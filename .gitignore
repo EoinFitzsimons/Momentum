@@ -25,7 +25,56 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Environment & API Keys (CRITICAL SECURITY)
+.env
+.env.*
+!.env.example
+*.key
+*.secret
+config.json
+secrets.json
+api_keys.txt
+credentials.json
+.secrets/
+keys/
+
+# Name Generation Data & Databases
+data/paranames.tsv
+data/paranames.db
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+logs/
+*.log
+
+# Temporary & Cache Files
+temp/
+tmp/
+cache/
+.cache/
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
 
 # OS
 .DS_Store
