@@ -40,13 +40,42 @@ class ProductionTouringEngine(BaseDisciplineEngine):
         self.discipline = RacingDiscipline.PRODUCTION_TOURING
     
     def get_attribute_weights(self) -> Dict[str, float]:
-        """Driver attribute weights for touring car racing"""
+        """Driver attribute weights for production/touring car racing"""
         return {
-            "skill": 0.25,        # Important but not dominant
-            "consistency": 0.20,   # Needed for championship success
-            "racecraft": 0.30,     # Crucial for door-to-door racing
-            "adaptability": 0.15,  # Setup and traffic adaptation
-            "aggression": 0.25     # High importance for overtaking in traffic
+            # Core driving skills emphasizing contact racing
+            "racecraft": 0.18,              # Most important for door-to-door racing
+            "overtaking": 0.15,             # Critical for passing in traffic
+            "defensive_driving": 0.12,      # Protecting position in close racing
+            "raw_speed": 0.10,              # Less important than racecraft
+            "consistency": 0.10,            # Some importance for championships
+            
+            # Physical traits for aggressive racing
+            "concentration": 0.08,          # Focus during close battles
+            "reaction_time": 0.08,          # Quick responses in traffic
+            "multitasking": 0.06,           # Managing multiple battles
+            "pressure_handling": 0.06,      # High-pressure racing
+            
+            # Technical knowledge for setup
+            "setup_knowledge": 0.08,        # Car balance for close racing
+            "tire_management": 0.06,        # Tire preservation in contact
+            "mechanical_sympathy": 0.08,    # Preserving car in contact racing
+            
+            # Discipline preference
+            "touring_car_aptitude": 0.15,   # Natural preference for touring cars
+            
+            # Race craft specific to touring cars
+            "traffic_management": 0.12,     # Navigation through fields
+            "pit_stop_coordination": 0.06,  # Working with crew efficiently
+            "safety_car_awareness": 0.08,   # Maximizing opportunities
+            
+            # Environmental adaptation
+            "car_adaptation": 0.08,         # Different car balance each race
+            "surface_adaptation": 0.06,     # Various track surfaces
+            
+            # Personal traits emphasizing aggression
+            "risk_appetite": 0.10,          # Willingness to make bold moves
+            "team_cooperation": 0.06,       # Working within team strategy
+            "ego_management": 0.04          # Handling contact and criticism
         }
     
     def get_supported_event_types(self) -> List[RaceEventType]:

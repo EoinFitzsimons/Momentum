@@ -144,9 +144,17 @@ class BaseDisciplineEngine(ABC):
         """
         Get driver attribute importance weights for this discipline
         
+        Each discipline defines which of the 50+ driver attributes are most
+        important and how they should be weighted in performance calculations.
+        
         Returns:
             Dictionary mapping attribute names to weight values (0-1)
-            Must include: skill, consistency, racecraft, adaptability, aggression
+            Can include any combination of driver attributes like:
+            - Core: raw_speed, consistency, racecraft, overtaking, etc.
+            - Physical: physical_fitness, reaction_time, concentration, etc.
+            - Technical: setup_knowledge, tire_management, fuel_management, etc.
+            - Discipline-specific aptitudes: single_seater_aptitude, rally_aptitude, etc.
+            - Environmental: wet_weather_skill, night_racing_skill, etc.
         """
         pass
     
@@ -169,28 +177,36 @@ class BaseDisciplineEngine(ABC):
     
     def calculate_base_performance(self, driver: Driver, team: Team, context: DisciplineContext) -> float:
         """
-        Calculate base driver+team performance score
+        Calculate base driver+team performance score using comprehensive attribute system
         
-        Common calculation used across all disciplines, with discipline-specific
-        weighting applied through get_attribute_weights().
+        Uses the full 50+ attribute driver model with discipline-specific weighting
+        applied through get_attribute_weights().
         
         Args:
-            driver: Driver with attributes
+            driver: Driver with comprehensive attributes (50+ attributes)
             team: Team with budget and tier
             context: Race context with conditions
             
         Returns:
-            Base performance score (0.0 - 1.0+)
+            Base performance score (0.0 - 100.0 scale, normalized to 0-1)
         """
-        # Driver attributes weighted by discipline importance
+        # Get discipline-specific attribute weights
         weights = self.get_attribute_weights()
-        driver_score = (
-            driver.skill * weights.get('skill', 0.3) +
-            driver.consistency * weights.get('consistency', 0.2) +
-            driver.racecraft * weights.get('racecraft', 0.2) +
-            driver.adaptability * weights.get('adaptability', 0.15) +
-            driver.aggression * weights.get('aggression', 0.15)
-        )
+        
+        # Calculate weighted driver performance using new attribute system
+        driver_score = 0.0
+        total_weight = 0.0
+        
+        # Core driving skills
+        for attr_name, weight in weights.items():
+            if hasattr(driver, attr_name):
+                attr_value = getattr(driver, attr_name)
+                driver_score += (attr_value / 100.0) * weight  # Normalize to 0-1 scale
+                total_weight += weight
+        
+        # Normalize driver score
+        if total_weight > 0:
+            driver_score /= total_weight
         
         # Team performance based on budget and tier
         team_performance = self.calculate_team_performance(team)

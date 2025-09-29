@@ -41,13 +41,44 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         self.discipline = RacingDiscipline.SINGLE_SEATER
     
     def get_attribute_weights(self) -> Dict[str, float]:
-        """Driver attribute weights optimized for single-seater racing"""
+        """Driver attribute weights for single seater racing (F1/Formula style)"""
         return {
-            "skill": 0.35,        # Raw pace is crucial in open-wheel racing
-            "consistency": 0.25,   # Long races require consistency
-            "racecraft": 0.20,     # Overtaking and race management
-            "adaptability": 0.10,  # Setup and weather adaptation
-            "aggression": 0.10     # Controlled aggression for overtakes
+            # Core driving skills (high importance)
+            "raw_speed": 0.20,              # Critical for qualifying and race pace
+            "consistency": 0.15,            # Essential for championship success
+            "racecraft": 0.12,              # Important for wheel-to-wheel racing
+            "cornering_skill": 0.15,        # Crucial for single seater performance
+            "braking_technique": 0.10,      # Late braking into corners
+            
+            # Physical and mental traits
+            "concentration": 0.08,          # Long race focus
+            "reaction_time": 0.06,          # Quick reflexes for starts/overtakes
+            "g_force_tolerance": 0.08,      # High G forces in single seaters
+            "pressure_handling": 0.06,      # Championship pressure
+            
+            # Technical knowledge
+            "setup_knowledge": 0.10,        # Car setup crucial in F1
+            "tire_management": 0.08,        # Strategic tire use
+            "fuel_management": 0.06,        # Fuel strategy importance
+            "aerodynamics_understanding": 0.08,  # Aero critical in single seaters
+            
+            # Single seater specific
+            "single_seater_aptitude": 0.12, # Natural preference for formula racing
+            
+            # Race craft and strategy
+            "qualifying_optimization": 0.10, # Grid position critical
+            "race_strategy": 0.08,          # Strategic thinking
+            "overtaking": 0.08,             # Passing ability
+            "defensive_driving": 0.06,      # Position defense
+            
+            # Environmental adaptation
+            "wet_weather_skill": 0.08,      # Wet conditions common
+            "car_adaptation": 0.06,         # Adapting to car changes
+            "track_learning": 0.05,         # Learning new circuits
+            
+            # Personal traits
+            "risk_appetite": 0.04,          # Calculated risk-taking
+            "championship_thinking": 0.06   # Long-term strategic view
         }
     
     def get_supported_event_types(self) -> List[RaceEventType]:

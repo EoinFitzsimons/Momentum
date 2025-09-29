@@ -33,62 +33,205 @@ from datetime import datetime
 @dataclass
 class Driver:
     """
-    Driver Entity Model
+    Driver Entity Model - Comprehensive Multi-Discipline Driver System
     
-    Represents individual racing drivers in the simulation with comprehensive
-    attribute modeling for realistic performance simulation. Each driver has
-    five core performance attributes that influence race outcomes through the
-    Monte Carlo simulation engine.
+    Represents individual racing drivers with 50+ attributes covering all aspects
+    of motorsport performance. Drivers can compete across all disciplines with
+    varying levels of aptitude and preference, just like real-world drivers
+    who may excel in one area but can compete in multiple categories.
     
-    Performance Attributes (0.0 = Poor, 1.0 = Exceptional):
-        - skill: Raw driving talent and speed
-        - consistency: Ability to maintain performance lap after lap
-        - aggression: Willingness to take risks and make bold moves
-        - racecraft: Strategic racing intelligence and situational awareness
-        - adaptability: Ability to adjust to changing conditions (weather, track, car)
+    Attribute Categories:
+    1. Core Driving Skills (10 attributes) - fundamental driving abilities
+    2. Physical & Mental Traits (10 attributes) - fitness, focus, pressure handling
+    3. Technical Knowledge (8 attributes) - car setup, mechanical understanding
+    4. Discipline Specializations (7 attributes) - aptitude for different racing types
+    5. Race Craft & Strategy (8 attributes) - tactical racing intelligence
+    6. Environmental Adaptation (7 attributes) - handling different conditions
+    7. Personal & Social Traits (6 attributes) - personality and media presence
     
-    Career Statistics:
-        - career_wins: Total race victories
-        - career_podiums: Total podium finishes (1st, 2nd, 3rd places)
-        - career_points: Cumulative championship points earned
-    
-    Usage in Simulation:
-        Driver attributes are weighted and combined with team performance,
-        track characteristics, and random factors to determine race outcomes
-        via Monte Carlo methods.
+    All attributes use 0.0-100.0 scale (0=Poor, 50=Average, 100=Exceptional)
+    Drivers have preferences and aptitudes but aren't locked to single disciplines.
     """
-    # Core identification and personal information
+    # ===== CORE IDENTIFICATION =====
     id: int                                    # Unique driver identifier
     name: str                                  # Full driver name
     nationality: str                           # ISO country code (e.g., "GBR", "USA")
     birth_date: str                           # Birth date in YYYY-MM-DD format
+    age: int = 25                             # Current age (affects performance curves)
     
-    # Performance attributes (normalized 0.0-1.0 scale)
-    skill: float                              # Raw driving talent and speed (0.0-1.0)
-    consistency: float                        # Performance reliability (0.0-1.0)
-    aggression: float                         # Risk-taking tendency (0.0-1.0)
-    racecraft: float                          # Strategic intelligence (0.0-1.0)
-    adaptability: float                       # Environmental adaptation (0.0-1.0)
+    # ===== CORE DRIVING SKILLS (10 attributes) =====
+    # Fundamental driving abilities that apply to all disciplines
+    raw_speed: float = 50.0                   # Pure pace and fast lap ability
+    consistency: float = 50.0                 # Maintaining performance over stints
+    racecraft: float = 50.0                   # Strategic racing intelligence
+    overtaking: float = 50.0                  # Ability to pass other drivers
+    defensive_driving: float = 50.0           # Protecting position and blocking
+    cornering_skill: float = 50.0             # Apex speed and racing line optimization
+    braking_technique: float = 50.0           # Late braking and brake management
+    acceleration_control: float = 50.0        # Launch technique and traction management
+    spatial_awareness: float = 50.0           # Track positioning and gap judgment
+    vehicle_control: float = 50.0             # Car handling at the limit
     
-    # Career statistics and progression
-    career_wins: int = 0                      # Total race victories
+    # ===== PHYSICAL & MENTAL TRAITS (10 attributes) =====
+    # Physical fitness and mental strength affecting performance
+    physical_fitness: float = 50.0            # Endurance and physical conditioning
+    reaction_time: float = 50.0               # Quick reflexes and response speed
+    concentration: float = 50.0               # Mental focus over long periods
+    pressure_handling: float = 50.0           # Performance under stress/pressure
+    pain_tolerance: float = 50.0              # Handling discomfort and fatigue
+    g_force_tolerance: float = 50.0           # Physical tolerance for high G forces
+    coordination: float = 50.0                # Hand-eye coordination and smoothness
+    multitasking: float = 50.0                # Managing multiple tasks simultaneously
+    mental_resilience: float = 50.0           # Recovery from mistakes and setbacks
+    adrenaline_management: float = 50.0       # Controlling excitement and nerves
+    
+    # ===== TECHNICAL KNOWLEDGE (8 attributes) =====
+    # Understanding of car mechanics and setup
+    setup_knowledge: float = 50.0             # Car setup and tuning understanding
+    mechanical_sympathy: float = 50.0         # Preserving car components and reliability
+    tire_management: float = 50.0             # Managing tire wear and grip
+    fuel_management: float = 50.0             # Fuel saving and consumption optimization
+    aerodynamics_understanding: float = 50.0  # Knowledge of aero effects and setup
+    suspension_feel: float = 50.0             # Sensing car balance and handling
+    engine_management: float = 50.0           # Power delivery and engine modes
+    data_analysis: float = 50.0               # Interpreting telemetry and feedback
+    
+    # ===== DISCIPLINE SPECIALIZATIONS (7 attributes) =====
+    # Natural aptitude for different racing categories
+    single_seater_aptitude: float = 50.0      # Formula/open-wheel racing preference
+    touring_car_aptitude: float = 50.0        # Close-contact production car racing
+    rally_aptitude: float = 50.0              # Stage rally and off-road racing
+    street_racing_aptitude: float = 50.0      # Urban/street racing and drifting
+    drag_racing_aptitude: float = 50.0        # Straight-line acceleration racing
+    rallycross_aptitude: float = 50.0         # Mixed-surface sprint racing
+    endurance_aptitude: float = 50.0          # Long-distance racing specialization
+    
+    # ===== RACE CRAFT & STRATEGY (8 attributes) =====
+    # Tactical and strategic racing abilities
+    race_strategy: float = 50.0               # Understanding race strategy and timing
+    pit_stop_coordination: float = 50.0       # Working with pit crew effectively
+    traffic_management: float = 50.0          # Navigating through slower cars
+    tire_strategy: float = 50.0               # Strategic tire choice and timing
+    fuel_strategy: float = 50.0               # Strategic fuel management decisions
+    safety_car_awareness: float = 50.0        # Maximizing safety car opportunities
+    qualifying_optimization: float = 50.0     # Extracting maximum single-lap pace
+    championship_thinking: float = 50.0       # Long-term championship management
+    
+    # ===== ENVIRONMENTAL ADAPTATION (7 attributes) =====
+    # Adapting to different conditions and circumstances
+    wet_weather_skill: float = 50.0           # Performance in rain and wet conditions
+    night_racing_skill: float = 50.0          # Racing in low visibility conditions
+    temperature_adaptation: float = 50.0      # Handling hot/cold temperature extremes
+    altitude_adaptation: float = 50.0          # Performance at high altitude tracks
+    surface_adaptation: float = 50.0          # Adjusting to different track surfaces
+    car_adaptation: float = 50.0              # Quickly adapting to new/different cars
+    track_learning: float = 50.0              # Speed of learning new circuits
+    
+    # ===== PERSONAL & SOCIAL TRAITS (6 attributes) =====
+    # Personality and interpersonal characteristics
+    media_presence: float = 50.0              # Charisma and marketing appeal
+    team_cooperation: float = 50.0            # Working effectively within team
+    leadership_ability: float = 50.0          # Natural leadership and influence
+    risk_appetite: float = 50.0               # Willingness to take calculated risks
+    ego_management: float = 50.0              # Handling success and criticism
+    commercial_appeal: float = 50.0           # Sponsor and fan attraction
+    
+    # ===== CAREER STATISTICS & PROGRESSION =====
+    career_wins: int = 0                      # Total race victories across all disciplines
     career_podiums: int = 0                   # Total podium finishes (top 3)
     career_points: int = 0                    # Cumulative championship points
+    career_starts: int = 0                    # Total race entries
+    career_dnf: int = 0                       # Did not finish count
+    seasons_active: int = 0                   # Number of seasons competed
     
-    # Additional metadata and historical depth
+    # Discipline-specific career stats
+    single_seater_wins: int = 0               # Wins in formula/single seater categories
+    touring_wins: int = 0                     # Wins in touring/production car racing
+    rally_wins: int = 0                       # Wins in rally/stage racing
+    street_wins: int = 0                      # Wins in street/urban racing
+    drag_wins: int = 0                        # Wins in drag/acceleration racing
+    rallycross_wins: int = 0                  # Wins in rallycross/sprint racing
+    endurance_wins: int = 0                   # Wins in endurance racing
+    
+    # ===== ADDITIONAL METADATA =====
     biography: str = ""                       # Driver background and career history
     career_highlights: str = ""               # Major achievements and memorable moments
-    personality_traits: str = ""              # Character traits affecting AI decisions
-    career_phase: str = "active"              # active, rookie, veteran, retired
+    preferred_discipline: str = "single_seater" # Primary discipline preference
+    career_phase: str = "active"              # rookie, rising, peak, veteran, declining, retired
     
     # Team and relationship data
     current_team_id: Optional[int] = None     # Current team assignment (FK to teams.id)
     previous_teams: str = ""                  # JSON list of previous team associations
+    contract_length: int = 1                  # Remaining contract years
+    salary: float = 1.0                       # Annual salary in millions USD
     
-    # AI decision-making factors
-    risk_tolerance: float = 0.5               # Affects strategic decisions (0.0-1.0)
-    team_loyalty: float = 0.5                 # Likelihood to stay with team (0.0-1.0)
-    media_savvy: float = 0.5                  # Marketing and sponsorship appeal (0.0-1.0)
+    # Performance trends and development
+    form_trend: str = "stable"                # improving, stable, declining
+    peak_performance_age: int = 28            # Age at which driver peaks
+    retirement_age: int = 40                  # Expected retirement age
+    learning_rate: float = 50.0               # Speed of attribute improvement
+    
+    # Special traits and achievements
+    championship_titles: int = 0              # Total championship victories
+    rookie_of_year_awards: int = 0            # Rookie season recognition
+    fastest_laps: int = 0                     # Career fastest lap awards
+    pole_positions: int = 0                   # Career pole position count
+    
+    def get_discipline_rating(self, discipline: str) -> float:
+        """
+        Calculate overall performance rating for a specific discipline
+        
+        This method provides a comprehensive evaluation of how well this driver
+        would perform in the given discipline, considering their aptitude for
+        that discipline as well as their overall driving abilities.
+        
+        Args:
+            discipline: The racing discipline to evaluate
+                      ("single_seater", "touring_car", "rally", "street_racing",
+                       "drag_racing", "rallycross", "endurance")
+        
+        Returns:
+            Overall performance rating (0-100 scale)
+        """
+        # Get discipline-specific aptitude
+        aptitude_map = {
+            "single_seater": self.single_seater_aptitude,
+            "touring_car": self.touring_car_aptitude,
+            "rally": self.rally_aptitude,
+            "street_racing": self.street_racing_aptitude,
+            "drag_racing": self.drag_racing_aptitude,
+            "rallycross": self.rallycross_aptitude,
+            "endurance": self.endurance_aptitude
+        }
+        
+        discipline_aptitude = aptitude_map.get(discipline, 50.0)
+        
+        # Calculate average of key driving attributes
+        core_skills = (
+            self.raw_speed + self.consistency + self.racecraft + 
+            self.vehicle_control + self.spatial_awareness
+        ) / 5.0
+        
+        # Weight combination: 60% discipline aptitude, 40% core skills
+        overall_rating = (discipline_aptitude * 0.6) + (core_skills * 0.4)
+        
+        return round(min(100.0, max(0.0, overall_rating)), 1)
+    
+    def get_overall_rating(self) -> float:
+        """
+        Calculate overall driver rating across all attributes
+        
+        Returns:
+            Overall rating (0-100) representing driver's general ability
+        """
+        # Average of all core driving skills and key attributes
+        core_skills = [
+            self.raw_speed, self.consistency, self.racecraft, self.overtaking,
+            self.vehicle_control, self.concentration, self.pressure_handling,
+            self.setup_knowledge, self.tire_management, self.race_strategy
+        ]
+        
+        return sum(core_skills) / len(core_skills)
 
 @dataclass
 class Team:
