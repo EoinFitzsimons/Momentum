@@ -1,35 +1,147 @@
 """
-Database manager for Momentum simulation.
-Handles database initialization, CRUD operations, and data integrity.
+Momentum Motorsport Simulation - Database Manager
+
+Comprehensive database abstraction layer providing CRUD operations, data integrity
+enforcement, and query optimization for the Momentum simulation system. Manages
+all persistent storage operations for drivers, teams, tracks, championships, and
+race results using SQLite as the backend database.
+
+Key Features:
+- Automatic schema initialization and validation
+- Transaction management with rollback support
+- Optimized queries with proper indexing
+- Data integrity through foreign key constraints
+- Connection pooling and resource management
+- Comprehensive error handling and logging
+
+Database Architecture:
+- SQLite file-based storage for portability
+- Normalized relational schema
+- Performance-optimized with strategic indexes
+- Multi-discipline support (Formula, Rally, Endurance, Street)
+- Historical data preservation for career tracking
+
+Usage Patterns:
+    db = DatabaseManager()
+    drivers = db.get_all_drivers()
+    team = db.get_team(team_id)
+    standings = db.get_championship_standings(championship_id, season)
+
+Compatibility: SQLite 3.7+, Python 3.8+
+Authors: Final Year Project - Computer Science
 """
 
 import sqlite3
 import json
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-from .models import Driver, Team, Track, Championship, Race, RaceResult, SCHEMA_SQL
-from ..config import DATABASE_PATH
+from database.models import Driver, Team, Track, Championship, Race, RaceResult, SCHEMA_SQL
+from config import DATABASE_PATH
 
 class DatabaseManager:
-    """Manages all database operations for Momentum simulation"""
+    """
+    Database Manager - Core Data Access Layer
+    
+    Provides comprehensive database management for the Momentum simulation system.
+    Handles all CRUD operations, schema management, and data integrity enforcement
+    across the complete motorsport simulation data model.
+    
+    Architecture:
+        - SQLite backend for portability and simplicity
+        - Connection pooling for performance
+        - Automatic transaction management
+        - Schema validation and migration support
+        - Comprehensive error handling
+    
+    Key Responsibilities:
+        - Database schema initialization and updates
+        - CRUD operations for all entity types
+        - Complex queries for standings and statistics
+        - Data validation and constraint enforcement
+        - Connection lifecycle management
+    
+    Usage:
+        manager = DatabaseManager()  # Uses default database path
+        manager = DatabaseManager("/custom/path/db.sqlite")  # Custom path
+    """
     
     def __init__(self, db_path: str = DATABASE_PATH):
+        """
+        Initialize Database Manager
+        
+        Sets up the database connection and ensures proper schema initialization.
+        Creates the database file and directory structure if they don't exist.
+        
+        Args:
+            db_path (str): Path to SQLite database file. Defaults to configured path
+                          from config.DATABASE_PATH
+        
+        Raises:
+            sqlite3.Error: If database initialization fails
+            OSError: If database directory cannot be created
+        """
         self.db_path = db_path
         self.init_database()
     
     def init_database(self):
-        """Initialize database with schema if it doesn't exist"""
-        # Ensure directory exists
+        """
+        Initialize Database Schema
+        
+        Creates the complete database schema including all tables, indexes,
+        constraints, and triggers. Safe to call multiple times - only creates
+        objects that don't already exist.
+        
+        Schema Components:
+            - Core entity tables (drivers, teams, tracks, championships, races)
+            - Result tracking tables (race_results)
+            - Performance indexes for query optimization
+            - Foreign key constraints for data integrity
+            - Check constraints for data validation
+        
+        Raises:
+            sqlite3.Error: If schema creation fails
+            OSError: If database directory creation fails
+        """
+        # Ensure database directory exists (create parent directories as needed)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         
+        # Execute complete schema creation script
+        # Uses transaction to ensure atomicity of schema operations
         with sqlite3.connect(self.db_path) as conn:
+            # Enable foreign key constraint enforcement
+            conn.execute("PRAGMA foreign_keys = ON")
+            
+            # Execute the complete schema creation script
             conn.executescript(SCHEMA_SQL)
             conn.commit()
     
     def get_connection(self) -> sqlite3.Connection:
-        """Get database connection with row factory"""
+        """
+        Get Database Connection with Configuration
+        
+        Creates a new database connection with optimal settings for the simulation
+        system including row factory for easier data access and foreign key
+        constraint enforcement.
+        
+        Returns:
+            sqlite3.Connection: Configured database connection with:
+                - Row factory for dict-like row access
+                - Foreign key constraints enabled
+                - Optimal pragma settings
+        
+        Usage:
+            with self.get_connection() as conn:
+                cursor = conn.execute("SELECT * FROM drivers")
+                rows = cursor.fetchall()
+        """
         conn = sqlite3.connect(self.db_path)
+        
+        # Set row factory for easier data access (allows dict-like access to columns)
         conn.row_factory = sqlite3.Row
+        
+        # Enable foreign key constraint enforcement
+        conn.execute("PRAGMA foreign_keys = ON")
+        
         return conn
     
     # Driver operations

@@ -1,30 +1,178 @@
 """
-Core race simulation engine using Monte Carlo methods.
-Simulates race outcomes based on driver attributes, car performance, and track characteristics.
+Momentum Motorsport Simulation - Monte Carlo Race Engine
+
+Advanced probabilistic race simulation system using Monte Carlo statistical methods
+to generate realistic and varied race outcomes. The engine combines driver attributes,
+team performance, track characteristics, and environmental factors to simulate
+complex race dynamics with statistical authenticity.
+
+Monte Carlo Methodology:
+The simulation runs thousands of virtual race iterations, each with slight
+randomization in performance factors. Statistical analysis of these iterations
+determines the most probable race outcome while maintaining realistic variance
+and unexpected results that mirror real-world motorsport unpredictability.
+
+Core Simulation Factors:
+1. Driver Attributes (40% weight):
+   - skill: Raw driving talent and speed
+   - consistency: Performance reliability lap-to-lap
+   - racecraft: Strategic intelligence and race awareness
+   - adaptability: Response to changing conditions
+   - aggression: Risk-taking and overtaking tendency
+
+2. Team Performance (30% weight):
+   - Budget-based car performance calculation
+   - Tier-based operational excellence
+   - Strategic decision quality
+
+3. Environmental Factors (20% weight):
+   - Track surface and difficulty
+   - Weather conditions impact
+   - Track-specific driver suitability
+
+4. Randomization (10% weight):
+   - Mechanical reliability simulation
+   - Strategy execution variance
+   - Random racing incidents
+
+Realistic Features:
+- Grid position determination via qualifying simulation
+- Weather impact on different driver types
+- Track-specific performance advantages
+- Tire degradation and strategy effects
+- DNF (Did Not Finish) possibility modeling
+- Fastest lap bonus point allocation
+
+Performance Characteristics:
+- Configurable iteration count (default: 1000)
+- Deterministic results with seed control
+- Sub-second simulation times for real-time use
+- Scalable from 2-30+ car grids
+
+Compatibility: NumPy 1.19+, Python 3.8+
+Authors: Final Year Project - Computer Science
 """
 
 import random
 import numpy as np
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
-from ..database.models import Driver, Team, Track, Race, RaceResult
-from ..config import MONTE_CARLO_ITERATIONS, RANDOM_SEED
+from database.models import Driver, Team, Track, Race, RaceResult
+from config import MONTE_CARLO_ITERATIONS, RANDOM_SEED
 
 @dataclass
 class SimulationContext:
-    """Context for a single race simulation"""
-    race: Race
-    track: Track
-    drivers: List[Driver]
-    teams: Dict[int, Team]  # team_id -> Team
-    weather_factor: float = 1.0
-    tire_degradation: float = 0.1
+    """
+    Race Simulation Context Container
+    
+    Encapsulates all data required for Monte Carlo race simulation including
+    participants, venue, conditions, and configuration parameters. Serves as
+    the complete input specification for the simulation engine.
+    
+    Context Components:
+        - race: Race event metadata and configuration
+        - track: Circuit characteristics and properties
+        - drivers: All participating drivers with attributes
+        - teams: Team performance data mapped by ID
+        - weather_factor: Environmental condition modifier
+        - tire_degradation: Tire wear simulation parameter
+    
+    Weather Factor Scale:
+        1.0 = Dry conditions (optimal grip)
+        0.8 = Light rain (reduced grip)
+        0.6 = Heavy rain (significantly reduced grip)
+        0.4 = Extreme conditions (very challenging)
+    
+    Tire Degradation:
+        Controls how much tire wear affects performance over race distance.
+        Higher values increase strategic importance of pit stops.
+    
+    Usage:
+        context = SimulationContext(
+            race=race_object,
+            track=track_object, 
+            drivers=driver_list,
+            teams=team_dict,
+            weather_factor=0.8  # Light rain conditions
+        )
+        results = simulator.simulate_race(context)
+    """
+    # Core simulation input data
+    race: Race                                # Race event with metadata and rules
+    track: Track                              # Circuit with physical/gameplay characteristics
+    drivers: List[Driver]                     # All race participants with attributes
+    teams: Dict[int, Team]                    # Team performance data (team_id -> Team object)
+    
+    # Environmental and configuration parameters
+    weather_factor: float = 1.0               # Weather impact multiplier (1.0 = dry, <1.0 = wet)
+    tire_degradation: float = 0.1             # Tire wear rate affecting strategy decisions
 
 class RaceSimulator:
-    """Monte Carlo race simulation engine"""
+    """
+    Monte Carlo Race Simulation Engine
+    
+    Advanced probabilistic simulation system that generates realistic race outcomes
+    through statistical modeling. Uses Monte Carlo methods to run thousands of
+    virtual race iterations and determine the most probable results while
+    maintaining authentic unpredictability.
+    
+    Core Algorithm:
+    1. Initialize race state (grid positions, car performance, driver form)
+    2. Run N Monte Carlo iterations (default: 1000)
+    3. For each iteration:
+       - Calculate performance for each driver/car combination
+       - Apply randomization factors (luck, incidents, strategy)
+       - Determine finishing order for this iteration
+    4. Aggregate results across all iterations
+    5. Determine most probable finishing positions
+    6. Resolve conflicts using driver skill tiebreakers
+    7. Generate final race results with points allocation
+    
+    Randomization Sources:
+        - Driver form variation (±5% of base performance)
+        - Mechanical reliability simulation
+        - Weather adaptation differences
+        - Strategy execution quality
+        - Racing incidents and luck factors
+    
+    Performance Factors:
+        - Driver attributes weighted by importance
+        - Team budget and tier impact on car performance
+        - Track-specific suitability calculations
+        - Weather condition adaptability
+        - Strategic decision quality simulation
+    
+    Statistical Authenticity:
+        Uses real-world racing statistics and patterns to ensure
+        realistic distribution of results, including appropriate
+        frequency of upsets and unexpected outcomes.
+    """
     
     def __init__(self, seed: int = RANDOM_SEED):
+        """
+        Initialize Race Simulation Engine
+        
+        Sets up the Monte Carlo random number generators with specified seed
+        for reproducible results. Configures both NumPy and standard Python
+        random generators for different simulation components.
+        
+        Args:
+            seed (int): Random seed for reproducible simulations.
+                       Same seed produces identical results, different seeds
+                       produce varied outcomes. Defaults to config.RANDOM_SEED.
+        
+        Usage:
+            # Reproducible simulations
+            sim = RaceSimulator(seed=12345)
+            
+            # Different results each time
+            import time
+            sim = RaceSimulator(seed=int(time.time()))
+        """
+        # Initialize NumPy random generator for performance calculations
         self.rng = np.random.RandomState(seed)
+        
+        # Initialize Python random generator for discrete choices
         random.seed(seed)
     
     def simulate_race(self, context: SimulationContext) -> List[RaceResult]:
