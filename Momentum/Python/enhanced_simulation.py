@@ -36,7 +36,7 @@ from config import Config
 
 app = FastAPI(
     title="Momentum Multi-Discipline Motorsport Simulation API",
-    description="Comprehensive motorsport management API supporting F1, F2, F3, WEC, WRC, MotoGP, and Formula E",
+    description="Comprehensive motorsport management API supporting all major racing disciplines with generic, non-licensed content",
     version="2.0.0"
 )
 
@@ -328,7 +328,7 @@ async def get_all_championship_standings(season_year: int = 2025):
     try:
         standings = {}
         
-        for discipline in ["GPC", "GPDC", "GPAC", "WEC", "WRC", "MPG", "EGP"]:
+        for discipline in ["single_seater", "production_touring", "rally_stage", "endurance", "urban_street", "drag_acceleration", "sprint_rallycross"]:
             standings[discipline] = {
                 "drivers": [
                     {"position": 1, "driver_id": 1, "name": "Alex Sterling", "points": 393, "wins": 8},
@@ -353,7 +353,7 @@ async def get_season_calendar(year: int = 2025):
     """
     try:
         calendar = championship_manager.create_season_calendar(
-            year, ["GPC", "GPDC", "GPAC", "WEC", "WRC", "MPG", "EGP"]
+            year, ["single_seater", "production_touring", "rally_stage", "endurance", "urban_street", "drag_acceleration", "sprint_rallycross"]
         )
         
         return {
@@ -484,7 +484,7 @@ async def get_driver_ai_analysis(driver_id: int):
             "career_trajectory": "ascending",
             "strengths": ["racecraft", "consistency", "pressure_handling"],
             "development_areas": ["technical_feedback", "media_presence"],
-            "optimal_disciplines": ["F1", "WEC"],
+            "optimal_disciplines": ["single_seater", "endurance"],
             "contract_recommendations": {
                 "preferred_contract_length": 3,
                 "target_salary_range": [35.0, 45.0],
@@ -517,14 +517,14 @@ async def simulate_race_enhanced(race_id: int, discipline: str):
             "race_id": race_id,
             "discipline": discipline,
             "race_status": "completed",
-            "race_duration": "1:45:23.456" if discipline in ["F1", "F2", "F3"] else "varies",
+            "race_duration": "1:45:23.456" if discipline in ["single_seater"] else "varies",
             "results": [
                 {
                     "position": 1,
                     "driver_id": 1,
-                    "driver_name": "Max Verstappen",
+                    "driver_name": "Alex Johnson",
                     "team_id": 1,
-                    "team_name": "Red Bull Racing",
+                    "team_name": "Thunder Racing Team",
                     "finish_time": "1:45:23.456",
                     "gap_to_leader": "0.000",
                     "points_awarded": 25,
@@ -590,15 +590,15 @@ async def get_disciplines_info():
                 "typical_race_length": "35 minutes",
                 "key_characteristics": ["cost_controlled", "young_drivers", "close_racing"]
             },
-            "WEC": {
-                "full_name": "World Endurance Championship",
-                "description": "Multi-class prototype and GT endurance racing",
+            "endurance": {
+                "full_name": "Global Endurance Championship",
+                "description": "Multi-class prototype and sports car endurance racing",
                 "grid_size": 60,
                 "typical_race_length": "6-24 hours",
                 "key_characteristics": ["endurance", "multi_class", "manufacturer_focus"]
             },
-            "WRC": {
-                "full_name": "World Rally Championship", 
+            "rally_stage": {
+                "full_name": "International Rally Championship", 
                 "description": "Point-to-point stage rally competition",
                 "grid_size": 16,
                 "typical_event_length": "3 days",

@@ -14,28 +14,41 @@ The Python backend serves as the core simulation engine, utilizing Monte Carlo s
 ### 🎯 Key Features
 
 #### 🏁 **Multi-Discipline Racing System** (7 Complete Engines)
-- **Single Seater** (Formula 1, F2, F3): High-speed technical precision racing
-- **Production/Touring** (GT3, BTCC, TCR): Close-quarters production-based racing
-- **Rally/Stage** (WRC, WRC2): Point-to-point navigation and surface variety
-- **Urban/Street** (Formula E, Street circuits): City-based technical racing
-- **Drag/Acceleration** (Top Fuel, Pro Stock): Straight-line acceleration competition
-- **Sprint/Rallycross** (World RX): Mixed-surface short-format racing
-- **Endurance** (Le Mans, IMSA): Long-distance strategy-focused racing
+
+- **Single Seater**: High-speed technical precision racing with open wheels
+- **Production/Touring**: Close-quarters production-based racing with modified road cars
+- **Rally/Stage**: Point-to-point navigation racing across varied surfaces
+- **Urban/Street**: City-based technical racing on closed street circuits
+- **Drag/Acceleration**: Straight-line acceleration competition over quarter miles
+- **Sprint/Rallycross**: Mixed-surface short-format racing with jumps
+- **Endurance**: Long-distance strategy-focused racing emphasizing reliability
 
 #### 👨‍💼 **Comprehensive Driver System** (50+ Attributes)
+
 - **Cross-discipline compatibility**: Drivers can race in all disciplines with preferences
 - **7 attribute categories**: Technical Skills, Mental Attributes, Physical Fitness, Racecraft, Personality, Experience, Discipline Preferences
 - **Dynamic career progression**: Skill development and specialization over time
 - **Realistic attribute ranges**: 0-100 scale with tier-based distributions
 
 #### 🏢 **Advanced Staff Management System** (40+ Attributes, 25+ Roles)
+
 - **Comprehensive staff roles**: Technical Director, Data Analyst, Race Strategist, Pit Crew Chief, Chief Designer, and 20+ more
 - **Budget-based scaling**: Staff quality and quantity scale with team budgets ($800K to $12M+)
 - **Information fog-of-war**: Better analysts provide access to more detailed race data
 - **Performance multipliers**: Staff capabilities affect team performance across 6 key areas
 - **Realistic hiring system**: Salary negotiations, contract management, job satisfaction
 
+#### 💰 **Advanced Currency System** (Multi-Currency Support)
+
+- **Multi-currency support**: EUR (default), USD, GBP, JPY, CHF with real-time exchange rates
+- **Discipline budget caps**: Realistic budget limits scaled by racing discipline complexity
+- **Motorsport budget templates**: Realistic budget breakdowns for all 7 racing disciplines
+- **Locale-specific formatting**: Proper currency display for international users
+- **Staff salary management**: Multi-currency salary calculations and contract values
+- **Budget scaling**: Staff requirements and quality scale with team budgets (€800K to €12M+)
+
 #### 🎮 **Advanced Simulation Technology**
+
 - **Monte Carlo Methods**: Advanced probabilistic race outcome generation
 - **Discipline-specific logic**: Each racing type has unique simulation characteristics
 - **Environmental factors**: Weather, track conditions, and surface variations
@@ -79,13 +92,21 @@ Momentum Python Backend
 │   ├── Data Integrity Constraints
 │   └── Performance Optimization
 │
+├── 💰 Multi-Currency Financial System
+│   ├── systems/currency_system.py    # Multi-currency support with live rates
+│   ├── Budget Cap Compliance         # €130M EUR budget cap for top-tier racing
+│   ├── Motorsport Budget Templates   # Series-specific budget breakdowns
+│   ├── Staff Salary Management       # Multi-currency salary calculations
+│   └── Currency Formatting & Localization # Proper display for all regions
+│
 ├── 🌐 External Integrations
 │   ├── Hybrid Name Generation (NameAPI + ParaNames dataset)
 │   ├── API Key Security Management
+│   ├── Live Exchange Rate Integration
 │   └── External Data Sources
 │
 └── ⚙️ Configuration & Utils
-    ├── System Configuration
+    ├── System Configuration (with currency settings)
     ├── Constants & Settings
     ├── Logging & Monitoring
     └── Comprehensive Test Suites
@@ -102,22 +123,23 @@ Momentum Python Backend
 ### Installation
 
 1. **Clone the Repository**
+
    ```bash
    git clone https://github.com/EoinFitzsimons/FinalProject.git
    cd FinalProject/Momentum/Python
    ```
-
 2. **Install Dependencies**
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. **Run the Server**
+
    ```bash
    python simulation.py
    ```
-
 4. **Verify Installation**
+
    - Open browser to `http://localhost:8000`
    - Check interactive docs at `http://localhost:8000/docs`
 
@@ -164,14 +186,14 @@ endurance_results = endurance_engine.simulate_race(
 
 #### Advanced Simulation Factors
 
-| Factor Category | Weight Range | Key Components | Discipline Variation |
-|----------------|--------------|----------------|---------------------|
-| **Driver Attributes (50+)** | 35-45% | Technical skills, mental attributes, racecraft, fitness | Varies by discipline specialization |
-| **Staff Performance** | 15-25% | 6 performance multipliers from team staff quality | Higher impact in technical disciplines |
-| **Team Resources** | 10-20% | Budget tier, equipment quality, operational excellence | Critical in development-heavy series |
-| **Environmental** | 10-25% | Weather, track surface, visibility, temperature | Rally/street racing more affected |
-| **Discipline-Specific** | 5-15% | Downforce (F1), navigation (rally), strategy (endurance) | Unique to each racing type |
-| **Randomization** | 5-10% | Mechanical reliability, incidents, safety cars | Consistent across all disciplines |
+| Factor Category                   | Weight Range | Key Components                                           | Discipline Variation                   |
+| --------------------------------- | ------------ | -------------------------------------------------------- | -------------------------------------- |
+| **Driver Attributes (50+)** | 35-45%       | Technical skills, mental attributes, racecraft, fitness  | Varies by discipline specialization    |
+| **Staff Performance**       | 15-25%       | 6 performance multipliers from team staff quality        | Higher impact in technical disciplines |
+| **Team Resources**          | 10-20%       | Budget tier, equipment quality, operational excellence   | Critical in development-heavy series   |
+| **Environmental**           | 10-25%       | Weather, track surface, visibility, temperature          | Rally/street racing more affected      |
+| **Discipline-Specific**     | 5-15%        | Downforce (F1), navigation (rally), strategy (endurance) | Unique to each racing type             |
+| **Randomization**           | 5-10%        | Mechanical reliability, incidents, safety cars           | Consistent across all disciplines      |
 
 ### 🗄️ Database Schema
 
@@ -188,26 +210,39 @@ race_results    -- Performance outcomes and standings
 ```
 
 #### Key Relationships
+
 - **Drivers** belong to **Teams** (many-to-one)
 - **Races** occur at **Tracks** within **Championships** (many-to-one)
 - **RaceResults** link **Drivers**, **Teams**, and **Races** (many-to-many)
 
 ### 🌐 API Endpoints
 
-| Method | Endpoint | Description | Response |
-|--------|----------|-------------|----------|
-| `GET` | `/` | System information and status | API metadata |
-| `GET` | `/health` | Health check with database stats | System health |
-| `GET` | `/drivers` | All drivers with attributes | Driver list |
-| `GET` | `/teams?discipline={type}` | Teams (filterable by discipline) | Team list |
-| `POST` | `/simulate/race` | Execute race simulation | Race results |
-| `GET` | `/stats` | Database statistics | Entity counts |
+| Method   | Endpoint                     | Description                      | Response      |
+| -------- | ---------------------------- | -------------------------------- | ------------- |
+| `GET`  | `/`                        | System information and status    | API metadata  |
+| `GET`  | `/health`                  | Health check with database stats | System health |
+| `GET`  | `/drivers`                 | All drivers with attributes      | Driver list   |
+| `GET`  | `/teams?discipline={type}` | Teams (filterable by discipline) | Team list     |
+| `GET`  | `/staff?currency={code}`   | Staff with salaries in currency | Staff list    |
+| `POST` | `/simulate/race`           | Execute race simulation          | Race results  |
+| `GET`  | `/budgets/{discipline}?currency={code}` | Racing discipline budget cap info | Budget data   |
+| `GET`  | `/currency/rates`          | Current exchange rates           | Rate data     |
+| `GET`  | `/stats`                   | Database statistics              | Entity counts |
 
 #### Example API Usage
 
 ```bash
-# Get all Formula racing teams
-curl "http://localhost:8000/teams?discipline=formula"
+# Get all single seater racing teams
+curl "http://localhost:8000/teams?discipline=single_seater"
+
+# Get staff salaries in EUR (default currency)
+curl "http://localhost:8000/staff?currency=EUR"
+
+# Get single seater budget cap in USD
+curl "http://localhost:8000/budgets/single_seater?currency=USD"
+
+# Get current exchange rates
+curl "http://localhost:8000/currency/rates"
 
 # Run a race simulation
 curl -X POST "http://localhost:8000/simulate/race" \
@@ -235,7 +270,7 @@ class Driver:
     nationality: str
     birth_date: str
     age: int
-    
+  
     # Technical Skills (12 attributes)
     technical_knowledge: float      # Understanding of car systems (0-100)
     setup_ability: float           # Car setup optimization
@@ -243,7 +278,7 @@ class Driver:
     mechanical_sympathy: float     # Preserving equipment
     tire_management: float         # Tire wear optimization
     fuel_efficiency: float         # Fuel consumption management
-    
+  
     # Mental Attributes (8 attributes) 
     focus_ability: float           # Concentration during races
     pressure_handling: float       # Performance under pressure
@@ -251,7 +286,7 @@ class Driver:
     strategic_thinking: float      # Long-term race planning
     learning_speed: float          # Adaptation to new situations
     mental_resilience: float       # Recovery from setbacks
-    
+  
     # Physical Fitness (7 attributes)
     overall_fitness: float         # General physical condition
     reaction_time: float           # Response speed
@@ -259,7 +294,7 @@ class Driver:
     g_force_tolerance: float      # High-G maneuver handling
     vision_quality: float         # Visual acuity and tracking
     hand_eye_coordination: float  # Precision control
-    
+  
     # Racecraft (10 attributes)
     overtaking_ability: float      # Passing other drivers
     defensive_driving: float       # Maintaining position
@@ -267,7 +302,7 @@ class Driver:
     traffic_navigation: float      # Racing in groups
     situational_awareness: float   # Track condition awareness
     risk_assessment: float         # Calculated risk-taking
-    
+  
     # Personality Traits (6 attributes)
     aggression: float             # Racing aggressiveness
     confidence: float             # Self-belief and boldness
@@ -275,13 +310,13 @@ class Driver:
     professionalism: float        # Media and sponsor relations
     adaptability: float           # Adjustment to changes
     leadership: float             # Inspiring team performance
-    
+  
     # Experience & Specialization (7 attributes)
     years_experience: int         # Total racing career length
     championship_experience: float # High-level competition exposure
     wet_weather_skill: float      # Rain/adverse condition ability
     night_racing_skill: float     # Low visibility racing
-    
+  
     # Discipline Preferences (7 attributes) - Cross-discipline compatibility
     single_seater_preference: float    # Formula racing affinity
     touring_car_preference: float      # Production car racing
@@ -302,7 +337,7 @@ class TeamStaffing:
     total_budget: float          # Annual team budget
     personnel_budget: float      # Staff salary allocation
     staff_members: List[StaffMember]  # Team personnel
-    
+  
     # Performance multipliers (calculated from staff)
     overall_performance: float    # 0.3x - 1.5x based on staff quality
     development_speed: float     # Car development rate
@@ -310,10 +345,10 @@ class TeamStaffing:
     race_strategy: float         # Strategic decision quality
     reliability: float           # Equipment reliability
     adaptability: float          # Response to changing conditions
-    
+  
     # Information access (fog-of-war system)
     data_access_level: float     # 0-100 based on analyst quality
-    
+  
 @dataclass
 class StaffMember:
     # 40+ attributes across 6 categories:
@@ -323,7 +358,7 @@ class StaffMember:
     # - Operational Skills (8): pit efficiency, crisis management
     # - Financial & Commercial (5): budget management, negotiations
     # - Discipline Specializations (7): expertise in each racing type
-    
+  
     role: StaffRole              # 25+ roles: Technical Director, Data Analyst, etc.
     tier: StaffTier              # Intern → Junior → Regular → Senior → Expert → Legendary
     salary: float                # Annual compensation
@@ -333,6 +368,7 @@ class StaffMember:
 ## � Racing Disciplines (7 Complete Engines)
 
 ### 1. Single Seater Racing 🏎️
+
 - **Categories**: Formula 1, Formula 2, Formula 3, IndyCar
 - **Characteristics**: High downforce, technical precision, aerodynamic optimization
 - **Key Factors**: Technical skill, racecraft, car development, aerodynamics expertise
@@ -340,6 +376,7 @@ class StaffMember:
 - **Unique Elements**: Qualifying system, DRS zones, tire strategy
 
 ### 2. Production/Touring Car Racing 🚗
+
 - **Categories**: GT3, BTCC, TCR, V8 Supercars
 - **Characteristics**: Production-based cars, close racing, driver skill emphasis
 - **Key Factors**: Racecraft, adaptability, car setup, mechanical reliability
@@ -347,6 +384,7 @@ class StaffMember:
 - **Unique Elements**: Balance of Performance (BoP), contact tolerance
 
 ### 3. Rally/Stage Racing 🏔️
+
 - **Categories**: WRC, WRC2, Regional Rally Championships
 - **Characteristics**: Point-to-point stages, surface variety, navigation
 - **Key Factors**: Adaptability, bravery, co-driver communication, surface expertise
@@ -354,6 +392,7 @@ class StaffMember:
 - **Unique Elements**: Pacenotes, surface changes, weather impact
 
 ### 4. Urban/Street Racing 🏙️
+
 - **Categories**: Formula E, Monaco GP, Street Circuits
 - **Characteristics**: Confined spaces, walls, technical challenges
 - **Key Factors**: Precision, racecraft, adaptability, risk management
@@ -361,12 +400,14 @@ class StaffMember:
 - **Unique Elements**: Track evolution, wall proximity, limited overtaking
 
 ### 5. Drag/Acceleration Racing 🚀
+
 - **Categories**: Top Fuel, Funny Car, Pro Stock, Pro Mod
 - **Key Factors**: Reaction time, technical precision, power management
 - **Staff Impact**: Engine specialists and data analysts critical
 - **Unique Elements**: Christmas tree starts, terminal speeds, parachute deployment
 
 ### 6. Sprint/Rallycross Racing 💨
+
 - **Categories**: World Rallycross Championship, Americas Rallycross
 - **Characteristics**: Mixed surfaces, short races, jump sections
 - **Key Factors**: Adaptability, aggression, racecraft, surface switching
@@ -374,6 +415,7 @@ class StaffMember:
 - **Unique Elements**: Joker laps, surface transitions, wheel-to-wheel racing
 
 ### 7. Endurance Racing ⏱️
+
 - **Categories**: Le Mans 24h, IMSA, WEC, Nürburgring 24h
 - **Characteristics**: Multi-hour races, driver changes, strategic complexity
 - **Key Factors**: Consistency, strategy, stamina, team coordination
@@ -401,6 +443,7 @@ API_RELOAD = True               # Development hot-reload
 ## 🧪 Testing
 
 ### Running Tests
+
 ```bash
 # Run all tests
 python -m pytest tests/
@@ -414,12 +457,14 @@ python -m pytest tests/test_api.py
 ## 📝 Development Guidelines
 
 ### Code Style
+
 - **PEP 8** compliance for Python code
 - **Type hints** for all function signatures
 - **Comprehensive docstrings** for classes and methods
 - **Meaningful variable names** and comments
 
 ### Database Operations
+
 ```python
 # Always use context managers for database operations
 with db_manager.get_connection() as conn:
@@ -433,6 +478,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 ## 📊 Performance Characteristics
 
 ### Multi-Engine Simulation Performance
+
 - **7 Racing Engines**: Each optimized for discipline-specific characteristics
 - **Driver System**: 50+ attributes per driver with cross-discipline compatibility
 - **Staff System**: 40+ attributes per staff member with 25+ roles
@@ -441,6 +487,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 - **Scalability**: Supports up to 50 participants per race with full staff simulation
 
 ### Advanced System Capabilities
+
 - **Budget Scaling**: Staff requirements scale from $500K to $10M+ team budgets
 - **Information Fog-of-War**: 10-level data access system based on analyst quality
 - **Performance Multipliers**: 6 distinct team performance areas affected by staff
@@ -448,6 +495,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 - **Comprehensive Testing**: 100% test coverage across all major system components
 
 ### Database Performance
+
 - **Multi-Entity Schema**: Drivers, Teams, Staff, Races, Championships
 - **Relationship Management**: Complex staff-team-performance relationships
 - **Query Optimization**: Efficient lookups for 50+ attribute comparisons
@@ -456,23 +504,27 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 ## 🚀 System Status & Capabilities
 
 ### ✅ Fully Implemented Systems
-- [x] **7 Complete Racing Engines** - All disciplines with unique simulation logic
-- [x] **50+ Attribute Driver System** - Cross-discipline compatibility with preferences
-- [x] **40+ Attribute Staff System** - 25+ roles with budget scaling and performance impact
-- [x] **Information Fog-of-War** - Data access based on staff analytical capabilities
-- [x] **Budget-Based Team Scaling** - Realistic staff requirements and salary scaling
-- [x] **Comprehensive Testing Suite** - 100% validation of all major components
-- [x] **Hybrid Name Generation** - External API integration with fallback systems
-- [x] **Security Implementation** - API key protection and gitignore configuration
+
+- [X] **7 Complete Racing Engines** - All disciplines with unique simulation logic
+- [X] **50+ Attribute Driver System** - Cross-discipline compatibility with preferences
+- [X] **40+ Attribute Staff System** - 25+ roles with budget scaling and performance impact
+- [X] **Multi-Currency Financial System** - EUR default with budget cap compliance for all racing disciplines
+- [X] **Budget Cap Integration** - €130M EUR cap for single-seater racing with compliance checking
+- [X] **Information Fog-of-War** - Data access based on staff analytical capabilities
+- [X] **Budget-Based Team Scaling** - Realistic staff requirements and salary scaling
+- [X] **Live Exchange Rate Support** - Real-time currency conversion for 5 major currencies
+- [X] **Comprehensive Testing Suite** - 100% validation of all major components
+- [X] **Hybrid Name Generation** - External API integration with fallback systems
+- [X] **Security Implementation** - API key protection and gitignore configuration
 
 ### 🔮 Future Enhancement Opportunities
+
 - [ ] **Dynamic Weather Systems** - Real-time weather changes during race simulation
 - [ ] **Multi-Season Career Mode** - Long-term driver and staff development
 - [ ] **Contract Negotiations** - Advanced staff and driver contract management
 - [ ] **Championship Management** - Multi-series competition tracking
 - [ ] **Economic Simulation** - Detailed budget management and sponsorship systems
 - [ ] **Machine Learning Integration** - AI-powered strategy optimization
-- [ ] **Real-Time Multiplayer** - Live competitive team management
 
 ## 📄 License
 
@@ -480,7 +532,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Contributors
 
-- **Primary Developer**: Final Year Computer Science Student
+- **Primary Developer**: Eoin Fitzsimons
 - **Project Supervisor**: [Supervisor Name]
 - **Institution**: [University Name]
 

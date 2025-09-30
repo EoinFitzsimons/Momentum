@@ -2,13 +2,13 @@
 Momentum Motorsport Simulation - Multi-Discipline Models
 
 This module extends the base data models to support all 7 racing disciplines:
-- Single Seater: Formula racing (F1, F2, F3, IndyCar style)
-- Production/Touring: GT3, BTCC, TCR, V8 Supercars
-- Rally/Stage: WRC, point-to-point rally racing
-- Urban/Street: Street circuits, drift
-- Drag/Acceleration: NHRA, drag racing, quarter-mile
-- Sprint/Rallycross: World RX, mixed-surface racing
-- Endurance: Le Mans, IMSA, WEC, long-distance racing
+- Single Seater: Open-wheel formula racing with aerodynamic focus
+- Production/Touring: Production-based touring car racing
+- Rally/Stage: Point-to-point rally racing on varied surfaces
+- Urban/Street: Street circuits and urban racing environments
+- Drag/Acceleration: Straight-line acceleration racing
+- Sprint/Rallycross: Mixed-surface sprint racing
+- Endurance: Long-distance multi-class racing
 
 Each discipline has unique characteristics, vehicle development paths,
 and specific driver skill requirements.
@@ -462,10 +462,9 @@ class MultiDisciplineTeam:
     data_analysis_capability: float = 0.5    # Telemetry and performance analysis
     
     # Discipline-specific facilities
-    rally_test_stages: Optional[float] = None     # WRC development capability
-    endurance_pit_crew_quality: Optional[float] = None  # WEC pit stop performance
-    motogp_chassis_expertise: Optional[float] = None     # MotoGP bike development
-    electric_powertrain_expertise: Optional[float] = None # Formula E specialization
+    rally_test_stages: Optional[float] = None     # Rally development capability
+    endurance_pit_crew_quality: Optional[float] = None  # Endurance pit stop performance
+    electric_powertrain_expertise: Optional[float] = None # Electric vehicle specialisation
     
     # AI personality and strategic approach
     risk_appetite: float = 0.5
@@ -504,12 +503,12 @@ class Track:
     track_type: str  # "circuit", "street", "rally_stage", "oval"
     surface_type: str = "tarmac"  # "tarmac", "gravel", "snow", "mixed"
     
-    # Circuit-specific (F1, F2, F3, WEC, Formula E)
+    # Circuit-specific
     corner_count: Optional[int] = None
     straight_length_km: Optional[float] = None
     elevation_change_m: Optional[float] = None
     
-    # Rally-specific (WRC)
+    # Rally-specific
     stage_type: Optional[str] = None  # "forest", "mountain", "coastal"
     average_width_m: Optional[float] = None
     weather_variability: Optional[float] = None  # How much weather affects this stage
@@ -549,7 +548,7 @@ class Championship:
     qualifying_format: str = "standard"  # "standard", "knockout", "superpole"
     
     # Endurance: Multi-class racing
-    racing_classes: Optional[List[str]] = None  # ["LMP1", "LMP2", "GTE-Pro", "GTE-Am"]
+    racing_classes: Optional[List[str]] = None  
     
     # Rally: Stage-based scoring
     stage_points_system: bool = False

@@ -41,6 +41,21 @@ AI_DECISION_FREQUENCY = int(os.getenv("AI_DECISION_FREQUENCY", "5"))  # seconds
 STRATEGY_COMPLEXITY = os.getenv("STRATEGY_COMPLEXITY", "medium")  # low, medium, high
 
 # ============================================================================
+# CURRENCY CONFIGURATION
+# ============================================================================
+
+# Currency System Settings
+DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "EUR")  # EUR, USD, GBP, JPY, CHF
+CURRENCY_UPDATE_INTERVAL = int(os.getenv("CURRENCY_UPDATE_INTERVAL", "3600"))  # seconds (1 hour)
+USE_LIVE_EXCHANGE_RATES = os.getenv("USE_LIVE_EXCHANGE_RATES", "true").lower() == "true"
+CURRENCY_CACHE_FILE = os.getenv("CURRENCY_CACHE_FILE", "currency_cache.json")
+
+# Motorsport Budget Configuration (2025 values)
+SINGLE_SEATER_BUDGET_CAP_EUR = float(os.getenv("SINGLE_SEATER_BUDGET_CAP_EUR", "130000000"))  # €130M EUR
+ENABLE_BUDGET_ENFORCEMENT = os.getenv("ENABLE_BUDGET_ENFORCEMENT", "true").lower() == "true"
+BUDGET_VIOLATION_PENALTY = float(os.getenv("BUDGET_VIOLATION_PENALTY", "0.1"))  # 10% performance penalty
+
+# ============================================================================
 # API CONFIGURATION
 # ============================================================================
 
@@ -72,24 +87,24 @@ MOCK_EXTERNAL_APIS = os.getenv("MOCK_EXTERNAL_APIS", "false").lower() == "true"
 
 # Racing Disciplines
 DISCIPLINES = {
-    "formula": {
-        "name": "Formula Racing",
-        "categories": ["F1", "F2", "F3"],
+    "single_seater": {
+        "name": "Single Seater Racing",
+        "categories": ["Premier", "Second", "Third"],
         "race_duration_minutes": 90
     },
-    "rally": {
-        "name": "Rally Racing", 
-        "categories": ["WRC", "WRC2", "WRC3"],
+    "rally_stage": {
+        "name": "Rally Stage Racing", 
+        "categories": ["World", "Regional", "National"],
         "race_duration_minutes": 180
     },
     "endurance": {
         "name": "Endurance Racing",
-        "categories": ["LMP1", "LMP2", "GTE"],
+        "categories": ["Prototype_A", "Prototype_B", "Grand_Touring"],
         "race_duration_minutes": 360
     },
-    "street": {
-        "name": "Street Racing",
-        "categories": ["GT3", "GT4", "Touring"],
+    "urban_street": {
+        "name": "Urban Street Racing",
+        "categories": ["Sports_GT_A", "Sports_GT_B", "Touring_Car"],
         "race_duration_minutes": 60
     }
 }

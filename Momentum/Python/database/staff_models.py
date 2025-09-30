@@ -8,7 +8,8 @@ team management simulation.
 
 Features:
 - 40+ staff attributes across 6 categories
-- 12+ different staff roles with specializations
+- 25+ different staff roles with specialisations  
+- Multi-currency support with EUR default (2025 F1 budget cap: $140.4M USD)
 - Budget-based staff scaling and hiring
 - Information fog-of-war based on staff capabilities
 - Cross-discipline compatibility
@@ -22,10 +23,28 @@ from typing import List, Dict, Optional, Any, Union, Tuple
 from enum import Enum
 from datetime import datetime
 import random
+import sys
+import os
+
+# Import currency system
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from systems.currency_system import Currency, currency_system
+except ImportError:
+    # Fallback if currency system not available
+    class Currency:
+        EUR = "EUR"
+        USD = "USD"
+    
+    class MockCurrencySystem:
+        def format_amount(self, amount, currency=Currency.EUR, show_code=False):
+            return f"€{amount:,.0f}" if currency == Currency.EUR else f"${amount:,.0f}"
+    
+    currency_system = MockCurrencySystem()
 
 
 class StaffRole(Enum):
-    """Staff role categories with specialization areas"""
+    """Staff role categories with specialisation areas"""
     
     # Core Technical Roles
     TECHNICAL_DIRECTOR = "TECHNICAL_DIRECTOR"
@@ -91,7 +110,7 @@ class StaffMember:
     Comprehensive staff member with 40+ attributes across 6 categories
     
     Similar to the driver system but focused on team operational capabilities
-    rather than racing performance. Each staff member has specializations
+    rather than racing performance. Each staff member has specialisations
     and contributes to different aspects of team performance.
     """
     
@@ -120,7 +139,7 @@ class StaffMember:
     innovation_ability: float = 50.0          # Creative problem solving
     
     # ===== ANALYTICAL SKILLS (8 attributes) =====
-    # Data analysis and performance optimization capabilities
+    # Data analysis and performance optimisation capabilities
     data_analysis: float = 50.0               # Statistical analysis and interpretation
     telemetry_analysis: float = 50.0          # Real-time data interpretation
     performance_modeling: float = 50.0        # Predictive performance models
@@ -131,9 +150,9 @@ class StaffMember:
     database_management: float = 50.0         # Data storage and retrieval
     
     # ===== MANAGEMENT & LEADERSHIP (7 attributes) =====
-    # Team coordination and organizational capabilities
+    # Team coordination and organisational capabilities
     leadership_ability: float = 50.0          # Natural leadership and influence
-    team_coordination: float = 50.0           # Organizing and managing teams
+    team_coordination: float = 50.0           # Organising and managing teams
     project_management: float = 50.0          # Planning and executing projects
     resource_allocation: float = 50.0         # Efficient resource utilization
     conflict_resolution: float = 50.0         # Handling team conflicts
@@ -157,14 +176,14 @@ class StaffMember:
     commercial_acumen: float = 50.0           # Business development skills
     negotiation_skills: float = 50.0          # Contract and deal negotiation
     sponsorship_development: float = 50.0     # Attracting and managing sponsors
-    cost_optimization: float = 50.0           # Efficient spending strategies
+    cost_optimisation: float = 50.0           # Efficient spending strategies
     
-    # ===== DISCIPLINE SPECIALIZATIONS (7 attributes) =====
+    # ===== DISCIPLINE SPECIALISATIONS (7 attributes) =====
     # Expertise in specific racing disciplines
-    single_seater_expertise: float = 50.0     # Formula racing specialization
+    single_seater_expertise: float = 50.0     # Formula racing specialisation
     touring_car_expertise: float = 50.0       # Production car racing knowledge
     rally_expertise: float = 50.0             # Rally and stage racing knowledge
-    street_racing_expertise: float = 50.0     # Urban racing specialization
+    street_racing_expertise: float = 50.0     # Urban racing specialisation
     drag_racing_expertise: float = 50.0       # Straight-line racing knowledge
     rallycross_expertise: float = 50.0        # Mixed surface racing expertise
     endurance_expertise: float = 50.0         # Long-distance racing knowledge
@@ -394,6 +413,73 @@ class StaffMember:
         
         return round(final_salary, -3)  # Round to nearest thousand
         
+    def get_formatted_salary(self, currency: Currency = Currency.EUR, 
+                           show_currency_code: bool = False) -> str:
+        """
+        Get formatted salary string in specified currency
+        
+        Args:
+            currency: Target currency for display
+            show_currency_code: Whether to show currency code (e.g., "EUR")
+            
+        Returns:
+            Formatted salary string (e.g., "€120,000" or "$130,000")
+        """
+        # Convert from USD (stored) to target currency
+        converted_salary = currency_system.convert_amount(
+            self.salary, Currency.USD, currency
+        )
+        return currency_system.format_amount(
+            converted_salary, currency, show_currency_code
+        )
+        
+    def calculate_salary_demand_in_currency(self, team_budget: float, 
+                                          role_importance: float,
+                                          currency: Currency = Currency.EUR) -> float:
+        """
+        Calculate salary demand in specified currency
+        
+        Args:
+            team_budget: Team's total budget in specified currency
+            role_importance: Role importance multiplier
+            currency: Target currency
+            
+        Returns:
+            Expected salary in target currency
+        """
+        # Convert team budget to USD for calculation
+        usd_budget = currency_system.convert_amount(team_budget, currency, Currency.USD)
+        
+        # Calculate salary in USD
+        usd_salary = self.calculate_salary_demand(usd_budget, role_importance)
+        
+        # Convert result to target currency
+        return currency_system.convert_amount(usd_salary, Currency.USD, currency)
+        
+    def get_contract_value_display(self, currency: Currency = Currency.EUR) -> Dict[str, str]:
+        """
+        Get comprehensive contract information for display
+        
+        Args:
+            currency: Display currency
+            
+        Returns:
+            Dictionary with formatted contract details
+        """
+        annual_salary = currency_system.convert_amount(
+            self.salary, Currency.USD, currency
+        )
+        total_value = annual_salary * self.contract_length
+        
+        return {
+            "annual_salary": currency_system.format_amount(annual_salary, currency, True),
+            "contract_length": f"{self.contract_length} year{'s' if self.contract_length != 1 else ''}",
+            "total_value": currency_system.format_amount(total_value, currency, True),
+            "contract_type": self.contract_type.replace("_", " ").title(),
+            "job_satisfaction": f"{self.job_satisfaction:.1f}%",
+            "performance_rating": f"{self.performance_rating:.1f}%"
+        }
+        
     def __repr__(self):
         return f"<StaffMember(name='{self.name}', role='{self.role.value}', tier='{self.tier.value}', effectiveness={self.get_role_effectiveness():.1f})>"
 
@@ -561,6 +647,102 @@ class TeamStaffing:
             ])
             
         return [role for role in critical_roles if role not in current_roles]
+        
+    def get_budget_breakdown(self, currency: Currency = Currency.EUR) -> Dict[str, str]:
+        """
+        Get formatted budget breakdown in specified currency
+        
+        Args:
+            currency: Display currency
+            
+        Returns:
+            Dictionary with formatted budget information
+        """
+        # Convert budgets from USD to target currency
+        total_budget_converted = currency_system.convert_amount(
+            self.total_budget, Currency.USD, currency
+        )
+        personnel_budget_converted = currency_system.convert_amount(
+            self.personnel_budget, Currency.USD, currency
+        )
+        
+        current_costs = sum(
+            currency_system.convert_amount(member.salary, Currency.USD, currency)
+            for member in self.staff_members
+        )
+        
+        remaining_budget = personnel_budget_converted - current_costs
+        budget_utilization = (current_costs / personnel_budget_converted) * 100 if personnel_budget_converted > 0 else 0
+        
+        return {
+            "total_budget": currency_system.format_amount(total_budget_converted, currency, True),
+            "personnel_budget": currency_system.format_amount(personnel_budget_converted, currency, True),
+            "current_costs": currency_system.format_amount(current_costs, currency, True),
+            "remaining_budget": currency_system.format_amount(remaining_budget, currency, True),
+            "budget_utilization": f"{budget_utilization:.1f}%",
+            "staff_count": str(len(self.staff_members)),
+            "info_access_level": f"{self.calculate_information_access_level():.1f}/100"
+        }
+        
+    def check_budget_compliance(self, discipline: str = "single_seater") -> Dict[str, Any]:
+        """
+        Check compliance with racing discipline budget caps
+        
+        Args:
+            discipline: Racing discipline for budget cap reference (single_seater, production_touring, etc.)
+            
+        Returns:
+            Dictionary with compliance information
+        """
+        try:
+            budget_cap_usd = currency_system.get_budget_cap(discipline, Currency.USD)
+            over_budget = self.total_budget > budget_cap_usd
+            
+            return {
+                "discipline": discipline,
+                "budget_cap": currency_system.get_formatted_budget_cap(discipline, Currency.EUR),
+                "team_budget": currency_system.format_amount(
+                    currency_system.convert_amount(self.total_budget, Currency.USD, Currency.EUR), 
+                    Currency.EUR, True
+                ),
+                "compliant": not over_budget,
+                "excess_amount": currency_system.format_amount(
+                    currency_system.convert_amount(max(0, self.total_budget - budget_cap_usd), Currency.USD, Currency.EUR),
+                    Currency.EUR, True
+                ) if over_budget else "€0",
+                "utilization_percentage": f"{(self.total_budget / budget_cap_usd) * 100:.1f}%"
+            }
+        except ValueError:
+            return {"error": f"Unknown discipline: {discipline}"}
+        
+    def get_staff_salary_summary(self, currency: Currency = Currency.EUR) -> List[Dict[str, str]]:
+        """
+        Get summary of all staff salaries in specified currency
+        
+        Args:
+            currency: Display currency
+            
+        Returns:
+            List of staff salary information
+        """
+        staff_summary = []
+        
+        for member in sorted(self.staff_members, key=lambda x: x.salary, reverse=True):
+            converted_salary = currency_system.convert_amount(
+                member.salary, Currency.USD, currency
+            )
+            
+            staff_summary.append({
+                "name": member.name,
+                "role": member.role.value.replace("_", " ").title(),
+                "tier": member.tier.value.title(),
+                "annual_salary": currency_system.format_amount(converted_salary, currency),
+                "contract_years": str(member.contract_length),
+                "effectiveness": f"{member.get_role_effectiveness():.1f}%",
+                "nationality": member.nationality
+            })
+            
+        return staff_summary
         
     def __repr__(self):
         return f"<TeamStaffing(team_id={self.team_id}, staff_count={len(self.staff_members)}, budget=${self.total_budget:,.0f}, info_access={self.calculate_information_access_level():.1f})>"
