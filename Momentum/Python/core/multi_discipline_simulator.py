@@ -13,13 +13,13 @@ Features:
 - Error handling and fallback mechanisms
 
 Supported Disciplines:
-- Single Seater (F1, IndyCar, Formula series)
-- Production/Touring (BTCC, WTCC, V8 Supercars)
-- Rally/Stage (WRC, Rally Championship)
-- Urban/Street (Drift, Street Racing, Underground)
-- Drag/Acceleration (NHRA, Street Drag)
-- Sprint/Rallycross (World RX, ARX)
-- Endurance (Le Mans, IMSA, WEC)
+- Single Seater
+- Production/Touring
+- Rally/Stage
+- Urban/Street
+- Drag/Acceleration
+- Sprint/Rallycross
+- Endurance
 
 Authors: Final Year Project - Computer Science
 """

@@ -177,47 +177,15 @@ TEAM_NAME_SUFFIXES = [
 # Sample generated teams (will be expanded programmatically)
 SAMPLE_TEAM_NAMES = {
     
-    "GPDC": [
-        "Academy Racing", "Future Stars Racing", "Rising Phoenix",
-        "Next Gen Motorsport", "Talent Development Team", "Prospect Racing",
-        "Elite Academy", "Championship Futures", "Star Racing Academy",
-        "Premier Development", "Racing Pathways", "Victory Academy"
-    ],
-    
-    "GPAC": [
-        "Junior Stars", "Rookie Racing", "Academy Motorsport",
-        "Youth Racing Team", "Development Stars", "Future Champions",
-        "Cadet Racing", "Premier Academy", "Rising Talent",
-        "Championship Academy", "Elite Juniors", "Victory Cadets"
-    ],
-    
-    "WEC": [
-        "Endurance Masters", "Marathon Racing", "Persistence Motorsport",
-        "Long Distance Racing", "Stamina Racing Team", "Durability Motors",
-        "24 Hour Racing", "Ultra Distance Team", "Endurance Elite",
-        "Distance Champions", "Marathon Masters", "Persistence Racing"
-    ],
-    
-    "WRC": [
-        "Rally Masters", "Off-Road Racing", "Stage Racing Team",
-        "Terrain Masters", "All-Surface Racing", "Rally Champions",
-        "Cross-Country Racing", "Surface Specialists", "Rally Elite",
-        "Terrain Racing", "Stage Masters", "Rally Professionals"
-    ],
-    
-    "MPG": [
-        "Motorcycle Masters", "Bike Racing Elite", "Two-Wheel Champions",
-        "Speed Demons Racing", "Lean Angle Racing", "Motorcycle Legends",
-        "Bike Masters Team", "Racing Motorcycles", "Elite Bike Racing",
-        "Motorcycle Champions", "Two-Wheel Masters", "Speed Racing Team"
-    ],
-    
-    "EGP": [
-        "Electric Racing", "Voltage Motorsport", "E-Power Racing",
-        "Clean Energy Racing", "Electric Elite", "Sustainable Racing",
-        "Green Racing Team", "Electric Champions", "Eco Racing",
-        "Zero Emission Racing", "Electric Masters", "Green Speed Team"
-    ]
+    "GPC1": ["Premier Racing", "Global Velocity", "Apex Motorsport", "Sterling GP", "Phoenix Racing", "Titan Racing", "Vanguard GP", "Quantum Racing", "Summit Motorsport", "Zenith Racing", "Nexus GP", "Elite Racing"],
+    "GPC2": ["NextGen Racing", "Future Stars GP", "Pinnacle Motorsport", "Matrix Racing", "Vertex GP", "Pulse Racing", "Surge Motorsport", "Blaze GP", "Vortex Racing", "Nova Motorsport", "Stellar GP", "Cosmic Racing"],
+    "GPC3": ["Rising Talent GP", "Prospect Racing", "Cadet Motorsport", "Junior Velocity", "Academy GP", "Star Racing", "Victory Cadets", "Premier Academy", "Racing Pathways", "Championship Futures", "Elite Juniors", "Victory Academy"],
+    "WTC1": ["Touring Masters", "World Touring Elite", "Velocity Touring", "Apex Touring", "Thunder Touring", "Crimson Touring", "Azure Touring", "Sterling Touring", "Nexus Touring", "Titan Touring", "Eclipse Touring", "Lightning Touring"],
+    "WTC2": ["Touring Pros", "Touring Champions", "Touring Performance", "Touring Dynamics", "Touring Engineering", "Touring Technology", "Touring Systems", "Touring Solutions", "Touring Innovations", "Touring Developments", "Touring Enterprises", "Touring Industries"],
+    "WRC1": ["Rally Masters", "Off-Road Racing", "Stage Racing Team", "Terrain Masters", "All-Surface Racing", "Rally Champions", "Cross-Country Racing", "Surface Specialists", "Rally Elite", "Terrain Racing", "Stage Masters", "Rally Professionals"],
+    "WRC2": ["Rally Pros", "Rally Champions", "Rally Performance", "Rally Dynamics", "Rally Engineering", "Rally Technology", "Rally Systems", "Rally Solutions", "Rally Innovations", "Rally Developments", "Rally Enterprises", "Rally Industries"],
+    "WEC1": ["Endurance Masters", "Marathon Racing", "Persistence Motorsport", "Long Distance Racing", "Stamina Racing Team", "Durability Motors", "24 Hour Racing", "Ultra Distance Team", "Endurance Elite", "Distance Champions", "Marathon Masters", "Persistence Racing"],
+    "WEC2": ["Endurance Pros", "Endurance Champions", "Endurance Performance", "Endurance Dynamics", "Endurance Engineering", "Endurance Technology", "Endurance Systems", "Endurance Solutions", "Endurance Innovations", "Endurance Developments", "Endurance Enterprises", "Endurance Industries"],
 }
 
 # ============================================================================
@@ -297,63 +265,12 @@ SAMPLE_DRIVER_POOL = [
     DriverProfile("Kai", "Thunder", "JPN", 25, "GPC1"),
 ]
 
-# ============================================================================
-# FICTIONAL TRACK NAMES AND LOCATIONS
-# ============================================================================
-
-TRACK_NAMES = {
-    "GPC": [
-        # Circuit Tracks
-        {"name": "Apex International Circuit", "location": "Silverton", "country": "Britannia"},
-        {"name": "Phoenix Grand Prix Circuit", "location": "Monaco Bay", "country": "Riviera"},
-        {"name": "Thunder Valley Circuit", "location": "Speedway City", "country": "Americana"},
-        {"name": "Azure Coast Circuit", "location": "Blue Harbor", "country": "Mediterra"},
-        {"name": "Crimson Hills Circuit", "location": "Red Valley", "country": "Germania"},
-        {"name": "Velocity Park Circuit", "location": "Motor City", "country": "Italia"},
-        {"name": "Sterling Ring", "location": "Crown City", "country": "Britannia"},
-        {"name": "Nexus Speedway", "location": "Tech Valley", "country": "Futura"},
-        {"name": "Eclipse Circuit", "location": "Shadow Hills", "country": "Nordica"},
-        {"name": "Titan Raceway", "location": "Steel City", "country": "Industria"}
-    ],
-    
-    "WEC": [
-        # Endurance Tracks
-        {"name": "Marathon International Circuit", "location": "Le Circuit", "country": "Gallia"},
-        {"name": "Endurance Valley", "location": "Long Beach", "country": "Americana"},
-        {"name": "24 Hour Circuit", "location": "Daylight City", "country": "Germania"},
-        {"name": "Distance Masters Track", "location": "Far Valley", "country": "Nordica"}
-    ],
-    
-    "WRC": [
-        # Rally Stages
-        {"name": "Forest Masters Stage", "location": "Pine Valley", "country": "Nordica"},
-        {"name": "Mountain Rally Stage", "location": "High Peaks", "country": "Alpina"},
-        {"name": "Desert Cross Stage", "location": "Sand Dunes", "country": "Saharia"},
-        {"name": "Coastal Rally Stage", "location": "Sea Cliffs", "country": "Oceanica"}
-    ],
-    
-    "MPG": [
-        # Motorcycle Circuits
-        {"name": "Speed Demon Circuit", "location": "Fast City", "country": "Velocia"},
-        {"name": "Lean Angle Track", "location": "Curve Valley", "country": "Bendica"},
-        {"name": "Two-Wheel Speedway", "location": "Bike Town", "country": "Motorcity"},
-        {"name": "Racing Thunder Circuit", "location": "Sound Valley", "country": "Acoustica"}
-    ],
-    
-    "EGP": [
-        # Electric Racing Circuits
-        {"name": "Voltage Street Circuit", "location": "Electric City", "country": "Futura"},
-        {"name": "Green Energy Track", "location": "Eco Valley", "country": "Sustainia"},
-        {"name": "Zero Emission Circuit", "location": "Clean City", "country": "Purica"},
-        {"name": "E-Power Speedway", "location": "Battery Bay", "country": "Electronia"}
-    ]
-}
 
 # ============================================================================
-# COUNTRIES AND TERRITORIES (UN Members + Recognized Territories)
+# COUNTRIES AND TERRITORIES (UN Members + Recognised Territories)
 # ============================================================================
 
-# Using real country codes and names (not copyrighted)
+# Using real country codes and names
 COUNTRIES = {
     # Major Racing Nations
     "GBR": "United Kingdom", "USA": "United States", "ITA": "Italy", "FRA": "France",
@@ -408,7 +325,35 @@ COUNTRIES = {
     "VAT": "Vatican City", "VEN": "Venezuela", "VNM": "Vietnam", "YEM": "Yemen",
     "ZMB": "Zambia", "ZWE": "Zimbabwe",
     
-    # Recognized Territories and Entities
+    # Recognised Territories and Entities 
+    "GIB": "Gibraltar",
+    "JEY": "Jersey",
+    "GGY": "Guernsey",
+    "FLK": "Falkland Islands",
+    "BES": "Caribbean Netherlands (Bonaire, Sint Eustatius, Saba)",
+    "CUW": "Curaçao",
+    "SXM": "Sint Maarten",
+    "MAF": "Saint Martin (French part)",
+    "BLM": "Saint Barthélemy",
+    "GLP": "Guadeloupe",
+    "MTQ": "Martinique",
+    "REU": "Réunion",
+    "MYT": "Mayotte",
+    "NCL": "New Caledonia",
+    "PYF": "French Polynesia",
+    "WLF": "Wallis and Futuna",
+    "ASM": "American Samoa",
+    "GUM": "Guam",
+    "MNP": "Northern Mariana Islands",
+    "PRI": "Puerto Rico",
+    "VIR": "U.S. Virgin Islands",
+    "VGB": "British Virgin Islands",
+    "TCA": "Turks and Caicos Islands",
+    "SHN": "Saint Helena, Ascension and Tristan da Cunha",
+    "PCN": "Pitcairn Islands",
+    "COK": "Cook Islands",
+    "NIU": "Niue",
+    "TKL": "Tokelau",
     "PSE": "Palestine", "TWN": "Taiwan", "XKX": "Kosovo", "PMR": "Transnistria",
     "ABK": "Abkhazia", "OSE": "South Ossetia", "ARK": "Artsakh", "DNR": "Donetsk People's Republic",
     "LNR": "Luhansk People's Republic", "NCY": "Northern Cyprus", "SOM2": "Somaliland",
@@ -416,31 +361,11 @@ COUNTRIES = {
 }
 
 # ============================================================================
-# CHAMPIONSHIP NAMES
-# ============================================================================
-
-CHAMPIONSHIP_NAMES = {
-    "GPC": "Global Premier Championship",
-    "GPDC": "Global Premier Development Series", 
-    "GPAC": "Global Premier Academy Series",
-    "WEC": "World Endurance Series",
-    "WRC": "World Rally Series",
-    "MPG": "Motorcycle Premier Global Series",
-    "EGP": "Electric Grand Prix Series"
-}
-
-# ============================================================================
 # MANUFACTURER/ENGINE SUPPLIER NAMES
 # ============================================================================
 
 ENGINE_SUPPLIERS = {
-    "GPC": ["PowerTech", "VelocityMotors", "TurboMax", "SpeedForce", "RacingPower"],
-    "GPDC": ["DevelopmentPower", "AcademyMotors", "RisingForce", "FutureTech"],
-    "GPAC": ["JuniorPower", "CadetMotors", "AcademyTech", "RookieForce"],
-    "WEC": ["EnduranceTech", "MarathonPower", "DistanceMotors", "StaminaForce"],
-    "WRC": ["RallyTech", "TerrainPower", "OffRoadMotors", "StageForce"],
-    "MPG": ["BikeMax", "TwoWheelPower", "MotorcycleTech", "SpeedBike"],
-    "EGP": ["ElectricMax", "VoltageMotors", "GreenTech", "EcoPower"]
+
 }
 
 TIRE_SUPPLIERS = [
