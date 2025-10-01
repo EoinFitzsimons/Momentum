@@ -27,7 +27,7 @@ from Momentum.Python.database.models.multi_discipline_models import (
 from systems.vehicle_development import VehicleDevelopmentEngine, DevelopmentProject
 from systems.championship_manager import ChampionshipManager, TransferMarket
 from ai.decision_engine import TeamAI, DriverAI, AIDecision
-from core.race_simulation import RaceSimulator
+from Momentum.Python.disciplines.race_simulation import RaceSimulator
 from data.placeholder_names import (
     DISCIPLINES, TEAM_NAMES, DRIVER_POOL, TRACK_NAMES, 
     get_random_driver_name, get_random_team_name

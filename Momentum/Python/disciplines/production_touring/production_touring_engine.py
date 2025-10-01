@@ -23,7 +23,7 @@ import random
 from typing import List, Dict, Optional, Tuple
 
 from database.models import Driver, Team, RaceResult
-from .base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
+from ..base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
 
 
 class ProductionTouringEngine(BaseDisciplineEngine):

@@ -26,7 +26,7 @@ from typing import List, Dict, Optional, Tuple
 from enum import Enum
 
 from database.models import Driver, Team, RaceResult
-from .base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
+from ..base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
 
 
 class EnduranceRaceLength(Enum):

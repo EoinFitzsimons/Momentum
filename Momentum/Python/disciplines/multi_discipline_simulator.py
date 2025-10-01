@@ -28,14 +28,14 @@ from typing import List, Dict, Optional, Type, Any
 import logging
 
 from database.models import Driver, Team, Race, RaceResult
-from .disciplines.base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
-from .disciplines.single_seater_engine import SingleSeaterEngine
-from .disciplines.production_touring_engine import ProductionTouringEngine
-from .disciplines.rally_stage_engine import RallyStageEngine
-from .disciplines.urban_street_engine import UrbanStreetEngine
-from .disciplines.drag_acceleration_engine import DragAccelerationEngine
-from .disciplines.sprint_rallycross_engine import SprintRallycrossEngine
-from .disciplines.endurance_engine import EnduranceEngine
+from .base_engine import BaseDisciplineEngine, DisciplineContext, RacingDiscipline, RaceEventType
+from .single_seater.single_seater_engine import SingleSeaterEngine
+from .production_touring.production_touring_engine import ProductionTouringEngine
+from .rally_stage.rally_stage_engine import RallyStageEngine
+from .urban_street.urban_street_engine import UrbanStreetEngine
+from .drag_acceleration.drag_acceleration_engine import DragAccelerationEngine
+from .sprint_rallycross.sprint_rallycross_engine import SprintRallycrossEngine
+from .endurance.endurance_engine import EnduranceEngine
 
 
 class MultiDisciplineSimulator:
