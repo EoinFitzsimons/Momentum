@@ -85,42 +85,157 @@ DEV_MODE = os.getenv("DEV_MODE", "true").lower() == "true"
 ENABLE_DEBUG_ENDPOINTS = os.getenv("ENABLE_DEBUG_ENDPOINTS", "true").lower() == "true"
 MOCK_EXTERNAL_APIS = os.getenv("MOCK_EXTERNAL_APIS", "false").lower() == "true"
 
-# Racing Disciplines
+# ============================================================================
+# RACING DISCIPLINES (All 7 Disciplines)
+# ============================================================================
+
 DISCIPLINES = {
-    "single_seater": {
+    "SINGLE_SEATER": {
         "name": "Single Seater Racing",
-        "categories": ["Premier", "Second", "Third"],
-        "race_duration_minutes": 90
+        "description": "Formula-style open-wheel racing"
     },
-    "rally_stage": {
-        "name": "Rally Stage Racing", 
-        "categories": ["World", "Regional", "National"],
-        "race_duration_minutes": 180
+    "PRODUCTION_TOURING": {
+        "name": "Production/Touring Car Racing",
+        "description": "GT and touring car racing"
     },
-    "endurance": {
+    "RALLY_STAGE": {
+        "name": "Rally/Stage Racing",
+        "description": "WRC-style point-to-point rally racing"
+    },
+    "URBAN_STREET": {
+        "name": "Urban/Street Racing",
+        "description": "Formula E and city street circuit racing"
+    },
+    "DRAG_ACCELERATION": {
+        "name": "Drag/Acceleration Racing",
+        "description": "Straight-line acceleration racing"
+    },
+    "SPRINT_RALLYCROSS": {
+        "name": "Sprint/Rallycross Racing",
+        "description": "Mixed-surface short-circuit racing"
+    },
+    "ENDURANCE": {
         "name": "Endurance Racing",
-        "categories": ["Prototype_A", "Prototype_B", "Grand_Touring"],
-        "race_duration_minutes": 360
-    },
-    "urban_street": {
-        "name": "Urban Street Racing",
-        "categories": ["Sports_GT_A", "Sports_GT_B", "Touring_Car"],
-        "race_duration_minutes": 60
+        "description": "Long-distance prototype and GT racing"
     }
 }
 
-# Driver Attributes Range (0.0 to 1.0)
-DRIVER_ATTRIBUTES = {
-    "skill": {"min": 0.1, "max": 1.0},
-    "consistency": {"min": 0.1, "max": 1.0},
-    "aggression": {"min": 0.0, "max": 1.0},
-    "racecraft": {"min": 0.1, "max": 1.0},
-    "adaptability": {"min": 0.1, "max": 1.0}
-}
+# ============================================================================
+# DRIVER ATTRIBUTES (50+ Comprehensive Attributes)
+# ============================================================================
 
-# Team Financial Ranges (in millions)
-TEAM_BUDGETS = {
-    "tier1": {"min": 100, "max": 400},  # Top teams
-    "tier2": {"min": 50, "max": 150},   # Mid-field
-    "tier3": {"min": 20, "max": 80}     # Lower teams
-}
+# Core Driving Skills (10 attributes)
+DRIVER_CORE_SKILLS = [
+    "raw_speed",
+    "consistency",
+    "racecraft",
+    "overtaking",
+    "defensive_driving",
+    "cornering_skill",
+    "braking_technique",
+    "acceleration_control",
+    "spatial_awareness",
+    "vehicle_control"
+]
+
+# Physical & Mental Traits (10 attributes)
+DRIVER_PHYSICAL_MENTAL = [
+    "physical_fitness",
+    "reaction_time",
+    "concentration",
+    "pressure_handling",
+    "pain_tolerance",
+    "g_force_tolerance",
+    "coordination",
+    "multitasking",
+    "mental_resilience",
+    "adrenaline_management"
+]
+
+# Technical Knowledge (8 attributes)
+DRIVER_TECHNICAL = [
+    "setup_knowledge",
+    "mechanical_sympathy",
+    "tire_management",
+    "fuel_management",
+    "aerodynamics_understanding",
+    "suspension_feel",
+    "engine_management",
+    "data_analysis"
+]
+
+# Discipline Specializations (7 attributes)
+DRIVER_DISCIPLINE_APTITUDES = [
+    "single_seater_aptitude",
+    "production_touring_aptitude",
+    "rally_stage_aptitude",
+    "urban_street_aptitude",
+    "drag_acceleration_aptitude",
+    "sprint_rallycross_aptitude",
+    "endurance_aptitude"
+]
+
+# Race Craft & Strategy (8 attributes)
+DRIVER_STRATEGY = [
+    "race_strategy",
+    "pit_stop_coordination",
+    "traffic_management",
+    "tire_strategy",
+    "fuel_strategy",
+    "safety_car_awareness",
+    "qualifying_optimization",
+    "championship_thinking"
+]
+
+# Environmental Adaptation (7 attributes)
+DRIVER_ADAPTATION = [
+    "wet_weather_skill",
+    "night_racing_skill",
+    "temperature_adaptation",
+    "altitude_adaptation",
+    "surface_adaptation",
+    "car_adaptation",
+    "track_learning"
+]
+
+# Personal & Social Traits (6 attributes)
+DRIVER_PERSONAL = [
+    "media_presence",
+    "team_cooperation",
+    "leadership_ability",
+    "risk_appetite",
+    "ego_management",
+    "commercial_appeal"
+]
+
+# Specialized Skills (2 attributes)
+DRIVER_SPECIALIZED = [
+    "energy_management",
+    "stint_management"
+]
+
+# Development & Career Traits (4 attributes)
+DRIVER_DEVELOPMENT = [
+    "learning_rate",
+    "team_loyalty",
+    "ambition_level",
+    "discipline_switching_tendency"
+]
+
+# All Driver Attributes Combined (56 total)
+ALL_DRIVER_ATTRIBUTES = (
+    DRIVER_CORE_SKILLS +
+    DRIVER_PHYSICAL_MENTAL +
+    DRIVER_TECHNICAL +
+    DRIVER_DISCIPLINE_APTITUDES +
+    DRIVER_STRATEGY +
+    DRIVER_ADAPTATION +
+    DRIVER_PERSONAL +
+    DRIVER_SPECIALIZED +
+    DRIVER_DEVELOPMENT
+)
+
+# Attribute value range (0.0 to 100.0 scale used in models)
+DRIVER_ATTRIBUTE_MIN = 0.0
+DRIVER_ATTRIBUTE_MAX = 100.0
+DRIVER_ATTRIBUTE_DEFAULT = 50.0

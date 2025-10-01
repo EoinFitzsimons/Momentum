@@ -23,7 +23,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
-from database.multi_discipline_models import (
+from Momentum.Python.database.models.multi_discipline_models import (
     RacingDiscipline, MultiDisciplineDriver, MultiDisciplineTeam, 
     Championship, Race, Track
 )

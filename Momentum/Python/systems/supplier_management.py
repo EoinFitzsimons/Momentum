@@ -20,7 +20,7 @@ import sqlite3
 import random
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
-from database.supplier_models import Supplier, ComponentContract, SupplierCategory, SupplierTier, SUPPLIER_BASE_MODELS
+from Momentum.Python.database.models.supplier_models import Supplier, ComponentContract, SupplierCategory, SupplierTier, SUPPLIER_BASE_MODELS
 
 
 class SupplierManager:

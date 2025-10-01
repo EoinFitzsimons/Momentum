@@ -21,7 +21,7 @@ from typing import List, Optional, Dict
 import json
 
 from database.database_manager import DatabaseManager
-from database.multi_discipline_models import (
+from Momentum.Python.database.models.multi_discipline_models import (
     MultiDisciplineDriver, MultiDisciplineTeam, Vehicle, RacingDiscipline
 )
 from systems.vehicle_development import VehicleDevelopmentEngine, DevelopmentProject
