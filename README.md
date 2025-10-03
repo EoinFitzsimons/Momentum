@@ -77,7 +77,7 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 - **Staff Management:** 40+ attributes, 25+ roles (Technical Director, Race Strategist, Data Analyst, Pit Crew Chief, etc.)
 - **Currency System:** Multi-currency support (EUR, USD, GBP, JPY, CHF) with real-time exchange rates
 - **Financial Management:** Realistic budget caps, salary negotiations, operational costs scaled by discipline
-- **Name Generation:** Hybrid system using NameAPI + ParaNames dataset for authentic international driver/staff names
+- **Name Generation:** Intelligent system using Faker library with 24 locales for authentic, culturally-appropriate international names
 - **Supplier System:** Engine, tire, and fuel suppliers with performance characteristics
 - **Monte Carlo Simulation:** Advanced probabilistic race outcome generation
 - **Database Layer:** SQLite persistence for teams, drivers, staff, races, championships
@@ -96,7 +96,7 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 - **Database:** SQLite 3.7+ with SQLAlchemy ORM
 - **Web Framework:** FastAPI (optional, for future API exposure)
 - **Libraries:** NumPy, Pandas, SciPy (Monte Carlo simulation)
-- **Name Generation:** NameAPI integration + ParaNames dataset (500K+ names)
+- **Name Generation:** Faker library with comprehensive locale support (80+ countries, 24 locales)
 - **Currency:** Live exchange rate support via currency API
 - **Tools:** VS Code, GitHub Desktop, SQLite browser
 
@@ -125,7 +125,9 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
    Create a `.env` file in the Python directory:
    ```env
    # Name Generation API (optional)
-   NAMEAPI_KEY=your_api_key_here
+      ```bash
+   # No API keys required - fully offline name generation
+   ```
    
    # Currency System
    DEFAULT_CURRENCY=EUR
@@ -185,7 +187,7 @@ Momentum/Python/
 │
 ├── data/                       # Static data and generators
 │   ├── placeholder_names.py    # Generic names, teams, leagues
-│   └── paranames.db            # ParaNames database (500K+ names)
+│   └── used_names.db           # Name uniqueness tracking database
 │
 ├── vehicles/                   # Vehicle component systems
 │   ├── vehicle.py              # Vehicle class
@@ -208,7 +210,7 @@ Momentum/Python/
 - **Driver System:** 50+ attributes, cross-discipline compatibility, career progression modeling
 - **Staff Management:** 40+ attributes, 25+ roles, budget-scaled hiring, performance multipliers
 - **Currency System:** Multi-currency support with live exchange rates (EUR, USD, GBP, JPY, CHF)
-- **Name Generation:** Hybrid system with NameAPI + ParaNames (500K+ international names)
+- **Name Generation:** Intelligent system with Faker (guaranteed unique, culturally-appropriate names)
 - **Supplier Management:** Engine, tire, and fuel suppliers with performance characteristics
 - **Database Layer:** SQLite persistence with comprehensive models for all entities
 - **Generic Content:** All placeholder names, teams, leagues, and personnel (no licensed content)
@@ -289,4 +291,4 @@ This is a final year Computer Science project. Contributions, suggestions, and f
 
 - **Python:** 3.11+
 - **Database:** SQLite (included with Python)
-- **Optional APIs:** NameAPI key for enhanced name generation (falls back to local database)
+- **No API Keys Required:** Fully offline operation with Faker-based name generation

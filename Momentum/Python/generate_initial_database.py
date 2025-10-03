@@ -43,11 +43,11 @@ logger = logging.getLogger(__name__)
 
 # Import our systems
 from data.placeholder_names import (
-    RACING_CATEGORIES, COUNTRIES, generate_driver_name, 
-    generate_team_name, calculate_total_entities,
-    STAFF_ROLES, STAFF_SIZE_ESTIMATES
+    RACING_CATEGORIES, COUNTRIES, generate_team_name, 
+    calculate_total_entities, STAFF_ROLES, STAFF_SIZE_ESTIMATES
 )
 from database.database_manager import DatabaseManager
+from systems.intelligent_name_generator import IntelligentNameGenerator
 from database.models import Driver, Team
 
 # Try to import staff models, but continue if not available
@@ -72,6 +72,7 @@ class DatabaseGenerator:
         """Initialize the generator with database connection"""
         self.db_path = db_path or "database/momentum.db"
         self.db = DatabaseManager(self.db_path)
+        self.name_generator = IntelligentNameGenerator()
         self.stats = {
             'teams_created': 0,
             'drivers_created': 0,
@@ -86,7 +87,7 @@ class DatabaseGenerator:
         logger.info("=" * 80)
         
         # Step 1: Calculate requirements
-        logger.info("\n📊 Calculating generation requirements...")
+        logger.info("\n[STATS] Calculating generation requirements...")
         totals = calculate_total_entities()
         logger.info(f"  → Teams needed: {totals['teams']:,}")
         logger.info(f"  → Drivers needed: {totals['drivers']:,}")
@@ -94,7 +95,7 @@ class DatabaseGenerator:
         logger.info(f"  → Total personnel: {totals['total_personnel']:,}")
         
         # Step 2: Generate for each discipline
-        logger.info("\n🏁 Generating teams, drivers, and staff by discipline...")
+        logger.info("\n[GENERATING] Teams, drivers, and staff by discipline...")
         
         for category_name, category_data in RACING_CATEGORIES.items():
             self._generate_discipline(category_name, category_data)
@@ -102,18 +103,18 @@ class DatabaseGenerator:
         # Step 3: Generate final report
         self._generate_report()
         
-        logger.info("\n✅ Database generation complete!")
+        logger.info("\n[SUCCESS] Database generation complete!")
         logger.info(f"   Teams: {self.stats['teams_created']:,}")
         logger.info(f"   Drivers: {self.stats['drivers_created']:,}")
         logger.info(f"   Staff: {self.stats['staff_created']:,}")
         
         if self.stats['errors']:
-            logger.warning(f"\n⚠️  Encountered {len(self.stats['errors'])} errors (see log)")
+            logger.warning(f"\n[WARNING]  Encountered {len(self.stats['errors'])} errors (see log)")
     
     def _generate_discipline(self, category_name: str, category_data: Dict):
         """Generate all teams, drivers, and staff for a specific discipline"""
         logger.info(f"\n{'=' * 60}")
-        logger.info(f"📁 {category_data['name']} ({category_name})")
+        logger.info(f"[CATEGORY] {category_data['name']} ({category_name})")
         logger.info(f"{'=' * 60}")
         
         for league_code, league_info in category_data['leagues'].items():
@@ -121,7 +122,7 @@ class DatabaseGenerator:
     
     def _generate_league(self, league_code: str, league_info, category_name: str):
         """Generate teams for a specific league"""
-        logger.info(f"\n  🏆 {league_info.full_name} ({league_code}) - Tier {league_info.tier}")
+        logger.info(f"\n  [LEAGUE] {league_info.full_name} ({league_code}) - Tier {league_info.tier}")
         
         # Determine number of teams
         num_teams = random.randint(league_info.min_teams, league_info.max_teams)
@@ -153,9 +154,9 @@ class DatabaseGenerator:
         )[0]
         
         # Generate team principal name
-        gender = random.choice(["MALE", "FEMALE"])
-        principal_data = generate_driver_name(headquarters_country, gender)
-        team_principal_name = f"{principal_data['first_name']} {principal_data['last_name']}"
+        gender = random.choice(["M", "F"])
+        principal_data = self.name_generator.generate_unique_name(headquarters_country, gender, role='principal')
+        team_principal_name = principal_data['full_name']
         
         # Create team entity
         team = Team(
@@ -164,7 +165,7 @@ class DatabaseGenerator:
             nationality=headquarters_country,
             founded_year=random.randint(1990, 2023),
             discipline=category_name,
-            tier=league_info.tier,
+            tier=f"tier{league_info.tier}",  # Convert integer tier to string format (tier1, tier2, etc.)
             budget=budget,
             headquarters=f"{random.choice(['City', 'Town', 'Base'])} in {COUNTRIES[headquarters_country]}",
             team_principal=team_principal_name
@@ -184,7 +185,7 @@ class DatabaseGenerator:
             team_id, team_name, league_info.tier, budget, category_name
         )
         
-        logger.info(f"     ✓ {team_name} ({team_id})")
+        logger.info(f"     [OK] {team_name} ({team_id})")
         logger.info(f"       Budget: €{budget:,.0f} | Drivers: {len(drivers)} | Staff: {len(staff)}")
     
     def _generate_drivers_for_team(
@@ -204,10 +205,10 @@ class DatabaseGenerator:
                 k=1
             )[0]
             
-            # Generate name
-            gender = random.choice(["MALE", "FEMALE"])
-            name_data = generate_driver_name(nationality, gender)
-            full_name = f"{name_data['first_name']} {name_data['last_name']}"
+            # Generate name using intelligent generator
+            gender = random.choice(["M", "F"])
+            name_data = self.name_generator.generate_unique_name(nationality, gender, role='driver')
+            full_name = name_data['full_name']
             
             # Generate birth date (age between 18-45)
             age = random.randint(18, 45)
@@ -321,7 +322,9 @@ class DatabaseGenerator:
             
             for staff_num in range(num_staff):
                 # Select role
-                role_name = random.choice(available_roles)
+                role_display_name = random.choice(available_roles)
+                # Convert display name to database format (lowercase with underscores)
+                role_name = role_display_name.lower().replace(" ", "_")
                 
                 # Select nationality
                 nationality = random.choices(
@@ -330,45 +333,55 @@ class DatabaseGenerator:
                     k=1
                 )[0]
                 
-                # Generate name
-                gender = random.choice(["MALE", "FEMALE"])
-                name_data = generate_driver_name(nationality, gender)
+                # Generate name using intelligent generator
+                gender = random.choice(["M", "F"])
+                name_data = self.name_generator.generate_unique_name(nationality, gender, role=role_name)
                 
-                # Generate staff ID
-                staff_id = f"{team_id}_S{role_category[0].upper()}{staff_num + 1:02d}"
+                # Generate full name for staff member
+                full_staff_name = name_data['full_name']
                 
                 # Determine staff tier based on team tier
                 staff_tier = self._determine_staff_tier(tier)
                 
                 # Create staff member
                 staff = StaffMember(
-                    id=staff_id,
-                    first_name=name_data['first_name'],
-                    last_name=name_data['last_name'],
+                    id=0,  # Auto-incremented by database
+                    name=full_staff_name,
                     nationality=nationality,
+                    birth_date=self._generate_birth_date(random.randint(25, 65)),
                     age=random.randint(25, 65),
+                    current_team_id=team_id,
                     role=role_name,
-                    role_category=role_category,
                     tier=staff_tier,
-                    team_id=team_id,
                     # Core attributes
-                    technical_expertise=random.uniform(0.4, 0.95),
+                    technical_expertise=random.uniform(40.0, 95.0),
                     experience_years=random.randint(2, 30),
-                    management_skill=random.uniform(0.3, 0.9),
-                    innovation_ability=random.uniform(0.3, 0.95),
-                    communication_skill=random.uniform(0.4, 0.9),
-                    work_under_pressure=random.uniform(0.5, 0.95),
-                    team_chemistry=random.uniform(0.4, 0.9),
-                    # Salary based on tier and role
-                    salary=self._calculate_staff_salary(staff_tier, role_name, budget),
-                    contract_end_date=datetime.now() + timedelta(days=random.randint(365, 1095))
+                    management_skill=random.uniform(30.0, 90.0),
+                    innovation_ability=random.uniform(30.0, 95.0),
+                    communication=random.uniform(40.0, 90.0),
+                    work_under_pressure=random.uniform(50.0, 95.0)
+                    # Note: Other attributes use default values from dataclass
                 )
                 
-                # Save to database (implement your save method)
-                staff_members.append(staff)
-                self.stats['staff_created'] += 1
+                # Save to database
+                try:
+                    staff_id = self.db.create_staff_member(staff)
+                    self.stats['staff_created'] += 1
+                    staff_members.append(staff)
+                except Exception as e:
+                    error_msg = f"Error creating staff member (role: {role_name}): {str(e)}"
+                    logger.error(error_msg)
+                    self.stats['errors'].append(error_msg)
         
         return staff_members
+    
+    def _generate_birth_date(self, age: int) -> str:
+        """Generate a birth date for a given age"""
+        today = datetime.now()
+        birth_year = today.year - age
+        birth_month = random.randint(1, 12)
+        birth_day = random.randint(1, 28)  # Simplified to avoid invalid dates
+        return f"{birth_year}-{birth_month:02d}-{birth_day:02d}"
     
     def _calculate_team_budget(self, tier: int) -> float:
         """Calculate team budget based on tier"""
@@ -386,16 +399,19 @@ class DatabaseGenerator:
     
     def _determine_staff_tier(self, team_tier: int) -> str:
         """Determine staff tier based on team tier"""
+        # Staff tiers align with team tiers
+        # Higher tier teams (1-2) get mostly tier1-tier2 staff
+        # Lower tier teams (5-6) get mostly tier4-tier6 staff
         tier_mapping = {
-            1: ["WORLD_CLASS", "ELITE", "SENIOR"],
-            2: ["ELITE", "SENIOR", "EXPERIENCED"],
-            3: ["SENIOR", "EXPERIENCED", "INTERMEDIATE"],
-            4: ["EXPERIENCED", "INTERMEDIATE", "JUNIOR"],
-            5: ["INTERMEDIATE", "JUNIOR", "INTERN"],
-            6: ["JUNIOR", "INTERN"]
+            1: ["tier1", "tier1", "tier2"],  # Weighted towards tier1
+            2: ["tier1", "tier2", "tier2"],  # Mix of tier1 and tier2
+            3: ["tier2", "tier3", "tier3"],  # Mix of tier2 and tier3
+            4: ["tier3", "tier4", "tier4"],  # Mix of tier3 and tier4
+            5: ["tier4", "tier5", "tier5"],  # Mix of tier4 and tier5
+            6: ["tier5", "tier6", "tier6"]   # Mix of tier5 and tier6
         }
         
-        available_tiers = tier_mapping.get(team_tier, ["INTERMEDIATE", "JUNIOR"])
+        available_tiers = tier_mapping.get(team_tier, ["tier4", "tier5"])
         return random.choice(available_tiers)
     
     def _calculate_staff_salary(self, staff_tier: str, role: str, team_budget: float) -> float:
@@ -479,7 +495,7 @@ class DatabaseGenerator:
             
             f.write("\n" + "=" * 80 + "\n")
         
-        logger.info(f"\n📄 Generation report saved to: {report_path}")
+        logger.info(f"\n[REPORT] Generation report saved to: {report_path}")
 
 
 def main():
@@ -490,22 +506,24 @@ def main():
     print("=" * 80 + "\n")
     
     # Confirm before proceeding
-    response = input("This will generate a complete database with ~10,000+ entities.\nContinue? (yes/no): ")
-    if response.lower() not in ['yes', 'y']:
-        print("❌ Generation cancelled.")
-        return
+    # response = input("This will generate a complete database with ~10,000+ entities.\nContinue? (yes/no): ")
+    # if response.lower() not in ['yes', 'y']:
+    #     print("❌ Generation cancelled.")
+    #     return
+    
+    print("Generating database with ~10,000+ entities...")
     
     # Create generator and run
     generator = DatabaseGenerator()
     
     try:
         generator.generate_complete_database()
-        print("\n✅ Database generation completed successfully!")
-        print(f"   Check 'database_generation_report.txt' for details.")
+        print("\n[SUCCESS] Database generation completed successfully!")
+        print("   Check 'database_generation_report.txt' for details.")
         
     except Exception as e:
-        logger.error(f"❌ Fatal error during generation: {str(e)}", exc_info=True)
-        print(f"\n❌ Generation failed: {str(e)}")
+        logger.error(f"[ERROR] Fatal error during generation: {str(e)}", exc_info=True)
+        print(f"\n[ERROR] Generation failed: {str(e)}")
         print("   Check 'database_generation.log' for details.")
         sys.exit(1)
 
