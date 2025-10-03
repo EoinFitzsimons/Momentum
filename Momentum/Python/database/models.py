@@ -109,32 +109,32 @@ class Driver:
     # ===== RACE CRAFT & STRATEGY (8 attributes) =====
     # Tactical and strategic racing abilities
     race_strategy: float = 50.0               # Understanding race strategy and timing
-    pit_stop_coordination: float = 50.0       # Working with pit crew effectively
+    pit_entry_exit: float = 50.0              # Pit lane entry/exit skill and timing
     traffic_management: float = 50.0          # Navigating through slower cars
-    tire_strategy: float = 50.0               # Strategic tire choice and timing
-    fuel_strategy: float = 50.0               # Strategic fuel management decisions
-    safety_car_awareness: float = 50.0        # Maximizing safety car opportunities
-    qualifying_optimization: float = 50.0     # Extracting maximum single-lap pace
-    championship_thinking: float = 50.0       # Long-term championship management
+    qualifying_pace: float = 50.0             # Extracting maximum single-lap pace
+    race_pace: float = 50.0                   # Sustained race pace over full distance
+    starting_skill: float = 50.0              # Launch technique and first lap performance
+    tyre_warming: float = 50.0                # Bringing tires to optimal temperature
+    energy_management: float = 50.0           # Managing power/fuel/battery strategically
     
     # ===== ENVIRONMENTAL ADAPTATION (7 attributes) =====
     # Adapting to different conditions and circumstances
     wet_weather_skill: float = 50.0           # Performance in rain and wet conditions
-    night_racing_skill: float = 50.0          # Racing in low visibility conditions
-    temperature_adaptation: float = 50.0      # Handling hot/cold temperature extremes
+    night_driving: float = 50.0               # Racing in low visibility/darkness
+    heat_tolerance: float = 50.0              # Handling hot temperature extremes
+    cold_tolerance: float = 50.0              # Handling cold temperature extremes
     altitude_adaptation: float = 50.0          # Performance at high altitude tracks
+    visibility_adaptation: float = 50.0       # Adjusting to fog/dust/low visibility
     surface_adaptation: float = 50.0          # Adjusting to different track surfaces
-    car_adaptation: float = 50.0              # Quickly adapting to new/different cars
-    track_learning: float = 50.0              # Speed of learning new circuits
     
     # ===== PERSONAL & SOCIAL TRAITS (6 attributes) =====
     # Personality and interpersonal characteristics
-    media_presence: float = 50.0              # Charisma and marketing appeal
-    team_cooperation: float = 50.0            # Working effectively within team
-    leadership_ability: float = 50.0          # Natural leadership and influence
-    risk_appetite: float = 50.0               # Willingness to take calculated risks
-    ego_management: float = 50.0              # Handling success and criticism
-    commercial_appeal: float = 50.0           # Sponsor and fan attraction
+    media_handling: float = 50.0              # Working with media and public relations
+    sponsorship_appeal: float = 50.0          # Attractiveness to sponsors and brands
+    fan_engagement: float = 50.0              # Fan interaction and popularity
+    team_player: float = 50.0                 # Working effectively within team
+    leadership: float = 50.0                  # Natural leadership and influence
+    professionalism: float = 50.0             # Professional conduct and attitude
     
     # ===== CAREER STATISTICS & PROGRESSION =====
     career_wins: int = 0                      # Total race victories across all disciplines
@@ -437,17 +437,85 @@ class RaceResult:
 
 # Database Schema Creation SQL
 SCHEMA_SQL = """
--- Drivers table
+-- Drivers table with comprehensive 50+ attributes
 CREATE TABLE IF NOT EXISTS drivers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     nationality TEXT NOT NULL,
     birth_date TEXT NOT NULL,
-    skill REAL NOT NULL CHECK(skill >= 0.0 AND skill <= 1.0),
-    consistency REAL NOT NULL CHECK(consistency >= 0.0 AND consistency <= 1.0),
-    aggression REAL NOT NULL CHECK(aggression >= 0.0 AND aggression <= 1.0),
-    racecraft REAL NOT NULL CHECK(racecraft >= 0.0 AND racecraft <= 1.0),
-    adaptability REAL NOT NULL CHECK(adaptability >= 0.0 AND adaptability <= 1.0),
+    age INTEGER NOT NULL DEFAULT 25,
+    
+    -- Core Driving Skills (10 attributes)
+    raw_speed REAL NOT NULL DEFAULT 50.0 CHECK(raw_speed >= 0.0 AND raw_speed <= 100.0),
+    consistency REAL NOT NULL DEFAULT 50.0 CHECK(consistency >= 0.0 AND consistency <= 100.0),
+    racecraft REAL NOT NULL DEFAULT 50.0 CHECK(racecraft >= 0.0 AND racecraft <= 100.0),
+    overtaking REAL NOT NULL DEFAULT 50.0 CHECK(overtaking >= 0.0 AND overtaking <= 100.0),
+    defensive_driving REAL NOT NULL DEFAULT 50.0 CHECK(defensive_driving >= 0.0 AND defensive_driving <= 100.0),
+    cornering_skill REAL NOT NULL DEFAULT 50.0 CHECK(cornering_skill >= 0.0 AND cornering_skill <= 100.0),
+    braking_technique REAL NOT NULL DEFAULT 50.0 CHECK(braking_technique >= 0.0 AND braking_technique <= 100.0),
+    acceleration_control REAL NOT NULL DEFAULT 50.0 CHECK(acceleration_control >= 0.0 AND acceleration_control <= 100.0),
+    spatial_awareness REAL NOT NULL DEFAULT 50.0 CHECK(spatial_awareness >= 0.0 AND spatial_awareness <= 100.0),
+    vehicle_control REAL NOT NULL DEFAULT 50.0 CHECK(vehicle_control >= 0.0 AND vehicle_control <= 100.0),
+    
+    -- Physical & Mental Traits (10 attributes)
+    physical_fitness REAL NOT NULL DEFAULT 50.0 CHECK(physical_fitness >= 0.0 AND physical_fitness <= 100.0),
+    reaction_time REAL NOT NULL DEFAULT 50.0 CHECK(reaction_time >= 0.0 AND reaction_time <= 100.0),
+    concentration REAL NOT NULL DEFAULT 50.0 CHECK(concentration >= 0.0 AND concentration <= 100.0),
+    pressure_handling REAL NOT NULL DEFAULT 50.0 CHECK(pressure_handling >= 0.0 AND pressure_handling <= 100.0),
+    pain_tolerance REAL NOT NULL DEFAULT 50.0 CHECK(pain_tolerance >= 0.0 AND pain_tolerance <= 100.0),
+    g_force_tolerance REAL NOT NULL DEFAULT 50.0 CHECK(g_force_tolerance >= 0.0 AND g_force_tolerance <= 100.0),
+    coordination REAL NOT NULL DEFAULT 50.0 CHECK(coordination >= 0.0 AND coordination <= 100.0),
+    multitasking REAL NOT NULL DEFAULT 50.0 CHECK(multitasking >= 0.0 AND multitasking <= 100.0),
+    mental_resilience REAL NOT NULL DEFAULT 50.0 CHECK(mental_resilience >= 0.0 AND mental_resilience <= 100.0),
+    adrenaline_management REAL NOT NULL DEFAULT 50.0 CHECK(adrenaline_management >= 0.0 AND adrenaline_management <= 100.0),
+    
+    -- Technical Knowledge (8 attributes)
+    setup_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(setup_knowledge >= 0.0 AND setup_knowledge <= 100.0),
+    mechanical_sympathy REAL NOT NULL DEFAULT 50.0 CHECK(mechanical_sympathy >= 0.0 AND mechanical_sympathy <= 100.0),
+    tire_management REAL NOT NULL DEFAULT 50.0 CHECK(tire_management >= 0.0 AND tire_management <= 100.0),
+    fuel_management REAL NOT NULL DEFAULT 50.0 CHECK(fuel_management >= 0.0 AND fuel_management <= 100.0),
+    aerodynamics_understanding REAL NOT NULL DEFAULT 50.0 CHECK(aerodynamics_understanding >= 0.0 AND aerodynamics_understanding <= 100.0),
+    suspension_feel REAL NOT NULL DEFAULT 50.0 CHECK(suspension_feel >= 0.0 AND suspension_feel <= 100.0),
+    engine_management REAL NOT NULL DEFAULT 50.0 CHECK(engine_management >= 0.0 AND engine_management <= 100.0),
+    data_analysis REAL NOT NULL DEFAULT 50.0 CHECK(data_analysis >= 0.0 AND data_analysis <= 100.0),
+    
+    -- Discipline Specializations (7 attributes)
+    single_seater_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(single_seater_aptitude >= 0.0 AND single_seater_aptitude <= 100.0),
+    touring_car_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(touring_car_aptitude >= 0.0 AND touring_car_aptitude <= 100.0),
+    rally_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(rally_aptitude >= 0.0 AND rally_aptitude <= 100.0),
+    street_racing_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(street_racing_aptitude >= 0.0 AND street_racing_aptitude <= 100.0),
+    drag_racing_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(drag_racing_aptitude >= 0.0 AND drag_racing_aptitude <= 100.0),
+    rallycross_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(rallycross_aptitude >= 0.0 AND rallycross_aptitude <= 100.0),
+    endurance_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(endurance_aptitude >= 0.0 AND endurance_aptitude <= 100.0),
+    
+    -- Race Craft & Strategy (8 attributes)
+    race_strategy REAL NOT NULL DEFAULT 50.0 CHECK(race_strategy >= 0.0 AND race_strategy <= 100.0),
+    pit_entry_exit REAL NOT NULL DEFAULT 50.0 CHECK(pit_entry_exit >= 0.0 AND pit_entry_exit <= 100.0),
+    traffic_management REAL NOT NULL DEFAULT 50.0 CHECK(traffic_management >= 0.0 AND traffic_management <= 100.0),
+    qualifying_pace REAL NOT NULL DEFAULT 50.0 CHECK(qualifying_pace >= 0.0 AND qualifying_pace <= 100.0),
+    race_pace REAL NOT NULL DEFAULT 50.0 CHECK(race_pace >= 0.0 AND race_pace <= 100.0),
+    starting_skill REAL NOT NULL DEFAULT 50.0 CHECK(starting_skill >= 0.0 AND starting_skill <= 100.0),
+    tyre_warming REAL NOT NULL DEFAULT 50.0 CHECK(tyre_warming >= 0.0 AND tyre_warming <= 100.0),
+    energy_management REAL NOT NULL DEFAULT 50.0 CHECK(energy_management >= 0.0 AND energy_management <= 100.0),
+    
+    -- Environmental Adaptation (7 attributes)
+    wet_weather_skill REAL NOT NULL DEFAULT 50.0 CHECK(wet_weather_skill >= 0.0 AND wet_weather_skill <= 100.0),
+    night_driving REAL NOT NULL DEFAULT 50.0 CHECK(night_driving >= 0.0 AND night_driving <= 100.0),
+    heat_tolerance REAL NOT NULL DEFAULT 50.0 CHECK(heat_tolerance >= 0.0 AND heat_tolerance <= 100.0),
+    cold_tolerance REAL NOT NULL DEFAULT 50.0 CHECK(cold_tolerance >= 0.0 AND cold_tolerance <= 100.0),
+    altitude_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(altitude_adaptation >= 0.0 AND altitude_adaptation <= 100.0),
+    visibility_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(visibility_adaptation >= 0.0 AND visibility_adaptation <= 100.0),
+    surface_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(surface_adaptation >= 0.0 AND surface_adaptation <= 100.0),
+    
+    -- Personal & Social Traits (6 attributes)
+    media_handling REAL NOT NULL DEFAULT 50.0 CHECK(media_handling >= 0.0 AND media_handling <= 100.0),
+    sponsorship_appeal REAL NOT NULL DEFAULT 50.0 CHECK(sponsorship_appeal >= 0.0 AND sponsorship_appeal <= 100.0),
+    fan_engagement REAL NOT NULL DEFAULT 50.0 CHECK(fan_engagement >= 0.0 AND fan_engagement <= 100.0),
+    team_player REAL NOT NULL DEFAULT 50.0 CHECK(team_player >= 0.0 AND team_player <= 100.0),
+    leadership REAL NOT NULL DEFAULT 50.0 CHECK(leadership >= 0.0 AND leadership <= 100.0),
+    professionalism REAL NOT NULL DEFAULT 50.0 CHECK(professionalism >= 0.0 AND professionalism <= 100.0),
+    
+    -- Career Stats
     career_wins INTEGER DEFAULT 0,
     career_podiums INTEGER DEFAULT 0,
     career_points INTEGER DEFAULT 0,
@@ -540,6 +608,130 @@ CREATE TABLE IF NOT EXISTS race_results (
     UNIQUE(race_id, driver_id)
 );
 
+-- Staff Members table with comprehensive 40+ attributes
+CREATE TABLE IF NOT EXISTS staff_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    nationality TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    age INTEGER NOT NULL DEFAULT 30,
+    current_team_id INTEGER,
+    role TEXT NOT NULL CHECK(role IN ('team_principal', 'technical_director', 'race_engineer', 'data_analyst', 
+                                      'aerodynamicist', 'chief_mechanic', 'mechanic', 'strategist', 'driver_coach',
+                                      'fitness_coach', 'psychologist', 'pr_manager', 'marketing_director',
+                                      'commercial_director', 'chief_designer', 'engine_specialist', 'suspension_specialist',
+                                      'tire_specialist', 'logistics_coordinator', 'team_coordinator', 'hospitality_manager',
+                                      'finance_director', 'legal_counsel', 'hr_manager', 'operations_manager')),
+    tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4')),
+    
+    -- Core Competencies (10 attributes)
+    technical_expertise REAL NOT NULL DEFAULT 50.0 CHECK(technical_expertise >= 0.0 AND technical_expertise <= 100.0),
+    experience_years INTEGER NOT NULL DEFAULT 5,
+    management_skill REAL NOT NULL DEFAULT 50.0 CHECK(management_skill >= 0.0 AND management_skill <= 100.0),
+    innovation_ability REAL NOT NULL DEFAULT 50.0 CHECK(innovation_ability >= 0.0 AND innovation_ability <= 100.0),
+    problem_solving REAL NOT NULL DEFAULT 50.0 CHECK(problem_solving >= 0.0 AND problem_solving <= 100.0),
+    attention_to_detail REAL NOT NULL DEFAULT 50.0 CHECK(attention_to_detail >= 0.0 AND attention_to_detail <= 100.0),
+    work_under_pressure REAL NOT NULL DEFAULT 50.0 CHECK(work_under_pressure >= 0.0 AND work_under_pressure <= 100.0),
+    adaptability REAL NOT NULL DEFAULT 50.0 CHECK(adaptability >= 0.0 AND adaptability <= 100.0),
+    learning_speed REAL NOT NULL DEFAULT 50.0 CHECK(learning_speed >= 0.0 AND learning_speed <= 100.0),
+    decision_making REAL NOT NULL DEFAULT 50.0 CHECK(decision_making >= 0.0 AND decision_making <= 100.0),
+    
+    -- Technical Specializations (8 attributes)
+    aerodynamics_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(aerodynamics_knowledge >= 0.0 AND aerodynamics_knowledge <= 100.0),
+    engine_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(engine_knowledge >= 0.0 AND engine_knowledge <= 100.0),
+    suspension_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(suspension_knowledge >= 0.0 AND suspension_knowledge <= 100.0),
+    tire_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(tire_knowledge >= 0.0 AND tire_knowledge <= 100.0),
+    electronics_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(electronics_knowledge >= 0.0 AND electronics_knowledge <= 100.0),
+    data_analysis_skill REAL NOT NULL DEFAULT 50.0 CHECK(data_analysis_skill >= 0.0 AND data_analysis_skill <= 100.0),
+    cfd_expertise REAL NOT NULL DEFAULT 50.0 CHECK(cfd_expertise >= 0.0 AND cfd_expertise <= 100.0),
+    simulation_expertise REAL NOT NULL DEFAULT 50.0 CHECK(simulation_expertise >= 0.0 AND simulation_expertise <= 100.0),
+    
+    -- Strategic & Leadership (7 attributes)
+    race_strategy_skill REAL NOT NULL DEFAULT 50.0 CHECK(race_strategy_skill >= 0.0 AND race_strategy_skill <= 100.0),
+    team_leadership REAL NOT NULL DEFAULT 50.0 CHECK(team_leadership >= 0.0 AND team_leadership <= 100.0),
+    negotiation_skill REAL NOT NULL DEFAULT 50.0 CHECK(negotiation_skill >= 0.0 AND negotiation_skill <= 100.0),
+    budget_management REAL NOT NULL DEFAULT 50.0 CHECK(budget_management >= 0.0 AND budget_management <= 100.0),
+    resource_allocation REAL NOT NULL DEFAULT 50.0 CHECK(resource_allocation >= 0.0 AND resource_allocation <= 100.0),
+    long_term_planning REAL NOT NULL DEFAULT 50.0 CHECK(long_term_planning >= 0.0 AND long_term_planning <= 100.0),
+    risk_assessment REAL NOT NULL DEFAULT 50.0 CHECK(risk_assessment >= 0.0 AND risk_assessment <= 100.0),
+    
+    -- Communication & People Skills (6 attributes)
+    communication REAL NOT NULL DEFAULT 50.0 CHECK(communication >= 0.0 AND communication <= 100.0),
+    driver_relationship REAL NOT NULL DEFAULT 50.0 CHECK(driver_relationship >= 0.0 AND driver_relationship <= 100.0),
+    team_motivation REAL NOT NULL DEFAULT 50.0 CHECK(team_motivation >= 0.0 AND team_motivation <= 100.0),
+    conflict_resolution REAL NOT NULL DEFAULT 50.0 CHECK(conflict_resolution >= 0.0 AND conflict_resolution <= 100.0),
+    media_handling REAL NOT NULL DEFAULT 50.0 CHECK(media_handling >= 0.0 AND media_handling <= 100.0),
+    stakeholder_management REAL NOT NULL DEFAULT 50.0 CHECK(stakeholder_management >= 0.0 AND stakeholder_management <= 100.0),
+    
+    -- Discipline Specializations (7 attributes)
+    single_seater_expertise REAL NOT NULL DEFAULT 50.0 CHECK(single_seater_expertise >= 0.0 AND single_seater_expertise <= 100.0),
+    touring_car_expertise REAL NOT NULL DEFAULT 50.0 CHECK(touring_car_expertise >= 0.0 AND touring_car_expertise <= 100.0),
+    rally_expertise REAL NOT NULL DEFAULT 50.0 CHECK(rally_expertise >= 0.0 AND rally_expertise <= 100.0),
+    street_racing_expertise REAL NOT NULL DEFAULT 50.0 CHECK(street_racing_expertise >= 0.0 AND street_racing_expertise <= 100.0),
+    drag_racing_expertise REAL NOT NULL DEFAULT 50.0 CHECK(drag_racing_expertise >= 0.0 AND drag_racing_expertise <= 100.0),
+    rallycross_expertise REAL NOT NULL DEFAULT 50.0 CHECK(rallycross_expertise >= 0.0 AND rallycross_expertise <= 100.0),
+    endurance_expertise REAL NOT NULL DEFAULT 50.0 CHECK(endurance_expertise >= 0.0 AND endurance_expertise <= 100.0),
+    
+    -- Personal Traits (5 attributes)
+    reliability REAL NOT NULL DEFAULT 50.0 CHECK(reliability >= 0.0 AND reliability <= 100.0),
+    loyalty REAL NOT NULL DEFAULT 50.0 CHECK(loyalty >= 0.0 AND loyalty <= 100.0),
+    ambition REAL NOT NULL DEFAULT 50.0 CHECK(ambition >= 0.0 AND ambition <= 100.0),
+    professionalism REAL NOT NULL DEFAULT 50.0 CHECK(professionalism >= 0.0 AND professionalism <= 100.0),
+    work_ethic REAL NOT NULL DEFAULT 50.0 CHECK(work_ethic >= 0.0 AND work_ethic <= 100.0),
+    
+    -- Additional Technical Skills (4 attributes)
+    materials_science REAL NOT NULL DEFAULT 50.0 CHECK(materials_science >= 0.0 AND materials_science <= 100.0),
+    cad_design REAL NOT NULL DEFAULT 50.0 CHECK(cad_design >= 0.0 AND cad_design <= 100.0),
+    manufacturing_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(manufacturing_knowledge >= 0.0 AND manufacturing_knowledge <= 100.0),
+    quality_control REAL NOT NULL DEFAULT 50.0 CHECK(quality_control >= 0.0 AND quality_control <= 100.0),
+    
+    -- Advanced Analytical Skills (7 attributes)
+    telemetry_analysis REAL NOT NULL DEFAULT 50.0 CHECK(telemetry_analysis >= 0.0 AND telemetry_analysis <= 100.0),
+    performance_modeling REAL NOT NULL DEFAULT 50.0 CHECK(performance_modeling >= 0.0 AND performance_modeling <= 100.0),
+    statistical_methods REAL NOT NULL DEFAULT 50.0 CHECK(statistical_methods >= 0.0 AND statistical_methods <= 100.0),
+    pattern_recognition REAL NOT NULL DEFAULT 50.0 CHECK(pattern_recognition >= 0.0 AND pattern_recognition <= 100.0),
+    predictive_analytics REAL NOT NULL DEFAULT 50.0 CHECK(predictive_analytics >= 0.0 AND predictive_analytics <= 100.0),
+    software_proficiency REAL NOT NULL DEFAULT 50.0 CHECK(software_proficiency >= 0.0 AND software_proficiency <= 100.0),
+    database_management REAL NOT NULL DEFAULT 50.0 CHECK(database_management >= 0.0 AND database_management <= 100.0),
+    
+    -- Operational Skills (5 attributes)
+    pit_stop_efficiency REAL NOT NULL DEFAULT 50.0 CHECK(pit_stop_efficiency >= 0.0 AND pit_stop_efficiency <= 100.0),
+    crisis_management REAL NOT NULL DEFAULT 50.0 CHECK(crisis_management >= 0.0 AND crisis_management <= 100.0),
+    equipment_maintenance REAL NOT NULL DEFAULT 50.0 CHECK(equipment_maintenance >= 0.0 AND equipment_maintenance <= 100.0),
+    logistics_coordination REAL NOT NULL DEFAULT 50.0 CHECK(logistics_coordination >= 0.0 AND logistics_coordination <= 100.0),
+    safety_protocols REAL NOT NULL DEFAULT 50.0 CHECK(safety_protocols >= 0.0 AND safety_protocols <= 100.0),
+    
+    -- Financial & Commercial Skills (3 attributes)
+    commercial_acumen REAL NOT NULL DEFAULT 50.0 CHECK(commercial_acumen >= 0.0 AND commercial_acumen <= 100.0),
+    sponsorship_development REAL NOT NULL DEFAULT 50.0 CHECK(sponsorship_development >= 0.0 AND sponsorship_development <= 100.0),
+    cost_optimisation REAL NOT NULL DEFAULT 50.0 CHECK(cost_optimisation >= 0.0 AND cost_optimisation <= 100.0),
+    
+    -- Career & Development (4 attributes)
+    previous_teams TEXT DEFAULT '',
+    education_level TEXT DEFAULT 'bachelor',
+    certifications TEXT DEFAULT '',
+    languages_spoken INTEGER DEFAULT 1,
+    contract_type TEXT DEFAULT 'full_time',
+    
+    -- Performance & Satisfaction (4 attributes)
+    job_satisfaction REAL NOT NULL DEFAULT 75.0 CHECK(job_satisfaction >= 0.0 AND job_satisfaction <= 100.0),
+    workload_capacity REAL NOT NULL DEFAULT 100.0 CHECK(workload_capacity >= 0.0 AND workload_capacity <= 200.0),
+    current_workload REAL NOT NULL DEFAULT 50.0 CHECK(current_workload >= 0.0 AND current_workload <= 200.0),
+    performance_rating REAL NOT NULL DEFAULT 75.0 CHECK(performance_rating >= 0.0 AND performance_rating <= 100.0),
+    
+    -- Professional Achievements (3 attributes)
+    innovation_projects INTEGER DEFAULT 0,
+    patents_held INTEGER DEFAULT 0,
+    publications INTEGER DEFAULT 0,
+    
+    -- Career & Contract
+    salary_demand REAL NOT NULL DEFAULT 50000.0,
+    contract_years_remaining INTEGER DEFAULT 1,
+    biography TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (current_team_id) REFERENCES teams (id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);
 CREATE INDEX IF NOT EXISTS idx_teams_discipline ON teams(discipline);
@@ -547,4 +739,6 @@ CREATE INDEX IF NOT EXISTS idx_tracks_discipline ON tracks(discipline);
 CREATE INDEX IF NOT EXISTS idx_races_championship_season ON races(championship_id, season);
 CREATE INDEX IF NOT EXISTS idx_race_results_race ON race_results(race_id);
 CREATE INDEX IF NOT EXISTS idx_race_results_driver ON race_results(driver_id);
+CREATE INDEX IF NOT EXISTS idx_staff_team ON staff_members(current_team_id);
+CREATE INDEX IF NOT EXISTS idx_staff_role ON staff_members(role);
 """
