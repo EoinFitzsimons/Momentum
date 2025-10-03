@@ -107,13 +107,13 @@ class BudgetCategory(Enum):
 @dataclass
 class StaffMember:
     """
-    Comprehensive staff member with 70+ attributes across multiple categories
+    Comprehensive staff member with 69 attributes across multiple categories
     
     Complete simulation model with full SQL schema persistence. All attributes
     are persisted to the database for complete staff member tracking and
     comprehensive team operational modeling.
     
-    SQL Schema Attributes (ALL 70+ attributes persisted):
+    SQL Schema Attributes (ALL 69 attributes persisted):
     1. Basic Information (8 attributes) - identity and team assignment
     2. Core Competencies (10 attributes) - fundamental professional skills
     3. Technical Specializations (8 attributes) - engineering knowledge
@@ -127,8 +127,7 @@ class StaffMember:
     11. Financial & Commercial Skills (3 attributes) - business management
     12. Career & Development (5 attributes) - education and history
     13. Performance & Satisfaction (4 attributes) - current state tracking
-    14. Professional Achievements (3 attributes) - career accomplishments
-    15. Career & Contract (3 attributes) - employment details
+    14. Career & Contract (3 attributes) - employment details
     
     All skill attributes use 0.0-100.0 scale (0=Poor, 50=Average, 100=Exceptional)
     """
@@ -255,12 +254,6 @@ class StaffMember:
     workload_capacity: float = 100.0           # Maximum workload handling
     current_workload: float = 50.0             # Current workload percentage
     performance_rating: float = 75.0           # Recent performance evaluation
-    
-    # ===== PROFESSIONAL ACHIEVEMENTS (3 attributes) - SQL SCHEMA =====
-    # Career accomplishments and contributions
-    innovation_projects: int = 0               # Number of innovation projects led
-    patents_held: int = 0                      # Technical patents owned
-    publications: int = 0                      # Technical papers published
     
     def get_role_effectiveness(self) -> float:
         """

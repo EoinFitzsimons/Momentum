@@ -719,11 +719,6 @@ CREATE TABLE IF NOT EXISTS staff_members (
     current_workload REAL NOT NULL DEFAULT 50.0 CHECK(current_workload >= 0.0 AND current_workload <= 200.0),
     performance_rating REAL NOT NULL DEFAULT 75.0 CHECK(performance_rating >= 0.0 AND performance_rating <= 100.0),
     
-    -- Professional Achievements (3 attributes)
-    innovation_projects INTEGER DEFAULT 0,
-    patents_held INTEGER DEFAULT 0,
-    publications INTEGER DEFAULT 0,
-    
     -- Career & Contract
     salary_demand REAL NOT NULL DEFAULT 50000.0,
     contract_years_remaining INTEGER DEFAULT 1,

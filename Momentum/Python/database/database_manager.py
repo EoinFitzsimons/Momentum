@@ -275,8 +275,6 @@ class DatabaseManager:
                     previous_teams, education_level, certifications, languages_spoken, contract_type,
                     -- Performance & Satisfaction
                     job_satisfaction, workload_capacity, current_workload, performance_rating,
-                    -- Professional Achievements
-                    innovation_projects, patents_held, publications,
                     -- Career & Contract
                     salary_demand, contract_years_remaining, biography
                 )
@@ -293,7 +291,6 @@ class DatabaseManager:
                         ?, ?, ?,
                         ?, ?, ?, ?, ?,
                         ?, ?, ?, ?,
-                        ?, ?, ?,
                         ?, ?, ?)
             """, (
                 staff.name, staff.nationality, staff.birth_date, staff.age, staff.current_team_id, staff.role, staff.tier,
@@ -329,8 +326,6 @@ class DatabaseManager:
                 staff.previous_teams, staff.education_level, staff.certifications, staff.languages_spoken, staff.contract_type,
                 # Performance & Satisfaction
                 staff.job_satisfaction, staff.workload_capacity, staff.current_workload, staff.performance_rating,
-                # Professional Achievements
-                staff.innovation_projects, staff.patents_held, staff.publications,
                 # Career & Contract
                 staff.salary_demand, staff.contract_years_remaining, staff.biography
             ))
