@@ -24,9 +24,9 @@ from examples.driver_examples import (
     create_formula_specialist, create_touring_car_battler,
     create_rally_legend, create_versatile_all_rounder
 )
-from core.disciplines.base_engine import BaseDisciplineEngine
-from core.disciplines.single_seater_engine import SingleSeaterEngine
-from core.disciplines.production_touring_engine import ProductionTouringEngine
+from disciplines.base_engine import BaseDisciplineEngine
+from disciplines.single_seater.single_seater_engine import SingleSeaterEngine
+from disciplines.production_touring.production_touring_engine import ProductionTouringEngine
 
 
 class DriverSystemTester:

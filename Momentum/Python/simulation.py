@@ -35,7 +35,7 @@ import uvicorn
 
 from database.database_manager import DatabaseManager
 from database.models import Driver, Team, Track, Championship, Race
-from core.race_simulation import RaceSimulator, SimulationContext
+from disciplines.race_simulation import RaceSimulator, SimulationContext
 from config import API_HOST, API_PORT, API_RELOAD
 
 app = FastAPI(

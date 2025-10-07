@@ -1,32 +1,30 @@
-# 🔒 API Key Security Notice
+# 🔒 Security & Data Management
 
-## ⚠️ CRITICAL SECURITY INFORMATION
+## ✅ No API Keys Required!
 
-This project uses external APIs that require API keys. **NEVER commit API keys to version control!**
+**Good News:** This project now uses the Faker library for name generation, which works completely offline with no API keys needed!
 
 ## 🛡️ Protected Files
 
 The following files are automatically ignored by Git and should **NEVER** be committed:
 
 ### Environment Files
-- `.env` - Contains your actual API keys and secrets
+- `.env` - May contain future API keys or configuration secrets
 - `.env.*` - Any environment files with secrets
 - `*.key` - Any key files
 - `*.secret` - Any secret files
 - `credentials.json` - Credential files
-- `api_keys.txt` - API key files
 
 ### Databases & Data
-- `data/paranames.tsv` - Large dataset file (download separately)
-- `data/paranames.db` - Generated database file
-- `database/*.db` - All database files
+- `data/used_names.db` - Name tracking database (auto-generated)
+- `database/*.db` - All database files (contains generated game data)
 - `logs/` - Log files may contain sensitive info
 
 ## ✅ Safe to Commit
 
 These files are safe and should be committed:
 
-- `.env.example` - Template with placeholder values
+- `.env.example` - Template with placeholder values (if needed for future features)
 - `.gitignore` - Protects sensitive files
 - All source code files (`.py`, `.md`, etc.)
 - Configuration templates
@@ -36,21 +34,23 @@ These files are safe and should be committed:
 
 If someone else works on this project:
 
-1. **Copy the example environment file:**
+1. **Clone the repository:**
    ```bash
-   cd Momentum/Python
-   copy .env.example .env
+   git clone <repository-url>
+   cd FinalProject/Momentum/Python
    ```
 
-2. **Get your own NameAPI key:**
-   - Visit: https://www.nameapi.org/
-   - Sign up for an account
-   - Get your API key
-   - Edit `.env` and replace `your-nameapi-key-here` with your actual key
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. **Never commit the `.env` file:**
-   - It's already in `.gitignore`
-   - Double-check with `git status` before committing
+3. **Generate initial database:**
+   ```bash
+   python generate_initial_database.py
+   ```
+
+That's it! No API keys, no downloads, no external services required.
 
 ## 🔍 How to Check if Files are Protected
 
@@ -60,24 +60,29 @@ Run this command to verify sensitive files are ignored:
 git status --ignored
 ```
 
-You should see `.env` and other sensitive files listed under "Ignored files".
+You should see `*.db` files and `data/` directory listed under "Ignored files".
 
-## 🚨 What to Do if You Accidentally Commit a Key
+## � Name Generation System
 
-If you accidentally commit an API key:
+The project uses an **Intelligent Name Generator** with:
 
-1. **Immediately rotate the key:**
-   - Go to NameAPI dashboard
-   - Generate a new key
-   - Update your `.env` file
+- **Faker library**: 24 different locales for culturally-appropriate names
+- **SQLite tracking**: Ensures 100% unique names (no duplicates)
+- **Offline operation**: No internet connection required
+- **80+ countries**: Comprehensive mapping with regional fallbacks
+- **Multilingual**: Supports Cyrillic, Chinese, Japanese, Arabic, diacritics, etc.
 
-2. **Remove from Git history:**
-   ```bash
-   git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch .env' --prune-empty --tag-name-filter cat -- --all
-   git push origin --force --all
-   ```
+### Example Names Generated
 
-3. **Update `.gitignore` if needed**
+| Country | Example Name | Locale Used |
+|---------|--------------|-------------|
+| Ukraine | Наталья Константинов | Russian (ru_RU) |
+| Japan | 聡太郎 石川 | Japanese (ja_JP) |
+| Brazil | Isadora Peixoto | Portuguese (pt_BR) |
+| Germany | Oswin Ziegert | German (de_DE) |
+| Finland | Tapio Nieminen | Finnish (fi_FI) |
+
+See `docs/NAME_GENERATION_SOLUTION.md` for complete technical details.
 
 ## 🏆 Best Practices
 

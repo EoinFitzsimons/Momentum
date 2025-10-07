@@ -13,8 +13,8 @@ torch
 # Database (SQLite is builtin, but we may need utilities)
 # sqlite3 is builtin with Python
 
-# Name Generation Services
-nameapi-client  # NameAPI external service integration
+# Name Generation
+Faker  # Generate realistic culturally-appropriate names with locale support
 
 # Environment Configuration
 python-dotenv  # Load environment variables from .env files

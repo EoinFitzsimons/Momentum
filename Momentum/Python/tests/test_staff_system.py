@@ -20,7 +20,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from Momentum.Python.database.models.staff_models import (
+from database.models.staff_models import (
     StaffMember, StaffRole, StaffTier, TeamStaffing,
     generate_staff_requirements, calculate_role_importance
 )
