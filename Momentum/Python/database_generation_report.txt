@@ -1,0 +1,76 @@
+================================================================================
+MOMENTUM MOTORSPORT SIMULATION - DATABASE GENERATION REPORT
+================================================================================
+
+Generated: 2025-10-03 13:25:48
+Database: database/momentum.db
+
+GENERATION SUMMARY
+----------------------------------------
+Teams Created:        668
+Drivers Created:    1,103
+Staff Created:     36,045
+Total Personnel:   37,148
+
+ERRORS ENCOUNTERED
+----------------------------------------
+  • Error creating team 1 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 2 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 3 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 4 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 5 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 6 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 7 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 8 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 9 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 10 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 11 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 12 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 13 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 35 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 30 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 37 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 2 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 3 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 4 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 5 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 6 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 7 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 8 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 9 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 10 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 11 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 12 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 13 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 14 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 15 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 16 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 17 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 18 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 19 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 20 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 21 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 22 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 23 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 24 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 25 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 26 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 5 in USC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 32 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 28 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 31 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in RWEC: UNIQUE constraint failed: teams.name
+
+================================================================================

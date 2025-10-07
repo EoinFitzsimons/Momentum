@@ -107,112 +107,153 @@ class BudgetCategory(Enum):
 @dataclass
 class StaffMember:
     """
-    Comprehensive staff member with 40+ attributes across 6 categories
+    Comprehensive staff member with 69 attributes across multiple categories
     
-    Similar to the driver system but focused on team operational capabilities
-    rather than racing performance. Each staff member has specialisations
-    and contributes to different aspects of team performance.
+    Complete simulation model with full SQL schema persistence. All attributes
+    are persisted to the database for complete staff member tracking and
+    comprehensive team operational modeling.
+    
+    SQL Schema Attributes (ALL 69 attributes persisted):
+    1. Basic Information (8 attributes) - identity and team assignment
+    2. Core Competencies (10 attributes) - fundamental professional skills
+    3. Technical Specializations (8 attributes) - engineering knowledge
+    4. Strategic & Leadership (7 attributes) - management capabilities
+    5. Communication & People Skills (6 attributes) - interpersonal abilities
+    6. Discipline Specializations (7 attributes) - racing category expertise
+    7. Personal Traits (5 attributes) - character and work ethic
+    8. Advanced Technical Skills (4 attributes) - specialized engineering
+    9. Advanced Analytical Skills (7 attributes) - data science and modeling
+    10. Operational Skills (5 attributes) - day-to-day racing operations
+    11. Financial & Commercial Skills (3 attributes) - business management
+    12. Career & Development (5 attributes) - education and history
+    13. Performance & Satisfaction (4 attributes) - current state tracking
+    14. Career & Contract (3 attributes) - employment details
+    
+    All skill attributes use 0.0-100.0 scale (0=Poor, 50=Average, 100=Exceptional)
     """
     
     # ===== BASIC INFORMATION =====
-    id: int
-    name: str
-    nationality: str
-    birth_date: str
-    age: int
-    role: StaffRole
-    tier: StaffTier
+    id: int                                    # Unique staff identifier
+    name: str                                  # Full staff member name
+    nationality: str                           # ISO country code
+    birth_date: str                            # Birth date in YYYY-MM-DD format
+    age: int = 30                              # Current age
+    current_team_id: Optional[int] = None      # Team assignment (FK to teams.id)
+    role: str = "mechanic"                     # Staff role (see schema CHECK constraint)
+    tier: str = "tier3"                        # Staff quality tier (tier1-tier4)
     
-    # ===== TECHNICAL SKILLS (12 attributes) =====
-    # Core technical competencies for engineering and development
-    engineering_knowledge: float = 50.0        # General engineering understanding
-    aerodynamics_expertise: float = 50.0       # Aerodynamic design and analysis
+    # ===== CORE COMPETENCIES (10 attributes) - SQL SCHEMA =====
+    # Fundamental professional skills and abilities
+    technical_expertise: float = 50.0          # Technical knowledge and capability
+    experience_years: int = 5                  # Years of professional experience
+    management_skill: float = 50.0             # People and project management ability
+    innovation_ability: float = 50.0           # Creative problem solving and innovation
+    problem_solving: float = 50.0              # Analytical problem resolution
+    attention_to_detail: float = 50.0          # Precision and thoroughness
+    work_under_pressure: float = 50.0          # Performance under stress
+    adaptability: float = 50.0                 # Adjusting to changes and challenges
+    learning_speed: float = 50.0               # Rate of skill acquisition
+    decision_making: float = 50.0              # Quality of decisions under uncertainty
+    
+    # ===== TECHNICAL SPECIALIZATIONS (8 attributes) - SQL SCHEMA =====
+    # Engineering and technical domain expertise
+    aerodynamics_knowledge: float = 50.0       # Aerodynamic design and analysis
     engine_knowledge: float = 50.0             # Powertrain and engine systems
-    suspension_expertise: float = 50.0         # Chassis and suspension systems
-    electronics_knowledge: float = 50.0       # Electronic systems and controls
-    materials_science: float = 50.0           # Material selection and properties
-    cfd_analysis: float = 50.0                # Computational fluid dynamics
-    cad_design: float = 50.0                  # Computer-aided design skills
-    simulation_expertise: float = 50.0        # Virtual testing and modeling
-    manufacturing_knowledge: float = 50.0     # Production and fabrication
-    quality_control: float = 50.0             # Testing and validation processes
-    innovation_ability: float = 50.0          # Creative problem solving
+    suspension_knowledge: float = 50.0         # Chassis and suspension systems
+    tire_knowledge: float = 50.0               # Tire technology and management
+    electronics_knowledge: float = 50.0        # Electronic systems and controls
+    data_analysis_skill: float = 50.0          # Data interpretation and analysis
+    cfd_expertise: float = 50.0                # Computational fluid dynamics
+    simulation_expertise: float = 50.0         # Virtual testing and modeling
     
-    # ===== ANALYTICAL SKILLS (8 attributes) =====
-    # Data analysis and performance optimisation capabilities
-    data_analysis: float = 50.0               # Statistical analysis and interpretation
-    telemetry_analysis: float = 50.0          # Real-time data interpretation
-    performance_modeling: float = 50.0        # Predictive performance models
-    statistical_methods: float = 50.0         # Advanced statistical techniques
-    pattern_recognition: float = 50.0         # Identifying trends and patterns
-    predictive_analytics: float = 50.0        # Forecasting and predictions
-    software_proficiency: float = 50.0        # Technical software mastery
-    database_management: float = 50.0         # Data storage and retrieval
+    # ===== STRATEGIC & LEADERSHIP (7 attributes) - SQL SCHEMA =====
+    # Management and organizational capabilities
+    race_strategy_skill: float = 50.0          # Strategic race planning
+    team_leadership: float = 50.0              # Leading and inspiring teams
+    negotiation_skill: float = 50.0            # Contract and deal negotiation
+    budget_management: float = 50.0            # Financial planning and control
+    resource_allocation: float = 50.0          # Efficient resource distribution
+    long_term_planning: float = 50.0           # Strategic future planning
+    risk_assessment: float = 50.0              # Evaluating and managing risks
     
-    # ===== MANAGEMENT & LEADERSHIP (7 attributes) =====
-    # Team coordination and organisational capabilities
-    leadership_ability: float = 50.0          # Natural leadership and influence
-    team_coordination: float = 50.0           # Organising and managing teams
-    project_management: float = 50.0          # Planning and executing projects
-    resource_allocation: float = 50.0         # Efficient resource utilization
-    conflict_resolution: float = 50.0         # Handling team conflicts
-    decision_making: float = 50.0             # Strategic decision capability
-    mentoring_ability: float = 50.0           # Developing junior staff
+    # ===== COMMUNICATION & PEOPLE SKILLS (6 attributes) - SQL SCHEMA =====
+    # Interpersonal and relationship capabilities
+    communication: float = 50.0                # Clear and effective communication
+    driver_relationship: float = 50.0          # Working effectively with drivers
+    team_motivation: float = 50.0              # Inspiring and energizing team
+    conflict_resolution: float = 50.0          # Resolving disputes and tensions
+    media_handling: float = 50.0               # Managing media and PR
+    stakeholder_management: float = 50.0       # Managing sponsors and partners
     
-    # ===== OPERATIONAL SKILLS (8 attributes) =====
+    # ===== DISCIPLINE SPECIALIZATIONS (7 attributes) - SQL SCHEMA =====
+    # Racing category expertise and knowledge
+    single_seater_expertise: float = 50.0      # Formula/open-wheel racing expertise
+    touring_car_expertise: float = 50.0        # Production car racing knowledge
+    rally_expertise: float = 50.0              # Rally and stage racing knowledge
+    street_racing_expertise: float = 50.0      # Urban racing specialization
+    drag_racing_expertise: float = 50.0        # Straight-line racing knowledge
+    rallycross_expertise: float = 50.0         # Mixed surface racing expertise
+    endurance_expertise: float = 50.0          # Long-distance racing knowledge
+    
+    # ===== PERSONAL TRAITS (5 attributes) - SQL SCHEMA =====
+    # Character and professional conduct
+    reliability: float = 50.0                  # Dependability and consistency
+    loyalty: float = 50.0                      # Team commitment and faithfulness
+    ambition: float = 50.0                     # Career drive and motivation
+    professionalism: float = 50.0              # Professional conduct and ethics
+    work_ethic: float = 50.0                   # Dedication and hard work
+    
+    # ===== CAREER & CONTRACT - SQL SCHEMA =====
+    # Employment and professional details (SQL persisted)
+    salary_demand: float = 50000.0             # Annual salary expectation in USD
+    contract_years_remaining: int = 1          # Remaining contract duration
+    biography: str = ""                        # Staff member background and history
+    
+    # ===== ADDITIONAL TECHNICAL SKILLS (4 attributes) - SQL SCHEMA =====
+    # Specialized engineering capabilities
+    materials_science: float = 50.0            # Material selection and properties
+    cad_design: float = 50.0                   # Computer-aided design skills
+    manufacturing_knowledge: float = 50.0      # Production and fabrication
+    quality_control: float = 50.0              # Testing and validation processes
+    
+    # ===== ADVANCED ANALYTICAL SKILLS (7 attributes) - SQL SCHEMA =====
+    # Data analysis and performance optimization
+    telemetry_analysis: float = 50.0           # Real-time data interpretation
+    performance_modeling: float = 50.0         # Predictive performance models
+    statistical_methods: float = 50.0          # Advanced statistical techniques
+    pattern_recognition: float = 50.0          # Identifying trends and patterns
+    predictive_analytics: float = 50.0         # Forecasting and predictions
+    software_proficiency: float = 50.0         # Technical software mastery
+    database_management: float = 50.0          # Data storage and retrieval
+    
+    # ===== OPERATIONAL SKILLS (5 attributes) - SQL SCHEMA =====
     # Day-to-day racing and team operations
-    pit_stop_efficiency: float = 50.0         # Pit stop execution speed
-    race_strategy: float = 50.0               # Strategic race planning
-    crisis_management: float = 50.0           # Handling emergency situations
-    equipment_maintenance: float = 50.0       # Maintaining tools and systems
-    logistics_coordination: float = 50.0      # Travel and equipment planning
-    safety_protocols: float = 50.0            # Safety awareness and implementation
-    communication_skills: float = 50.0        # Clear and effective communication
-    adaptability: float = 50.0                # Adjusting to changing conditions
+    pit_stop_efficiency: float = 50.0          # Pit stop execution speed
+    crisis_management: float = 50.0            # Handling emergency situations
+    equipment_maintenance: float = 50.0        # Maintaining tools and systems
+    logistics_coordination: float = 50.0       # Travel and equipment planning
+    safety_protocols: float = 50.0             # Safety awareness and implementation
     
-    # ===== FINANCIAL & COMMERCIAL (5 attributes) =====
-    # Business and financial management capabilities
-    financial_management: float = 50.0        # Budget and cost management
-    commercial_acumen: float = 50.0           # Business development skills
-    negotiation_skills: float = 50.0          # Contract and deal negotiation
-    sponsorship_development: float = 50.0     # Attracting and managing sponsors
-    cost_optimisation: float = 50.0           # Efficient spending strategies
+    # ===== FINANCIAL & COMMERCIAL SKILLS (3 attributes) - SQL SCHEMA =====
+    # Business management capabilities
+    commercial_acumen: float = 50.0            # Business development skills
+    sponsorship_development: float = 50.0      # Attracting sponsors
+    cost_optimisation: float = 50.0            # Efficient spending strategies
     
-    # ===== DISCIPLINE SPECIALISATIONS (7 attributes) =====
-    # Expertise in specific racing disciplines
-    single_seater_expertise: float = 50.0     # Formula racing specialisation
-    touring_car_expertise: float = 50.0       # Production car racing knowledge
-    rally_expertise: float = 50.0             # Rally and stage racing knowledge
-    street_racing_expertise: float = 50.0     # Urban racing specialisation
-    drag_racing_expertise: float = 50.0       # Straight-line racing knowledge
-    rallycross_expertise: float = 50.0        # Mixed surface racing expertise
-    endurance_expertise: float = 50.0         # Long-distance racing knowledge
+    # ===== CAREER & DEVELOPMENT (5 attributes) - SQL SCHEMA =====
+    # Education, history, and employment details
+    previous_teams: str = ""                   # JSON list of previous employment
+    education_level: str = "bachelor"          # Educational background
+    certifications: str = ""                   # Professional certifications
+    languages_spoken: int = 1                  # Number of languages
+    contract_type: str = "full_time"           # Employment type
     
-    # ===== CAREER & DEVELOPMENT =====
-    # Professional progression and experience tracking
-    years_experience: int = 0                 # Total years in motorsport
-    previous_teams: str = ""                  # JSON list of previous employment
-    education_level: str = "bachelor"         # Educational background
-    certifications: str = ""                  # Professional certifications
-    languages_spoken: int = 1                 # Number of languages
-    
-    # Current employment details
-    current_team_id: Optional[int] = None     # Team assignment (FK)
-    salary: float = 50000.0                   # Annual salary in USD
-    contract_length: int = 1                  # Remaining contract years
-    contract_type: str = "full_time"          # Employment type
-    
-    # Performance and satisfaction
-    job_satisfaction: float = 75.0            # Current job satisfaction
-    workload_capacity: float = 100.0          # Maximum workload handling
-    current_workload: float = 50.0            # Current workload percentage
-    performance_rating: float = 75.0          # Recent performance evaluation
-    
-    # Professional development
-    learning_rate: float = 50.0               # Speed of skill development
-    innovation_projects: int = 0              # Number of innovation projects led
-    patents_held: int = 0                     # Technical patents owned
-    publications: int = 0                     # Technical papers published
+    # ===== PERFORMANCE & SATISFACTION (4 attributes) - SQL SCHEMA =====
+    # Current state tracking for comprehensive simulation
+    job_satisfaction: float = 75.0             # Current job satisfaction
+    workload_capacity: float = 100.0           # Maximum workload handling
+    current_workload: float = 50.0             # Current workload percentage
+    performance_rating: float = 75.0           # Recent performance evaluation
     
     def get_role_effectiveness(self) -> float:
         """
@@ -241,7 +282,7 @@ class StaffMember:
         effectiveness = total_score / total_weight
         
         # Apply experience and tier bonuses
-        experience_bonus = min(self.years_experience * 2, 20)  # Up to 20% bonus
+        experience_bonus = min(self.experience_years * 2, 20)  # Up to 20% bonus
         tier_bonus = self._get_tier_bonus()
         
         final_effectiveness = effectiveness + experience_bonus + tier_bonus
@@ -253,82 +294,82 @@ class StaffMember:
         role_weights = {
             # Technical Director - Strategic technical oversight
             StaffRole.TECHNICAL_DIRECTOR: {
-                "engineering_knowledge": 0.20,
-                "leadership_ability": 0.15,
+                "technical_expertise": 0.20,
+                "team_leadership": 0.15,
                 "decision_making": 0.15,
                 "innovation_ability": 0.12,
-                "team_coordination": 0.10,
-                "project_management": 0.10,
-                "aerodynamics_expertise": 0.08,
+                "management_skill": 0.10,
+                "long_term_planning": 0.10,
+                "aerodynamics_knowledge": 0.08,
                 "engine_knowledge": 0.10
             },
             
             # Chief Engineer - Hands-on technical leadership
             StaffRole.CHIEF_ENGINEER: {
-                "engineering_knowledge": 0.25,
+                "technical_expertise": 0.25,
                 "problem_solving": 0.15,
-                "team_coordination": 0.12,
-                "quality_control": 0.10,
-                "manufacturing_knowledge": 0.10,
+                "management_skill": 0.12,
+                "attention_to_detail": 0.10,
+                "innovation_ability": 0.10,
                 "simulation_expertise": 0.08,
-                "communication_skills": 0.10,
-                "mentoring_ability": 0.10
+                "communication": 0.10,
+                "team_leadership": 0.10
             },
             
             # Data Analyst - Performance analysis specialist
             StaffRole.DATA_ANALYST: {
-                "data_analysis": 0.25,
-                "telemetry_analysis": 0.20,
-                "statistical_methods": 0.15,
-                "pattern_recognition": 0.12,
-                "software_proficiency": 0.10,
-                "predictive_analytics": 0.10,
-                "performance_modeling": 0.08
+                "data_analysis_skill": 0.25,
+                "technical_expertise": 0.20,
+                "problem_solving": 0.15,
+                "attention_to_detail": 0.12,
+                "learning_speed": 0.10,
+                "adaptability": 0.10,
+                "communication": 0.08
             },
             
             # Race Strategist - Strategic race planning
             StaffRole.RACE_STRATEGIST: {
-                "race_strategy": 0.25,
-                "data_analysis": 0.15,
+                "race_strategy_skill": 0.25,
+                "data_analysis_skill": 0.15,
                 "decision_making": 0.15,
-                "pattern_recognition": 0.12,
-                "crisis_management": 0.10,
-                "communication_skills": 0.10,
+                "problem_solving": 0.12,
+                "work_under_pressure": 0.10,
+                "communication": 0.10,
                 "adaptability": 0.13
             },
             
             # Pit Crew Chief - Pit stop leadership
             StaffRole.PIT_CREW_CHIEF: {
-                "pit_stop_efficiency": 0.25,
-                "leadership_ability": 0.20,
-                "team_coordination": 0.15,
-                "crisis_management": 0.12,
-                "communication_skills": 0.10,
-                "safety_protocols": 0.10,
-                "equipment_maintenance": 0.08
+                "technical_expertise": 0.25,
+                "team_leadership": 0.20,
+                "management_skill": 0.15,
+                "work_under_pressure": 0.12,
+                "communication": 0.10,
+                "attention_to_detail": 0.10,
+                "reliability": 0.08
             },
             
             # Chief Designer - Car design leadership
             StaffRole.CHIEF_DESIGNER: {
-                "cad_design": 0.20,
-                "aerodynamics_expertise": 0.18,
+                "cfd_expertise": 0.20,
+                "aerodynamics_knowledge": 0.18,
                 "innovation_ability": 0.15,
-                "engineering_knowledge": 0.12,
-                "leadership_ability": 0.10,
-                "materials_science": 0.10,
+                "technical_expertise": 0.12,
+                "team_leadership": 0.10,
+                "problem_solving": 0.10,
                 "simulation_expertise": 0.15
             },
             
             # Team Principal - Overall team leadership
             StaffRole.TEAM_PRINCIPAL: {
-                "leadership_ability": 0.25,
-                "financial_management": 0.15,
-                "commercial_acumen": 0.12,
+                "team_leadership": 0.25,
+                "budget_management": 0.15,
+                "stakeholder_management": 0.12,
                 "decision_making": 0.12,
-                "negotiation_skills": 0.10,
-                "team_coordination": 0.10,
-                "crisis_management": 0.08,
-                "communication_skills": 0.08
+                "negotiation_skill": 0.10,
+                "management_skill": 0.10,
+                "work_under_pressure": 0.08,
+                "communication": 0.08
             }
         }
         
@@ -337,12 +378,10 @@ class StaffMember:
     def _get_tier_bonus(self) -> float:
         """Get effectiveness bonus based on staff tier"""
         tier_bonuses = {
-            StaffTier.INTERN: -10.0,
-            StaffTier.JUNIOR: -5.0,
-            StaffTier.REGULAR: 0.0,
-            StaffTier.SENIOR: 5.0,
-            StaffTier.EXPERT: 10.0,
-            StaffTier.LEGENDARY: 15.0
+            "tier1": 15.0,
+            "tier2": 5.0,
+            "tier3": 0.0,
+            "tier4": -5.0
         }
         return tier_bonuses.get(self.tier, 0.0)
         
@@ -369,7 +408,7 @@ class StaffMember:
         base_expertise = expertise_map.get(discipline, 50.0)
         
         # Add general competence bonus
-        general_bonus = (self.engineering_knowledge + self.years_experience) / 20
+        general_bonus = (self.technical_expertise + self.experience_years) / 20
         
         return round(min(100.0, base_expertise + general_bonus), 1)
         
@@ -386,12 +425,10 @@ class StaffMember:
         """
         # Base salary by tier
         base_salaries = {
-            StaffTier.INTERN: 25000,
-            StaffTier.JUNIOR: 45000,
-            StaffTier.REGULAR: 75000,
-            StaffTier.SENIOR: 120000,
-            StaffTier.EXPERT: 200000,
-            StaffTier.LEGENDARY: 350000
+            "tier1": 200000,
+            "tier2": 100000,
+            "tier3": 60000,
+            "tier4": 35000
         }
         
         base_salary = base_salaries.get(self.tier, 50000)
@@ -401,7 +438,7 @@ class StaffMember:
         skill_bonus = (skill_average - 50) / 100  # -50% to +50%
         
         # Experience bonus
-        experience_bonus = min(self.years_experience * 0.02, 0.3)  # Up to 30%
+        experience_bonus = min(self.experience_years * 0.02, 0.3)  # Up to 30%
         
         # Role importance multiplier
         role_multiplier = role_importance
@@ -427,7 +464,7 @@ class StaffMember:
         """
         # Convert from USD (stored) to target currency
         converted_salary = currency_system.convert_amount(
-            self.salary, Currency.USD, currency
+            self.salary_demand, Currency.USD, currency
         )
         return currency_system.format_amount(
             converted_salary, currency, show_currency_code
@@ -467,17 +504,16 @@ class StaffMember:
             Dictionary with formatted contract details
         """
         annual_salary = currency_system.convert_amount(
-            self.salary, Currency.USD, currency
+            self.salary_demand, Currency.USD, currency
         )
-        total_value = annual_salary * self.contract_length
+        total_value = annual_salary * self.contract_years_remaining
         
         return {
             "annual_salary": currency_system.format_amount(annual_salary, currency, True),
-            "contract_length": f"{self.contract_length} year{'s' if self.contract_length != 1 else ''}",
+            "contract_length": f"{self.contract_years_remaining} year{'s' if self.contract_years_remaining != 1 else ''}",
             "total_value": currency_system.format_amount(total_value, currency, True),
-            "contract_type": self.contract_type.replace("_", " ").title(),
-            "job_satisfaction": f"{self.job_satisfaction:.1f}%",
-            "performance_rating": f"{self.performance_rating:.1f}%"
+            "tier": self.tier.title(),
+            "role": self.role.replace("_", " ").title()
         }
         
     def __repr__(self):

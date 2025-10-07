@@ -27,17 +27,35 @@ from enum import Enum
 
 
 class SupplierCategory(Enum):
-    """Categories of component suppliers in the motorsport ecosystem"""
-    ENGINE_POWERTRAIN = "ENGINE_POWERTRAIN"           # ICE engines, electric motors, hybrid systems
-    TIRE_COMPOUND = "TIRE_COMPOUND"                   # Tire manufacturers and compounds
-    CHASSIS_AERO = "CHASSIS_AERO"                     # Chassis, aerodynamics, bodywork
-    ELECTRONICS = "ELECTRONICS"                       # ECU, telemetry, data systems
-    TRANSMISSION = "TRANSMISSION"                     # Gearboxes, differentials, drivetrain
-    BRAKE_SYSTEMS = "BRAKE_SYSTEMS"                   # Brake calipers, discs, cooling
-    SUSPENSION = "SUSPENSION"                         # Dampers, springs, anti-roll bars
-    FUEL_ENERGY = "FUEL_ENERGY"                      # Fuel, batteries, energy systems
-    SAFETY_EQUIPMENT = "SAFETY_EQUIPMENT"            # Roll cages, fire systems, helmets
-    SPECIALTY_PERFORMANCE = "SPECIALTY_PERFORMANCE"   # Nitrous, launch control, exotic systems
+    """Categories of component suppliers matching the vehicle components system"""
+    # Engine & Powertrain (engine.py)
+    ENGINE = "ENGINE"                                 # Internal combustion engines
+    HYBRID_SYSTEM = "HYBRID_SYSTEM"                   # Hybrid power units (KERS, ERS-H, ERS-K)
+    
+    # Drivetrain (drivetrain.py)
+    GEARBOX = "GEARBOX"                               # Transmissions and gearboxes
+    DIFFERENTIAL = "DIFFERENTIAL"                     # Differentials (LSD, torque vectoring, etc.)
+    DRIVETRAIN = "DRIVETRAIN"                         # Complete drivetrain assemblies
+    
+    # Chassis (chassis.py)
+    CHASSIS = "CHASSIS"                               # Chassis structures (monocoque, tubular)
+    SUSPENSION = "SUSPENSION"                         # Suspension systems (dampers, springs, ARB)
+    BRAKES = "BRAKES"                                 # Brake systems (discs, calipers, cooling)
+    
+    # Aerodynamics (aerodynamics.py)
+    AERODYNAMICS = "AERODYNAMICS"                     # Aerodynamic packages (wings, diffusers, DRS)
+    
+    # Tires (part of chassis/vehicle system)
+    TIRES = "TIRES"                                   # Tire manufacturers and compounds
+    
+    # Electronics (electronics.py)
+    ECU = "ECU"                                       # Electronic control units
+    TELEMETRY = "TELEMETRY"                           # Telemetry and data systems
+    STEERING = "STEERING"                             # Steering systems
+    
+    # Safety & Energy
+    SAFETY = "SAFETY"                                 # Safety equipment (roll cage, fire suppression)
+    FUEL_ENERGY = "FUEL_ENERGY"                      # Fuel, batteries, energy storage
 
 
 class SupplierTier(Enum):
@@ -202,14 +220,15 @@ class ComponentContract:
 
 
 # Base supplier templates for each component category
-# These define the characteristics and typical ranges for each supplier type
+# Aligned with the vehicle components system (engine.py, drivetrain.py, chassis.py, aerodynamics.py, electronics.py)
 SUPPLIER_BASE_MODELS = {
-    # ===== ENGINE/POWERTRAIN MANUFACTURERS =====
-    "ENGINE_POWERTRAIN": {
-        "category_description": "Engine and powertrain system manufacturers",
+    # ===== ENGINE MANUFACTURERS (engine.py - EngineComponent) =====
+    "ENGINE": {
+        "category_description": "Internal combustion engine manufacturers",
         "specialization_types": [
-            "formula_engines", "touring_engines", "rally_engines", "drag_engines",
-            "electric_powertrains", "hybrid_systems", "turbocharged_engines"
+            "naturally_aspirated", "turbocharged", "supercharged", "twincharged",
+            "inline_engines", "v_engines", "flat_engines", "rotary_engines",
+            "formula_engines", "touring_engines", "rally_engines", "drag_engines"
         ],
         "typical_quality_ranges": {
             "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
@@ -217,79 +236,33 @@ SUPPLIER_BASE_MODELS = {
             "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.70)},
             "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
         "base_annual_cost_millions": 3.0
     },
     
-    # ===== TIRE MANUFACTURERS =====
-    "TIRE_COMPOUND": {
-        "category_description": "Tire and rubber compound manufacturers",
+    # ===== HYBRID SYSTEM MANUFACTURERS (engine.py - HybridSystem) =====
+    "HYBRID_SYSTEM": {
+        "category_description": "Hybrid power unit and energy recovery system manufacturers",
         "specialization_types": [
-            "formula_compounds", "endurance_tires", "rally_tires", "drag_slicks",
-            "wet_weather", "all_terrain", "street_compounds", "racing_slicks"
-        ],
-        "typical_quality_ranges": {
-            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.80, 0.90)},
-            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.80)},
-            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
-            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
-        },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
-        "base_annual_cost_millions": 1.2
-    },
-    
-    # ===== CHASSIS & AERODYNAMICS =====
-    "CHASSIS_AERO": {
-        "category_description": "Chassis, aerodynamics, and bodywork manufacturers",
-        "specialization_types": [
-            "carbon_fiber", "monocoque_chassis", "aerodynamic_packages", "body_kits",
-            "ground_effect", "active_aerodynamics", "lightweight_materials"
+            "kers", "ers_h", "ers_k", "full_hybrid", "mgu_systems",
+            "battery_management", "energy_recovery", "deployment_control",
+            "supercapacitor", "flywheel_ers"
         ],
         "typical_quality_ranges": {
             "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
             "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.70, 0.85)},
-            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
-            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
-        },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
-        "base_annual_cost_millions": 2.0
-    },
-    
-    # ===== ELECTRONICS & DATA SYSTEMS =====
-    "ELECTRONICS": {
-        "category_description": "Electronic control units, telemetry, and data systems",
-        "specialization_types": [
-            "telemetry_systems", "ecu_development", "engine_management", "data_logging",
-            "driver_aids", "traction_control", "energy_management", "sensor_systems"
-        ],
-        "typical_quality_ranges": {
-            "PREMIUM": {"engineering_quality": (0.85, 1.0), "pricing_tier": (0.75, 0.85)},
-            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.75)},
-            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.70)},
             "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
-        "base_annual_cost_millions": 1.5
+        "base_annual_cost_millions": 2.5
     },
     
-    # ===== TRANSMISSION MANUFACTURERS =====
-    "TRANSMISSION": {
-        "category_description": "Gearbox, differential, and drivetrain manufacturers",
+    # ===== GEARBOX MANUFACTURERS (drivetrain.py - Gearbox) =====
+    "GEARBOX": {
+        "category_description": "Gearbox and transmission manufacturers",
         "specialization_types": [
-            "sequential_gearboxes", "formula_transmissions", "awd_systems", "rally_gearboxes",
-            "drag_transmissions", "torque_converters", "limited_slip_differentials"
+            "sequential", "manual", "semi_auto", "dual_clutch", "cvt",
+            "automated_manual", "single_speed_electric",
+            "formula_transmissions", "rally_gearboxes", "drag_transmissions"
         ],
         "typical_quality_ranges": {
             "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.80, 0.90)},
@@ -297,39 +270,65 @@ SUPPLIER_BASE_MODELS = {
             "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
             "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
         "base_annual_cost_millions": 2.2
     },
     
-    # ===== BRAKE SYSTEM MANUFACTURERS =====
-    "BRAKE_SYSTEMS": {
-        "category_description": "Brake calipers, discs, and cooling system manufacturers",
+    # ===== DIFFERENTIAL MANUFACTURERS (drivetrain.py - Differential) =====
+    "DIFFERENTIAL": {
+        "category_description": "Differential and traction control system manufacturers",
         "specialization_types": [
-            "carbon_brakes", "steel_brakes", "cooling_systems", "brake_by_wire",
-            "drag_brakes", "endurance_brakes", "lightweight_systems"
+            "open", "lsd", "torsen", "electronic_active", "viscous_coupling",
+            "mechanical_lsd", "torque_vectoring", "rally_differentials"
         ],
         "typical_quality_ranges": {
-            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
-            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.80)},
-            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
-            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.80, 0.90)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.70, 0.80)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
         "base_annual_cost_millions": 1.8
     },
     
-    # ===== SUSPENSION SPECIALISTS =====
-    "SUSPENSION": {
-        "category_description": "Suspension dampers, springs, and anti-roll bar manufacturers",
+    # ===== DRIVETRAIN MANUFACTURERS (drivetrain.py - complete assemblies) =====
+    "DRIVETRAIN": {
+        "category_description": "Complete drivetrain assembly manufacturers",
         "specialization_types": [
-            "active_suspension", "formula_dampers", "rally_suspension", "long_travel",
-            "coilovers", "adjustable_dampers", "anti_roll_systems"
+            "fwd_systems", "rwd_systems", "awd_systems", "four_wd",
+            "integrated_drivetrain", "power_transmission", "driveshaft_systems"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.80, 0.90)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.70, 0.80)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
+        },
+        "base_annual_cost_millions": 2.0
+    },
+    
+    # ===== CHASSIS MANUFACTURERS (chassis.py - Chassis) =====
+    "CHASSIS": {
+        "category_description": "Chassis structure manufacturers",
+        "specialization_types": [
+            "carbon_fiber_monocoque", "aluminum_monocoque", "steel_tubular",
+            "chromoly_tubular", "composite_materials", "space_frame",
+            "crash_structures", "lightweight_construction"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.70, 0.85)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
+        },
+        "base_annual_cost_millions": 2.5
+    },
+    
+    # ===== SUSPENSION MANUFACTURERS (chassis.py - Suspension) =====
+    "SUSPENSION": {
+        "category_description": "Suspension system manufacturers",
+        "specialization_types": [
+            "double_wishbone", "macpherson", "pushrod", "pullrod", "multi_link",
+            "active_suspension", "monotube_dampers", "twin_tube_dampers",
+            "magnetic_dampers", "coilovers", "anti_roll_bars"
         ],
         "typical_quality_ranges": {
             "PREMIUM": {"engineering_quality": (0.85, 1.0), "pricing_tier": (0.75, 0.85)},
@@ -337,18 +336,133 @@ SUPPLIER_BASE_MODELS = {
             "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
             "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
         "base_annual_cost_millions": 1.6
+    },
+    
+    # ===== BRAKE MANUFACTURERS (chassis.py - BrakeSystem) =====
+    "BRAKES": {
+        "category_description": "Brake system manufacturers",
+        "specialization_types": [
+            "carbon_carbon", "carbon_ceramic", "steel_discs", "cast_iron",
+            "ventilated_discs", "drilled_discs", "slotted_discs",
+            "brake_cooling", "brake_by_wire", "abs_systems"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.80)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
+        },
+        "base_annual_cost_millions": 1.8
+    },
+    
+    # ===== AERODYNAMICS MANUFACTURERS (aerodynamics.py - AeroPackage) =====
+    "AERODYNAMICS": {
+        "category_description": "Aerodynamic package manufacturers",
+        "specialization_types": [
+            "front_wings", "rear_wings", "drs_systems", "ground_effect",
+            "diffusers", "body_kits", "active_aerodynamics", "splitters",
+            "low_downforce_packages", "high_downforce_packages", "cfd_development"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.85, 0.95)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.70, 0.85)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.60, 0.70)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.60)}
+        },
+        "base_annual_cost_millions": 2.0
+    },
+    
+    # ===== TIRE MANUFACTURERS (vehicle tires) =====
+    "TIRES": {
+        "category_description": "Tire and rubber compound manufacturers",
+        "specialization_types": [
+            "slick_tires", "wet_tires", "intermediate_tires", "gravel_tires",
+            "snow_tires", "drag_slicks", "all_terrain", "mud_terrain",
+            "super_soft", "soft", "medium", "hard", "super_hard"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.80, 0.90)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.80)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
+        },
+        "base_annual_cost_millions": 1.2
+    },
+    
+    # ===== ECU MANUFACTURERS (electronics.py - ControlUnit) =====
+    "ECU": {
+        "category_description": "Electronic control unit manufacturers",
+        "specialization_types": [
+            "standard_ecu", "advanced_ecu", "telemetry_control", "fia_spec_ecu",
+            "custom_development", "engine_management", "traction_control",
+            "energy_management", "data_logging"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.85, 1.0), "pricing_tier": (0.75, 0.85)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.75)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
+        },
+        "base_annual_cost_millions": 1.5
+    },
+    
+    # ===== TELEMETRY MANUFACTURERS (electronics.py - telemetry systems) =====
+    "TELEMETRY": {
+        "category_description": "Telemetry and data acquisition system manufacturers",
+        "specialization_types": [
+            "real_time_telemetry", "data_acquisition", "sensor_systems",
+            "wireless_telemetry", "pit_wall_systems", "driver_displays",
+            "performance_analysis", "predictive_analytics"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.85, 1.0), "pricing_tier": (0.75, 0.85)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.65, 0.75)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
+        },
+        "base_annual_cost_millions": 1.2
+    },
+    
+    # ===== STEERING MANUFACTURERS (electronics.py - SteeringSystem) =====
+    "STEERING": {
+        "category_description": "Steering system manufacturers",
+        "specialization_types": [
+            "manual_steering", "hydraulic_assist", "electric_assist",
+            "electrohydraulic", "rack_and_pinion", "quick_ratio", "variable_ratio"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.85, 1.0), "pricing_tier": (0.70, 0.80)},
+            "PROFESSIONAL": {"engineering_quality": (0.80, 0.90), "pricing_tier": (0.60, 0.70)},
+            "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.45, 0.55)}
+        },
+        "base_annual_cost_millions": 0.8
+    },
+    
+    # ===== SAFETY EQUIPMENT MANUFACTURERS =====
+    "SAFETY": {
+        "category_description": "Safety equipment manufacturers",
+        "specialization_types": [
+            "roll_cages", "fire_suppression", "impact_structures", "safety_cells",
+            "fia_certification", "crash_testing", "restraint_systems",
+            "basic_safety", "intermediate_safety", "advanced_safety", "fia_grade_1"
+        ],
+        "typical_quality_ranges": {
+            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.75, 0.85)},
+            "PROFESSIONAL": {"engineering_quality": (0.85, 0.95), "pricing_tier": (0.65, 0.75)},
+            "COMPETITIVE": {"engineering_quality": (0.75, 0.85), "pricing_tier": (0.55, 0.65)},
+            "BUDGET": {"engineering_quality": (0.60, 0.75), "pricing_tier": (0.45, 0.55)}
+        },
+        "base_annual_cost_millions": 1.0
     },
     
     # ===== FUEL & ENERGY SUPPLIERS =====
     "FUEL_ENERGY": {
         "category_description": "Fuel, battery, and energy storage system providers",
         "specialization_types": [
-            "high_octane_fuel", "racing_additives", "battery_systems", "energy_storage",
+            "petrol", "diesel", "ethanol", "e85", "methanol", "hydrogen",
+            "lithium_ion_batteries", "solid_state_batteries", "supercapacitors",
             "fuel_cells", "hybrid_energy", "charging_systems"
         ],
         "typical_quality_ranges": {
@@ -357,54 +471,92 @@ SUPPLIER_BASE_MODELS = {
             "COMPETITIVE": {"engineering_quality": (0.70, 0.80), "pricing_tier": (0.55, 0.65)},
             "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.55)}
         },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
         "base_annual_cost_millions": 0.8
-    },
-    
-    # ===== SAFETY EQUIPMENT =====
-    "SAFETY_EQUIPMENT": {
-        "category_description": "Safety systems, roll cages, and fire suppression manufacturers",
-        "specialization_types": [
-            "roll_cages", "fire_suppression", "impact_structures", "safety_cells",
-            "helmets", "racing_suits", "restraint_systems"
-        ],
-        "typical_quality_ranges": {
-            "PREMIUM": {"engineering_quality": (0.90, 1.0), "pricing_tier": (0.75, 0.85)},
-            "PROFESSIONAL": {"engineering_quality": (0.85, 0.95), "pricing_tier": (0.65, 0.75)},
-            "COMPETITIVE": {"engineering_quality": (0.75, 0.85), "pricing_tier": (0.55, 0.65)},
-            "BUDGET": {"engineering_quality": (0.60, 0.75), "pricing_tier": (0.45, 0.55)}
-        },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
-        "base_annual_cost_millions": 1.0
-    },
-    
-    # ===== SPECIALTY PERFORMANCE COMPONENTS =====
-    "SPECIALTY_PERFORMANCE": {
-        "category_description": "Specialized performance components for specific disciplines",
-        "specialization_types": [
-            "nitrous_systems", "launch_control", "traction_control", "launch_systems",
-            "turbocharger_systems", "intercoolers", "exhaust_systems"
-        ],
-        "typical_quality_ranges": {
-            "PREMIUM": {"engineering_quality": (0.80, 1.0), "pricing_tier": (0.65, 0.75)},
-            "PROFESSIONAL": {"engineering_quality": (0.75, 0.90), "pricing_tier": (0.60, 0.70)},
-            "COMPETITIVE": {"engineering_quality": (0.70, 0.85), "pricing_tier": (0.50, 0.60)},
-            "BUDGET": {"engineering_quality": (0.50, 0.70), "pricing_tier": (0.40, 0.50)}
-        },
-        "discipline_specializations": [
-            "single_seater_focus", "production_touring_focus", "rally_stage_focus",
-            "urban_street_focus", "drag_acceleration_focus", "sprint_rallycross_focus", "endurance_focus"
-        ],
-        "base_annual_cost_millions": 1.4
     }
 }
 
+
+# Placeholder supplier names organized by category
+PLACEHOLDER_SUPPLIERS = {
+    "ENGINE": [
+        "Engine_Supplier_Premium_1", "Engine_Supplier_Premium_2", "Engine_Supplier_Premium_3",
+        "Engine_Supplier_Pro_1", "Engine_Supplier_Pro_2", "Engine_Supplier_Pro_3",
+        "Engine_Supplier_Comp_1", "Engine_Supplier_Comp_2",
+        "Engine_Supplier_Budget_1", "Engine_Supplier_Budget_2"
+    ],
+    "HYBRID_SYSTEM": [
+        "Hybrid_Supplier_Premium_1", "Hybrid_Supplier_Premium_2",
+        "Hybrid_Supplier_Pro_1", "Hybrid_Supplier_Pro_2",
+        "Hybrid_Supplier_Comp_1", "Hybrid_Supplier_Budget_1"
+    ],
+    "GEARBOX": [
+        "Gearbox_Supplier_Premium_1", "Gearbox_Supplier_Premium_2",
+        "Gearbox_Supplier_Pro_1", "Gearbox_Supplier_Pro_2", "Gearbox_Supplier_Pro_3",
+        "Gearbox_Supplier_Comp_1", "Gearbox_Supplier_Comp_2",
+        "Gearbox_Supplier_Budget_1"
+    ],
+    "DIFFERENTIAL": [
+        "Diff_Supplier_Premium_1", "Diff_Supplier_Premium_2",
+        "Diff_Supplier_Pro_1", "Diff_Supplier_Pro_2",
+        "Diff_Supplier_Comp_1", "Diff_Supplier_Budget_1"
+    ],
+    "DRIVETRAIN": [
+        "Drivetrain_Supplier_Premium_1", "Drivetrain_Supplier_Pro_1",
+        "Drivetrain_Supplier_Comp_1", "Drivetrain_Supplier_Budget_1"
+    ],
+    "CHASSIS": [
+        "Chassis_Supplier_Premium_1", "Chassis_Supplier_Premium_2",
+        "Chassis_Supplier_Pro_1", "Chassis_Supplier_Pro_2",
+        "Chassis_Supplier_Comp_1", "Chassis_Supplier_Budget_1"
+    ],
+    "SUSPENSION": [
+        "Suspension_Supplier_Premium_1", "Suspension_Supplier_Premium_2",
+        "Suspension_Supplier_Pro_1", "Suspension_Supplier_Pro_2",
+        "Suspension_Supplier_Comp_1", "Suspension_Supplier_Comp_2",
+        "Suspension_Supplier_Budget_1"
+    ],
+    "BRAKES": [
+        "Brake_Supplier_Premium_1", "Brake_Supplier_Premium_2",
+        "Brake_Supplier_Pro_1", "Brake_Supplier_Pro_2", "Brake_Supplier_Pro_3",
+        "Brake_Supplier_Comp_1", "Brake_Supplier_Comp_2",
+        "Brake_Supplier_Budget_1"
+    ],
+    "AERODYNAMICS": [
+        "Aero_Supplier_Premium_1", "Aero_Supplier_Premium_2",
+        "Aero_Supplier_Pro_1", "Aero_Supplier_Pro_2",
+        "Aero_Supplier_Comp_1", "Aero_Supplier_Comp_2",
+        "Aero_Supplier_Budget_1"
+    ],
+    "TIRES": [
+        "Tire_Supplier_Premium_1", "Tire_Supplier_Premium_2",
+        "Tire_Supplier_Pro_1", "Tire_Supplier_Pro_2",
+        "Tire_Supplier_Comp_1", "Tire_Supplier_Comp_2",
+        "Tire_Supplier_Budget_1"
+    ],
+    "ECU": [
+        "ECU_Supplier_Premium_1", "ECU_Supplier_Pro_1", "ECU_Supplier_Pro_2",
+        "ECU_Supplier_Comp_1", "ECU_Supplier_Budget_1"
+    ],
+    "TELEMETRY": [
+        "Telemetry_Supplier_Premium_1", "Telemetry_Supplier_Pro_1",
+        "Telemetry_Supplier_Comp_1", "Telemetry_Supplier_Budget_1"
+    ],
+    "STEERING": [
+        "Steering_Supplier_Premium_1", "Steering_Supplier_Pro_1",
+        "Steering_Supplier_Comp_1", "Steering_Supplier_Budget_1"
+    ],
+    "SAFETY": [
+        "Safety_Supplier_Premium_1", "Safety_Supplier_Premium_2",
+        "Safety_Supplier_Pro_1", "Safety_Supplier_Pro_2",
+        "Safety_Supplier_Comp_1", "Safety_Supplier_Budget_1"
+    ],
+    "FUEL_ENERGY": [
+        "Fuel_Supplier_Premium_1", "Fuel_Supplier_Pro_1", "Fuel_Supplier_Pro_2",
+        "Fuel_Supplier_Comp_1", "Fuel_Supplier_Budget_1"
+    ]
+}
+
 __all__ = [
-    'SupplierCategory', 'SupplierTier', 'Supplier', 'ComponentContract', 'SUPPLIER_BASE_MODELS'
+    'SupplierCategory', 'SupplierTier', 'Supplier', 'ComponentContract', 
+    'SUPPLIER_BASE_MODELS', 'PLACEHOLDER_SUPPLIERS'
 ]
