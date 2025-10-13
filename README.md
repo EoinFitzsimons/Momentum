@@ -1,8 +1,7 @@
-
 # Momentum - Multi-discipline Motorsport Management Simulator
 
-**Project Type:** Multi-discipline Motorsport Management Simulator  
-**Development Scope:** Python back-end simulation engine (primary focus)  
+**Project Type:** Multi-discipline Motorsport Management Simulator
+**Development Scope:** Python back-end simulation engine (primary focus)
 **Status:** Active Development - Backend Systems Implementation Phase
 
 ## Project Overview
@@ -25,42 +24,49 @@ Players act as team principals, making managerial, financial, and strategic deci
 Momentum features **seven complete racing disciplines**, each with distinct simulation characteristics:
 
 ### 1. **Single Seater** (Open-Wheel Racing)
+
 - **Format:** Technical precision racing with open wheels and aerodynamic focus
 - **Grid Size:** 20-32 cars, 2 per team
 - **Leagues:** GPC1 (Premier), GPC2, GPC3, GPRC (Regional), GPNC (National), GPJC (Junior)
 - **Key Factors:** Aerodynamics, cornering speed, qualifying precision
 
 ### 2. **Production/Touring Cars** (Circuit Racing)
+
 - **Format:** Close-quarters racing with modified production vehicles
 - **Grid Size:** 30-40 cars, 2 per team
 - **Leagues:** WTC1 (Premier), WTC2, RTC (Regional), NTC (National), STC (Super), CTC (Club)
 - **Key Factors:** Durability, contact management, overtaking ability
 
 ### 3. **Rally/Stage Racing** (Off-Road Navigation)
+
 - **Format:** Point-to-point time trials across varied terrain
 - **Grid Size:** 30-60 entries, 1 car per team
 - **Leagues:** WRC1 (Premier), WRC2, WRC3, CWRC (Continental), NRC (National), RRC (Regional)
 - **Key Factors:** Co-driver communication, surface adaptability, pace notes
 
 ### 4. **Urban/Street Racing** (City Circuits)
+
 - **Format:** Technical street circuit racing in urban environments
 - **Grid Size:** 8 cars per event
 - **Leagues:** USC1 (Elite), USC2 (Pro), USC3 (Sport), CUSC (Continental), NUSC (National)
 - **Key Factors:** Precision, barrier proximity, street surface grip
 
 ### 5. **Drag/Acceleration Racing** (Quarter Mile)
+
 - **Format:** Straight-line acceleration in knockout tournament format
 - **Grid Size:** 64 cars, knockout elimination
 - **Leagues:** WDC1 (Elite), WDC2 (Pro), WDC3 (Sport), CWDC (Continental), NWDC (National)
 - **Key Factors:** Launch technique, power delivery, reaction time
 
 ### 6. **Sprint/Rallycross** (Mixed Surface)
+
 - **Format:** Short circuit races mixing tarmac and gravel with jumps
 - **Grid Size:** 16-24 cars in heat format
 - **Leagues:** WSRC1 (Elite), WSRC2 (Pro), WSRC3 (Sport), CSRC (Continental), NSRC (National)
 - **Key Factors:** Surface transitions, jump navigation, heat consistency
 
 ### 7. **Endurance Racing** (Long Distance)
+
 - **Format:** Extended multi-hour races emphasizing reliability and strategy
 - **Grid Size:** 30-50 cars, 2 per team
 - **Leagues:** WEC1 (Premier), WEC2, CWEC (Continental), NWEC (National), RWEC (Regional)
@@ -111,38 +117,45 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 ### Installation
 
 1. **Clone the repository:**
+
    ```bash
    git clone https://github.com/EoinFitzsimons/FinalProject.git
    cd FinalProject/Momentum/Python
    ```
-
 2. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. **Configure environment variables** (optional):
    Create a `.env` file in the Python directory:
+
    ```env
    # Name Generation API (optional)
       ```bash
    # No API keys required - fully offline name generation
    ```
-   
+
    # Currency System
+
    DEFAULT_CURRENCY=EUR
    USE_LIVE_EXCHANGE_RATES=true
-   
+
    # Database
+
    DATABASE_PATH=database/momentum.db
+
+
    ```
 
+   ```
 4. **Initialize the database:**
+
    ```bash
    python -m database.database_manager
    ```
-
 5. **Run tests:**
+
    ```bash
    python tests/simple_driver_test.py
    python tests/test_staff_system.py
@@ -234,6 +247,7 @@ Momentum/Python/
 ### No Licensed Content
 
 All teams, drivers, series, tracks, and personnel are fictional and generated using:
+
 - **Generic League Codes:** GPC1, WTC1, WRC1, etc. (not F1, NASCAR, WRC, etc.)
 - **Placeholder Names:** Randomly generated from international name databases
 - **Generic Team Names:** Procedurally generated from prefix + suffix combinations
@@ -244,6 +258,7 @@ This approach avoids licensing costs and legal complications while maintaining a
 ### Backend-First Development
 
 The Python simulation engine is being developed first to ensure:
+
 - Realistic statistical modeling and simulation accuracy
 - Comprehensive data structures and relationships
 - Solid foundation for any frontend implementation
@@ -252,6 +267,7 @@ The Python simulation engine is being developed first to ensure:
 ### Cross-Discipline Driver System
 
 Drivers can compete in all seven disciplines with varying effectiveness:
+
 - **Discipline Preferences:** Each driver has aptitudes for different racing types
 - **Attribute-Based Performance:** 50+ attributes determine capability across disciplines
 - **Specialization vs. Versatility:** Trade-offs between mastery and flexibility
@@ -266,6 +282,7 @@ The project includes comprehensive test suites:
 - **`tests/test_staff_system.py`:** Staff management validation (hiring, budgets, performance impact)
 
 Run all tests:
+
 ```bash
 cd Momentum/Python
 python tests/simple_driver_test.py
@@ -285,7 +302,7 @@ Additional documentation available in the repository:
 
 ## Contributing
 
-This is a final year Computer Science project. Contributions, suggestions, and feedback are welcome!
+This is a final year Computer Science project.
 
 ## Requirements
 
