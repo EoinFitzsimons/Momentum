@@ -7,7 +7,7 @@ Authors: Final Year Project - Computer Science
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 @dataclass
@@ -22,7 +22,7 @@ class SingleSeaterRulebook:
     # ===== ENGINE REGULATIONS =====
     engine_displacement_max_cc: float = 1600.0
     engine_cylinders_max: int = 6
-    aspiration_allowed: list = None  # ["naturally_aspirated", "turbocharged"]
+    aspiration_allowed: Optional[List[str]] = None  # ["naturally_aspirated", "turbocharged"]
     max_turbo_boost_bar: float = 3.5
     max_engine_rpm: int = 15000
     
@@ -31,7 +31,7 @@ class SingleSeaterRulebook:
     
     # ===== HYBRID SYSTEM REGULATIONS =====
     hybrid_required: bool = True
-    hybrid_systems_allowed: list = None  # ["ERS_K", "ERS_H"]
+    hybrid_systems_allowed: Optional[List[str]] = None  # ["ERS_K", "ERS_H"]
     max_hybrid_power_kw: float = 120.0
     max_energy_recovery_per_lap_mj: float = 4.0
     max_energy_deployment_per_lap_mj: float = 4.0
@@ -84,7 +84,7 @@ class SingleSeaterRulebook:
     
     # ===== CHASSIS REGULATIONS =====
     monocoque_required: bool = True
-    minimum_cockpit_opening_dimensions_mm: Dict[str, float] = None
+    minimum_cockpit_opening_dimensions_mm: Optional[Dict[str, float]] = None
     crash_test_required: bool = True
     
     # ===== DIMENSIONS REGULATIONS =====
@@ -219,27 +219,27 @@ class SingleSeaterRulebook:
         all_violations = {}
         
         # Check each subsystem
-        engine_ok, engine_violations = self.validate_engine(vehicle)
+        _, engine_violations = self.validate_engine(vehicle)
         if engine_violations:
             all_violations['engine'] = engine_violations
-        
-        hybrid_ok, hybrid_violations = self.validate_hybrid(vehicle)
+
+        _, hybrid_violations = self.validate_hybrid(vehicle)
         if hybrid_violations:
             all_violations['hybrid'] = hybrid_violations
-        
-        weight_ok, weight_violations = self.validate_weight(vehicle)
+
+        _, weight_violations = self.validate_weight(vehicle)
         if weight_violations:
             all_violations['weight'] = weight_violations
-        
-        aero_ok, aero_violations = self.validate_aerodynamics(vehicle)
+
+        _, aero_violations = self.validate_aerodynamics(vehicle)
         if aero_violations:
             all_violations['aerodynamics'] = aero_violations
-        
-        electronics_ok, electronics_violations = self.validate_electronics(vehicle)
+
+        _, electronics_violations = self.validate_electronics(vehicle)
         if electronics_violations:
             all_violations['electronics'] = electronics_violations
-        
-        safety_ok, safety_violations = self.validate_safety(vehicle)
+
+        _, safety_violations = self.validate_safety(vehicle)
         if safety_violations:
             all_violations['safety'] = safety_violations
         
