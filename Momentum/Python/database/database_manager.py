@@ -404,6 +404,14 @@ class DatabaseManager:
                 (discipline,)
             ).fetchall()
             return [Track(**dict(row)) for row in rows]
+
+    def get_track(self, track_id: int) -> Optional[Track]:
+        """Get track by ID"""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM tracks WHERE id = ?", (track_id,)).fetchone()
+            if row:
+                return Track(**dict(row))
+            return None
     
     # Championship operations
     def create_championship(self, championship: Championship) -> int:

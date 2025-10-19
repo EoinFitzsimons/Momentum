@@ -108,7 +108,17 @@ class BaseDisciplineEngine(ABC):
     
     def __init__(self, seed: int = RANDOM_SEED):
         """Initialize engine with random seed for reproducible results"""
-        self.rng = np.random.RandomState(seed)
+        # Use the newer numpy Generator API for better randomness and performance
+        try:
+            self.rng = np.random.default_rng(seed)
+        except Exception:
+            # Fallback: construct a Generator backed by PCG64 with a seed
+            try:
+                bitgen = np.random.PCG64(seed)
+                self.rng = np.random.Generator(bitgen)
+            except Exception:
+                # As a last resort, create a default RNG with the provided seed (or None)
+                self.rng = np.random.default_rng(seed)
         random.seed(seed)
         self.discipline = None  # Set in subclasses
     
@@ -270,8 +280,15 @@ class BaseDisciplineEngine(ABC):
         Returns:
             Reliability factor (1.0 = no issues, 0.0 = DNF)
         """
-        base_reliability = 0.95 - (0.15 if team.tier == "tier3" else 
-                                  0.08 if team.tier == "tier2" else 0.03)
+        # Determine tier penalty in a clear statement to avoid nested ternary
+        if team.tier == "tier3":
+            tier_penalty = 0.15
+        elif team.tier == "tier2":
+            tier_penalty = 0.08
+        else:
+            tier_penalty = 0.03
+
+        base_reliability = 0.95 - tier_penalty
         
         # Weather can affect reliability
         weather_stress = context.weather_conditions["precipitation"] * 0.02

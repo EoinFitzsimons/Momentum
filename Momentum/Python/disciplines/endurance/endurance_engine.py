@@ -372,7 +372,12 @@ class EnduranceEngine(BaseDisciplineEngine):
                                          context: DisciplineContext, race_phase: RacePhase) -> float:
         """Calculate mechanical reliability degradation per phase"""
         # Base reliability by team tier
-        base_reliability = 0.98 if team.tier == "tier1" else 0.95 if team.tier == "tier2" else 0.92
+        if team.tier == "tier1":
+            base_reliability = 0.98
+        elif team.tier == "tier2":
+            base_reliability = 0.95
+        else:
+            base_reliability = 0.92
         
         # Driver's mechanical sympathy affects reliability
         mechanical_sympathy = (100.0 - driver.aggression) / 100.0 * 0.02

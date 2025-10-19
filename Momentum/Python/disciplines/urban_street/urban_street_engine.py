@@ -319,7 +319,12 @@ class UrbanStreetEngine(BaseDisciplineEngine):
         tuning_skill = (driver.skill + driver.adaptability) / 2.0
         
         # Team's tuning capability (underground teams vary widely)
-        team_tuning = 0.7 if team.tier == "tier1" else 0.5 if team.tier == "tier2" else 0.3
+        if team.tier == "tier1":
+            team_tuning = 0.7
+        elif team.tier == "tier2":
+            team_tuning = 0.5
+        else:
+            team_tuning = 0.3
         
         return tuning_skill * team_tuning * 0.01
     
