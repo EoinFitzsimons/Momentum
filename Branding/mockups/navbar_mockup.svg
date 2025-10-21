@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1440" height="72" viewBox="0 0 1440 72" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="navGrad" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#353839" />
+      <stop offset="100%" stop-color="#2C2D2D" />
+    </linearGradient>
+    <style>
+      <![CDATA[
+        .nav-bg { fill: url(#navGrad); }
+        .logo { fill: #B9F2FF; }
+        .title { fill: #F5F5F5; font-family: 'Segoe UI', Roboto, Arial; font-weight:700; font-size:18px; }
+        .btn { fill: transparent; font-family: 'Segoe UI', Roboto, Arial; font-weight:600; font-size:14px; fill: #F5F5F5; }
+        .btn-inactive { fill: #E6E7E7; opacity:0.9; }
+        .btn-active { fill: #DD2D4A; }
+        .badge { fill: #DD2D4A; }
+        .icon-circle { fill: #FFFFFF; opacity:0.06; }
+      ]]>
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="nav-bg" x="0" y="0" width="1440" height="72" rx="0" />
+
+  <!-- Left: logo + title -->
+  <g transform="translate(18,12)">
+    <rect x="0" y="0" width="48" height="48" rx="8" class="logo" />
+    <text x="70" y="32" class="title">Momentum</text>
+  </g>
+
+  <!-- Center: primary nav -->
+  <g transform="translate(360,18)">
+    <text x="0" y="18" class="btn btn-active">Home</text>
+    <text x="70" y="18" class="btn btn-inactive">Team</text>
+    <text x="150" y="18" class="btn btn-inactive">World</text>
+    <text x="240" y="18" class="btn btn-inactive">Standings</text>
+    <text x="360" y="18" class="btn btn-inactive">Races</text>
+  </g>
+
+  <!-- Right: utility buttons -->
+  <g transform="translate(1040,12)">
+    <!-- Inbox with badge -->
+    <g transform="translate(0,0)">
+      <circle cx="16" cy="16" r="16" class="icon-circle" />
+      <text x="6" y="20" font-family='Segoe UI' font-size='12' fill='#F5F5F5'>✉</text>
+      <rect x="34" y="2" width="18" height="18" rx="9" class="badge" />
+      <text x="41" y="15" font-family='Segoe UI' font-size='12' fill='#FFFFFF' font-weight='700'>3</text>
+    </g>
+
+    <text x="64" y="18" class="btn btn-inactive">Training</text>
+    <text x="146" y="18" class="btn btn-inactive">Staff</text>
+    <text x="206" y="18" class="btn btn-inactive">Parts</text>
+    <text x="264" y="18" class="btn btn-inactive">Settings</text>
+  </g>
+
+  <!-- Bottom active underline (for Home) -->
+  <rect x="360" y="68" width="48" height="4" rx="2" fill="#DD2D4A" />
+
+</svg>
