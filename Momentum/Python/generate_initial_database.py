@@ -43,11 +43,12 @@ logger = logging.getLogger(__name__)
 
 # Import our systems
 from data.placeholder_names import (
-    RACING_CATEGORIES, COUNTRIES, generate_team_name, 
+    RACING_CATEGORIES, COUNTRIES, 
     calculate_total_entities, STAFF_ROLES, STAFF_SIZE_ESTIMATES
 )
 from database.database_manager import DatabaseManager
 from systems.intelligent_name_generator import IntelligentNameGenerator
+from systems.realistic_team_generator import generate_realistic_team_name
 from database.models import Driver, Team
 
 # Try to import staff models, but continue if not available
@@ -139,8 +140,11 @@ class DatabaseGenerator:
     def _generate_team(self, league_code: str, league_info, category_name: str, team_num: int):
         """Generate a single team with drivers and staff"""
         
-        # Generate team
-        team_name = generate_team_name()
+        # Generate team with realistic name generator (base name only, no title sponsor)
+        team_name = generate_realistic_team_name(
+            category=category_name,
+            tier=league_info.tier
+        )
         
         # Determine team budget based on tier
         budget = self._calculate_team_budget(league_info.tier)

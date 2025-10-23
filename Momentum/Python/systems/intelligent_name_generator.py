@@ -30,7 +30,9 @@ class IntelligentNameGenerator:
         self._init_database()
         self._load_cache()
         
-        # Initialize Faker instances for different locales
+        # Initialize Faker instances for different locales (LATIN SCRIPT ONLY)
+        # Removed: ja_JP (Kanji), zh_CN (Chinese), ru_RU (Cyrillic), ar_SA (Arabic), ko_KR (Hangul), hi_IN (Devanagari)
+        # Using romanized/Latin script locales only for consistent display
         self.faker_instances = {
             'en_US': Faker('en_US'),
             'en_GB': Faker('en_GB'),
@@ -39,9 +41,6 @@ class IntelligentNameGenerator:
             'it_IT': Faker('it_IT'),
             'es_ES': Faker('es_ES'),
             'pt_BR': Faker('pt_BR'),
-            'ja_JP': Faker('ja_JP'),
-            'zh_CN': Faker('zh_CN'),
-            'ru_RU': Faker('ru_RU'),
             'nl_NL': Faker('nl_NL'),
             'sv_SE': Faker('sv_SE'),
             'fi_FI': Faker('fi_FI'),
@@ -51,14 +50,12 @@ class IntelligentNameGenerator:
             'cs_CZ': Faker('cs_CZ'),
             'hu_HU': Faker('hu_HU'),
             'tr_TR': Faker('tr_TR'),
-            'ar_SA': Faker('ar_SA'),
-            'ko_KR': Faker('ko_KR'),
-            'hi_IN': Faker('hi_IN'),
             'es_MX': Faker('es_MX'),
             'pt_PT': Faker('pt_PT'),
         }
         
         # Comprehensive map of country codes to Faker locales with regional fallbacks
+        # Using LATIN SCRIPT ONLY - all non-Latin script countries map to English/Latin equivalents
         self.country_to_locale = {
             # North America
             'USA': 'en_US', 'CAN': 'en_US', 'MEX': 'es_MX',
@@ -71,24 +68,35 @@ class IntelligentNameGenerator:
             # Scandinavia
             'SWE': 'sv_SE', 'FIN': 'fi_FI', 'NOR': 'no_NO', 'DEN': 'da_DK',
             
-            # Eastern Europe
-            'POL': 'pl_PL', 'CZE': 'cs_CZ', 'HUN': 'hu_HU', 'RUS': 'ru_RU',
-            'UKR': 'ru_RU', 'BLR': 'ru_RU', 'SVK': 'cs_CZ', 'SVN': 'cs_CZ',
-            'CRO': 'cs_CZ', 'SRB': 'cs_CZ', 'BUL': 'ru_RU', 'ROM': 'ru_RU',
+            # Eastern Europe (using Latin script equivalents)
+            'POL': 'pl_PL', 'CZE': 'cs_CZ', 'HUN': 'hu_HU', 
+            'RUS': 'en_GB',  # Russian -> English (was ru_RU Cyrillic)
+            'UKR': 'en_GB',  # Ukrainian -> English
+            'BLR': 'en_GB',  # Belarus -> English
+            'SVK': 'cs_CZ', 'SVN': 'cs_CZ',
+            'CRO': 'cs_CZ', 'SRB': 'cs_CZ', 
+            'BUL': 'en_GB',  # Bulgarian -> English (was Cyrillic)
+            'ROM': 'en_GB',  # Romanian -> English
             
             # Southern Europe
             'GRE': 'en_GB', 'TUR': 'tr_TR', 'CYP': 'en_GB', 'MLT': 'en_GB',
             
-            # Asia Pacific
-            'JPN': 'ja_JP', 'CHN': 'zh_CN', 'KOR': 'ko_KR', 'IND': 'hi_IN',
-            'AUS': 'en_GB', 'NZL': 'en_GB', 'SGP': 'en_GB', 'HKG': 'zh_CN',
-            'TWN': 'zh_CN', 'THA': 'en_GB', 'MYS': 'en_GB', 'IDN': 'en_GB',
+            # Asia Pacific (using Latin script equivalents)
+            'JPN': 'en_US',  # Japanese -> English (was ja_JP Kanji)
+            'CHN': 'en_US',  # Chinese -> English (was zh_CN)
+            'KOR': 'en_US',  # Korean -> English (was ko_KR Hangul)
+            'IND': 'en_GB',  # Indian -> English (was hi_IN Devanagari)
+            'AUS': 'en_GB', 'NZL': 'en_GB', 'SGP': 'en_GB', 
+            'HKG': 'en_GB',  # Hong Kong -> English
+            'TWN': 'en_GB',  # Taiwan -> English
+            'THA': 'en_GB', 'MYS': 'en_GB', 'IDN': 'en_GB',
             'PHL': 'en_US', 'VNM': 'en_GB',
             
-            # Middle East
-            'SAU': 'ar_SA', 'UAE': 'ar_SA', 'QAT': 'ar_SA', 'KWT': 'ar_SA',
-            'BHR': 'ar_SA', 'OMN': 'ar_SA', 'JOR': 'ar_SA', 'LBN': 'ar_SA',
-            'ISR': 'en_GB', 'IRN': 'ar_SA', 'IRQ': 'ar_SA', 'SYR': 'ar_SA',
+            # Middle East (using Latin script equivalents)
+            'SAU': 'en_GB',  # Saudi Arabia -> English (was ar_SA Arabic)
+            'UAE': 'en_GB', 'QAT': 'en_GB', 'KWT': 'en_GB',
+            'BHR': 'en_GB', 'OMN': 'en_GB', 'JOR': 'en_GB', 'LBN': 'en_GB',
+            'ISR': 'en_GB', 'IRN': 'en_GB', 'IRQ': 'en_GB', 'SYR': 'en_GB',
             
             # South America
             'BRA': 'pt_BR', 'ARG': 'es_ES', 'CHI': 'es_ES', 'COL': 'es_ES',
@@ -101,15 +109,17 @@ class IntelligentNameGenerator:
             'JAM': 'en_GB', 'TTO': 'en_GB', 'BRB': 'en_GB', 'PRI': 'es_ES',
             'MTQ': 'fr_FR', 'GLP': 'fr_FR', 'GUF': 'fr_FR',
             
-            # Africa
+            # Africa (using Latin script equivalents)
             'RSA': 'en_GB', 'ZIM': 'en_GB', 'KEN': 'en_GB', 'NGA': 'en_GB',
-            'GHA': 'en_GB', 'EGY': 'ar_SA', 'MAR': 'fr_FR', 'TUN': 'fr_FR',
+            'GHA': 'en_GB', 
+            'EGY': 'en_GB',  # Egypt -> English (was ar_SA Arabic)
+            'MAR': 'fr_FR', 'TUN': 'fr_FR',
             'ALG': 'fr_FR', 'SEN': 'fr_FR', 'CIV': 'fr_FR', 'CMR': 'fr_FR',
             'ETH': 'en_GB', 'TZA': 'en_GB', 'UGA': 'en_GB', 'ZMB': 'en_GB',
             
-            # Other regions
-            'BTN': 'hi_IN', 'NPL': 'hi_IN', 'LKA': 'hi_IN', 'BGD': 'hi_IN',
-            'PAK': 'hi_IN', 'AFG': 'hi_IN', 'KHM': 'en_GB', 'LAO': 'en_GB',
+            # Other regions (using Latin script equivalents)
+            'BTN': 'en_GB', 'NPL': 'en_GB', 'LKA': 'en_GB', 'BGD': 'en_GB',
+            'PAK': 'en_GB', 'AFG': 'en_GB', 'KHM': 'en_GB', 'LAO': 'en_GB',
             'MMR': 'en_GB', 'ARK': 'en_US',  # Arkansas (US state fallback)
         }
     

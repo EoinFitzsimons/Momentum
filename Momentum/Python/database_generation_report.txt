@@ -2,75 +2,361 @@
 MOMENTUM MOTORSPORT SIMULATION - DATABASE GENERATION REPORT
 ================================================================================
 
-Generated: 2025-10-03 13:25:48
+Generated: 2025-10-23 20:03:46
 Database: database/momentum.db
 
 GENERATION SUMMARY
 ----------------------------------------
-Teams Created:        668
-Drivers Created:    1,103
-Staff Created:     36,045
-Total Personnel:   37,148
+Teams Created:        375
+Drivers Created:      612
+Staff Created:     20,077
+Total Personnel:   20,689
 
 ERRORS ENCOUNTERED
 ----------------------------------------
-  • Error creating team 1 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 2 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 3 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 4 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 5 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 6 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 7 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 8 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 9 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 10 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 11 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 12 in GPJC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 13 in WRC1: UNIQUE constraint failed: teams.name
-  • Error creating team 35 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in GPC1: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in GPC1: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in GPC1: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in GPC1: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in GPC1: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in GPC2: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in GPC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in GPRC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in GPRC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in GPRC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in GPRC: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in GPRC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in GPNC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in GPNC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in GPNC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in GPJC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WTC1: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WTC1: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in WTC1: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WTC1: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WTC1: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in WTC2: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in RTC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in NTC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in STC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in STC: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in STC: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in STC: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in STC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in CTC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 23 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 24 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in WRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 24 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 26 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 28 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 29 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 30 in WRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 23 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 31 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 37 in WRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 38 in WRC3: UNIQUE constraint failed: teams.name
   • Error creating team 1 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 21 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 23 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 28 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 29 in CWRC: UNIQUE constraint failed: teams.name
   • Error creating team 30 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 33 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 36 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 37 in CWRC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 21 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 23 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 24 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 30 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 32 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 33 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 34 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 35 in NRC: UNIQUE constraint failed: teams.name
   • Error creating team 37 in NRC: UNIQUE constraint failed: teams.name
-  • Error creating team 1 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 2 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 3 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 4 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 5 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 6 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 7 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 8 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 9 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 10 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 11 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 12 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 13 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 14 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 15 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 16 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 17 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 18 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 19 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 20 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 21 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 22 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 23 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 24 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 25 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
-  • Error creating team 26 in RRC: CHECK constraint failed: tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')
+  • Error creating team 38 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 41 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 42 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 48 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 50 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 53 in NRC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 21 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 28 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 31 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 32 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 35 in RRC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in USC1: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in USC1: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in USC1: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in USC2: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in USC3: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in USC3: UNIQUE constraint failed: teams.name
   • Error creating team 5 in USC3: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in USC3: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in USC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in CUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in CUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in CUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in CUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in NUSC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in NUSC: UNIQUE constraint failed: teams.name
   • Error creating team 1 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WDC1: UNIQUE constraint failed: teams.name
   • Error creating team 11 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in WDC1: UNIQUE constraint failed: teams.name
   • Error creating team 17 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in WDC1: UNIQUE constraint failed: teams.name
   • Error creating team 22 in WDC1: UNIQUE constraint failed: teams.name
-  • Error creating team 32 in WDC1: UNIQUE constraint failed: teams.name
-  • Error creating team 28 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 23 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 28 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 29 in WDC1: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 14 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 26 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 29 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 32 in WDC2: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in WDC3: UNIQUE constraint failed: teams.name
   • Error creating team 7 in WDC3: UNIQUE constraint failed: teams.name
-  • Error creating team 15 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 30 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 31 in WDC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 17 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 24 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 25 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 27 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 29 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 30 in CWDC: UNIQUE constraint failed: teams.name
   • Error creating team 31 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 32 in CWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 20 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in NWDC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WSRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WSRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in WSRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in WSRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WSRC1: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WSRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in WSRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WSRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WSRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WSRC2: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WSRC3: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in CSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in NSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in NSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in NSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in NSRC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 9 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 13 in WEC1: UNIQUE constraint failed: teams.name
+  • Error creating team 19 in WEC1: UNIQUE constraint failed: teams.name
   • Error creating team 3 in WEC2: UNIQUE constraint failed: teams.name
-  • Error creating team 17 in CWEC: UNIQUE constraint failed: teams.name
-  • Error creating team 7 in NWEC: UNIQUE constraint failed: teams.name
-  • Error creating team 15 in NWEC: UNIQUE constraint failed: teams.name
-  • Error creating team 8 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 15 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 16 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 18 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 21 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 22 in WEC2: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in CWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 8 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 10 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in NWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 1 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 2 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 3 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 4 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 5 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 6 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 7 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 11 in RWEC: UNIQUE constraint failed: teams.name
+  • Error creating team 12 in RWEC: UNIQUE constraint failed: teams.name
 
 ================================================================================
