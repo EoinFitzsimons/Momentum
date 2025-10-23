@@ -216,14 +216,51 @@ class DatabaseManager:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,)).fetchone()
             if row:
-                return Driver(**dict(row))
+                row_dict = dict(row)
+                row_dict.pop('created_at', None)
+                row_dict.pop('updated_at', None)
+                try:
+                    return Driver(**row_dict)
+                except TypeError:
+                    return None
             return None
     
     def get_all_drivers(self) -> List[Driver]:
         """Get all drivers"""
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM drivers ORDER BY name").fetchall()
-            return [Driver(**dict(row)) for row in rows]
+            # Filter out extra database columns (created_at, updated_at, etc.)
+            drivers = []
+            for row in rows:
+                row_dict = dict(row)
+                # Remove non-model fields
+                row_dict.pop('created_at', None)
+                row_dict.pop('updated_at', None)
+                try:
+                    drivers.append(Driver(**row_dict))
+                except TypeError as e:
+                    # Skip drivers that fail to load (log in production)
+                    continue
+            return drivers
+    
+    def get_drivers_by_team(self, team_id: int) -> List[Driver]:
+        """Get all drivers for a specific team"""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM drivers WHERE current_team_id = ? ORDER BY raw_speed DESC", 
+                (team_id,)
+            ).fetchall()
+            drivers = []
+            for row in rows:
+                try:
+                    row_dict = dict(row)
+                    # Remove non-model fields
+                    row_dict.pop('created_at', None)
+                    row_dict.pop('updated_at', None)
+                    drivers.append(Driver(**row_dict))
+                except TypeError:
+                    continue
+            return drivers
     
     def update_driver_stats(self, driver_id: int, wins: int = 0, podiums: int = 0, points: int = 0):
         """Update driver career statistics"""
@@ -371,7 +408,8 @@ class DatabaseManager:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
             if row:
-                return Team(**dict(row))
+                # Filter out created_at field which isn't in the Team model
+                return Team(**{k: v for k, v in dict(row).items() if k != 'created_at'})
             return None
     
     def get_teams_by_discipline(self, discipline: str) -> List[Team]:
@@ -381,7 +419,8 @@ class DatabaseManager:
                 "SELECT * FROM teams WHERE discipline = ? ORDER BY tier, name", 
                 (discipline,)
             ).fetchall()
-            return [Team(**dict(row)) for row in rows]
+            # Filter out created_at field which isn't in the Team model
+            return [Team(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
     
     # Track operations
     def create_track(self, track: Track) -> int:
@@ -400,18 +439,25 @@ class DatabaseManager:
         """Get all tracks for a specific discipline"""
         with self.get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM tracks WHERE discipline = ? ORDER BY name", 
+                "SELECT * FROM tracks WHERE primary_discipline = ? ORDER BY name", 
                 (discipline,)
             ).fetchall()
-            return [Track(**dict(row)) for row in rows]
+            # Filter out created_at field which isn't in the Track model
+            return [Track(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
 
     def get_track(self, track_id: int) -> Optional[Track]:
         """Get track by ID"""
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM tracks WHERE id = ?", (track_id,)).fetchone()
             if row:
-                return Track(**dict(row))
+                # Filter out created_at field which isn't in the Track model
+                return Track(**{k: v for k, v in dict(row).items() if k != 'created_at'})
             return None
+    
+    # Alias for consistency
+    def get_track_by_id(self, track_id: int) -> Optional[Track]:
+        """Get track by ID (alias for get_track)"""
+        return self.get_track(track_id)
     
     # Championship operations
     def create_championship(self, championship: Championship) -> int:
@@ -431,7 +477,8 @@ class DatabaseManager:
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM championships WHERE id = ?", (championship_id,)).fetchone()
             if row:
-                return Championship(**dict(row))
+                # Filter out created_at field which isn't in the Championship model
+                return Championship(**{k: v for k, v in dict(row).items() if k != 'created_at'})
             return None
     
     # Race operations
@@ -454,7 +501,25 @@ class DatabaseManager:
                 WHERE race_id = ? 
                 ORDER BY position
             """, (race_id,)).fetchall()
-            return [RaceResult(**dict(row)) for row in rows]
+            # Filter out created_at field which isn't in the RaceResult model
+            return [RaceResult(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
+    
+    def get_race(self, race_id: int) -> Optional[Race]:
+        """Get race by ID"""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM races WHERE id = ?", (race_id,)).fetchone()
+            if row:
+                # Filter out created_at field which isn't in the Race model
+                return Race(**{k: v for k, v in dict(row).items() if k != 'created_at'})
+            return None
+    
+    def update_race_status(self, race_id: int, status: str):
+        """Update race status"""
+        with self.get_connection() as conn:
+            conn.execute(
+                "UPDATE races SET status = ? WHERE id = ?",
+                (status, race_id)
+            )
     
     def save_race_result(self, result: RaceResult) -> int:
         """Save race result and return ID"""
@@ -466,6 +531,18 @@ class DatabaseManager:
             """, (result.race_id, result.driver_id, result.team_id, result.position,
                   result.points, result.fastest_lap, result.dnf_reason, result.grid_position))
             return cursor.lastrowid
+    
+    # Alias for consistency with game loop
+    def create_race_result(self, result: RaceResult) -> int:
+        """Create race result (alias for save_race_result)"""
+        return self.save_race_result(result)
+    
+    def get_all_championships(self) -> List[Championship]:
+        """Get all championships"""
+        with self.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM championships ORDER BY name").fetchall()
+            # Filter out created_at field which isn't in the Championship model
+            return [Championship(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
     
     # Statistics and queries
     def get_championship_standings(self, championship_id: int, season: int) -> List[Dict[str, Any]]:
@@ -495,3 +572,14 @@ class DatabaseManager:
                 count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 stats[table] = count
             return stats
+    
+    # Convenience aliases for consistency
+    def add_track(self, track: Track) -> int:
+        """Alias for create_track"""
+        return self.create_track(track)
+    
+    def get_all_tracks(self) -> List[Track]:
+        """Get all tracks in the database"""
+        with self.get_connection() as conn:
+            rows = conn.execute("SELECT * FROM tracks ORDER BY name").fetchall()
+            return [Track(**dict(row)) for row in rows]

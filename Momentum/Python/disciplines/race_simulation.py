@@ -405,7 +405,7 @@ class RaceSimulator:
                 points=points,
                 fastest_lap=False,  # TODO: Implement fastest lap logic
                 dnf_reason=None,
-                grid_position=context.race_state.get('grid_positions', {}).get(driver.id, position)
+                grid_position=position  # Start position same as finish for now
             )
             results.append(result)
         

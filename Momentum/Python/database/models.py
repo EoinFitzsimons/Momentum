@@ -232,6 +232,33 @@ class Driver:
         ]
         
         return sum(core_skills) / len(core_skills)
+    
+    # Compatibility properties for race simulator
+    @property
+    def skill(self) -> float:
+        """Alias for raw_speed for backward compatibility"""
+        return self.raw_speed
+    
+    @property
+    def adaptability(self) -> float:
+        """Combined adaptability rating"""
+        return (self.wet_weather_skill + self.surface_adaptation + self.visibility_adaptation) / 3.0
+    
+    @property
+    def aggression(self) -> float:
+        """Aggression rating based on overtaking and defensive driving"""
+        return (self.overtaking + self.defensive_driving) / 2.0
+    
+    @property
+    def first_name(self) -> str:
+        """Extract first name from full name for compatibility"""
+        return self.name.split()[0] if self.name else ""
+    
+    @property
+    def last_name(self) -> str:
+        """Extract last name from full name for compatibility"""
+        parts = self.name.split()
+        return parts[-1] if len(parts) > 1 else ""
 
 @dataclass
 class Team:
@@ -296,43 +323,90 @@ class Track:
     """
     Track/Circuit Entity Model
     
-    Represents racing venues with detailed characteristics that influence
-    race outcomes and driver performance. Each track has unique properties
-    that interact with driver attributes to create realistic performance
-    variations across different circuits.
+    Represents racing venues with comprehensive characteristics including physical layout,
+    facilities, environmental factors, and IMA grading. Supports all 7 racing disciplines
+    with detailed specifications that influence race outcomes and driver performance.
     
-    Surface Types:
-        - "tarmac": Sealed asphalt surfaces (most formula and street racing)
-        - "gravel": Loose gravel surfaces (rally stages)
-        - "mixed": Combination of surface types (some rally stages)
+    IMA Grades (International Motorsport Authority):
+        - Diamond: Elite premier circuits (highest safety/facility standards)
+        - Platinum: Top-tier professional circuits
+        - Gold: High-standard professional circuits
+        - Silver: Professional circuits
+        - Bronze: Professional entry-level circuits
+        - Approved: Approved for competition (basic standards)
     
-    Difficulty Factors (0.0-1.0 scale):
-        - difficulty: Overall challenge level affecting all drivers
-        - weather_impact: How much weather conditions affect lap times
-        - overtaking_difficulty: How hard it is to pass other cars
-    
-    Simulation Impact:
-        Track characteristics modify driver performance during races.
-        Technical tracks favor skill/racecraft, while power tracks
-        may favor different attributes. Weather impact determines how
-        much rain affects race outcomes.
+    Circuit Types:
+        - permanent: Fixed racing facilities
+        - street: Temporary street circuits
+        - semi_permanent: Mixed permanent/temporary
+        - rally_stage: Point-to-point rally routes
     """
-    # Core identification and geographical information
-    id: int                                   # Unique track identifier
+    # Core identification
+    id: int                                   # Unique track identifier (maps to circuit_id in JSON)
     name: str                                 # Circuit/venue name
     country: str                              # Track location country
+    region: str                               # Specific region/state/province
+    
+    # Classification
+    circuit_type: str                         # permanent/street/semi_permanent/rally_stage
+    ima_grade: str                            # IMA safety/facility grade
+    primary_discipline: str                   # Primary racing discipline
+    
+    # Track layout and geometry
     length_km: float                          # Track length in kilometers
+    turns: int                                # Total number of turns
+    left_turns: int                           # Number of left turns
+    right_turns: int                          # Number of right turns
+    elevation_change_m: float                 # Total elevation change in meters
+    max_gradient_percent: float               # Maximum uphill gradient
+    min_gradient_percent: float               # Maximum downhill gradient (negative)
     
-    # Physical and gameplay characteristics
-    surface_type: str                         # Surface material (tarmac/gravel/mixed)
-    difficulty: float                         # Overall challenge level (0.0-1.0)
-    weather_impact: float                     # Weather sensitivity factor (0.0-1.0)
-    overtaking_difficulty: float              # Passing difficulty (0.0-1.0)
+    # Surface and dimensions
+    surface: str                              # Surface material (asphalt/concrete/gravel)
+    track_width_avg_m: float                  # Average track width in meters
+    track_width_min_m: float                  # Minimum track width in meters
+    track_width_max_m: float                  # Maximum track width in meters
     
-    # Classification and records
-    discipline: str                           # Racing discipline (formula/rally/endurance/street)
-    lap_record_time: Optional[str] = None     # Fastest recorded lap time (MM:SS.mmm)
-    description: str = ""                     # Track description and notable features
+    # Speed and corners
+    avg_speed_kmh: float                      # Average lap speed in km/h
+    top_speed_kmh: float                      # Top speed reached on circuit
+    longest_straight_m: int                   # Longest straight section in meters
+    shortest_straight_m: int                  # Shortest straight section in meters
+    tightest_corner_radius_m: float           # Tightest corner radius in meters
+    
+    # Environmental factors
+    climate: str                              # Climate type (temperate/mediterranean/tropical/desert/etc)
+    avg_temp_summer_c: float                  # Average summer temperature in Celsius
+    avg_temp_winter_c: float                  # Average winter temperature in Celsius
+    rainfall_mm_annual: int                   # Annual rainfall in millimeters
+    altitude_m: int                           # Altitude above sea level in meters
+    
+    # Facilities
+    pit_boxes: int                            # Number of pit box garages
+    pit_lane_length_m: float                  # Pit lane length in meters
+    pit_speed_limit_kmh: int                  # Pit lane speed limit
+    paddock_capacity_teams: int               # Maximum teams in paddock
+    grandstand_capacity: int                  # Total grandstand spectator capacity
+    
+    # Racing features
+    drs_zones: int                            # Number of DRS zones (0 if not applicable)
+    safety_car_probability: float             # Base probability of safety car (0.0-1.0)
+    night_racing_capable: bool                # Circuit has lighting for night racing
+    wet_weather_racing: bool                  # Circuit suitable for wet racing
+    
+    # Status and history
+    is_active: bool                           # Currently active on calendar
+    debut_year: int                           # Year circuit first used
+    last_used_year: Optional[int] = None      # Last year used (None if still active)
+    
+    # Legacy fields (for backward compatibility)
+    surface_type: str = "tarmac"              # Simplified surface (tarmac/gravel/mixed)
+    difficulty: float = 0.5                   # Overall challenge level (0.0-1.0)
+    weather_impact: float = 0.5               # Weather sensitivity factor (0.0-1.0)
+    overtaking_difficulty: float = 0.5        # Passing difficulty (0.0-1.0)
+    discipline: str = ""                      # Maps to primary_discipline
+    lap_record_time: Optional[str] = None     # Fastest recorded lap time
+    description: str = ""                     # Track description
 
 @dataclass
 class Championship:
@@ -532,7 +606,7 @@ CREATE TABLE IF NOT EXISTS teams (
     nationality TEXT NOT NULL,
     founded_year INTEGER NOT NULL,
     discipline TEXT NOT NULL CHECK(discipline IN ('SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE', 'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE')),
-    tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')),
+    tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5', 'tier6')),
     budget REAL NOT NULL,
     headquarters TEXT NOT NULL,
     team_principal TEXT NOT NULL,
@@ -543,17 +617,71 @@ CREATE TABLE IF NOT EXISTS teams (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tracks table
+-- Tracks table with comprehensive circuit specifications
 CREATE TABLE IF NOT EXISTS tracks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     country TEXT NOT NULL,
+    region TEXT NOT NULL,
+    
+    -- Classification
+    circuit_type TEXT NOT NULL CHECK(circuit_type IN ('permanent', 'street', 'semi_permanent', 'rally_stage')),
+    ima_grade TEXT NOT NULL CHECK(ima_grade IN ('Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze', 'Approved')),
+    primary_discipline TEXT NOT NULL CHECK(primary_discipline IN ('SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE', 'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE')),
+    
+    -- Track layout and geometry
     length_km REAL NOT NULL,
-    surface_type TEXT NOT NULL CHECK(surface_type IN ('tarmac', 'gravel', 'mixed')),
-    difficulty REAL NOT NULL CHECK(difficulty >= 0.0 AND difficulty <= 1.0),
-    weather_impact REAL NOT NULL CHECK(weather_impact >= 0.0 AND weather_impact <= 1.0),
-    overtaking_difficulty REAL NOT NULL CHECK(overtaking_difficulty >= 0.0 AND overtaking_difficulty <= 1.0),
-    discipline TEXT NOT NULL CHECK(discipline IN ('SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE', 'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE')),
+    turns INTEGER NOT NULL,
+    left_turns INTEGER NOT NULL,
+    right_turns INTEGER NOT NULL,
+    elevation_change_m REAL NOT NULL,
+    max_gradient_percent REAL NOT NULL,
+    min_gradient_percent REAL NOT NULL,
+    
+    -- Surface and dimensions
+    surface TEXT NOT NULL,
+    track_width_avg_m REAL NOT NULL,
+    track_width_min_m REAL NOT NULL,
+    track_width_max_m REAL NOT NULL,
+    
+    -- Speed and corners
+    avg_speed_kmh REAL NOT NULL,
+    top_speed_kmh REAL NOT NULL,
+    longest_straight_m INTEGER NOT NULL,
+    shortest_straight_m INTEGER NOT NULL,
+    tightest_corner_radius_m REAL NOT NULL,
+    
+    -- Environmental factors
+    climate TEXT NOT NULL,
+    avg_temp_summer_c REAL NOT NULL,
+    avg_temp_winter_c REAL NOT NULL,
+    rainfall_mm_annual INTEGER NOT NULL,
+    altitude_m INTEGER NOT NULL,
+    
+    -- Facilities
+    pit_boxes INTEGER NOT NULL,
+    pit_lane_length_m REAL NOT NULL,
+    pit_speed_limit_kmh INTEGER NOT NULL,
+    paddock_capacity_teams INTEGER NOT NULL,
+    grandstand_capacity INTEGER NOT NULL,
+    
+    -- Racing features
+    drs_zones INTEGER NOT NULL DEFAULT 0,
+    safety_car_probability REAL NOT NULL CHECK(safety_car_probability >= 0.0 AND safety_car_probability <= 1.0),
+    night_racing_capable INTEGER NOT NULL DEFAULT 0,
+    wet_weather_racing INTEGER NOT NULL DEFAULT 1,
+    
+    -- Status and history
+    is_active INTEGER NOT NULL DEFAULT 1,
+    debut_year INTEGER NOT NULL,
+    last_used_year INTEGER,
+    
+    -- Legacy fields (backward compatibility)
+    surface_type TEXT NOT NULL DEFAULT 'tarmac' CHECK(surface_type IN ('tarmac', 'gravel', 'mixed')),
+    difficulty REAL NOT NULL DEFAULT 0.5 CHECK(difficulty >= 0.0 AND difficulty <= 1.0),
+    weather_impact REAL NOT NULL DEFAULT 0.5 CHECK(weather_impact >= 0.0 AND weather_impact <= 1.0),
+    overtaking_difficulty REAL NOT NULL DEFAULT 0.5 CHECK(overtaking_difficulty >= 0.0 AND overtaking_difficulty <= 1.0),
+    discipline TEXT NOT NULL DEFAULT '',
     lap_record_time TEXT,
     description TEXT DEFAULT '',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -564,7 +692,7 @@ CREATE TABLE IF NOT EXISTS championships (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     discipline TEXT NOT NULL CHECK(discipline IN ('SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE', 'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE')),
-    tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5')),
+    tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5', 'tier6')),
     season_length INTEGER NOT NULL,
     points_system TEXT NOT NULL, -- JSON string
     current_season INTEGER NOT NULL,

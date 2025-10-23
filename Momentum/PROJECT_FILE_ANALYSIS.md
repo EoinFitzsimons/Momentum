@@ -615,22 +615,13 @@ Notes: Important for evaluation but not part of code execution.
 
 ---
 
-## Next steps (analysis only — you control next actions)
-
-- If you want, I can produce an expanded per-file analysis that includes:
-  - Function/class lists and likely method signatures by parsing each file (more work, useful for spec-writing).
-  - A formal `SPEC.md` that lists public interfaces, DTOs (Pydantic models), and repository signatures to guide a rebuild.
-- Alternatively, I can produce a CSV/JSON manifest from the file list enabling programmatic consumption.
-
-Tell me which direction you want next (detailed parsing of file contents, SPEC.md, or machine-readable manifest). I will not make any code changes unless you ask.
-
----
-
 ### Extracted function & class signatures (auto-generated)
+
+<!-- markdownlint-disable MD024 -->
 
 The following section lists class and function signatures parsed from the Python files under `Momentum/Python`. This is an automated extraction of top-level class and def lines (useful as an index of public interfaces). It's intended to be a quick reference — if you want full method parameter lists or docstrings added, tell me and I will expand entries per file.
 
-Note: signatures were collected via a repository grep for lines starting with `class ` or `def `.
+Note: signatures were collected via a repository grep for lines starting with `class` or `def`.
 
 #### Momentum/Python/vehicles/vehicle.py
 
