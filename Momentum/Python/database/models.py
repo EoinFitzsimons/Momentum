@@ -398,6 +398,7 @@ class Track:
     is_active: bool                           # Currently active on calendar
     debut_year: int                           # Year circuit first used
     last_used_year: Optional[int] = None      # Last year used (None if still active)
+    created_at: Optional[str] = None          # Database timestamp
     
     # Legacy fields (for backward compatibility)
     surface_type: str = "tarmac"              # Simplified surface (tarmac/gravel/mixed)
