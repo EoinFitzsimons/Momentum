@@ -208,6 +208,7 @@ class StaffMember:
     salary_demand: float = 50000.0             # Annual salary expectation in USD
     contract_years_remaining: int = 1          # Remaining contract duration
     biography: str = ""                        # Staff member background and history
+    created_at: Optional[str] = None           # Timestamp when record was created
     
     # ===== ADDITIONAL TECHNICAL SKILLS (4 attributes) - SQL SCHEMA =====
     # Specialized engineering capabilities

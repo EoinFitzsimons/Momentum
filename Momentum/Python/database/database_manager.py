@@ -583,3 +583,81 @@ class DatabaseManager:
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM tracks ORDER BY name").fetchall()
             return [Track(**dict(row)) for row in rows]
+    
+    def get_circuits_by_discipline(self, discipline: str) -> List[Any]:
+        """
+        Get all circuits for a specific discipline
+        
+        Args:
+            discipline: Racing discipline (e.g., "SINGLE_SEATER")
+        
+        Returns:
+            List of circuit objects (simplified from database)
+        """
+        with self.get_connection() as conn:
+            rows = conn.execute("""
+                SELECT id, name, country, region, length_km, turns, 
+                       primary_discipline as discipline, circuit_type
+                FROM tracks 
+                WHERE primary_discipline = ?
+                ORDER BY name
+            """, (discipline,)).fetchall()
+            
+            # Return as simple objects with necessary attributes
+            class SimpleCircuit:
+                def __init__(self, row_dict):
+                    for key, value in row_dict.items():
+                        setattr(self, key, value)
+                    # Add location as combined string for compatibility
+                    self.location = f"{self.country}, {self.region}"
+            
+            return [SimpleCircuit(dict(row)) for row in rows]
+    
+    def get_circuit_by_id(self, circuit_id: int) -> Optional[Any]:
+        """
+        Get circuit by ID as a full Track object
+        
+        Args:
+            circuit_id: Circuit database ID
+        
+        Returns:
+            Track object or None
+        """
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM tracks WHERE id = ?", (circuit_id,)).fetchone()
+            
+            if not row:
+                return None
+            
+            from database.models import Track
+            return Track(**dict(row))
+    
+    def get_race_by_id(self, race_id: int) -> Optional[Any]:
+        """
+        Get race by ID
+        
+        For now, returns a simple object with race attributes.
+        In future, this would query a races table.
+        
+        Args:
+            race_id: Race ID
+        
+        Returns:
+            Race-like object or None
+        """
+        # For now, we don't have a races table, so we create a temporary race object
+        # The race_id contains the info we need (championship_id * 1000 + round)
+        
+        championship_id = race_id // 1000
+        round_number = race_id % 1000
+        
+        class TempRace:
+            def __init__(self):
+                self.id = race_id
+                self.championship_id = championship_id
+                self.circuit_id = 1  # Placeholder
+                self.discipline = "SINGLE_SEATER"  # Will be set by caller
+                self.round_number = round_number
+                self.total_laps = 50
+        
+        return TempRace()
