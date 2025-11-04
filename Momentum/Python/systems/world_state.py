@@ -16,6 +16,8 @@ from pathlib import Path
 
 from database.database_manager import DatabaseManager
 from database.models import Team, Driver, Championship, Race
+from systems.component_integration import ComponentIntegration
+from systems.vehicle_creation_helper import VehicleCreationHelper
 
 
 @dataclass
@@ -66,6 +68,10 @@ class GameWorld:
         self.db = db_manager or DatabaseManager()
         self.state: Optional[GameWorldState] = None
         self.current_season_races: List[Race] = []
+        
+        # Component system integration
+        self.component_integration = ComponentIntegration(self.db)
+        self.vehicle_helper = VehicleCreationHelper(self.component_integration)
         
     def new_game(self, player_name: str, starting_discipline: str = "SINGLE_SEATER") -> GameWorldState:
         """
@@ -119,6 +125,10 @@ class GameWorld:
         
         # Assign team to player
         self.state.player_profile.team_id = team_id
+        
+        # Initialize component systems for player's team vehicle
+        self.vehicle_helper.initialize_player_team_vehicles(team)
+        
         return True
     
     def create_championship_season(
@@ -333,9 +343,24 @@ class GameWorld:
         # Save to JSON file
         save_path = saves_dir / f"{self.state.save_name}.json"
         
+        # Convert SimpleRace objects to dictionaries
+        races_data = []
+        for race in self.current_season_races:
+            race_dict = {
+                "id": race.id,
+                "circuit_id": race.circuit_id,
+                "discipline": race.discipline,
+                "round_number": race.round_number,
+                "race_date": race.race_date,
+                "status": race.status,
+                "total_laps": race.total_laps,
+                "circuit_name": race.circuit.name if hasattr(race, 'circuit') else "Unknown"
+            }
+            races_data.append(race_dict)
+        
         save_data = {
             "state": asdict(self.state),
-            "current_season_races": [asdict(race) for race in self.current_season_races]
+            "current_season_races": races_data
         }
         
         with open(save_path, 'w') as f:
@@ -381,10 +406,35 @@ class GameWorld:
             game_version=state_dict.get("game_version", "0.1.0")
         )
         
-        # Reconstruct races
-        # Note: This is simplified - in real implementation would need proper Race reconstruction
+        # Reconstruct races from saved data
         self.current_season_races = []
-        # TODO: Implement proper race reconstruction from saved data
+        for race_dict in save_data.get("current_season_races", []):
+            # Get circuit from database
+            circuit = self.db.get_circuit(race_dict["circuit_id"])
+            
+            # Recreate SimpleRace object
+            class SimpleRace:
+                def __init__(self, race_id, circuit_id, circuit, round_num, date, discipline, status, total_laps):
+                    self.id = race_id
+                    self.circuit_id = circuit_id
+                    self.circuit = circuit
+                    self.discipline = discipline
+                    self.round_number = round_num
+                    self.race_date = date
+                    self.status = status
+                    self.total_laps = total_laps
+            
+            race = SimpleRace(
+                race_id=race_dict["id"],
+                circuit_id=race_dict["circuit_id"],
+                circuit=circuit,
+                round_num=race_dict["round_number"],
+                date=race_dict["race_date"],
+                discipline=race_dict["discipline"],
+                status=race_dict.get("status", "scheduled"),
+                total_laps=race_dict.get("total_laps", 50)
+            )
+            self.current_season_races.append(race)
         
         return True
     

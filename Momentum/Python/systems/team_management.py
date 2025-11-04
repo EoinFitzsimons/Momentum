@@ -282,8 +282,7 @@ class TeamManager:
                 'nationality': staff.nationality,
                 'skill_level': staff.technical_expertise,  # Use actual skill attribute
                 'experience_years': staff.experience_years,
-                'asking_salary': round(salary, 2),
-                'specialization': staff.specialization
+                'asking_salary': round(salary, 2)
             })
         
         available.sort(key=lambda x: x['skill_level'], reverse=True)

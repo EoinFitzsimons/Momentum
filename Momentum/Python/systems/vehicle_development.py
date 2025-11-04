@@ -39,8 +39,11 @@ class ComponentType(Enum):
     SUSPENSION = "suspension"
     BRAKES = "brakes"
     TRANSMISSION = "transmission"
-    ELECTRIC_POWERTRAIN = "electric_powertrain"
+    TIRES = "tires"
+    COOLING = "cooling"
+    FUEL_SYSTEM = "fuel_system"
     SAFETY = "safety"
+    WEIGHT_DISTRIBUTION = "weight_distribution"
 
 
 @dataclass
@@ -336,78 +339,171 @@ class VehicleDevelopmentEngine:
     def _initialize_development_costs(self) -> Dict[str, Dict[str, float]]:
         """Initialize base development costs per discipline and component"""
         return {
-            "F1": {
-                "aerodynamics": 8.0,  # Most expensive in F1
-                "engine": 12.0,       # Power unit development very costly
-                "chassis": 5.0,
-                "electronics": 6.0,
-                "reliability": 3.0
+            "SINGLE_SEATER": {
+                "aerodynamics": 8.0,      # Critical for downforce
+                "engine": 10.0,           # High-revving power units
+                "chassis": 5.0,           # Carbon fiber monocoque
+                "electronics": 6.0,       # Advanced telemetry and controls
+                "reliability": 4.0,       # Race distance reliability
+                "suspension": 4.5,        # Precision handling
+                "brakes": 3.0,           # High-performance carbon brakes
+                "transmission": 4.0,      # Sequential gearbox
+                "tires": 3.5,            # Slick tire development
+                "cooling": 2.5,          # Radiator and cooling systems
+                "fuel_system": 2.0,      # Fuel delivery optimization
+                "safety": 3.0,           # FIA safety requirements
+                "weight_distribution": 2.5  # Balance optimization
             },
-            "F2": {
-                "aerodynamics": 3.0,
-                "engine": 4.0,
-                "chassis": 2.5,
-                "electronics": 2.0
+            "PRODUCTION_TOURING": {
+                "aerodynamics": 4.0,      # Limited aero allowed
+                "engine": 6.0,            # Tuned production engines
+                "chassis": 3.5,           # Modified production chassis
+                "electronics": 3.0,       # ECU tuning
+                "reliability": 5.0,       # Race and component durability
+                "suspension": 5.0,        # Critical for touring cars
+                "brakes": 4.0,           # Upgraded brake systems
+                "transmission": 3.5,      # Close-ratio gearbox
+                "tires": 4.5,            # Slick tire development
+                "cooling": 3.0,          # Engine and brake cooling
+                "fuel_system": 2.0,      # Fuel injection tuning
+                "safety": 4.0,           # Roll cage and safety
+                "weight_distribution": 3.0  # Ballast placement
             },
-            "F3": {
-                "aerodynamics": 1.5,
-                "chassis": 1.0,
-                "electronics": 0.5
+            "RALLY_STAGE": {
+                "aerodynamics": 2.0,      # Minimal aero importance
+                "engine": 5.0,            # Turbocharged power
+                "chassis": 6.0,           # Reinforced rally chassis
+                "electronics": 4.0,       # Launch control, traction
+                "reliability": 7.0,       # Extreme durability needed
+                "suspension": 8.0,        # CRITICAL - varied terrain
+                "brakes": 5.0,           # Gravel and tarmac braking
+                "transmission": 6.0,      # All-wheel drive system
+                "tires": 7.0,            # Surface-specific compounds
+                "cooling": 4.0,          # Dust and debris management
+                "fuel_system": 2.5,      # Anti-surge systems
+                "safety": 6.0,           # Heavy crash protection
+                "weight_distribution": 4.0  # AWD balance
             },
-            "WEC": {
-                "aerodynamics": 4.0,
-                "engine": 8.0,       # Hybrid systems complex
-                "chassis": 3.0,
-                "reliability": 6.0,  # Critical for endurance
-                "brakes": 2.0
+            "URBAN_STREET": {
+                "aerodynamics": 5.0,      # Drift aero and styling
+                "engine": 7.0,            # High power for drift/street
+                "chassis": 4.0,           # Drift-spec reinforcement
+                "electronics": 5.0,       # Traction control tuning
+                "reliability": 3.0,       # Sprint format
+                "suspension": 6.0,        # Drift angle and grip
+                "brakes": 5.0,           # Hard braking zones
+                "transmission": 5.0,      # Quick shifts, clutch kicks
+                "tires": 6.0,            # Grip vs slip tuning
+                "cooling": 3.5,          # Short burst performance
+                "fuel_system": 2.0,      # Not critical
+                "safety": 4.0,           # Street circuit barriers
+                "weight_distribution": 5.0  # Drift balance critical
             },
-            "WRC": {
-                "chassis": 4.0,      # Suspension critical
-                "engine": 3.0,
-                "transmission": 2.5,
-                "safety": 2.0
+            "DRAG_ACCELERATION": {
+                "aerodynamics": 6.0,      # Drag reduction and downforce
+                "engine": 12.0,           # MAXIMUM POWER - most critical
+                "chassis": 5.0,           # Lightweight dragster chassis
+                "electronics": 8.0,       # Launch control, traction
+                "reliability": 2.0,       # Short runs, can rebuild
+                "suspension": 4.0,        # Weight transfer management
+                "brakes": 1.5,           # Parachute primary
+                "transmission": 7.0,      # Power delivery critical
+                "tires": 8.0,            # Traction at launch
+                "cooling": 2.0,          # Brief runs
+                "fuel_system": 5.0,      # Nitrous, high-flow injectors
+                "safety": 5.0,           # Fire suppression, rollcage
+                "weight_distribution": 6.0  # Rear weight for traction
             },
-            "MotoGP": {
-                "engine": 6.0,
-                "chassis": 4.0,
-                "electronics": 5.0,  # Rider aids very important
-                "aerodynamics": 3.0
+            "SPRINT_RALLYCROSS": {
+                "aerodynamics": 3.0,      # Some aero benefit
+                "engine": 6.5,            # Turbocharged power
+                "chassis": 5.0,           # Mixed surface durability
+                "electronics": 5.5,       # Launch and traction control
+                "reliability": 5.0,       # Multiple heats
+                "suspension": 7.0,        # Mixed surface critical
+                "brakes": 5.5,           # Heavy braking into corners
+                "transmission": 6.0,      # AWD system optimization
+                "tires": 6.5,            # Mixed surface compounds
+                "cooling": 3.5,          # Short intense runs
+                "fuel_system": 2.5,      # Not critical
+                "safety": 5.0,           # Contact and jumps
+                "weight_distribution": 4.5  # AWD balance
             },
-            "FormulaE": {
-                "electric_powertrain": 8.0,  # Main differentiator
-                "aerodynamics": 3.0,
-                "chassis": 2.0,
-                "electronics": 4.0
+            "ENDURANCE": {
+                "aerodynamics": 6.0,      # Efficiency and downforce
+                "engine": 7.0,            # Fuel efficient power
+                "chassis": 5.0,           # Lightweight durability
+                "electronics": 5.0,       # Energy management
+                "reliability": 9.0,       # CRITICAL - 24hr+ races
+                "suspension": 5.0,        # Consistent over long runs
+                "brakes": 6.0,           # Brake wear management
+                "transmission": 4.5,      # Reliability over performance
+                "tires": 5.5,            # Compound longevity
+                "cooling": 6.0,          # Long-term thermal management
+                "fuel_system": 5.0,      # Fuel efficiency critical
+                "safety": 7.0,           # Driver changes, night racing
+                "weight_distribution": 3.5  # Fuel load changes
             }
         }
     
     def _initialize_component_interactions(self) -> Dict[str, Dict[str, Dict[str, float]]]:
         """Define synergies between different components"""
         return {
-            "F1": {
-                "aerodynamics": {"chassis": 0.3, "electronics": 0.2},
-                "engine": {"electronics": 0.4, "reliability": 0.3},
-                "chassis": {"aerodynamics": 0.3, "suspension": 0.4}
+            "SINGLE_SEATER": {
+                "aerodynamics": {"chassis": 0.4, "electronics": 0.2, "suspension": 0.3},
+                "engine": {"electronics": 0.3, "reliability": 0.3, "cooling": 0.2},
+                "chassis": {"aerodynamics": 0.4, "weight_distribution": 0.3, "safety": 0.2},
+                "electronics": {"engine": 0.3, "transmission": 0.2, "tires": 0.1},
+                "suspension": {"chassis": 0.4, "tires": 0.3, "weight_distribution": 0.2}
             },
-            "WEC": {
-                "engine": {"reliability": 0.5, "electronics": 0.3},
-                "aerodynamics": {"chassis": 0.2, "brakes": 0.1},
-                "reliability": {"engine": 0.4, "brakes": 0.3}
+            "PRODUCTION_TOURING": {
+                "aerodynamics": {"chassis": 0.2, "cooling": 0.1},
+                "engine": {"electronics": 0.3, "cooling": 0.4, "reliability": 0.3},
+                "chassis": {"suspension": 0.5, "weight_distribution": 0.3, "safety": 0.3},
+                "suspension": {"chassis": 0.5, "tires": 0.4, "brakes": 0.2},
+                "brakes": {"cooling": 0.4, "tires": 0.3, "suspension": 0.2},
+                "tires": {"suspension": 0.4, "brakes": 0.3, "weight_distribution": 0.2}
             },
-            "WRC": {
-                "chassis": {"suspension": 0.6, "transmission": 0.3},
-                "engine": {"transmission": 0.4, "electronics": 0.2},
-                "suspension": {"chassis": 0.5}
+            "RALLY_STAGE": {
+                "suspension": {"chassis": 0.6, "transmission": 0.4, "tires": 0.5},
+                "chassis": {"suspension": 0.6, "safety": 0.5, "weight_distribution": 0.3},
+                "transmission": {"engine": 0.4, "electronics": 0.3, "suspension": 0.4},
+                "tires": {"suspension": 0.5, "transmission": 0.3, "weight_distribution": 0.2},
+                "engine": {"cooling": 0.3, "reliability": 0.4, "transmission": 0.3},
+                "reliability": {"engine": 0.4, "transmission": 0.4, "chassis": 0.3}
             },
-            "MotoGP": {
-                "chassis": {"electronics": 0.4, "engine": 0.3},
-                "electronics": {"engine": 0.5, "chassis": 0.3},
-                "engine": {"chassis": 0.2, "electronics": 0.4}
+            "URBAN_STREET": {
+                "engine": {"transmission": 0.5, "electronics": 0.4, "cooling": 0.2},
+                "transmission": {"engine": 0.5, "electronics": 0.4, "weight_distribution": 0.3},
+                "suspension": {"chassis": 0.4, "weight_distribution": 0.5, "tires": 0.4},
+                "weight_distribution": {"suspension": 0.5, "transmission": 0.3, "chassis": 0.3},
+                "tires": {"suspension": 0.4, "weight_distribution": 0.3, "brakes": 0.2},
+                "electronics": {"engine": 0.4, "transmission": 0.4, "tires": 0.2}
             },
-            "FormulaE": {
-                "electric_powertrain": {"electronics": 0.6, "aerodynamics": 0.2},
-                "electronics": {"electric_powertrain": 0.5},
-                "aerodynamics": {"chassis": 0.3}
+            "DRAG_ACCELERATION": {
+                "engine": {"transmission": 0.6, "fuel_system": 0.5, "electronics": 0.4},
+                "transmission": {"engine": 0.6, "electronics": 0.5, "tires": 0.4},
+                "electronics": {"engine": 0.4, "transmission": 0.5, "tires": 0.5},
+                "tires": {"transmission": 0.4, "weight_distribution": 0.5, "chassis": 0.2},
+                "weight_distribution": {"tires": 0.5, "chassis": 0.3, "suspension": 0.3},
+                "fuel_system": {"engine": 0.5, "electronics": 0.3}
+            },
+            "SPRINT_RALLYCROSS": {
+                "suspension": {"chassis": 0.5, "transmission": 0.4, "tires": 0.5},
+                "transmission": {"engine": 0.4, "electronics": 0.4, "suspension": 0.3},
+                "tires": {"suspension": 0.5, "transmission": 0.3, "brakes": 0.3},
+                "engine": {"electronics": 0.3, "transmission": 0.4, "cooling": 0.2},
+                "electronics": {"engine": 0.3, "transmission": 0.4, "tires": 0.2},
+                "brakes": {"cooling": 0.3, "tires": 0.3, "suspension": 0.2}
+            },
+            "ENDURANCE": {
+                "reliability": {"engine": 0.5, "cooling": 0.5, "brakes": 0.4},
+                "engine": {"fuel_system": 0.4, "cooling": 0.5, "reliability": 0.5},
+                "cooling": {"engine": 0.5, "brakes": 0.4, "reliability": 0.4},
+                "fuel_system": {"engine": 0.4, "aerodynamics": 0.2, "electronics": 0.2},
+                "aerodynamics": {"chassis": 0.3, "fuel_system": 0.2},
+                "brakes": {"cooling": 0.4, "reliability": 0.4, "tires": 0.3},
+                "tires": {"brakes": 0.3, "fuel_system": 0.2, "reliability": 0.3}
             }
         }
     
@@ -462,32 +558,113 @@ class VehicleDevelopmentEngine:
     def _get_component_weights(self, discipline: str) -> Dict[str, float]:
         """Get relative importance weights for components per discipline"""
         weights = {
-            "F1": {
-                "aerodynamics": 0.25, "engine": 0.30, "chassis": 0.20,
-                "electronics": 0.15, "reliability": 0.10
+            "SINGLE_SEATER": {
+                "aerodynamics": 0.20,
+                "engine": 0.18,
+                "chassis": 0.12,
+                "electronics": 0.10,
+                "reliability": 0.08,
+                "suspension": 0.10,
+                "brakes": 0.06,
+                "transmission": 0.06,
+                "tires": 0.04,
+                "cooling": 0.02,
+                "fuel_system": 0.02,
+                "safety": 0.01,
+                "weight_distribution": 0.01
             },
-            "F2": {
-                "aerodynamics": 0.30, "engine": 0.25, "chassis": 0.25,
-                "electronics": 0.20
+            "PRODUCTION_TOURING": {
+                "chassis": 0.18,
+                "suspension": 0.15,
+                "engine": 0.12,
+                "brakes": 0.12,
+                "tires": 0.10,
+                "reliability": 0.10,
+                "weight_distribution": 0.08,
+                "safety": 0.05,
+                "cooling": 0.04,
+                "electronics": 0.03,
+                "transmission": 0.02,
+                "aerodynamics": 0.01,
+                "fuel_system": 0.00
             },
-            "WEC": {
-                "aerodynamics": 0.15, "engine": 0.25, "chassis": 0.20,
-                "reliability": 0.30, "brakes": 0.10
+            "RALLY_STAGE": {
+                "suspension": 0.25,
+                "chassis": 0.18,
+                "reliability": 0.15,
+                "transmission": 0.12,
+                "tires": 0.10,
+                "engine": 0.08,
+                "safety": 0.05,
+                "electronics": 0.03,
+                "weight_distribution": 0.02,
+                "brakes": 0.01,
+                "cooling": 0.01,
+                "aerodynamics": 0.00,
+                "fuel_system": 0.00
             },
-            "WRC": {
-                "chassis": 0.35, "engine": 0.25, "transmission": 0.20,
-                "safety": 0.20
+            "URBAN_STREET": {
+                "engine": 0.20,
+                "transmission": 0.18,
+                "weight_distribution": 0.15,
+                "suspension": 0.12,
+                "electronics": 0.10,
+                "tires": 0.10,
+                "chassis": 0.05,
+                "brakes": 0.04,
+                "reliability": 0.03,
+                "cooling": 0.02,
+                "fuel_system": 0.01,
+                "aerodynamics": 0.00,
+                "safety": 0.00
             },
-            "MotoGP": {
-                "engine": 0.30, "chassis": 0.25, "electronics": 0.25,
-                "aerodynamics": 0.20
+            "DRAG_ACCELERATION": {
+                "engine": 0.30,
+                "transmission": 0.20,
+                "electronics": 0.15,
+                "tires": 0.15,
+                "weight_distribution": 0.10,
+                "fuel_system": 0.05,
+                "chassis": 0.03,
+                "suspension": 0.02,
+                "cooling": 0.00,
+                "reliability": 0.00,
+                "brakes": 0.00,
+                "aerodynamics": 0.00,
+                "safety": 0.00
             },
-            "FormulaE": {
-                "electric_powertrain": 0.40, "aerodynamics": 0.25,
-                "chassis": 0.20, "electronics": 0.15
+            "SPRINT_RALLYCROSS": {
+                "suspension": 0.20,
+                "transmission": 0.15,
+                "tires": 0.15,
+                "engine": 0.12,
+                "electronics": 0.10,
+                "chassis": 0.10,
+                "brakes": 0.08,
+                "reliability": 0.05,
+                "weight_distribution": 0.03,
+                "cooling": 0.01,
+                "safety": 0.01,
+                "aerodynamics": 0.00,
+                "fuel_system": 0.00
+            },
+            "ENDURANCE": {
+                "reliability": 0.25,
+                "fuel_system": 0.18,
+                "cooling": 0.15,
+                "engine": 0.12,
+                "brakes": 0.10,
+                "aerodynamics": 0.08,
+                "tires": 0.05,
+                "electronics": 0.03,
+                "chassis": 0.02,
+                "suspension": 0.01,
+                "transmission": 0.01,
+                "weight_distribution": 0.00,
+                "safety": 0.00
             }
         }
-        return weights.get(discipline, {"aerodynamics": 0.5, "engine": 0.5})
+        return weights.get(discipline, weights["SINGLE_SEATER"])
     
     def _estimate_performance_impact(self, discipline: str, component: str, 
                                    current_level: float) -> float:

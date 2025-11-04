@@ -17,9 +17,7 @@ Usage:
 Output:
     - Populated momentum.db with ~350+ teams, ~700+ drivers, ~8000+ staff
     - Generation report with statistics and validation
-    - CSV exports for backup/review
 
-Authors: Final Year Project - Computer Science
 """
 
 import os

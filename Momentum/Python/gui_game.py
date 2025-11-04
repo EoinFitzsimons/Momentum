@@ -22,133 +22,187 @@ from systems.standings_manager import StandingsManager
 from systems.team_management import TeamManager
 from systems.car_development import CarDevelopmentManager
 from logging_system import logger, setup_exception_handler, LoggedOperation
+from gui_garage import GarageWorkshopScreen
 
 
 class MomentumTheme:
     """Game color theme and styling"""
     
-    # Racing-inspired color palette
-    PRIMARY = "#E10600"      # Racing red
-    SECONDARY = "#1A1A1A"    # Carbon black
-    ACCENT = "#FFD700"       # Gold
-    BACKGROUND = "#0D0D0D"   # Dark background
-    SURFACE = "#1E1E1E"      # Surface dark
-    TEXT_PRIMARY = "#FFFFFF"
-    TEXT_SECONDARY = "#B0B0B0"
-    SUCCESS = "#00C853"
-    WARNING = "#FFB300"
-    DANGER = "#D32F2F"
+    # Momentum color palette
+    PRIMARY = "#B9F2FF"      # Cyan Blue - main colour, highlights
+    SECONDARY = "#353839"    # Charcoal Grey - primary dark/background
+    ACCENT = "#DD2D4A"       # Racing Red - alerts and emphasis
+    BACKGROUND = "#353839"   # Charcoal Grey - main background
+    SURFACE = "#2A2D2E"      # Darker grey for panels/cards
+    TEXT_PRIMARY = "#F5F5F5" # Snow White - primary text
+    TEXT_SECONDARY = "#B0B0B0" # Light grey - secondary text
+    TEXT_LIGHT = "#F5F5F5"   # Snow White
+    SUCCESS = "#4CAF50"      # Neutral Green for positive metrics
+    WARNING = "#DD2D4A"      # Racing Red for warnings
+    DANGER = "#DD2D4A"       # Racing Red for critical alerts
     
     @staticmethod
     def apply_dark_theme(app):
-        """Apply dark theme to application"""
+        """Apply Momentum theme to application"""
         palette = QPalette()
+        
+        # Base colors
         palette.setColor(QPalette.ColorRole.Window, QColor(MomentumTheme.BACKGROUND))
         palette.setColor(QPalette.ColorRole.WindowText, QColor(MomentumTheme.TEXT_PRIMARY))
         palette.setColor(QPalette.ColorRole.Base, QColor(MomentumTheme.SURFACE))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor(MomentumTheme.SECONDARY))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#1E2122"))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(MomentumTheme.SURFACE))
+        palette.setColor(QPalette.ColorRole.ToolTipText, QColor(MomentumTheme.TEXT_PRIMARY))
         palette.setColor(QPalette.ColorRole.Text, QColor(MomentumTheme.TEXT_PRIMARY))
         palette.setColor(QPalette.ColorRole.Button, QColor(MomentumTheme.SURFACE))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor(MomentumTheme.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor(MomentumTheme.TEXT_LIGHT))
+        palette.setColor(QPalette.ColorRole.BrightText, QColor(MomentumTheme.PRIMARY))
+        palette.setColor(QPalette.ColorRole.Link, QColor(MomentumTheme.PRIMARY))
         palette.setColor(QPalette.ColorRole.Highlight, QColor(MomentumTheme.PRIMARY))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(MomentumTheme.TEXT_PRIMARY))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(MomentumTheme.BACKGROUND))
+        
         app.setPalette(palette)
         
-        # Apply stylesheet for additional styling
+        # Custom stylesheet for modern Momentum look
         app.setStyleSheet(f"""
             QMainWindow {{
                 background-color: {MomentumTheme.BACKGROUND};
             }}
+            
             QPushButton {{
-                background-color: {MomentumTheme.PRIMARY};
-                color: {MomentumTheme.TEXT_PRIMARY};
-                border: none;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 5px;
-            }}
-            QPushButton:hover {{
-                background-color: #FF1A00;
-            }}
-            QPushButton:pressed {{
-                background-color: #B30500;
-            }}
-            QPushButton:disabled {{
-                background-color: #444444;
-                color: #666666;
-            }}
-            QLabel {{
-                color: {MomentumTheme.TEXT_PRIMARY};
-                font-size: 13px;
-            }}
-            QGroupBox {{
-                color: {MomentumTheme.ACCENT};
-                font-weight: bold;
-                font-size: 14px;
+                background-color: {MomentumTheme.SURFACE};
+                color: {MomentumTheme.TEXT_LIGHT};
                 border: 2px solid {MomentumTheme.PRIMARY};
                 border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
+                padding: 10px;
+                font-weight: bold;
+                font-size: 12pt;
             }}
+            
+            QPushButton:hover {{
+                background-color: {MomentumTheme.PRIMARY};
+                color: {MomentumTheme.BACKGROUND};
+                border-color: {MomentumTheme.PRIMARY};
+            }}
+            
+            QPushButton:pressed {{
+                background-color: #90D9E8;
+                color: {MomentumTheme.BACKGROUND};
+            }}
+            
+            QPushButton:disabled {{
+                background-color: #1A1C1D;
+                color: #666666;
+                border-color: #444444;
+            }}
+            
+            QLabel {{
+                color: {MomentumTheme.TEXT_PRIMARY};
+            }}
+            
+            QGroupBox {{
+                background-color: {MomentumTheme.SURFACE};
+                border: 2px solid #444444;
+                border-radius: 8px;
+                margin-top: 10px;
+                font-weight: bold;
+                color: {MomentumTheme.TEXT_PRIMARY};
+                padding-top: 15px;
+            }}
+            
             QGroupBox::title {{
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                subcontrol-position: top left;
+                padding: 5px 10px;
+                color: {MomentumTheme.PRIMARY};
+                font-size: 11pt;
             }}
+            
             QTableWidget {{
                 background-color: {MomentumTheme.SURFACE};
+                alternate-background-color: #1E2122;
+                gridline-color: #444444;
                 color: {MomentumTheme.TEXT_PRIMARY};
-                gridline-color: {MomentumTheme.SECONDARY};
-                border: 1px solid {MomentumTheme.PRIMARY};
+                border: 1px solid #444444;
             }}
+            
             QTableWidget::item:selected {{
                 background-color: {MomentumTheme.PRIMARY};
+                color: {MomentumTheme.BACKGROUND};
             }}
+            
             QHeaderView::section {{
-                background-color: {MomentumTheme.SECONDARY};
-                color: {MomentumTheme.ACCENT};
+                background-color: #1E2122;
+                color: {MomentumTheme.TEXT_LIGHT};
                 padding: 5px;
-                border: none;
+                border: 1px solid #444444;
                 font-weight: bold;
             }}
-            QListWidget {{
+            
+            QTextEdit, QListWidget {{
                 background-color: {MomentumTheme.SURFACE};
                 color: {MomentumTheme.TEXT_PRIMARY};
-                border: 1px solid {MomentumTheme.PRIMARY};
+                border: 1px solid #444444;
+                border-radius: 3px;
             }}
-            QListWidget::item:selected {{
-                background-color: {MomentumTheme.PRIMARY};
-            }}
-            QTextEdit {{
-                background-color: {MomentumTheme.SURFACE};
-                color: {MomentumTheme.TEXT_PRIMARY};
-                border: 1px solid {MomentumTheme.SECONDARY};
-            }}
+            
             QComboBox {{
                 background-color: {MomentumTheme.SURFACE};
                 color: {MomentumTheme.TEXT_PRIMARY};
-                border: 1px solid {MomentumTheme.PRIMARY};
+                border: 2px solid #444444;
+                border-radius: 3px;
                 padding: 5px;
             }}
+            
+            QComboBox:hover {{
+                border-color: {MomentumTheme.PRIMARY};
+            }}
+            
             QComboBox::drop-down {{
                 border: none;
             }}
-            QComboBox::down-arrow {{
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid {MomentumTheme.TEXT_PRIMARY};
+            
+            QComboBox QAbstractItemView {{
+                background-color: {MomentumTheme.SURFACE};
+                color: {MomentumTheme.TEXT_PRIMARY};
+                selection-background-color: {MomentumTheme.PRIMARY};
+                selection-color: {MomentumTheme.BACKGROUND};
             }}
+            
             QProgressBar {{
-                border: 1px solid {MomentumTheme.SECONDARY};
+                border: 2px solid #444444;
                 border-radius: 5px;
                 text-align: center;
                 background-color: {MomentumTheme.SURFACE};
                 color: {MomentumTheme.TEXT_PRIMARY};
             }}
+            
             QProgressBar::chunk {{
                 background-color: {MomentumTheme.PRIMARY};
+            }}
+            
+            QTabWidget::pane {{
+                border: 2px solid #444444;
+                background-color: {MomentumTheme.BACKGROUND};
+            }}
+            
+            QTabBar::tab {{
+                background-color: {MomentumTheme.SURFACE};
+                color: {MomentumTheme.TEXT_SECONDARY};
+                padding: 8px 20px;
+                border: 1px solid #444444;
+                border-bottom: none;
+            }}
+            
+            QTabBar::tab:selected {{
+                background-color: {MomentumTheme.PRIMARY};
+                color: {MomentumTheme.BACKGROUND};
+                font-weight: bold;
+            }}
+            
+            QTabBar::tab:hover {{
+                background-color: #90D9E8;
+                color: {MomentumTheme.BACKGROUND};
             }}
         """)
 
@@ -193,6 +247,11 @@ class MainMenuScreen(QWidget):
         btn_load.clicked.connect(self.load_career)
         layout.addWidget(btn_load, alignment=Qt.AlignmentFlag.AlignCenter)
         
+        btn_settings = QPushButton("SETTINGS")
+        btn_settings.setFixedSize(300, 50)
+        btn_settings.clicked.connect(self.parent.show_settings)
+        layout.addWidget(btn_settings, alignment=Qt.AlignmentFlag.AlignCenter)
+        
         btn_exit = QPushButton("EXIT")
         btn_exit.setFixedSize(300, 50)
         btn_exit.clicked.connect(self.parent.close)
@@ -228,7 +287,7 @@ class DisciplineSelectionScreen(QWidget):
         header = QLabel("SELECT RACING DISCIPLINE")
         header_font = QFont("Arial", 24, QFont.Weight.Bold)
         header.setFont(header_font)
-        header.setStyleSheet(f"color: {MomentumTheme.ACCENT};")
+        header.setStyleSheet(f"color: {MomentumTheme.PRIMARY};")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
         
@@ -294,7 +353,7 @@ class TeamSelectionScreen(QWidget):
         self.header = QLabel("SELECT YOUR TEAM")
         header_font = QFont("Arial", 24, QFont.Weight.Bold)
         self.header.setFont(header_font)
-        self.header.setStyleSheet(f"color: {MomentumTheme.ACCENT};")
+        self.header.setStyleSheet(f"color: {MomentumTheme.PRIMARY};")
         layout.addWidget(self.header)
         
         # Tier filter
@@ -313,7 +372,10 @@ class TeamSelectionScreen(QWidget):
         self.teams_table.setHorizontalHeaderLabels(["Team Name", "Nationality", "Tier", "Budget (€M)", "ID"])
         self.teams_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.teams_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.teams_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.teams_table.setSortingEnabled(True)
         self.teams_table.itemSelectionChanged.connect(self.on_team_selected)
+        self.teams_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.teams_table)
         
         # Team details
@@ -368,6 +430,9 @@ class TeamSelectionScreen(QWidget):
     
     def display_teams(self, teams):
         """Display teams in table"""
+        # Disable sorting while updating
+        self.teams_table.setSortingEnabled(False)
+        
         self.teams_table.setRowCount(len(teams))
         
         for i, team in enumerate(teams):
@@ -378,6 +443,10 @@ class TeamSelectionScreen(QWidget):
             self.teams_table.setItem(i, 4, QTableWidgetItem(str(team.id)))
         
         self.teams_table.resizeColumnsToContents()
+        self.teams_table.horizontalHeader().setStretchLastSection(True)
+        
+        # Re-enable sorting
+        self.teams_table.setSortingEnabled(True)
     
     def filter_teams(self, tier_filter):
         """Filter teams by tier"""
@@ -667,8 +736,9 @@ class StandingsScreen(QWidget):
         self.driver_table.setHorizontalHeaderLabels([
             "Pos", "Driver", "Team", "Points", "Wins", "Podiums", "Poles", "Change"
         ])
-        self.driver_table.horizontalHeader().setStretchLastSection(False)
+        self.driver_table.horizontalHeader().setStretchLastSection(True)
         self.driver_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.driver_table.setSortingEnabled(True)
         self.tabs.addTab(self.driver_table, "Driver Standings")
         
         # Constructor standings
@@ -677,8 +747,9 @@ class StandingsScreen(QWidget):
         self.constructor_table.setHorizontalHeaderLabels([
             "Pos", "Team", "Points", "Wins", "Podiums", "1-2s", "Change"
         ])
-        self.constructor_table.horizontalHeader().setStretchLastSection(False)
+        self.constructor_table.horizontalHeader().setStretchLastSection(True)
         self.constructor_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.constructor_table.setSortingEnabled(True)
         self.tabs.addTab(self.constructor_table, "Constructor Standings")
         
         layout.addWidget(self.tabs)
@@ -709,6 +780,10 @@ class StandingsScreen(QWidget):
         if not standings:
             return
         
+        # Disable sorting while updating
+        self.driver_table.setSortingEnabled(False)
+        self.constructor_table.setSortingEnabled(False)
+        
         # Update driver standings
         self.driver_table.setRowCount(len(standings.driver_standings))
         for row, driver in enumerate(standings.driver_standings):
@@ -724,6 +799,8 @@ class StandingsScreen(QWidget):
             change_str = f"+{change}" if change > 0 else str(change) if change < 0 else "-"
             self.driver_table.setItem(row, 7, QTableWidgetItem(change_str))
         
+        self.driver_table.resizeColumnsToContents()
+        
         # Update constructor standings
         self.constructor_table.setRowCount(len(standings.constructor_standings))
         for row, constructor in enumerate(standings.constructor_standings):
@@ -737,6 +814,12 @@ class StandingsScreen(QWidget):
             change = constructor.position_change
             change_str = f"+{change}" if change > 0 else str(change) if change < 0 else "-"
             self.constructor_table.setItem(row, 6, QTableWidgetItem(change_str))
+        
+        self.constructor_table.resizeColumnsToContents()
+        
+        # Re-enable sorting
+        self.driver_table.setSortingEnabled(True)
+        self.constructor_table.setSortingEnabled(True)
         
         # Update info
         self.info_label.setText(
@@ -846,6 +929,20 @@ class CareerHubScreen(QWidget):
         btn_finances.setFixedHeight(50)
         btn_finances.clicked.connect(self.finances)
         actions_layout.addWidget(btn_finances)
+        
+        btn_garage = QPushButton("🔧 GARAGE & WORKSHOP")
+        btn_garage.setFixedHeight(50)
+        btn_garage.clicked.connect(self.open_garage)
+        btn_garage.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        actions_layout.addWidget(btn_garage)
         
         actions_layout.addStretch()
         
@@ -958,6 +1055,10 @@ class CareerHubScreen(QWidget):
         """Financial overview"""
         self.parent.show_finances()
     
+    def open_garage(self):
+        """Open garage and workshop"""
+        self.parent.show_garage()
+    
     def save_game(self):
         """Save current game"""
         if self.parent.world.save_game():
@@ -1011,6 +1112,8 @@ class TeamManagementScreen(QWidget):
         self.drivers_table.setHorizontalHeaderLabels([
             "Name", "Salary (€M)", "Contract Years", "Years Left", "Performance", "Action"
         ])
+        self.drivers_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.drivers_table.setSortingEnabled(True)
         roster_layout.addWidget(QLabel("CURRENT DRIVERS"))
         roster_layout.addWidget(self.drivers_table)
         
@@ -1020,6 +1123,8 @@ class TeamManagementScreen(QWidget):
         self.staff_table.setHorizontalHeaderLabels([
             "Name", "Role", "Salary (€M)", "Contract Years", "Skill", "Action"
         ])
+        self.staff_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.staff_table.setSortingEnabled(True)
         roster_layout.addWidget(QLabel("CURRENT STAFF"))
         roster_layout.addWidget(self.staff_table)
         
@@ -1035,6 +1140,8 @@ class TeamManagementScreen(QWidget):
         self.available_drivers_table.setHorizontalHeaderLabels([
             "Name", "Age", "Nationality", "Skill", "Aptitude", "Salary (€M)", "Hire"
         ])
+        self.available_drivers_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.available_drivers_table.setSortingEnabled(True)
         hire_drivers_layout.addWidget(self.available_drivers_table)
         
         hire_drivers_tab.setLayout(hire_drivers_layout)
@@ -1049,6 +1156,8 @@ class TeamManagementScreen(QWidget):
         self.available_staff_table.setHorizontalHeaderLabels([
             "Name", "Role", "Experience", "Skill", "Salary (€M)", "Hire"
         ])
+        self.available_staff_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.available_staff_table.setSortingEnabled(True)
         hire_staff_layout.addWidget(self.available_staff_table)
         
         hire_staff_tab.setLayout(hire_staff_layout)
@@ -1078,6 +1187,12 @@ class TeamManagementScreen(QWidget):
         # Update budget
         self.budget_label.setText(f"Budget: €{roster['financials'].current_budget:.1f}M")
         
+        # Disable sorting while updating
+        self.drivers_table.setSortingEnabled(False)
+        self.staff_table.setSortingEnabled(False)
+        self.available_drivers_table.setSortingEnabled(False)
+        self.available_staff_table.setSortingEnabled(False)
+        
         # Update drivers table
         self.drivers_table.setRowCount(len(roster['drivers']))
         for row, contract in enumerate(roster['drivers']):
@@ -1091,6 +1206,8 @@ class TeamManagementScreen(QWidget):
             btn_fire.clicked.connect(lambda checked, did=contract.person_id: self.fire_driver(did))
             self.drivers_table.setCellWidget(row, 5, btn_fire)
         
+        self.drivers_table.resizeColumnsToContents()
+        
         # Update staff table
         self.staff_table.setRowCount(len(roster['staff'][:10]))  # Show top 10
         for row, contract in enumerate(roster['staff'][:10]):
@@ -1103,6 +1220,8 @@ class TeamManagementScreen(QWidget):
             btn_fire = QPushButton("Fire")
             btn_fire.clicked.connect(lambda checked, sid=contract.person_id: self.fire_staff(sid))
             self.staff_table.setCellWidget(row, 5, btn_fire)
+        
+        self.staff_table.resizeColumnsToContents()
         
         # Load available drivers
         discipline = self.parent.selected_discipline
@@ -1121,6 +1240,8 @@ class TeamManagementScreen(QWidget):
             btn_hire.clicked.connect(lambda checked, did=driver['id'], sal=driver['asking_salary']: self.hire_driver(did, sal))
             self.available_drivers_table.setCellWidget(row, 6, btn_hire)
         
+        self.available_drivers_table.resizeColumnsToContents()
+        
         # Load available staff
         available_staff = self.parent.team_manager.get_available_staff()
         
@@ -1135,6 +1256,14 @@ class TeamManagementScreen(QWidget):
             btn_hire = QPushButton("Hire")
             btn_hire.clicked.connect(lambda checked, sid=staff['id'], sal=staff['asking_salary']: self.hire_staff(sid, sal))
             self.available_staff_table.setCellWidget(row, 5, btn_hire)
+        
+        self.available_staff_table.resizeColumnsToContents()
+        
+        # Re-enable sorting
+        self.drivers_table.setSortingEnabled(True)
+        self.staff_table.setSortingEnabled(True)
+        self.available_drivers_table.setSortingEnabled(True)
+        self.available_staff_table.setSortingEnabled(True)
     
     def hire_driver(self, driver_id: int, salary: float):
         """Hire a driver"""
@@ -1244,6 +1373,8 @@ class CarDevelopmentScreen(QWidget):
         self.components_table.setHorizontalHeaderLabels([
             "Component", "Level", "Progress", "Reliability", "Upgrade"
         ])
+        self.components_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.components_table.setSortingEnabled(True)
         components_layout.addWidget(self.components_table)
         
         components_group.setLayout(components_layout)
@@ -1289,6 +1420,9 @@ class CarDevelopmentScreen(QWidget):
         self.handling_rating.setText(f"Handling: {car.handling_rating:.1f}")
         self.reliability_rating.setText(f"Reliability: {car.reliability_rating:.1f}")
         
+        # Disable sorting while updating
+        self.components_table.setSortingEnabled(False)
+        
         # Update components table
         components = list(car.components.values())
         self.components_table.setRowCount(len(components))
@@ -1305,6 +1439,9 @@ class CarDevelopmentScreen(QWidget):
             btn_upgrade = QPushButton(f"Upgrade (€{comp.upgrade_cost:.1f}M)")
             btn_upgrade.clicked.connect(lambda checked, name=comp.component_name: self.upgrade_component(name))
             self.components_table.setCellWidget(row, 4, btn_upgrade)
+        
+        # Re-enable sorting
+        self.components_table.setSortingEnabled(True)
     
     def upgrade_component(self, component_name: str):
         """Upgrade a component"""
@@ -1434,6 +1571,98 @@ class FinancesScreen(QWidget):
         self.projection_label.setText(f"End of Season Projection: €{projection:.1f}M")
 
 
+class SettingsScreen(QWidget):
+    """Settings and options screen"""
+    
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        self.init_ui()
+    
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        # Header
+        title = QLabel("SETTINGS")
+        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
+        title.setStyleSheet(f"color: {MomentumTheme.PRIMARY};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+        
+        layout.addSpacing(30)
+        
+        # Display Settings
+        display_group = QGroupBox("DISPLAY")
+        display_layout = QVBoxLayout()
+        
+        # Window mode buttons
+        mode_layout = QHBoxLayout()
+        mode_layout.addWidget(QLabel("Window Mode:"))
+        
+        self.btn_borderless = QPushButton("Borderless Fullscreen")
+        self.btn_borderless.clicked.connect(self.set_borderless_fullscreen)
+        mode_layout.addWidget(self.btn_borderless)
+        
+        self.btn_windowed = QPushButton("Windowed")
+        self.btn_windowed.clicked.connect(self.set_windowed)
+        mode_layout.addWidget(self.btn_windowed)
+        
+        self.btn_fullscreen = QPushButton("True Fullscreen")
+        self.btn_fullscreen.clicked.connect(self.set_fullscreen)
+        mode_layout.addWidget(self.btn_fullscreen)
+        
+        mode_layout.addStretch()
+        display_layout.addLayout(mode_layout)
+        
+        display_group.setLayout(display_layout)
+        layout.addWidget(display_group)
+        
+        # Audio Settings (placeholder for future)
+        audio_group = QGroupBox("AUDIO")
+        audio_layout = QVBoxLayout()
+        audio_layout.addWidget(QLabel("Audio settings coming soon..."))
+        audio_group.setLayout(audio_layout)
+        layout.addWidget(audio_group)
+        
+        # Gameplay Settings (placeholder for future)
+        gameplay_group = QGroupBox("GAMEPLAY")
+        gameplay_layout = QVBoxLayout()
+        gameplay_layout.addWidget(QLabel("Gameplay settings coming soon..."))
+        gameplay_group.setLayout(gameplay_layout)
+        layout.addWidget(gameplay_group)
+        
+        layout.addStretch()
+        
+        # Back button
+        btn_back = QPushButton("BACK TO MENU")
+        btn_back.setFixedSize(300, 50)
+        btn_back.clicked.connect(self.parent.show_main_menu)
+        layout.addWidget(btn_back, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        self.setLayout(layout)
+    
+    def set_borderless_fullscreen(self):
+        """Set borderless fullscreen mode"""
+        self.parent.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        screen = QApplication.primaryScreen().geometry()
+        self.parent.setGeometry(0, 0, screen.width(), screen.height())
+        self.parent.show()
+        QMessageBox.information(self, "Display Mode", "Switched to Borderless Fullscreen")
+    
+    def set_windowed(self):
+        """Set windowed mode"""
+        self.parent.setWindowFlags(Qt.WindowType.Window)
+        self.parent.setGeometry(100, 100, 1400, 900)
+        self.parent.show()
+        QMessageBox.information(self, "Display Mode", "Switched to Windowed Mode")
+    
+    def set_fullscreen(self):
+        """Set true fullscreen mode"""
+        self.parent.setWindowFlags(Qt.WindowType.Window)
+        self.parent.showFullScreen()
+        QMessageBox.information(self, "Display Mode", "Switched to Fullscreen\nPress ESC to exit fullscreen")
+
+
 class MomentumGame(QMainWindow):
     """Main game window"""
     
@@ -1473,7 +1702,12 @@ class MomentumGame(QMainWindow):
     def init_ui(self):
         """Initialize the main window"""
         self.setWindowTitle("MOMENTUM - Motorsport Manager")
-        self.setGeometry(100, 100, 1400, 900)
+        
+        # Set windowed borderless fullscreen by default
+        self.is_fullscreen = True
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        screen = QApplication.primaryScreen().geometry()
+        self.setGeometry(0, 0, screen.width(), screen.height())
         
         # Create central widget and stacked layout
         self.stack = QStackedWidget()
@@ -1488,6 +1722,8 @@ class MomentumGame(QMainWindow):
         self.team_mgmt_screen = TeamManagementScreen(self)
         self.car_dev_screen = CarDevelopmentScreen(self)
         self.finances_screen = FinancesScreen(self)
+        self.garage_screen = GarageWorkshopScreen(self)
+        self.settings_screen = SettingsScreen(self)
         
         # Add screens to stack
         self.stack.addWidget(self.main_menu)
@@ -1498,6 +1734,8 @@ class MomentumGame(QMainWindow):
         self.stack.addWidget(self.team_mgmt_screen)
         self.stack.addWidget(self.car_dev_screen)
         self.stack.addWidget(self.finances_screen)
+        self.stack.addWidget(self.garage_screen)
+        self.stack.addWidget(self.settings_screen)
         
         # Show main menu
         self.show_main_menu()
@@ -1505,6 +1743,10 @@ class MomentumGame(QMainWindow):
     def show_main_menu(self):
         """Show main menu screen"""
         self.stack.setCurrentWidget(self.main_menu)
+    
+    def show_settings(self):
+        """Show settings screen"""
+        self.stack.setCurrentWidget(self.settings_screen)
     
     def show_discipline_selection(self):
         """Show discipline selection screen"""
@@ -1546,6 +1788,20 @@ class MomentumGame(QMainWindow):
         """Show financial overview screen"""
         self.finances_screen.update_display()
         self.stack.setCurrentWidget(self.finances_screen)
+    
+    def show_garage(self):
+        """Show garage/workshop screen"""
+        if self.world and self.world.state:
+            # Get player's vehicle ID
+            team_id = self.world.state.player_profile.team_id
+            # For now, use a simple vehicle ID calculation
+            vehicle_id = team_id * 10000 + 2025
+            
+            # Set vehicle and update display
+            self.garage_screen.set_vehicle(vehicle_id, self.world.component_integration)
+            self.stack.setCurrentWidget(self.garage_screen)
+        else:
+            QMessageBox.warning(self, "Not Available", "Start a career first to access the garage.")
     
     def start_career(self, team_id):
         """Start a new career"""
@@ -1599,7 +1855,32 @@ class MomentumGame(QMainWindow):
                 "Error",
                 f"Failed to start career:\n\n{str(e)}\n\nCheck logs/errors_*.log for details"
             )
-
+    
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts"""
+        # ESC - Exit fullscreen
+        if event.key() == Qt.Key.Key_Escape:
+            if self.is_fullscreen:
+                self.setWindowFlags(Qt.WindowType.Window)
+                self.setGeometry(100, 100, 1400, 900)
+                self.show()
+                self.is_fullscreen = False
+        
+        # ALT+ENTER - Toggle fullscreen
+        elif event.key() == Qt.Key.Key_Return and event.modifiers() == Qt.KeyboardModifier.AltModifier:
+            if self.is_fullscreen:
+                self.setWindowFlags(Qt.WindowType.Window)
+                self.setGeometry(100, 100, 1400, 900)
+                self.show()
+                self.is_fullscreen = False
+            else:
+                self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+                screen = QApplication.primaryScreen().geometry()
+                self.setGeometry(0, 0, screen.width(), screen.height())
+                self.show()
+                self.is_fullscreen = True
+        
+        super().keyPressEvent(event)
 
 
 def main():

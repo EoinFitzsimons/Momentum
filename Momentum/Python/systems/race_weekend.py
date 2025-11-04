@@ -76,9 +76,10 @@ class RaceWeekendManager:
     with realistic progression and driver performance.
     """
     
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self, db_manager: DatabaseManager, component_integration=None):
         self.db = db_manager
         self.simulator = RaceSimulator()
+        self.component_integration = component_integration
     
     def run_practice_session(
         self,
@@ -137,6 +138,15 @@ class RaceWeekendManager:
             result.position = idx
             result.gap_to_leader = result.time_or_points - results[0].time_or_points
         
+        # Simulate component wear during practice
+        if self.component_integration:
+            for result in results:
+                vehicle_id = result.team_id * 10000 + 2025  # Simple ID calculation
+                if vehicle_id in self.component_integration.race_cars:
+                    self.component_integration.simulate_race_session(
+                        vehicle_id, f"practice_{session_number}", 60, 0.7
+                    )
+        
         return results
     
     def run_qualifying(
@@ -192,6 +202,15 @@ class RaceWeekendManager:
         for idx, result in enumerate(results, 1):
             result.position = idx
             result.gap_to_leader = result.time_or_points - results[0].time_or_points
+        
+        # Simulate component wear during qualifying
+        if self.component_integration:
+            for result in results:
+                vehicle_id = result.team_id * 10000 + 2025
+                if vehicle_id in self.component_integration.race_cars:
+                    self.component_integration.simulate_race_session(
+                        vehicle_id, "qualifying", 30, 0.95
+                    )
         
         return results
     
