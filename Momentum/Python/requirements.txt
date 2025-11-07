@@ -1,23 +1,39 @@
-# Core API Framework
+# Consolidated requirements (full list of libraries used in the project)
+# The project owner requested a single requirements file while developing.
+
+# Web / API
 fastapi
 uvicorn
 
-# Data Science & Simulation
+# Data & Numeric
 numpy
 pandas
 scipy
 
-# AI/ML Framework
+# Machine learning
 torch
 
-# Database (SQLite is builtin, but we may need utilities)
-# sqlite3 is builtin with Python
+# GUI
+PyQt6
 
-# Name Generation
-Faker  # Generate realistic culturally-appropriate names with locale support
+# Database / Validation
+pydantic
+# Note: SQLite is builtin; SQLAlchemy is commented out in the code but you
+# can enable it if you plan to switch to an ORM.
 
-# Environment Configuration
-python-dotenv  # Load environment variables from .env files
+# Utilities
+Faker
+python-dotenv
+requests
 
-# Optional utilities
-requests  # For external API calls if needed
+# Dev & Test tools (included while coding)
+pytest
+pytest-cov
+black
+flake8
+mypy
+ipython
+
+# Optional / extras that may be platform-specific
+# - PyTorch wheels (torch) should be installed following https://pytorch.org/
+# - PyQt6 on some Windows setups requires MSVC redistributables
