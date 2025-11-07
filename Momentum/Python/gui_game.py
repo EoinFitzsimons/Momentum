@@ -415,6 +415,19 @@ class TeamSelectionScreen(QWidget):
             with LoggedOperation(f"Load {discipline} teams"):
                 db = self.parent.db
                 self.teams = db.get_teams_by_discipline(discipline)
+                # Temporary debug info to help diagnose GUI/DB discrepancies
+                try:
+                    db_path = getattr(db, 'db_path', None) or 'unknown'
+                    # compute tier distribution
+                    tier_counts = {}
+                    for t in self.teams:
+                        tier_counts[t.tier] = tier_counts.get(t.tier, 0) + 1
+                    sample = [(t.name, t.tier) for t in self.teams[:5]]
+                    logger.info(
+                        f"DB path: {db_path}; discipline={discipline}; teams_loaded={len(self.teams)}; tier_counts={tier_counts}; sample={sample}"
+                    )
+                except Exception:
+                    logger.exception("Failed to log team debug info")
             
             logger.info(f"Loaded {len(self.teams)} teams")
             self.display_teams(self.teams)

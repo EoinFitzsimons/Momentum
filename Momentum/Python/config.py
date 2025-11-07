@@ -28,6 +28,12 @@ PARANAMES_DB_PATH = os.getenv("PARANAMES_DB_PATH", "data/paranames.db")
 # Database Configuration
 DATABASE_PATH = os.getenv("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "database", "momentum.db"))
 
+# Ensure DATABASE_PATH is absolute and anchored to this package directory.
+# This prevents a relative path from .env (e.g. "database/momentum.db") resolving
+# relative to the current working directory when the app is launched from elsewhere.
+if not os.path.isabs(DATABASE_PATH):
+    DATABASE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), DATABASE_PATH))
+
 # ============================================================================
 # SIMULATION PARAMETERS
 # ============================================================================

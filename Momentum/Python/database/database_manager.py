@@ -415,9 +415,13 @@ class DatabaseManager:
     def get_teams_by_discipline(self, discipline: str) -> List[Team]:
         """Get all teams in a specific discipline"""
         with self.get_connection() as conn:
+            # Accept flexible discipline identifiers: case-insensitive, spaces vs underscores
+            # Normalize input to lowercase with underscores and compare against a normalized
+            # discipline column (replace spaces with underscores and lower-case it).
+            norm = discipline.lower().replace(' ', '_')
             rows = conn.execute(
-                "SELECT * FROM teams WHERE discipline = ? ORDER BY tier, name", 
-                (discipline,)
+                "SELECT * FROM teams WHERE LOWER(REPLACE(discipline, ' ', '_')) = ? ORDER BY tier, name",
+                (norm,)
             ).fetchall()
             # Filter out created_at field which isn't in the Team model
             return [Team(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
