@@ -13,13 +13,19 @@ This script:
 5. Reports success/failure for each circuit
 
 Usage:
-    python import_circuits.py
+    python scripts/import_circuits.py
 """
 
 import json
 import sqlite3
+import os
+import sys
 from pathlib import Path
 from typing import Dict, Any
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from config import DATABASE_PATH
 
 def map_circuit_to_db_fields(circuit: Dict[str, Any]) -> Dict[str, Any]:
@@ -139,12 +145,14 @@ def import_circuits():
     print("CIRCUIT IMPORT UTILITY")
     print("=" * 80)
     
-    # Load circuits from JSON
-    circuits_file = Path(__file__).parent / 'circuits_database.json'
+    # Load circuits from JSON (now in data/ folder)
+    parent_dir = Path(__file__).parent.parent
+    circuits_file = parent_dir / 'data' / 'circuits_database.json'
     print(f"\n1. Loading circuits from: {circuits_file}")
     
     if not circuits_file.exists():
         print(f"   ❌ ERROR: circuits_database.json not found!")
+        print(f"   Expected location: {circuits_file}")
         return
     
     with open(circuits_file, 'r', encoding='utf-8') as f:

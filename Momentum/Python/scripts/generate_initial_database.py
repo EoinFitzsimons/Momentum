@@ -28,12 +28,17 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
 from pathlib import Path
 
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Setup logging
+log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('database_generation.log'),
+        logging.FileHandler(os.path.join(log_dir, 'database_generation.log')),
         logging.StreamHandler()
     ]
 )

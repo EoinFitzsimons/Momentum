@@ -54,7 +54,7 @@ STRATEGY_COMPLEXITY = os.getenv("STRATEGY_COMPLEXITY", "medium")  # low, medium,
 DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "EUR")  # EUR, USD, GBP, JPY, CHF
 CURRENCY_UPDATE_INTERVAL = int(os.getenv("CURRENCY_UPDATE_INTERVAL", "3600"))  # seconds (1 hour)
 USE_LIVE_EXCHANGE_RATES = os.getenv("USE_LIVE_EXCHANGE_RATES", "true").lower() == "true"
-CURRENCY_CACHE_FILE = os.getenv("CURRENCY_CACHE_FILE", "currency_cache.json")
+CURRENCY_CACHE_FILE = os.getenv("CURRENCY_CACHE_FILE", os.path.join(os.path.dirname(__file__), "data", "currency_cache.json"))
 
 # Motorsport Budget Configuration (2025 values)
 SINGLE_SEATER_BUDGET_CAP_EUR = float(os.getenv("SINGLE_SEATER_BUDGET_CAP_EUR", "130000000"))  # €130M EUR

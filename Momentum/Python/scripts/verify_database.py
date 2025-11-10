@@ -1,7 +1,14 @@
 """Quick database verification script."""
 import sqlite3
+import os
+import sys
 
-conn = sqlite3.connect('database/momentum.db')
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Get database path relative to parent directory
+db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database', 'momentum.db')
+conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Count records

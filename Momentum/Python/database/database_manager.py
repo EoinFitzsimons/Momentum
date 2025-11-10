@@ -426,6 +426,21 @@ class DatabaseManager:
             # Filter out created_at field which isn't in the Team model
             return [Team(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
     
+    def get_teams_by_discipline_and_tier(self, discipline: str, tier: str) -> List[Team]:
+        """Get all teams in a specific discipline and tier (for championship-specific races)"""
+        with self.get_connection() as conn:
+            # Normalize discipline input (case-insensitive, spaces vs underscores)
+            norm_discipline = discipline.lower().replace(' ', '_')
+            rows = conn.execute(
+                """SELECT * FROM teams 
+                   WHERE LOWER(REPLACE(discipline, ' ', '_')) = ? 
+                   AND tier = ? 
+                   ORDER BY name""",
+                (norm_discipline, tier)
+            ).fetchall()
+            # Filter out created_at field which isn't in the Team model
+            return [Team(**{k: v for k, v in dict(row).items() if k != 'created_at'}) for row in rows]
+    
     # Track operations
     def create_track(self, track: Track) -> int:
         """Create a new track and return ID"""

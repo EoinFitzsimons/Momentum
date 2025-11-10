@@ -475,6 +475,19 @@ class Race:
     weather_conditions: str                   # Weather during race (dry/wet/mixed)
     race_duration_minutes: int                # Planned race duration
     status: str                               # Race status (scheduled/completed/cancelled)
+    
+    # Compatibility properties
+    @property
+    def circuit_id(self) -> int:
+        """Alias for track_id for backward compatibility"""
+        return self.track_id
+    
+    @property
+    def discipline(self) -> str:
+        """Note: Race discipline comes from championship, not stored directly"""
+        # This is a placeholder - actual discipline should be retrieved via championship
+        # Added for backward compatibility with code expecting race.discipline
+        return getattr(self, '_discipline', 'SINGLE_SEATER')
 
 @dataclass
 class RaceResult:

@@ -11,6 +11,11 @@ Comprehensive component management interface where players can:
 Authors: Final Year Project - Computer Science
 """
 
+import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QGridLayout, QMessageBox, QTableWidget,
@@ -19,7 +24,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
-from gui_component_health import ComponentHealthPanel, ComponentRepairButton
+from gui.gui_component_health import ComponentHealthPanel, ComponentRepairButton
 
 
 class GarageWorkshopScreen(QWidget):
