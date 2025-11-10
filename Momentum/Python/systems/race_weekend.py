@@ -101,14 +101,19 @@ class RaceWeekendManager:
         if not race:
             raise ValueError(f"Race {race_id} not found")
         
-        # Get participating drivers
-        # For now, get all teams in discipline and their drivers
-        teams = self.db.get_teams_by_discipline(race.discipline)
+        # Get championship to determine tier
+        championship = self.db.get_championship(race.championship_id)
+        if not championship:
+            raise ValueError(f"Championship {race.championship_id} not found for race {race_id}")
+        
+        # Get participating drivers - filter by discipline AND tier
+        teams = self.db.get_teams_by_discipline_and_tier(race.discipline, championship.tier)
         
         results = []
         base_lap_time = self._estimate_lap_time(race.circuit_id, race.discipline)
         
-        for team in teams[:20]:  # Limit to 20 teams for now
+        # Use ALL teams in the discipline
+        for team in teams:
             drivers = self.db.get_drivers_by_team(team.id)
             
             for driver in drivers[:2]:  # Max 2 drivers per team
@@ -168,12 +173,19 @@ class RaceWeekendManager:
         if not race:
             raise ValueError(f"Race {race_id} not found")
         
-        teams = self.db.get_teams_by_discipline(race.discipline)
+        # Get championship to determine tier
+        championship = self.db.get_championship(race.championship_id)
+        if not championship:
+            raise ValueError(f"Championship {race.championship_id} not found for race {race_id}")
+        
+        # Get participating teams - filter by discipline AND tier
+        teams = self.db.get_teams_by_discipline_and_tier(race.discipline, championship.tier)
         
         results = []
         base_lap_time = self._estimate_lap_time(race.circuit_id, race.discipline)
         
-        for team in teams[:20]:
+        # Use ALL teams in the discipline
+        for team in teams:
             drivers = self.db.get_drivers_by_team(team.id)
             
             for driver in drivers[:2]:
@@ -240,8 +252,13 @@ class RaceWeekendManager:
         if not track:
             raise ValueError(f"Circuit {race.circuit_id} not found")
         
-        # Get teams and drivers
-        team_list = self.db.get_teams_by_discipline(race.discipline)[:20]
+        # Get championship to determine tier
+        championship = self.db.get_championship(race.championship_id)
+        if not championship:
+            raise ValueError(f"Championship {race.championship_id} not found for race {race_id}")
+        
+        # Get teams and drivers - filter by discipline AND tier
+        team_list = self.db.get_teams_by_discipline_and_tier(race.discipline, championship.tier)
         teams_dict = {}
         driver_list = []
         

@@ -9,14 +9,15 @@ This script:
 
 import sys
 import shutil
+import os
 from pathlib import Path
 from datetime import datetime
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.database_manager import DatabaseManager
-from generate_initial_database import DatabaseGenerator
+from scripts.generate_initial_database import DatabaseGenerator
 
 def main():
     print("=" * 80)

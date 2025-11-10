@@ -1,7 +1,14 @@
 """Check what's actually in the database"""
 import sqlite3
+import os
+import sys
 
-conn = sqlite3.connect('momentum.db')
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Get database path
+db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database', 'momentum.db')
+conn = sqlite3.connect(db_path)
 
 # Check championships
 print("\n=== CHAMPIONSHIPS ===")

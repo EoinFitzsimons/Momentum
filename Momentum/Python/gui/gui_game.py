@@ -6,6 +6,10 @@ A professional multi-discipline motorsport management simulation.
 """
 
 import sys
+import os
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QListWidget, QTableWidget, QTableWidgetItem,
@@ -22,7 +26,7 @@ from systems.standings_manager import StandingsManager
 from systems.team_management import TeamManager
 from systems.car_development import CarDevelopmentManager
 from logging_system import logger, setup_exception_handler, LoggedOperation
-from gui_garage import GarageWorkshopScreen
+from gui.gui_garage import GarageWorkshopScreen
 
 
 class MomentumTheme:
@@ -620,10 +624,13 @@ class RaceWeekendScreen(QWidget):
                 output += f"{'Pos':<4} {'Driver':<25} {'Team':<20} {'Time':<10}\n"
                 output += "-" * 60 + "\n"
                 
-                for result in results[:10]:
+                # Show ALL results, not just top 10
+                for result in results:
                     time_str = f"{result.time_or_points:.3f}s"
                     gap_str = f"+{result.gap_to_leader:.3f}" if result.gap_to_leader > 0 else "Leader"
                     output += f"{result.position:<4} {result.driver_name:<25} {result.team_name:<20} {time_str:<10}\n"
+                
+                output += f"\n\nTotal participants: {len(results)} drivers"
                 
                 self.practice_view.setPlainText(output)
                 self.tabs.setCurrentIndex(0)

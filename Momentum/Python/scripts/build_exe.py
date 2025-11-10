@@ -5,6 +5,9 @@ import os
 import subprocess
 import sys
 
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 def build_exe():
     """Build standalone executable using PyInstaller"""
     
@@ -12,16 +15,20 @@ def build_exe():
     print("MOMENTUM - Building Executable")
     print("=" * 60)
     
+    # Change to parent directory for build
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.chdir(parent_dir)
+    
     # PyInstaller command
     cmd = [
         "pyinstaller",
         "--name=MOMENTUM",
         "--onefile",  # Single executable
         "--windowed",  # No console window
-        "--add-data=momentum.db;.",  # Include database
+        "--add-data=database/momentum.db;.",  # Include database
         "--add-data=saves;saves",  # Include saves folder
         "--icon=NONE",  # Add icon later if desired
-        "gui_game.py"
+        "gui/gui_game.py"
     ]
     
     print("\nBuilding executable...")
