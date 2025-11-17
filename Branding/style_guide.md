@@ -6,12 +6,12 @@ This document formalises the Momentum colour palette and provides practical guid
 
 ## Colour Palette (Primary)
 
-| Name          |         Hex | Usage                                                                       |
-| ------------- | ----------: | :-------------------------------------------------------------------------- |
-| Cyan Blue     | `#B9F2FF` | Main brand colour — highlights, performance indicators, active UI elements |
-| Charcoal Grey | `#353839` | Primary text colour, primary UI surfaces, structure                         |
-| Racing Red    | `#DD2D4A` | Alerts, critical states, spectacle moments                                  |
-| Snow White    | `#F5F5F5` | Backgrounds, panels, negative space                                         |
+| Name          |         Hex |
+| ------------- | ----------: |
+| Cyan Blue     | `#B9F2FF` |
+| Charcoal Grey | `#353839` |
+| Racing Red    | `#DD2D4A` |
+| Snow White    | `#F5F5F5` |
 
 ### Quick tokens
 
