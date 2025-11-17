@@ -71,9 +71,3 @@ Ethical considerations permeate every stage of Momentum's development lifecycle.
 ## References
 
 Association for Computing Machinery (2018). *ACM Code of Ethics and Professional Conduct*. Available at: https://www.acm.org/code-of-ethics (Accessed: 12 November 2025).
-
----
-
-**Word Count: 1,247 words**
-
-*Note: This exceeds the 1,000-word target but provides comprehensive coverage. You can trim sections if needed by removing some examples or condensing explanations. Key sections to potentially trim: the borderless fullscreen accessibility example, some of the code quality examples, or the environmental considerations section.*
