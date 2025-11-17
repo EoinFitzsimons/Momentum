@@ -33,7 +33,7 @@ The development plan is broken into clear phases, with regular feedback and revi
 # 2.0 Technical Details
 
 
-Momentum uses Python for both the front-end dashboards and the back-end simulation logic, AI, and database management. The system relies on NumPy for fast calculations, Pandas for handling data, and SciPy for advanced statistics. AI features use PyTorch for learning and neural networks. The database uses SQLite to store all the information about drivers, teams, tracks, and championships, making it easy to save and load multi-season histories. All content creation and generation is handled by the database management system.
+Momentum uses Python for both the front-end dashboards and the back-end simulation logic and database management. The system relies on NumPy for fast calculations, Pandas for handling data, and SciPy for advanced statistics. The database uses SQLite to store all the information about drivers, teams, tracks, and championships, making it easy to save and load multi-season histories. All content creation and generation is handled by the database management system.
 
 
 ## 2.1 Race Outcome Simulation
@@ -57,37 +57,43 @@ All teams, drivers, tracks, and championships are created and managed by the dat
 ## 2.4 Performance Optimisation & Integration
 
 
-The Python back-end uses fast, vectorized calculations and keeps frequently used data in memory for speed. The Unity front-end gets updates from the back end without slowing down the display. League states are saved at the end of each season, so progress is never lost. The system uses JSON to keep everything in sync between the front end, AI, and database management. The design makes it easy to add new features or motorsport types in the future, without having to change the core of the game.
+The Python backend uses fast, vectorized calculations and keeps frequently used data in memory for speed. League states are saved at the end of each season, so progress is never lost. The system uses JSON to keep everything in sync between the front end and database management. The design makes it easy to add new features or motorsport types in the future, without having to change the core of the game.
 
 
 # 3.0 Special Resources Required
 
 
+
 ## 3.1 Hardware Requirements
 
-Development and execution of Momentum require a
-high-performance workstation with a minimum of a 6-core CPU (Intel i7-12700 or
-AMD Ryzen 7 5800X) to handle concurrent back-end simulations and AI
-computations, 16 GB of RAM for caching simulation states, and a dedicated GPU
-(NVIDIA RTX 3060 or equivalent) to render real-time Unity dashboards and
-optional 3D track previews. For testing multi-league persistence and large
-procedural ecosystems, additional cores or cloud-based virtual machines (VMs)
-are recommended to parallelise race simulations across multiple seasons without
-performance degradation. SSD storage is necessary for fast SQLite read/write
-operations, particularly when managing hundreds of driver and team records
-across concurrent leagues.
+Momentum's Python GUI and simulation backend have modest hardware requirements. For typical development and use:
+
+- **Minimum Requirements:**
+	- CPU: Dual-core processor (e.g., Intel i3 or AMD equivalent)
+	- RAM: 4 GB
+	- Storage: 500 MB free disk space
+	- GPU: Integrated graphics (no dedicated GPU required)
+	- Display: 1366x768 resolution
+
+- **Recommended Requirements:**
+	- CPU: Quad-core processor (e.g., Intel i5 or AMD Ryzen 3)
+	- RAM: 8 GB
+	- Storage: 1 GB free disk space
+	- GPU: Integrated or basic dedicated GPU (optional)
+	- Display: 1920x1080 resolution
+
+These specifications are sufficient for running and developing the Python GUI, simulation, and database management systems. Higher-end hardware is only needed if running very large-scale simulations.
 
 
 ## 3.2 Software and Libraries
 
-
-The front end is built in Unity 2023, which handles all the graphics, user interface, and telemetry displays. The back end runs on Python 3.11, using NumPy, Pandas, and SciPy for calculations and data handling, and PyTorch for AI. All persistent data is stored in SQLite, which is lightweight and works across platforms. This setup is enough for multi-season and multi-league play, and can be upgraded to a bigger database if needed for very large simulations. SQLite also allows safe rollbacks during testing.
+The front end is built in Python, which handles all the graphics, user interface, and telemetry displays. The back end also runs on Python 3.11, using NumPy, Pandas, and SciPy for calculations and data handling. All persistent data is stored in SQLite, which is lightweight and works across platforms. This setup is enough for multi-season and multi-league play, and can be upgraded to a bigger database if needed for very large simulations. SQLite also allows safe rollbacks during testing.
 
 
 ## 3.3 Optional Resources
 
 
-Cloud-based virtual machines (like AWS, Azure, or GCP) can be used for large-scale testing of AI and multi-league simulations, helping to optimize performance. Git version control is used for safe, collaborative development. Automated testing is handled by tools like GitHub Actions or GitLab CI. Since all content is generated by the database management system, there is no need for licensed assets. Optional plugins can improve telemetry displays for advanced analysis.
+Cloud-based virtual machines (like AWS, Azure, or GCP) can be used for large-scale testing of multi-league simulations, helping to optimize performance. Git version control is used for safe, collaborative development. Automated testing is handled by tools like GitHub Actions or GitLab CI. Since all content is generated by the database management system, there is no need for licensed assets. Optional plugins can improve telemetry displays for advanced analysis.
 
 
 ## 3.4 Summary
@@ -102,13 +108,13 @@ Together, these resources provide all the computing power, software, and support
 ## 4.1 Project Overview
 
 
-Momentum will be developed in clear, manageable phases, using agile methods. Each phase builds on the last, with milestones to track progress. The plan ensures that the core systems are working before adding advanced AI or expanding the database management system. Regular feedback and testing help refine the algorithms and keep the simulation balanced and realistic.
+Momentum will be developed in clear, manageable phases, using agile methods. Each phase builds on the last, with milestones to track progress. The plan ensures that the core systems are working before expanding the database management system. Regular feedback and testing help refine the algorithms and keep the simulation balanced and realistic.
 
 
 ### 4.1.1 Requirements and Design
 
 
-The first phase is about defining what the project will do, how it will be structured, and how the AI and database management systems will work. The main goals are to have realistic driver progression, dynamic race results, and persistent multi-league play, with all teams, drivers, tracks, and championships created and managed by the database system. Non-functional goals include making sure the system is efficient, scalable, and easy to maintain. Design documents, diagrams, and flowcharts will be created so everyone understands the plan. This phase also sets performance targets and database designs, and defines how Unity and Python will communicate.
+The first phase is about defining what the project will do, how it will be structured, and how the database management system will work. The main goals are to have realistic driver progression, dynamic race results, and persistent multi-league play, with all teams, drivers, tracks, and championships created and managed by the database system. The database will be created before the game and packaged with it, so that every player has the same starting point. Non-functional goals include making sure the system is efficient, scalable, and easy to maintain. Design documents, diagrams, and flowcharts will be created to clarify and organize the project plan. This phase also sets performance targets and database designs, and defines how the Python components will communicate.
 
 
 ### 4.1.2 Core Simulation Engine Development
@@ -126,7 +132,7 @@ Once the simulation engine is working, the focus shifts to the database manageme
 ### 4.1.4 Front-End Integration
 
 
-The Unity front end is then connected to the Python back end to show race data, leaderboards, team dashboards, and driver stats. Updates are sent smoothly to keep the interface responsive. The user interface is tested for clarity and ease of use. Integration ensures that all changes from the simulation and database management systems are shown accurately in the game.
+The Python front end is connected to the backend to show race data, leaderboards, team dashboards, and driver stats. Updates are sent smoothly to keep the interface responsive. The user interface is tested for clarity and ease of use. Integration ensures that all changes from the simulation and database management systems are shown accurately in the game.
 
 
 ### 4.1.5 Iterative Testing and Refinement
@@ -138,6 +144,6 @@ Testing happens in cycles, with milestones for things like driver development, f
 ### 4.1.6 Final Evaluation and Documentation
 
 
-The final phase reviews how the system behaves, the user experience, stability, and overall performance. All code is documented, and detailed reports are created on simulation accuracy, AI performance, and database management. This phase makes sure that Momentum works as a complete, persistent, and scalable motorsport management simulator, meeting all the goals set out at the start.
+The final phase reviews how the system behaves, the user experience, stability, and overall performance. All code is documented, and detailed reports are created on simulation accuracy and database management. This phase makes sure that Momentum works as a complete, persistent, and scalable motorsport management simulator, meeting all the goals set out at the start.
 
 The project plan is designed to move smoothly from design to deployment, with clear milestones and dependencies. Regular feedback and testing ensure that Momentum delivers a realistic and engaging experience, while staying easy to maintain and expand in the future.
