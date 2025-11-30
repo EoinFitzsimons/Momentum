@@ -64,6 +64,8 @@ Data generation and import scripts are provided in `Momentum/Python/scripts/` fo
 - Indexes on frequently queried fields (driver_id, team_id)
 - Composite indexes on race lookups (championship_id, race_id)
 - Query optimisation for large result sets
+ - For a full field-level listing of all tables and columns see the detailed ERD and schema diagram: `Technical Report/diagrams/erd_class_diagram.md`.
+
 
 ### Entity Relationship Diagram
 
