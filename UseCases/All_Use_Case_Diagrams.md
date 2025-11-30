@@ -1,4 +1,4 @@
-````markdown
+
 # Use Case Diagrams
 
 This file contains the mermaid diagrams for each use case. Diagrams were moved from `All_Use_Cases_Detailed.md` to keep the primary document focused on textual use-case descriptions.

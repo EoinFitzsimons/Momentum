@@ -4,7 +4,7 @@
 
 ### 2.4.1 Testing Strategy
 
-The Momentum system employs a **multi-layered testing approach** combining unit tests, integration tests, and end-to-end validation. The testing strategy prioritizes:
+The Momentum system employs a **multi-layered testing approach** combining unit tests, integration tests, and end-to-end validation. The testing strategy prioritises:
 
 1. **Correctness**: Simulation logic produces mathematically sound results
 2. **Statistical Validity**: Race outcomes follow realistic distributions

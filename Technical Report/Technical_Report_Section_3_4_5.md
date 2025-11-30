@@ -57,7 +57,7 @@ The core simulation engine, utilizing **Monte Carlo statistical methods**, produ
 **Technical Limitations:**
 
 1. **AI System Incompleteness**
-   - AI decision-making framework exists but lacks behavioral diversity
+   - AI decision-making framework exists but lacks behavioural diversity
    - Limited personality expression in strategic decisions
    - No machine learning integration despite PyTorch dependency
    - **Impact:** Reduces single-player engagement and emergent storytelling
@@ -71,7 +71,7 @@ The core simulation engine, utilizing **Monte Carlo statistical methods**, produ
 3. **Database Limitations**
    - SQLite file-based storage not suitable for multi-user scenarios
    - No migration framework for schema updates
-   - Limited query optimization for complex joins
+   - Limited query optimisation for complex joins
    - **Impact:** Scaling to multiplayer requires database replacement
 
 4. **Frontend Absence**
@@ -165,12 +165,12 @@ This project contributes to computer science knowledge in several areas:
 **1. Monte Carlo Simulation for Interactive Systems**
 - Demonstrates practical application of statistical methods to game simulation
 - Shows how 100-iteration sampling balances accuracy and performance
-- Validates that normal distribution modeling creates engaging randomness
+- Validates that normal distribution modelling creates engaging randomness
 
 **2. Multi-Domain Attribute Systems**
 - Presents architecture for managing 50+ attributes across 7 domains
-- Shows how weighted attribute formulas create discipline-specific behavior
-- Provides framework for cross-domain compatibility modeling
+- Shows how weighted attribute formulas create discipline-specific behaviour
+- Provides framework for cross-domain compatibility modelling
 
 **3. Information Asymmetry in Game Design**
 - Implements "fog of war" concept in non-combat game context
@@ -187,7 +187,7 @@ This project contributes to computer science knowledge in several areas:
 **Technical Skills Acquired:**
 - Advanced Python development with FastAPI framework
 - Statistical simulation using NumPy and SciPy
-- Database design and optimization with SQLite
+- Database design and optimisation with SQLite
 - RESTful API design and implementation
 - Comprehensive testing strategies (unit, integration, E2E)
 - Git version control and collaborative development
@@ -441,7 +441,7 @@ Building a complex simulation system from scratch provided invaluable experience
 
 8. **SQLite Database Documentation**
    - Hipp, D.R. (2024). *SQLite Documentation*. https://www.sqlite.org/docs.html
-   - Application: Database implementation, query optimization
+   - Application: Database implementation, query optimisation
 
 9. **Python Type Hints (PEP 484)**
    - van Rossum, G., Lehtosalo, J., & Langa, Ł. (2014). *PEP 484 – Type Hints*. Python Enhancement Proposals.
@@ -459,7 +459,7 @@ Building a complex simulation system from scratch provided invaluable experience
 
 12. **Motorsport Statistical Analysis**
     - Bekker, J., & Lotz, W. (2009). "Planning Formula One race strategies using discrete event simulation". *Journal of the Operational Research Society*, 60(7), 952-961.
-    - Application: Race strategy modeling approaches
+    - Application: Race strategy modelling approaches
 
 ### Game Design References
 

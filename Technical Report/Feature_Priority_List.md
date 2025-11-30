@@ -233,7 +233,7 @@
 
 **Required CRUD Operations:**
 1. **UPDATE Drivers** - Change driver name/appearance (cosmetic)
-2. **UPDATE Teams** - Change team name/colors (cosmetic)
+2. **UPDATE Teams** - Change team name/colours (cosmetic)
 
 **Use Cases Needed:**
 - UC-28: Update Driver Appearance (cosmetic)
@@ -418,7 +418,7 @@ Based on NCI technical report template:
    - Add depth and strategic decision-making
    - **Excludes CREATE for drivers/staff** - can recycle existing database entities
 
-3. **🟢 LOW Priority = 9 use cases** (P11-P15: new entity creation, cleanup, customization, advanced features)
+3. **🟢 LOW Priority = 9 use cases** (P11-P15: new entity creation, cleanup, customisation, advanced features)
    - Nice-to-have polish and advanced features
    - Can be documented as "future enhancements"
    - Includes CREATE drivers/staff (not needed - recycle existing entities instead)
@@ -446,7 +446,7 @@ Based on NCI technical report template:
 
 ### Academic Justification:
 This priority structure demonstrates proper software engineering methodology:
-- ✅ Requirements prioritized by user value (MoSCoW method)
+- ✅ Requirements prioritised by user value (MoSCoW method)
 - ✅ Incremental development (HIGH → MEDIUM → LOW)
 - ✅ Honest documentation of implementation status
 - ✅ Clear distinction between MVP and enhancements

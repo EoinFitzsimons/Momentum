@@ -1,7 +1,7 @@
 # Momentum — Comprehensive File Analysis (Organized by Architecture)
 
 > **Last Updated:** October 23, 2025  
-> **Purpose:** Complete per-file analysis organized by architectural layer to understand the codebase structure and identify next steps.
+> **Purpose:** Complete per-file analysis organised by architectural layer to understand the codebase structure and identify next steps.
 
 ---
 

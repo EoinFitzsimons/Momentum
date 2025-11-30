@@ -8,6 +8,8 @@ Provide the simulation service with a complete driver profile and runtime status
 
 ### Description
 
+Return a driver's full profile and runtime status so the Simulation Service can initialise the driver in race simulations.
+
 ### Actors
 
 - `Simulation Service` - requests driver payloads for simulation initialisation.
@@ -17,6 +19,8 @@ Provide the simulation service with a complete driver profile and runtime status
 
 The system is in initialisation mode for a race; the driver record exists and the driver is eligible for selection.
 
+### Flow Description
+
 #### Activation
 
 This use case starts when the Simulation Service requests a driver's data for race setup.
@@ -25,8 +29,8 @@ This use case starts when the Simulation Service requests a driver's data for ra
 
 The system identifies the requested `driverId` and validates its format.
 
-1. The Simulation Service requests the driver's profile from the backend (see A1).
-2. The system retrieves the driver record and runtime state from the database (see E1).
+1. The Simulation Service requests the driver's profile from the backend.
+2. The system retrieves the driver record and runtime state from the database.
 3. The system returns the payload and initialises the driver object for the race.
 
 #### Alternate flow
@@ -40,7 +44,7 @@ E1: Database read failure - return `503 Service Unavailable` and include diagnos
 
 #### Termination
 
-Caller receives payload; simulation proceeds to instantiate driver.
+Client receives driver payload and proceeds with race initialisation.
 
 ## UC-2: Read Race Configuration
 
@@ -48,16 +52,18 @@ Caller receives payload; simulation proceeds to instantiate driver.
 
 The backend returns the configuration used for a given event so the Simulation Service and UI prepare appropriate settings.
 
+### Description
+
+Return the full event configuration payload so the Simulation Service and clients can prepare simulations and UI displays.
+
+### Actors
+
 - `Simulation Service` - consumes configuration for simulations.
 - `Client UI` - displays configuration to users.
 
 ### Use Case Diagram
 
-### Flow Description
-
 #### Precondition
-
-Race configuration exists for the requested event.
 
 #### Activation
 
@@ -82,16 +88,18 @@ Caller proceeds to initialisation.
 
 ## UC-3: Create Race Result
 
+### Scope
+
 Persist race outcomes (positions, times, incidents) and trigger standings updates.
 
 ### Description
+
+Accept a race result payload from the Simulation Service or operator, validate it, persist the results atomically, and enqueue standings recalculation.
 
 ### Actors
 
 - `Simulation Service` - submits generated race results.
 - `Standings Service` - recalculates standings from persisted results.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -116,8 +124,7 @@ A2: Event already finalised - return `409 Conflict` and provide adjustment optio
 
 #### Exceptional flow
 
-E1: Database write failure - rollback and return `500`.
-E2: Partial persistence detected - return `500` with reference id and queue reconciliation.
+E1: Database write failure - return `500` and include diagnostic id.
 
 #### Termination
 
@@ -132,8 +139,6 @@ Return stored race results for display and historical access.
 ### Description
 
 Provide classification, lap and penalty data for completed events.
-
-### Actors
 
 - `Client UI` - requests and displays results.
 - `Reporting Service` - consumes results for summaries.
@@ -177,8 +182,6 @@ Client displays results.
 Return championship metadata, calendar and standings snapshot.
 
 ### Description
-
-Aggregate championship name, discipline, calendar and current standings for UIs and services.
 
 ### Actors
 
@@ -224,8 +227,6 @@ Client displays championship view.
 Recalculate and persist championship standings after results are recorded.
 
 ### Description
-
-Gather results and apply the championship points rules to compute and persist standings.
 
 ### Actors
 
@@ -311,7 +312,7 @@ E2: External sync failure - create event in draft and return `202 Accepted` with
 
 Calendar updated; notifications may be sent.
 
-### UC-8: Read Race Schedule
+## UC-8: Read Race Schedule
 
 ### Scope
 
@@ -362,7 +363,7 @@ Client displays schedule.
 
 System awaits next request.
 
-### UC-9: Update Race Status
+## UC-9: Update Race Status
 
 ### Scope
 
@@ -414,63 +415,58 @@ Event status updated and notifications sent.
 
 System awaits next lifecycle event.
 
-### UC-10: Create Championship
+## UC-10: Create Championship
+
 ### Scope
-Add a driver to the hireable pool by either recycling an existing placeholder or generating a new driver with seeded attributes.
+
+Create a new championship/season automatically on season rollover, with base rules and an empty calendar.
 
 ### Description
-Maintain and expand the available driver pool to support roster growth, replacement of retired drivers, and content variety. Generation prefers recycling existing, deactivated driver records when appropriate; otherwise the Generator Service produces a new driver profile validated against uniqueness and policy constraints.
+
+On season rollover the Game Loop computes the next season parameters, instantiates a championship record with a ruleset and calendar placeholder, persists it, and notifies downstream systems (scheduling, AI, UI) that a new season is available.
 
 ### Actors
 
-- `Admin` - requests manual creation.
-- `System` - scheduled or policy-driven generator.
-- `Generator Service` - produces attribute payloads for new drivers.
+- `Game Loop / Scheduler` - triggers automatic season rollover and championship creation.
+- `Policy Service` - validates or supplies rulesets.
+- `Event Scheduler` - consumes the new championship to populate events.
 
 ### Use Case Diagram
 
 ### Flow Description
 
 #### Precondition
-Driver pool is below configured threshold or an explicit admin request to create a driver is received; seeding/config data is available.
+
+End-of-season tick reached; ruleset templates and calendar seeding configuration are available.
 
 #### Activation
-Triggered by `POST /api/drivers/generate` by an admin or by an automated roster expansion job.
+
+Triggered automatically by the `Game Loop` on season rollover (no manual admin intervention required).
 
 #### Main flow
 
-1. Validate request and policy constraints (pool thresholds, allowed classes).
-2. Attempt to select a recycle candidate from the deactivated pool; if none available, call `Generator Service` to create attributes.
-3. Validate generated attributes (unique name, valid age, discipline suitability).
-4. Persist the driver record inside a transaction and mark availability.
-5. Return `201 Created` with the driver resource.
+1. Game Loop determines season rollover has occurred and computes seed parameters (year, discipline, ruleset template).
+2. System requests/validates the ruleset from `Policy Service`.
+3. System creates the championship record with initial metadata and an empty calendar.
+4. System persists the championship atomically and emits events to `Event Scheduler`, `AI` and `UI`.
 
 #### Alternate flow
-A1: Recycle candidate unavailable - generate new attributes and continue.
-A2: Minor validation warnings - persist with `warnings` field and return `201 Created`.
-A3: Name or identity conflict - mutate the attribute (rename) and retry up to configured attempts; on exhaustion return `409 Conflict` with guidance.
+
+A1: Ruleset validation fails - select fallback template and continue, or mark championship as `requiresReview` and emit admin notification.
 
 #### Exceptional flow
-E1: Database write failure - rollback and return `500` with diagnostic id for support.
-E2: Generator Service unavailable - return `503 Service Unavailable` and schedule a retry job.
-E3: Policy or configuration violation - return `422 Unprocessable Entity` with policy details.
+
+E1: Database write failure - rollback and schedule a retry; emit diagnostic id to monitoring and place a recovery job in the maintenance queue.
 
 #### Termination
-Driver record created and visible in the hireable pool.
 
-#### Post condition
-Driver returned in subsequent listing endpoints and system awaits next generation task.
-
----
-#### Termination
-
-Championship available for events.
+Championship record created and downstream systems notified.
 
 #### Post condition
 
-System awaits further management operations.
+Event Scheduler and AI begin populating events and participants for the new season.
 
-### UC-11: Read Team Details
+## UC-11: Read Team Details
 
 ### Scope
 
@@ -521,7 +517,7 @@ Client displays team screen.
 
 System awaits next request.
 
-### UC-12: Create New Team
+## UC-12: Create New Team
 
 ### Scope
 
@@ -572,7 +568,7 @@ Team visible in lists.
 
 System awaits next management action.
 
-### UC-13: Read Team Details (player team)
+## UC-13: Read Team Details (player team)
 
 ### Scope
 
@@ -621,7 +617,7 @@ Player views editable team screen.
 
 System awaits further edits.
 
-### UC-14: Update Team Attributes
+## UC-14: Update Team Attributes
 
 ### Scope
 
@@ -672,7 +668,7 @@ Changes reflected on subsequent reads.
 
 System awaits next request.
 
-### UC-15: Read Available Drivers
+## UC-15: Read Available Drivers
 
 ### Scope
 
@@ -722,7 +718,7 @@ Client displays candidate drivers.
 
 System awaits next query.
 
-### UC-16: Update Driver Contract
+## UC-16: Update Driver Contract
 
 ### Scope
 
@@ -773,7 +769,7 @@ Driver assigned and availability updated.
 
 System awaits next contract action.
 
-### UC-17: Read Available Staff
+## UC-17: Read Available Staff
 
 ### Scope
 
@@ -823,7 +819,7 @@ Client displays staff candidates.
 
 System awaits next request.
 
-### UC-18: Update Staff Contract
+## UC-18: Update Staff Contract
 
 ### Scope
 
@@ -874,7 +870,7 @@ Staff assigned and salary deducted from budget.
 
 System awaits further HR actions.
 
-### UC-19: Update Driver Skills/Age
+## UC-19: Update Driver Skills/Age
 
 ### Scope
 
@@ -925,7 +921,7 @@ Driver records updated for next season.
 
 System awaits next scheduled update.
 
-### UC-20: Update Team Budget
+## UC-20: Update Team Budget
 
 ### Scope
 
@@ -962,7 +958,6 @@ Starts when a transaction affecting budget occurs.
 
 A1: Insufficient funds for debit - reject the transaction with `402 Payment Required` (or `422`) and suggest corrective actions (sponsor, loan, adjust expenses).
 A2: Pending transactions that affect available balance - return `409 Conflict` with pending transaction list.
-
 
 ## UC-21: Create New Driver
 
@@ -1020,9 +1015,7 @@ Driver record created and visible in the hireable pool.
 
 Driver returned in subsequent listing endpoints and system awaits next generation task.
 
----
-
-### UC-22: Create New Staff Member (staff generation)
+## UC-22: Create New Staff Member (staff generation)
 
 ### Scope
 
@@ -1071,7 +1064,7 @@ Staff visible in hiring pool.
 
 System awaits next generation.
 
-### UC-23: Delete Championship
+## UC-23: Delete Championship
 
 ### Scope
 
@@ -1121,7 +1114,7 @@ Championship removed or archived.
 
 System awaits next admin action.
 
-### UC-24: Create Custom Track
+## UC-24: Create Custom Track
 
 ### Scope
 
@@ -1171,7 +1164,7 @@ Track available for event creation.
 
 System awaits next track management action.
 
-### UC-25: Update Track Characteristics
+## UC-25: Update Track Characteristics
 
 ### Scope
 
@@ -1220,7 +1213,7 @@ Track updated for future events.
 
 System awaits next management action.
 
-### UC-26: Delete Track
+## UC-26: Delete Track
 
 ### Scope
 
@@ -1268,7 +1261,7 @@ Track removed or archived.
 
 System awaits further track management.
 
-### UC-27: Read Staff Performance Modifiers
+## UC-27: Read Staff Performance Modifiers
 
 ### Scope
 
@@ -1317,7 +1310,7 @@ Simulation applies modifiers.
 
 System awaits next modifier request.
 
-### UC-28: Update Driver Appearance
+## UC-28: Update Driver Appearance
 
 ### Scope
 
@@ -1368,7 +1361,7 @@ Appearance updated for reads.
 
 System awaits further edits.
 
-### UC-29: Update Team Branding
+## UC-29: Update Team Branding
 
 ### Scope
 

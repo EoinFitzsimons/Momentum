@@ -15,7 +15,7 @@ This section contains supplementary information supporting the main body of the 
 
 ### Project Objectives
 
-The primary objective of this project is to design and implement a comprehensive multi-discipline motorsport management simulation system that combines realistic statistical modeling with modern software architecture principles.
+The primary objective of this project is to design and implement a comprehensive multi-discipline motorsport management simulation system that combines realistic statistical modelling with modern software architecture principles.
 
 **Core Objectives:**
 
@@ -73,7 +73,7 @@ The primary objective of this project is to design and implement a comprehensive
 4. **Sprint 8-9:** Staff management and currency systems
 5. **Sprint 10-11:** Remaining disciplines (Drag, Rallycross, Endurance)
 6. **Sprint 12-13:** API development and documentation
-7. **Sprint 14-15:** Testing, optimization, and evaluation
+7. **Sprint 14-15:** Testing, optimisation, and evaluation
 
 **Testing Strategy:**
 
@@ -120,7 +120,7 @@ The primary objective of this project is to design and implement a comprehensive
 - **Weeks 3-5:** Core simulation engine and first discipline
 - **Weeks 6-9:** Additional disciplines and staff systems
 - **Weeks 10-11:** API development and currency system
-- **Weeks 12-13:** Testing and performance optimization
+- **Weeks 12-13:** Testing and performance optimisation
 - **Weeks 14-15:** Documentation and final report writing
 
 ### References
@@ -197,7 +197,7 @@ Type hints in Python are incredibly helpful. IDEs catch errors before runtime, a
 - Completed Single Seater engine with Monte Carlo simulation
 - Implemented performance score calculation with weighted attributes
 - Created first integration tests
-- Ran 1000 test simulations and analyzed statistical distribution
+- Ran 1000 test simulations and analysed statistical distribution
 
 **Reflections:**
 Major breakthrough! The Monte Carlo simulation works beautifully. After experimenting with different iteration counts (50, 100, 200, 500), I found 100 iterations provides the best balance:
@@ -216,7 +216,7 @@ The correlation coefficient of 0.89 between driver skill and race wins exceeded 
 - Result: Reduced to 0.23 seconds (13x faster!)
 
 **Key Learning:**
-Premature optimization is real, but so is premature pessimization. I should have profiled earlier.
+Premature optimisation is real, but so is premature pessimization. I should have profiled earlier.
 
 **Next Steps:**
 
@@ -320,7 +320,7 @@ The currency system was surprisingly complex. Exchange rate caching, locale-spec
 - This creates realistic strategy decisions about pit stop timing
 
 **Setback:**
-Realized I won't have time for advanced AI behaviors. The framework is there but personality-driven decisions are minimal. Marked as future work.
+Realized I won't have time for advanced AI behaviours. The framework is there but personality-driven decisions are minimal. Marked as future work.
 
 **Lessons Learned:**
 Scope management is HARD. I should have focused on 3-4 disciplines perfectly rather than 7 disciplines adequately. However, having all 7 does demonstrate the architecture's flexibility.
@@ -329,7 +329,7 @@ Scope management is HARD. I should have focused on 3-4 disciplines perfectly rat
 
 - Build FastAPI endpoints
 - Create comprehensive API documentation
-- Performance optimization
+- Performance optimisation
 
 ### Journal Entry 7 - January 6, 2025
 
@@ -397,12 +397,12 @@ System Usability Scale (SUS) score: 72.5/100 - above industry average but room f
 1. Layered architecture made testing straightforward
 2. Type hints caught numerous bugs before runtime
 3. Test-driven development prevented regressions
-4. Early performance profiling avoided late-stage optimization panic
+4. Early performance profiling avoided late-stage optimisation panic
 
 **What Could Be Improved:**
 
 1. Should have completed 3 disciplines perfectly before expanding to 7
-2. AI system feels incomplete (framework exists but limited behaviors)
+2. AI system feels incomplete (framework exists but limited behaviours)
 3. No visual interface limits accessibility to developers only
 4. Championship mode basic - lacks season progression
 
