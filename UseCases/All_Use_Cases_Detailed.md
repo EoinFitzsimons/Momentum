@@ -1,338 +1,343 @@
 # Use Cases
 
-## HIGH PRIORITY - Must Have for Basic Playability
+## UC-1: Read Driver Details
 
-### UC-1: Read Driver Details
+### Scope
 
-#### Scope
 Provide the simulation service with a complete driver profile and runtime status required to instantiate the driver in a race simulation.
 
-Description
+### Description
+
 How the game backend returns a driver's attributes, contract/team association and runtime state (injury/fatigue/availability) so the Simulation Service can include the driver in race initialisation and performance calculations.
 
-Actors
+### Actors
+
 - `Simulation Service` — requests driver payloads for simulation initialisation.
 - `Drivers DB` — stores driver records and runtime state.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-1` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 The system is in initialisation mode for a race; the driver record exists and the driver is eligible for selection.
 
-Activation
+#### Activation
 This use case starts when the Simulation Service requests a driver's data for race setup.
 
-Main flow
+#### Main flow
 The system identifies the requested `driverId` and validates its format.
 
 1. The Simulation Service requests the driver's profile from the backend (see A1).
 2. The system retrieves the driver record and runtime state from the database (see E1).
 3. The Simulation Service receives the payload and initialises the driver object for the race.
 
-Alternate flow
+#### Alternate flow
 A1: Driver retrieval request (internal API)
 
 1. The Simulation Service calls the internal `GET /internal/drivers/{driverId}` endpoint.
 2. The use case continues at step 2 of the main flow.
 
-Exceptional flow
+#### Exceptional flow
 E1: Data store failure or missing related data
 
 1. The system logs the error and returns an error code to the Simulation Service.
 2. The Simulation Service attempts to use a reserve driver or aborts the roster slot.
 3. If a substitute was selected, the use case continues at step 3 of the main flow.
 
-Termination
+#### Termination
 The system presents the initialised driver object to the Simulation Service and the race proceeds to the next initialisation step.
 
-Post condition
+#### Post condition
 The system goes into a wait state until the next simulation initialisation request.
 
 ---
 
-UC-2: Read Race Configuration
+## UC-2: Read Race Configuration
 
-Scope
+### Scope
+
 Provide race configuration (track, weather, lap count, ruleset) to simulation and clients.
 
-Description
+### Description
+
 Retrieve configuration used for a given event so the Simulation Service and UI can prepare appropriate settings.
 
-Actors
+### Actors
+
 - `Simulation Service` — uses configuration to run simulations.
 - `Client UI` — displays configuration to end users.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-2` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Race configuration exists for the requested event.
 
-Activation
+#### Activation
 Starts when a client or simulation requests event configuration.
 
-Main flow
+#### Main flow
 
 1. System validates `eventId`.
 2. System fetches track, laps, weather and ruleset.
 3. System returns configuration to caller.
 
-Alternate flow
+#### Alternate flow
 A1: Invalid `eventId` - return `400` with validation errors; caller may correct and retry.
 A2: Partial configuration - return available fields with a `partial: true` flag and a warning message; caller may proceed with defaults.
 
-Exceptional flow
+#### Exceptional flow
 E1: Database read error or connection timeout - log the incident, return `503 Service Unavailable` with a retry-after header; caller may retry after delay.
 E2: Permission denied for requested resource - return `403 Forbidden`.
 
-Termination
+#### Termination
 Caller proceeds to initialisation.
 
-Post condition
+#### Post condition
 System awaits next request.
 
 ---
 
-UC-3: Create Race Result
+## UC-3: Create Race Result
 
-Scope
+### Scope
+
 Persist race outcome (positions, times, incidents) and trigger standing updates.
 
-Description
+### Description
+
 Store results posted by the Simulation Service or manual entry and mark event complete.
 
-Actors
+### Actors
+
 - `Simulation Service` — posts generated race results.
 - `Operator/Admin` — may submit manual results.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-3` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Race event exists and is writable.
 
-Activation
+#### Activation
 Starts when simulation finishes or an operator submits results.
 
-Main flow
+#### Main flow
 
 1. System validates payload and event state.
 2. System stores race_results records.
 3. System marks event completed and acknowledges caller.
 
-Alternate flow
+#### Alternate flow
 A1: Validation failure - return `400 Bad Request` with field-level errors; caller corrects the payload and resubmits.
 A2: Event already finalised - return `409 Conflict` and include current event state; caller may submit an adjustment endpoint instead.
 
-Exceptional flow
+#### Exceptional flow
 E1: Database write error (transaction failure) - rollback, return `500 Internal Server Error` and log the error for investigation.
 E2: Partial persistence detected - return `500` with reference id for support; trigger compensating actions or manual reconciliation.
 
-Termination
+#### Termination
 Event status updated; standings update may be queued.
 
-Post condition
+#### Post condition
 System awaits next operation.
 
 ---
 
-MEDIUM PRIORITY - Essential for Career Mode
+## MEDIUM PRIORITY - Essential for Career Mode
 
-UC-4: Read Race Results
+## UC-4: Read Race Results
 
-Scope
+### Scope
+
 Return stored race results for display and historical access.
 
-Description
+### Description
+
 Provide full classification and related lap/penalty data for a completed event.
 
-Actors
+### Actors
+
 - `Client UI` — requests and displays event results.
 - `Reporting Service` — may consume results for summaries.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-4` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Results exist for the requested event.
 
-Activation
+#### Activation
 Starts when client requests results by event ID.
 
-Main flow
+#### Main flow
 
 1. Validate `eventId`.
 2. Retrieve classification and related data.
 3. Return results to caller.
 
-Alternate flow
+#### Alternate flow
 A1: No results found for `eventId` - return `404 Not Found` with suggestion to check event state; caller may request re-run of result generation.
 A2: Results are marked as provisional - return provisional flag and timestamp; caller may wait for official confirmation.
 
-Exceptional flow
+#### Exceptional flow
 E1: Database read failure - return `503 Service Unavailable` and log diagnostics; if available return cached/latest snapshot with a `stale: true` flag.
 E2: Deserialization error of stored result payload - return `500` and include error reference for debugging.
 
-Termination
+#### Termination
 Client displays results.
 
-Post condition
+#### Post condition
 System awaits next query.
 
 ---
 
-UC-5: Read Championship Details
+## UC-5: Read Championship Details
 
-Scope
+### Scope
+
 Return championship metadata, calendar and standings snapshot.
 
-Description
+### Description
+
 Aggregate championship name, discipline, calendar and current standings for UI or services.
 
-Actors
+### Actors
+
 - `Client UI` — displays championship metadata and standings.
 - `Analytics` — may consume standings for reports.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-5` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Championship exists.
 
-Activation
+#### Activation
 Starts when client requests championship details.
 
-Main flow
+#### Main flow
 
 1. Validate `championshipId`.
 2. Aggregate metadata, calendar and standings.
 3. Return combined payload.
 
-Alternate flow
+#### Alternate flow
 A1: Championship archived - return full metadata with `readOnly: true` and a note about archival date.
 A2: Partial standings available - return available data with `partial: true` and a link to the job that is computing the rest.
 
-Exceptional flow
+#### Exceptional flow
 E1: DB query timeout or failure - return `503` and include a diagnostic id; recommend retrying after a short delay.
 E2: Permission denied for sensitive championship data - return `403`.
 
-Termination
+#### Termination
 Client displays championship view.
 
-Post condition
+#### Post condition
 System awaits next request.
 
 ---
 
-UC-6: Update Championship Standings
+## UC-6: Update Championship Standings
 
-Scope
+### Scope
+
 Recalculate and persist championship standings after results are recorded.
 
-Description
+### Description
+
 Service recalculates points and orders teams/drivers per series rules and persists the standings.
 
-Actors
+### Actors
+
 - `Standings Service` — triggers recalculation and consumes updated standings.
 - `Admin` — may invoke recalculation manually.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-6` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Championship and results exist.
 
-Activation
+#### Activation
 Starts when results are created or adjusted.
 
-Main flow
+#### Main flow
 
 1. Gather results for championship.
 2. Apply points system and compute standings.
 3. Persist updated standings.
 
-Alternate flow
+#### Alternate flow
 A1: Partial update requested - recompute only affected rounds and return `202 Accepted` with job id for asynchronous completion.
 A2: Conflicting concurrent updates detected - use optimistic locking; return `409 Conflict` with current version and instructions to retry.
 
-Exceptional flow
+#### Exceptional flow
 E1: Points rules missing or malformed - return `500` with clear diagnostic message and fail the update; log for admin attention.
 E2: Persistence error during standings write - roll back the update, return `500`, and queue a retry job.
 
-Termination
+#### Termination
 Standings persisted; notifications may be emitted.
 
-Post condition
+#### Post condition
 System awaits next trigger.
 
 ---
 
-UC-7: Create Race Event
+## UC-7: Create Race Event
 
-Scope
+### Scope
+
 Add a race event to a championship calendar (track, date, configuration).
 
-Description
+### Description
+
 Admin or scheduler adds a race to a championship season.
 
-Actors
+### Actors
+
 - `Admin` — creates and manages race events.
 - `Scheduler` — may schedule events programmatically.
 
-Use Case Diagram
+### Use Case Diagram
 
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-7` diagram.
+### Flow Description
 
-Flow Description
-
-Precondition
+#### Precondition
 Championship exists and is editable.
 
-Activation
+#### Activation
 Starts when an admin posts new event details.
 
-Main flow
+#### Main flow
 
 1. Validate dates and track availability.
 2. Insert event record into `races`.
 3. Return created resource.
 
-Alternate flow
+#### Alternate flow
 A1: Date or track conflict detected - return `409 Conflict` with a list of conflicting events and suggested alternative dates/tracks.
 A2: Validation warning (e.g., close scheduling) - return `200` with `warnings` array; admin may confirm to override.
 
-Exceptional flow
+#### Exceptional flow
 E1: Database write failure - return `500` and persist the request to a retry queue; notify the admin.
 E2: External service (calendar/sync) failure - create the event in draft state and return `202 Accepted` with sync pending.
 
-Termination
+#### Termination
 Calendar updated; notifications may be sent.
 
-Post condition
+#### Post condition
 System awaits next action.
 
 ---
 
-UC-8: Read Race Schedule
+### UC-8: Read Race Schedule
 
 Scope
 Retrieve championship calendar/schedule for UI display.
@@ -341,12 +346,11 @@ Description
 Return ordered list of events with dates, tracks and statuses.
 
 Actors
+
 - `User / UI` — requests the schedule for display.
 - `Calendar Service` — may synchronise events externally.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-8` diagram.
 
 Flow Description
 
@@ -378,7 +382,7 @@ System awaits next request.
 
 ---
 
-UC-9: Update Race Status
+### UC-9: Update Race Status
 
 Scope
 Change a race event status (scheduled → in-progress → completed → cancelled).
@@ -387,13 +391,12 @@ Description
 Update event lifecycle state and notify dependent systems.
 
 Actors
+
 - `Simulation/Service` — updates status during simulation.
 - `Admin` — may manually change status.
 - `Notification Service` — receives lifecycle events.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-9` diagram.
 
 Flow Description
 
@@ -425,7 +428,7 @@ System awaits next lifecycle event.
 
 ---
 
-UC-10: Create Championship
+### UC-10: Create Championship
 
 Scope
 Create a new championship/season with base rules and empty calendar.
@@ -434,12 +437,11 @@ Description
 Admin creates a championship record which can then accept events and teams.
 
 Actors
+
 - `Admin` — creates and configures championships.
 - `Policy Service` — validates rulesets.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-10` diagram.
 
 Flow Description
 
@@ -471,7 +473,7 @@ System awaits further management operations.
 
 ---
 
-UC-11: Read Team Details
+### UC-11: Read Team Details
 
 Scope
 Return full team profile for team screen (budget, staff, vehicles, drivers).
@@ -480,12 +482,11 @@ Description
 Provide aggregated team information for display or simulation.
 
 Actors
+
 - `Player / UI` — views team details.
 - `Simulation Service` — may request team data for simulation.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-11` diagram.
 
 Flow Description
 
@@ -517,7 +518,7 @@ System awaits next request.
 
 ---
 
-UC-12: Create New Team
+### UC-12: Create New Team
 
 Scope
 Create a new team record (initial roster, budget, HQ).
@@ -526,12 +527,11 @@ Description
 Player or admin creates a team; system allocates starting assets or placeholders.
 
 Actors
+
 - `Player/Admin` — initiates team creation.
 - `Provisioning Service` — reserves starting resources.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-12` diagram.
 
 Flow Description
 
@@ -563,7 +563,7 @@ System awaits next management action.
 
 ---
 
-UC-13: Read Team Details (player team)
+### UC-13: Read Team Details (player team)
 
 Scope
 Return player's own team with editable flags and affordances.
@@ -572,12 +572,11 @@ Description
 Provide editable team data for the player's management screen.
 
 Actors
+
 - `Player` — owner of the team and primary editor.
 - `Auth Service` — validates ownership and permissions.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-13` diagram.
 
 Flow Description
 
@@ -607,7 +606,7 @@ System awaits further edits.
 
 ---
 
-UC-14: Update Team Attributes
+### UC-14: Update Team Attributes
 
 Scope
 Modify team attributes (budget allocation, HQ upgrades, staff assignments).
@@ -616,12 +615,11 @@ Description
 Player or admin updates team settings which are validated and persisted.
 
 Actors
+
 - `Player/Admin` — submits updates.
 - `Finance Service` — validates budget changes.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-14` diagram.
 
 Flow Description
 
@@ -653,7 +651,7 @@ System awaits next request.
 
 ---
 
-UC-15: Read Available Drivers
+### UC-15: Read Available Drivers
 
 Scope
 Return list of uncontracted or transfer-available drivers for recruitment.
@@ -662,12 +660,11 @@ Description
 Provide filtered and paginated driver pool for the market UI.
 
 Actors
+
 - `Player` — browses and filters available drivers.
 - `Team AI` — automated consumer of driver listings.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-15` diagram.
 
 Flow Description
 
@@ -698,7 +695,7 @@ System awaits next query.
 
 ---
 
-UC-16: Update Driver Contract
+### UC-16: Update Driver Contract
 
 Scope
 Sign, renew or terminate driver contracts and update team roster and budget.
@@ -707,12 +704,11 @@ Description
 Persist contract terms and adjust availability and team budgets.
 
 Actors
+
 - `Team Manager` — negotiates and confirms driver contracts.
 - `Admin` — may enforce or modify contract rules.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-16` diagram.
 
 Flow Description
 
@@ -744,7 +740,7 @@ System awaits next contract action.
 
 ---
 
-UC-17: Read Available Staff
+### UC-17: Read Available Staff
 
 Scope
 Return list of available staff for hiring with roles and modifiers.
@@ -753,12 +749,11 @@ Description
 Provide paginated staff pool for recruitment screens.
 
 Actors
+
 - `Player` — requests staff listings.
 - `HR Service` — may provide staff filters and pools.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-17` diagram.
 
 Flow Description
 
@@ -789,7 +784,7 @@ System awaits next request.
 
 ---
 
-UC-18: Update Staff Contract
+### UC-18: Update Staff Contract
 
 Scope
 Hire, fire or renegotiate staff contracts and persist changes to team resources.
@@ -798,12 +793,11 @@ Description
 Assign staff to teams, record salary and update budgets.
 
 Actors
+
 - `Player` — initiates hiring/renegotiation.
 - `Team Manager` — manages staff assignments.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-18` diagram.
 
 Flow Description
 
@@ -835,7 +829,7 @@ System awaits further HR actions.
 
 ---
 
-UC-19: Update Driver Skills/Age
+### UC-19: Update Driver Skills/Age
 
 Scope
 Periodic update of driver attributes (ageing, progression/regression) and handle retirements/recycling.
@@ -844,12 +838,11 @@ Description
 Perform end-of-season or scheduled updates to driver skills and ages; mark retirees and optionally regenerate/recycle entities.
 
 Actors
+
 - `Scheduler` (Game Loop) — triggers seasonal maintenance jobs.
 - `Admin` — may invoke manual progression runs.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-19` diagram.
 
 Flow Description
 
@@ -881,7 +874,7 @@ System awaits next scheduled update.
 
 ---
 
-UC-20: Update Team Budget
+### UC-20: Update Team Budget
 
 Scope
 Adjust team budget for income/expenses, sponsor payouts and race fees.
@@ -890,12 +883,11 @@ Description
 Apply transactions affecting a team's budget and persist them.
 
 Actors
+
 - `Finance System` — posts transactions affecting team budgets.
 - `Game Loop` — triggers periodic income/expense events.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-20` diagram.
 
 Flow Description
 
@@ -929,7 +921,7 @@ System awaits next financial event.
 
 LOW PRIORITY - Polish & Advanced Features
 
-UC-21: Create New Driver (rookie generation)
+### UC-21: Create New Driver (rookie generation)
 
 Scope
 Generate new rookie drivers when pool needs expansion (optional enhancement).
@@ -938,11 +930,10 @@ Description
 Create or recycle driver records for rookie generation.
 
 Actors
+
 - `Admin/System` — triggers generation jobs or scheduled tasks.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-21` diagram.
 
 Flow Description
 
@@ -973,7 +964,7 @@ System awaits next generation request.
 
 ---
 
-UC-22: Create New Staff Member (staff generation)
+### UC-22: Create New Staff Member (staff generation)
 
 Scope
 Generate new staff when required (optional).
@@ -982,11 +973,10 @@ Description
 Create or recycle staff records for hireable pool expansion.
 
 Actors
+
 - `Admin/System` — triggers staff generation or pool maintenance.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-22` diagram.
 
 Flow Description
 
@@ -1017,7 +1007,7 @@ System awaits next generation.
 
 ---
 
-UC-23: Delete Championship
+### UC-23: Delete Championship
 
 Scope
 Remove or archive a championship (admin only).
@@ -1026,11 +1016,10 @@ Description
 Delete or archive championship and related resources according to retention policy.
 
 Actors
+
 - `Admin` — authorised to delete or archive championships.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-23` diagram.
 
 Flow Description
 
@@ -1062,7 +1051,7 @@ System awaits next admin action.
 
 ---
 
-UC-24: Create Custom Track
+### UC-24: Create Custom Track
 
 Scope
 Add a custom track with characteristics for use in events.
@@ -1071,11 +1060,10 @@ Description
 Designer or admin submits track metadata and layout which becomes available for events.
 
 Actors
+
 - `Designer/Admin` — submits track definitions and layout files.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-24` diagram.
 
 Flow Description
 
@@ -1107,7 +1095,7 @@ System awaits next track management action.
 
 ---
 
-UC-25: Update Track Characteristics
+### UC-25: Update Track Characteristics
 
 Scope
 Modify track parameters (surface, length, grip) for balancing.
@@ -1116,11 +1104,10 @@ Description
 Admin updates track metadata and future events use revised parameters.
 
 Actors
+
 - `Admin` — submits track updates.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-25` diagram.
 
 Flow Description
 
@@ -1151,7 +1138,7 @@ System awaits next management action.
 
 ---
 
-UC-26: Delete Track
+### UC-26: Delete Track
 
 Scope
 Remove custom or unused tracks with checks for scheduled use.
@@ -1160,11 +1147,10 @@ Description
 Admin removes track or archives it if scheduled in future.
 
 Actors
+
 - `Admin` — initiates deletion or archiving of tracks.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-26` diagram.
 
 Flow Description
 
@@ -1194,7 +1180,7 @@ System awaits further track management.
 
 ---
 
-UC-27: Read Staff Performance Modifiers
+### UC-27: Read Staff Performance Modifiers
 
 Scope
 Return computed staff modifiers used by the simulation for team performance.
@@ -1203,11 +1189,10 @@ Description
 Provide staff-based modifiers (mechanic efficiency, strategist value) to the Simulation Service.
 
 Actors
+
 - `Simulation Service` — requests computed modifiers for a team.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-27` diagram.
 
 Flow Description
 
@@ -1238,7 +1223,7 @@ System awaits next modifier request.
 
 ---
 
-UC-28: Update Driver Appearance
+### UC-28: Update Driver Appearance
 
 Scope
 Change cosmetic appearance for a driver (helmet, livery) - non-gameplay affecting.
@@ -1247,12 +1232,11 @@ Description
 Player edits and saves driver appearance assets which are stored and served to UI.
 
 Actors
+
 - `Player` — creates or edits appearance assets.
 - `Storage Service` — stores and serves asset files.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-28` diagram.
 
 Flow Description
 
@@ -1284,7 +1268,7 @@ System awaits further edits.
 
 ---
 
-UC-29: Update Team Branding
+### UC-29: Update Team Branding
 
 Scope
 Update team visual branding assets and metadata (logos, colours).
@@ -1293,12 +1277,11 @@ Description
 Player or admin uploads branding assets and updates team metadata for display in UI.
 
 Actors
+
 - `Player/Admin` — uploads branding assets.
 - `Storage/DB` — stores branding files and metadata.
 
 Use Case Diagram
-
-See `UseCases/All_Use_Case_Diagrams.md` — `UC-29` diagram.
 
 Flow Description
 
