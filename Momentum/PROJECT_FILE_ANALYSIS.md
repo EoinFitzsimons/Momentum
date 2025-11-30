@@ -60,7 +60,7 @@ Purpose: Testing for name generation logic and uniqueness.
 Responsibilities: Verifies `intelligent_name_generator` outputs valid and unique names given constraints.
 Interactions: Depends on `systems/intelligent_name_generator.py` and possibly SQLite tracking DB.
 Issues: Ensure the tests use an ephemeral DB or mocks to avoid altering the real `used_names.db`.
-Suggestions: Convert to proper pytest tests, use fixtures to create temporary DBs, and assert deterministic behavior using a seed.
+Suggestions: Convert to proper pytest tests, use fixtures to create temporary DBs, and assert deterministic behaviour using a seed.
 
 ### Momentum/Python/simulation.py
 
@@ -163,12 +163,12 @@ Suggestions: Keep components pure and small, provide serialization helpers, and 
 Purpose: Vehicle electronics system model (e.g., ERS, traction control, ECU effects).
 Responsibilities: Provide simulation of electronics influence on lap times or reliability.
 Interactions: Engaged by engines for disciplines where electronics matter.
-Issues: Discipline-specific behavior can leak into component code; keep components generic.
-Suggestions: Provide parameterized behavior via discipline configs (weights) rather than embedding discipline logic here.
+Issues: Discipline-specific behaviour can leak into component code; keep components generic.
+Suggestions: Provide parameterized behaviour via discipline configs (weights) rather than embedding discipline logic here.
 
 ### Momentum/Python/vehicles/components/drivetrain.py
 
-Purpose: Drivetrain component (gearbox, differential) modeling.
+Purpose: Drivetrain component (gearbox, differential) modelling.
 Responsibilities: Provide speed/acceleration penalties and failure modes.
 Interactions: Combined into `RaceCar` total performance.
 Issues: As above, avoid discipline-specific branching.
@@ -184,7 +184,7 @@ Suggestions: Provide crisp normalization and unit documentation.
 
 ### Momentum/Python/vehicles/components/aerodynamics.py
 
-Purpose: Aerodynamic modeling (downforce vs drag tradeoffs).
+Purpose: Aerodynamic modelling (downforce vs drag tradeoffs).
 Responsibilities: Functions to compute aerodynamic balance and track-specific setups.
 Interactions: Used primarily by single-seater and touring engines.
 Issues: Complex aero models can be expensive; keep simplified formulas for management simulation.
@@ -236,7 +236,7 @@ Purpose: Simulate vehicle upgrades, development points, and resource allocation.
 Responsibilities: Apply development decisions to vehicle components and budgets.
 Interactions: Called by team management systems and possibly by `vehicle` tests.
 Issues: Might directly manipulate DB or global state – prefer to return deterministic patch objects which services can apply within transactions.
-Suggestions: Keep domain-only behavior here and rely on services to persist changes.
+Suggestions: Keep domain-only behaviour here and rely on services to persist changes.
 
 ### Momentum/Python/disciplines/multi_discipline_simulator.py
 
@@ -251,7 +251,7 @@ Suggestions: Consolidate orchestration into a single `simulator` module with a p
 Purpose: Manage suppliers and component procurement dynamics.
 Responsibilities: Provide supplier catalogs, prices, and procurement effects on performance.
 Interactions: Interacts with `currency_system.py` and `vehicle_development.py` for spending and supply effects.
-Issues: Supplier and procurement modeling may be simplistic; consider modeling lead times and reliability.
+Issues: Supplier and procurement modelling may be simplistic; consider modelling lead times and reliability.
 Suggestions: Keep supplier data separate (e.g., `data/suppliers.json`) and implement procurement flows in services with transaction boundaries.
 
 ### Momentum/Python/docs/NAME_GENERATION_SOLUTION.md
@@ -308,7 +308,7 @@ Purpose: Unit tests for staff management logic.
 Responsibilities: Validate staff creation, assignment, and effects on teams.
 Interactions: Should use temporary DB or mocks.
 Issues: Ensure tests don't modify the real DB in repo.
-Suggestions: Convert to pytest fixtures and assert idempotent behavior; run tests in CI.
+Suggestions: Convert to pytest fixtures and assert idempotent behaviour; run tests in CI.
 
 ### Momentum/Python/disciplines/base_engine.py
 
@@ -363,7 +363,7 @@ Suggestions: Split into pure functions for points calculation and a service to p
 Purpose: Helper to create or initialize the SQLite DB (runs `SCHEMA_SQL`), possibly for testing.
 Responsibilities: Create the database schema and seed initial data if required.
 Interactions: Used by `generate_initial_database.py` and in test setup.
-Issues: Ensure idempotent behavior and clear migration/version handling.
+Issues: Ensure idempotent behaviour and clear migration/version handling.
 Suggestions: Add a minimal migration version table or switch to using Alembic for complex schemas.
 
 ### Momentum/Python/tests/simple_driver_test.py
@@ -371,7 +371,7 @@ Suggestions: Add a minimal migration version table or switch to using Alembic fo
 Purpose: Tiny unit tests or smoke tests for driver-related functions.
 Responsibilities: Quick guards against breaking changes.
 Interactions: Use `database.models` and domain helper functions.
-Issues: Convert to canonical pytest style and organize under `tests/` with fixtures.
+Issues: Convert to canonical pytest style and organise under `tests/` with fixtures.
 Suggestions: Merge with `test_driver_system.py` where appropriate to avoid fragmentation.
 
 ### Momentum/Python/ai/decision_engine.py
@@ -411,12 +411,12 @@ Suggestions: Expose a factory function rather than importing engine at package i
 Purpose: Engine implementation for production/touring car races.
 Responsibilities: Translate driver and vehicle attributes to performance modifiers, simulate race sessions, and return `RaceResult` objects.
 Interactions: Uses `base_engine` helpers, rulebook validations, vehicle components, and RNG. Called by `multi_discipline_simulator`.
-Issues: Ensure deterministic behavior with seeded RNG and unit-testable components.
+Issues: Ensure deterministic behaviour with seeded RNG and unit-testable components.
 Suggestions: Decouple database access and persistent writes; accept a `Generator` instance for RNG.
 
 ### Momentum/Python/disciplines/single_seater/discipline_config.py
 
-Purpose: Discipline-specific configuration for single-seater racing (attribute weights, tire behavior, session lengths).
+Purpose: Discipline-specific configuration for single-seater racing (attribute weights, tire behaviour, session lengths).
 Responsibilities: Provide constants used by `single_seater_engine.py`.
 Interactions: Imported by the engine.
 Issues: Keep config small and documented (units, expected range).
@@ -560,8 +560,8 @@ Purpose: Package initializer for sprint rallycross discipline.
 
 ### Momentum/Python/disciplines/urban_street/urban_street_engine.py
 
-Purpose: Urban/street race simulation engine focusing on customization and incident risk.
-Suggestions: Provide tests for customization effects and incidents.
+Purpose: Urban/street race simulation engine focusing on customisation and incident risk.
+Suggestions: Provide tests for customisation effects and incidents.
 
 ### Momentum/Python/database/models/__init__.py
 
@@ -607,7 +607,7 @@ Notes: Important for evaluation but not part of code execution.
 ## Cross-file concerns and global issues (summary)
 
 - Layering and separation: Several modules mix concerns (API, orchestration, DB I/O). For a clean rebuild, separate into `api/`, `services/`, `domain/`, `repositories/`, `engines/`.
-- Determinism: Ensure all stochastic behavior receives an injected RNG/seed to make tests deterministic.
+- Determinism: Ensure all stochastic behaviour receives an injected RNG/seed to make tests deterministic.
 - Repositories: Consolidate DB code into repository classes; avoid direct SQL across application code.
 - Tests: Convert all ad-hoc scripts and test files into pytest tests with fixtures and avoid touching the real DB files in repo.
 - Documentation hygiene: Fix markdown linting issues and keep docs close to code with links.

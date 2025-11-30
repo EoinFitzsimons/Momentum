@@ -1,6 +1,6 @@
 # Momentum - Top Navigation Bar Spec
 
-Purpose: define a wide, branded top navigation bar for the game UI (both web/CSS prototypes and Unity UI 2D). Includes button list, layout rules, accessibility notes, CSS variables, and a Unity ScriptableObject snippet for colors and spacing.
+Purpose: define a wide, branded top navigation bar for the game UI (both web/CSS prototypes and Unity UI 2D). Includes button list, layout rules, accessibility notes, CSS variables, and a Unity ScriptableObject snippet for colours and spacing.
 
 Recommended buttons (based on `Momentum/Python/README.md` features):
 - Home — Dashboard / Current season summary
@@ -46,23 +46,23 @@ CSS variables (web prototype)
 .top-nav {
   height: var(--nav-height);
   background: linear-gradient(180deg, var(--brand-charcoal) 0%, #2C2D2D 100%);
-  color: var(--brand-white);
+  colour: var(--brand-white);
   display: flex;
-  align-items: center;
+  align-items: centre;
   padding: 0 var(--nav-padding);
   gap: 12px;
 }
 
-.nav-left { display:flex; align-items:center; gap:12px; }
-.nav-center { flex:1; display:flex; justify-content:center; gap:8px; }
-.nav-right { display:flex; align-items:center; gap:8px; }
+.nav-left { display:flex; align-items:centre; gap:12px; }
+.nav-centre { flex:1; display:flex; justify-content:centre; gap:8px; }
+.nav-right { display:flex; align-items:centre; gap:8px; }
 
-.nav-button { padding:10px 14px; border-radius:8px; background:transparent; color:inherit; font-weight:600; }
+.nav-button { padding:10px 14px; border-radius:8px; background:transparent; colour:inherit; font-weight:600; }
 .nav-button:hover { background: rgba(255,255,255,0.03); }
-.nav-button.active { color: var(--brand-red); border-bottom:3px solid var(--brand-red); }
+.nav-button.active { colour: var(--brand-red); border-bottom:3px solid var(--brand-red); }
 
 Badge example (Inbox):
-.badge { min-width:18px; height:18px; padding:0 6px; background:var(--brand-red); color:var(--brand-white); border-radius:12px; font-size:12px; display:inline-flex; align-items:center; justify-content:center; }
+.badge { min-width:18px; height:18px; padding:0 6px; background:var(--brand-red); colour:var(--brand-white); border-radius:12px; font-size:12px; display:inline-flex; align-items:centre; justify-content:centre; }
 
 Unity ScriptableObject snippet (C#)
 -----------------------------------

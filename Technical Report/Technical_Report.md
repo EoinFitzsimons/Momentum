@@ -44,7 +44,7 @@ Key achievements include:
 - Multi-currency financial system with real-time exchange rates supporting EUR, USD, GBP, JPY, and CHF
 - Seven complete racing engines each with discipline-specific simulation logic
 - Monte Carlo simulation engine generating statistically authentic race outcomes
-- AI decision-making framework for realistic team and driver behaviors
+- AI decision-making framework for realistic team and driver behaviours
 - RESTful API architecture enabling frontend integration and scalability
 
 The system successfully demonstrates advanced software engineering principles including object-oriented design, database normalization, API development, and statistical simulation. Performance testing shows sub-second race simulation times with realistic result distributions. The modular architecture enables easy expansion to additional disciplines or gameplay features.
@@ -58,7 +58,7 @@ Motorsport management simulation games have been a niche but dedicated gaming ge
 This project was undertaken to create a modern, multi-discipline motorsport simulation that:
 
 1. Supports multiple racing disciplines rather than forcing players into a single category
-2. Uses realistic statistical modeling based on real motorsport data and driver attributes
+2. Uses realistic statistical modelling based on real motorsport data and driver attributes
 3. Implements comprehensive team management including staff, budgets, and development
 4. Provides an API-first architecture enabling multiple frontend implementations (Unity, Web, Mobile)
 5. Demonstrates advanced computer science concepts including Monte Carlo simulation, AI decision-making, and distributed architecture
@@ -76,7 +76,7 @@ Technical Objectives:
 3. Develop seven discipline-specific racing engines with unique simulation characteristics
 4. Implement a RESTful API for frontend integration and external system access
 5. Build a multi-currency financial system with real-time exchange rate support
-6. Create an AI decision-making framework for autonomous team and driver behaviors
+6. Create an AI decision-making framework for autonomous team and driver behaviours
 
 Simulation Quality Objectives:
 
@@ -112,11 +112,11 @@ Backend (Python 3.8+):
 
   - Monte Carlo random sampling
   - Statistical distribution calculations
-  - Performance optimization for numerical operations
+  - Performance optimisation for numerical operations
 - PyTorch: Machine learning framework for AI decision-making
 
   - Neural network models for strategy prediction
-  - Gradient-based optimization
+  - Gradient-based optimisation
   - Future expansion for deep learning features
 
 Data Generation:
@@ -149,7 +149,7 @@ This separation enables:
 
 ### 1.4 Structure
 
-This technical report is organized as follows:
+This technical report is organised as follows:
 
 Section 2 - System: Provides comprehensive documentation of the system including requirements analysis, design decisions, implementation details, and testing procedures. This section is divided into:
 
@@ -437,7 +437,7 @@ The system requires persistent storage for the following entities:
 
 - Indexes on frequently queried fields (driver_id, team_id)
 - Composite indexes on race lookups (championship_id, race_id)
-- Query optimization for large result sets
+- Query optimisation for large result sets
 
 ### 2.1.3 User Requirements
 
@@ -453,7 +453,7 @@ The system requires persistent storage for the following entities:
 
 - Detailed driver and team statistics
 - Realistic race outcomes reflecting real-world physics
-- Deep customization and strategy options
+- Deep customisation and strategy options
 - Historical data and career progression tracking
 
 **For Casual Gamers:**

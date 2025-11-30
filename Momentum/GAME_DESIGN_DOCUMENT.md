@@ -11,7 +11,7 @@
 1. **Multi-Discipline Authenticity** - 7 distinct racing categories with unique mechanics
 2. **Deep Career Progression** - Multi-season team building with long-term consequences
 3. **Technical Depth** - Realistic vehicle component systems and development
-4. **Strategic Management** - Financial, personnel, and technical resource optimization
+4. **Strategic Management** - Financial, personnel, and technical resource optimisation
 
 ---
 

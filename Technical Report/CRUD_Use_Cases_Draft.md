@@ -356,7 +356,7 @@ These questions will help you write each use case in your own words:
 
 ## STRUCTURE FOR YOUR TECHNICAL REPORT
 
-Based on the template, organize like this:
+Based on the template, organise like this:
 
 ### 2.1.1 Functional Requirements
 
