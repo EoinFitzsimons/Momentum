@@ -1,6 +1,6 @@
 import sqlite3
 from typing import List, Optional
-from .persistence_iface import Driver, Track, RaceResult, PersistenceIface
+from persistence_iface import Driver, Track, RaceResult, PersistenceIface
 
 
 class PersistenceSQLite(PersistenceIface):

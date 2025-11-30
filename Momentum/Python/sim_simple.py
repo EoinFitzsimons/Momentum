@@ -1,6 +1,6 @@
 from typing import List
 import random
-from .persistence_iface import Driver, Track, RaceResult
+from persistence_iface import Driver, Track, RaceResult
 
 
 def simulate_race(drivers: List[Driver], track: Track, seed: int = 0) -> List[RaceResult]:
