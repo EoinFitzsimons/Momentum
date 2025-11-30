@@ -267,27 +267,27 @@ Summary
 
 UC-1: Read Driver Details
 
-UC-3: Read Race Configuration
+UC-2: Read Race Configuration
 
-UC-4: Create Race Result
+UC-3: Create Race Result
 
 MEDIUM Priority (Career Mode Depth):
 
-UC-5: Read Race Results
+UC-4: Read Race Results
 
-UC-6: Read Championship Details
+UC-5: Read Championship Details
 
-UC-7: Update Championship Standings
+UC-6: Update Championship Standings
 
-UC-8: Create Race Event
+UC-7: Create Race Event
 
-UC-9: Read Race Schedule
+UC-8: Read Race Schedule
 
-UC-10: Update Race Status
+UC-9 Update Race Status
 
-UC-11: Create Championship
+UC-10: Create Championship
 
-UC-2: Read Team Details
+UC-11: Read Team Details
 
 UC-12: Create New Team
 
