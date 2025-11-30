@@ -20,6 +20,20 @@
 *.VC.db
 *.pidb.meta
 *.unitypackage
+# Database files - keep out of repo
+*.db
+*.sqlite
+*.sqlite3
+momentum.db
+
+# Runtime caches
+currency_cache.json
+
+# Logs and local env
+*.log
+.env
+.pytest_cache/
+
 .vs/
 
 # Python
