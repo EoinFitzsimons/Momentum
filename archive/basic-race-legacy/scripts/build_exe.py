@@ -1,5 +1,6 @@
-# MOMENTUM Game - Build to EXE
-# Run this script to create a standalone executable
+#!/usr/bin/env python
+# Archived: build_exe.py
+# Moved from Momentum/Python/scripts to archive/basic-race-legacy/scripts
 
 import os
 import subprocess
