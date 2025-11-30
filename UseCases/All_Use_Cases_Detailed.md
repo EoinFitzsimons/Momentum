@@ -8,18 +8,12 @@ Provide the simulation service with a complete driver profile and runtime status
 
 ### Description
 
-How the game backend returns a driver's attributes, contract/team association and runtime state (injury/fatigue/availability) so the Simulation Service can include the driver in race initialisation and performance calculations.
-
 ### Actors
 
-- `Simulation Service` — requests driver payloads for simulation initialisation.
-- `Drivers DB` — stores driver records and runtime state.
+- `Simulation Service` - requests driver payloads for simulation initialisation.
+- `Drivers DB` - stores driver records and runtime state.
 
 ### Use Case Diagram
-
-### Flow Description
-
-#### Precondition
 
 The system is in initialisation mode for a race; the driver record exists and the driver is eligible for selection.
 
@@ -37,31 +31,22 @@ The system identifies the requested `driverId` and validates its format.
 
 #### Alternate flow
 
-A1: Requested `driverId` invalid — return `400 Bad Request` with validation errors.
-A2: Driver is ineligible (injured/unavailable) — return `409 Conflict` with status and reason.
+A1: Requested `driverId` invalid - return `400 Bad Request` with validation errors.
+A2: Driver is ineligible (injured/unavailable) - return `409 Conflict` with status and reason.
 
 #### Exceptional flow
 
-E1: Database read failure — return `503 Service Unavailable` and include diagnostic id.
-E2: Deserialization or payload assembly failure — return `500` and include error reference.
+E1: Database read failure - return `503 Service Unavailable` and include diagnostic id.
 
 #### Termination
 
 Caller receives payload; simulation proceeds to instantiate driver.
 
-
-
 ## UC-2: Read Race Configuration
 
 ### Scope
 
-Provide race configuration (track, weather, lap count, ruleset) to the Simulation Service and clients.
-
-### Description
-
 The backend returns the configuration used for a given event so the Simulation Service and UI prepare appropriate settings.
-
-### Actors
 
 - `Simulation Service` - consumes configuration for simulations.
 - `Client UI` - displays configuration to users.
@@ -93,21 +78,13 @@ A2: Partial configuration - return available fields with `partial: true` and a w
 E1: Database read error or connection timeout - return `503 Service Unavailable`.
 E2: Permission denied - return `403 Forbidden`.
 
-#### Termination
-
 Caller proceeds to initialisation.
 
-
-
 ## UC-3: Create Race Result
-
-### Scope
 
 Persist race outcomes (positions, times, incidents) and trigger standings updates.
 
 ### Description
-
-The Simulation Service posts generated race results; the backend validates and persists results, marks the event complete and enqueues standings recalculation.
 
 ### Actors
 
@@ -145,8 +122,6 @@ E2: Partial persistence detected - return `500` with reference id and queue reco
 #### Termination
 
 Event status updated; standings update job queued.
-
-
 
 ## UC-4: Read Race Results
 
@@ -195,8 +170,6 @@ E2: Deserialization error - return `500` with error reference.
 
 Client displays results.
 
-
-
 ## UC-5: Read Championship Details
 
 ### Scope
@@ -243,8 +216,6 @@ E2: Permission denied - return `403`.
 #### Termination
 
 Client displays championship view.
-
-
 
 ## UC-6: Update Championship Standings
 
@@ -293,8 +264,6 @@ E2: Persistence error - roll back and queue retry.
 
 Standings persisted.
 
-
-
 ## UC-7: Create Race Event
 
 ### Scope
@@ -341,8 +310,6 @@ E2: External sync failure - create event in draft and return `202 Accepted` with
 #### Termination
 
 Calendar updated; notifications may be sent.
-
-
 
 ### UC-8: Read Race Schedule
 
@@ -394,8 +361,6 @@ Client displays schedule.
 #### Post condition
 
 System awaits next request.
-
-
 
 ### UC-9: Update Race Status
 
@@ -449,51 +414,54 @@ Event status updated and notifications sent.
 
 System awaits next lifecycle event.
 
-
-
 ### UC-10: Create Championship
-
 ### Scope
-
-Create a new championship/season with base rules and empty calendar.
+Add a driver to the hireable pool by either recycling an existing placeholder or generating a new driver with seeded attributes.
 
 ### Description
-
-Admin creates a championship record which can then accept events and teams.
+Maintain and expand the available driver pool to support roster growth, replacement of retired drivers, and content variety. Generation prefers recycling existing, deactivated driver records when appropriate; otherwise the Generator Service produces a new driver profile validated against uniqueness and policy constraints.
 
 ### Actors
 
-- `Admin` - creates and configures championships.
-- `Policy Service` - validates rulesets.
+- `Admin` - requests manual creation.
+- `System` - scheduled or policy-driven generator.
+- `Generator Service` - produces attribute payloads for new drivers.
 
 ### Use Case Diagram
 
 ### Flow Description
 
 #### Precondition
-
-Requester has permission to create championships.
+Driver pool is below configured threshold or an explicit admin request to create a driver is received; seeding/config data is available.
 
 #### Activation
-
-Starts when admin submits championship definition.
+Triggered by `POST /api/drivers/generate` by an admin or by an automated roster expansion job.
 
 #### Main flow
 
-1. Validate rules and uniqueness of name.
-2. Insert championship record.
-3. Return created resource.
+1. Validate request and policy constraints (pool thresholds, allowed classes).
+2. Attempt to select a recycle candidate from the deactivated pool; if none available, call `Generator Service` to create attributes.
+3. Validate generated attributes (unique name, valid age, discipline suitability).
+4. Persist the driver record inside a transaction and mark availability.
+5. Return `201 Created` with the driver resource.
 
 #### Alternate flow
-
-A1: Rules validation failure - return `400 Bad Request` with rule-level errors; admin corrects and resubmits.
-A2: Name conflict - return `409 Conflict` with existing championship id; provide option to rename.
+A1: Recycle candidate unavailable - generate new attributes and continue.
+A2: Minor validation warnings - persist with `warnings` field and return `201 Created`.
+A3: Name or identity conflict - mutate the attribute (rename) and retry up to configured attempts; on exhaustion return `409 Conflict` with guidance.
 
 #### Exceptional flow
+E1: Database write failure - rollback and return `500` with diagnostic id for support.
+E2: Generator Service unavailable - return `503 Service Unavailable` and schedule a retry job.
+E3: Policy or configuration violation - return `422 Unprocessable Entity` with policy details.
 
-E1: Database persistence failure - return `500` and write the request to an audit log for manual replay.
-E2: Background task creation failure (e.g., scheduling post-creation jobs) - return `201 Created` but include `jobsPending: true`.
+#### Termination
+Driver record created and visible in the hireable pool.
 
+#### Post condition
+Driver returned in subsequent listing endpoints and system awaits next generation task.
+
+---
 #### Termination
 
 Championship available for events.
@@ -501,8 +469,6 @@ Championship available for events.
 #### Post condition
 
 System awaits further management operations.
-
-
 
 ### UC-11: Read Team Details
 
@@ -555,8 +521,6 @@ Client displays team screen.
 
 System awaits next request.
 
-
-
 ### UC-12: Create New Team
 
 ### Scope
@@ -608,8 +572,6 @@ Team visible in lists.
 
 System awaits next management action.
 
-
-
 ### UC-13: Read Team Details (player team)
 
 ### Scope
@@ -658,8 +620,6 @@ Player views editable team screen.
 #### Post condition
 
 System awaits further edits.
-
-
 
 ### UC-14: Update Team Attributes
 
@@ -712,8 +672,6 @@ Changes reflected on subsequent reads.
 
 System awaits next request.
 
-
-
 ### UC-15: Read Available Drivers
 
 ### Scope
@@ -763,8 +721,6 @@ Client displays candidate drivers.
 #### Post condition
 
 System awaits next query.
-
-
 
 ### UC-16: Update Driver Contract
 
@@ -817,8 +773,6 @@ Driver assigned and availability updated.
 
 System awaits next contract action.
 
-
-
 ### UC-17: Read Available Staff
 
 ### Scope
@@ -868,8 +822,6 @@ Client displays staff candidates.
 #### Post condition
 
 System awaits next request.
-
-
 
 ### UC-18: Update Staff Contract
 
@@ -922,8 +874,6 @@ Staff assigned and salary deducted from budget.
 
 System awaits further HR actions.
 
-
-
 ### UC-19: Update Driver Skills/Age
 
 ### Scope
@@ -975,8 +925,6 @@ Driver records updated for next season.
 
 System awaits next scheduled update.
 
-
-
 ### UC-20: Update Team Budget
 
 ### Scope
@@ -1016,6 +964,63 @@ A1: Insufficient funds for debit - reject the transaction with `402 Payment Requ
 A2: Pending transactions that affect available balance - return `409 Conflict` with pending transaction list.
 
 
+## UC-21: Create New Driver
+
+### Scope
+
+Add a driver to the hireable pool by recycling an existing placeholder or generating a new driver profile when pool thresholds require expansion.
+
+### Description
+
+Maintain and expand the hireable driver pool to support roster growth, replacement of retired drivers, and content variety. The system prefers recycling deactivated driver records when suitable; otherwise the Generator Service creates a new driver profile validated against uniqueness and configured policy constraints.
+
+### Actors
+
+- `Admin` - requests manual creation.
+- `System` - scheduled or policy-driven generator.
+- `Generator Service` - produces seeded attribute payloads for new drivers.
+
+### Use Case Diagram
+
+### Flow Description
+
+#### Precondition
+
+Driver pool is below configured threshold or an explicit admin request to create a driver is received; seeding and generation configuration are available.
+
+#### Activation
+
+Triggered by `POST /api/drivers/generate` from an admin or by an automated roster expansion job.
+
+#### Main flow
+
+1. Validate request and policy constraints (pool thresholds, allowed classes).
+2. Attempt to select a recycle candidate from the deactivated pool; if none available, call `Generator Service` to create attributes.
+3. Validate generated attributes (unique name, valid age, discipline suitability).
+4. Persist the driver record inside a transaction and mark availability.
+5. Return `201 Created` with the driver resource.
+
+#### Alternate flow
+
+A1: Recycle candidate unavailable - generate new attributes and continue.
+A2: Minor validation warnings - persist with a `warnings` field and return `201 Created`.
+A3: Name or identity conflict - mutate the attribute (rename) and retry up to configured attempts; on exhaustion return `409 Conflict` with guidance.
+
+#### Exceptional flow
+
+E1: Database write failure - rollback and return `500` with diagnostic id for support.
+E2: Generator Service unavailable - return `503 Service Unavailable` and schedule a retry job.
+E3: Policy or configuration violation - return `422 Unprocessable Entity` with policy details.
+
+#### Termination
+
+Driver record created and visible in the hireable pool.
+
+#### Post condition
+
+Driver returned in subsequent listing endpoints and system awaits next generation task.
+
+---
 
 ### UC-22: Create New Staff Member (staff generation)
 
@@ -1065,8 +1070,6 @@ Staff visible in hiring pool.
 #### Post condition
 
 System awaits next generation.
-
-
 
 ### UC-23: Delete Championship
 
@@ -1118,8 +1121,6 @@ Championship removed or archived.
 
 System awaits next admin action.
 
-
-
 ### UC-24: Create Custom Track
 
 ### Scope
@@ -1170,8 +1171,6 @@ Track available for event creation.
 
 System awaits next track management action.
 
-
-
 ### UC-25: Update Track Characteristics
 
 ### Scope
@@ -1221,8 +1220,6 @@ Track updated for future events.
 
 System awaits next management action.
 
-
-
 ### UC-26: Delete Track
 
 ### Scope
@@ -1270,8 +1267,6 @@ Track removed or archived.
 #### Post condition
 
 System awaits further track management.
-
-
 
 ### UC-27: Read Staff Performance Modifiers
 
@@ -1321,8 +1316,6 @@ Simulation applies modifiers.
 #### Post condition
 
 System awaits next modifier request.
-
-
 
 ### UC-28: Update Driver Appearance
 
@@ -1374,8 +1367,6 @@ Appearance updated for reads.
 #### Post condition
 
 System awaits further edits.
-
-
 
 ### UC-29: Update Team Branding
 
