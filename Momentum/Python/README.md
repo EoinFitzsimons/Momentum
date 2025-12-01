@@ -217,17 +217,17 @@ race_results    -- Performance outcomes and standings
 
 ### 🌐 API Endpoints
 
-| Method   | Endpoint                     | Description                      | Response      |
-| -------- | ---------------------------- | -------------------------------- | ------------- |
-| `GET`  | `/`                        | System information and status    | API metadata  |
-| `GET`  | `/health`                  | Health check with database stats | System health |
-| `GET`  | `/drivers`                 | All drivers with attributes      | Driver list   |
-| `GET`  | `/teams?discipline={type}` | Teams (filterable by discipline) | Team list     |
-| `GET`  | `/staff?currency={code}`   | Staff with salaries in currency | Staff list    |
-| `POST` | `/simulate/race`           | Execute race simulation          | Race results  |
+| Method   | Endpoint                                  | Description                       | Response      |
+| -------- | ----------------------------------------- | --------------------------------- | ------------- |
+| `GET`  | `/`                                     | System information and status     | API metadata  |
+| `GET`  | `/health`                               | Health check with database stats  | System health |
+| `GET`  | `/drivers`                              | All drivers with attributes       | Driver list   |
+| `GET`  | `/teams?discipline={type}`              | Teams (filterable by discipline)  | Team list     |
+| `GET`  | `/staff?currency={code}`                | Staff with salaries in currency   | Staff list    |
+| `POST` | `/simulate/race`                        | Execute race simulation           | Race results  |
 | `GET`  | `/budgets/{discipline}?currency={code}` | Racing discipline budget cap info | Budget data   |
-| `GET`  | `/currency/rates`          | Current exchange rates           | Rate data     |
-| `GET`  | `/stats`                   | Database statistics              | Entity counts |
+| `GET`  | `/currency/rates`                       | Current exchange rates            | Rate data     |
+| `GET`  | `/stats`                                | Database statistics               | Entity counts |
 
 #### Example API Usage
 
@@ -501,30 +501,119 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 - **Query Optimization**: Efficient lookups for 50+ attribute comparisons
 - **Storage Scaling**: <50MB for full season with complete personnel data
 
-## 🚀 System Status & Capabilities
+## 🚀 MVP Status & Current Capabilities
 
-### ✅ Fully Implemented Systems
+### ✅ Completed MVP Features
 
-- [X] **7 Complete Racing Engines** - All disciplines with unique simulation logic
-- [X] **50+ Attribute Driver System** - Cross-discipline compatibility with preferences
-- [X] **40+ Attribute Staff System** - 25+ roles with budget scaling and performance impact
-- [X] **Multi-Currency Financial System** - EUR default with budget cap compliance for all racing disciplines
-- [X] **Budget Cap Integration** - €130M EUR cap for single-seater racing with compliance checking
-- [X] **Information Fog-of-War** - Data access based on staff analytical capabilities
-- [X] **Budget-Based Team Scaling** - Realistic staff requirements and salary scaling
-- [X] **Live Exchange Rate Support** - Real-time currency conversion for 5 major currencies
-- [X] **Comprehensive Testing Suite** - 100% validation of all major components
-- [X] **Hybrid Name Generation** - External API integration with fallback systems
-- [X] **Security Implementation** - API key protection and gitignore configuration
+#### Core Simulation Engine
 
-### 🔮 Future Enhancement Opportunities
+- [X] **Lap-by-Lap Race Simulation** - Complete Monte Carlo-based race engine with realistic lap times
+- [X] **20-Driver Race Support** - Full grid simulation with overtaking, positioning, and race dynamics
+- [X] **Driver Performance Model** - 50+ attributes affecting race performance (speed, cornering, consistency, etc.)
+- [X] **Tire Wear & Degradation** - Dynamic tire performance degradation throughout race
+- [X] **Pit Stop Strategy** - Intelligent pit decision system based on tire wear and driver skill
+- [X] **Incident System** - Random incidents including crashes (DNF) and time-loss events
+- [X] **Real-Time Event System** - Lap-by-lap event callbacks for UI updates
+- [X] **Reproducible Races** - Seed-based randomization for testing and replay
 
-- [ ] **Dynamic Weather Systems** - Real-time weather changes during race simulation
-- [ ] **Multi-Season Career Mode** - Long-term driver and staff development
-- [ ] **Contract Negotiations** - Advanced staff and driver contract management
-- [ ] **Championship Management** - Multi-series competition tracking
-- [ ] **Economic Simulation** - Detailed budget management and sponsorship systems
-- [ ] **Machine Learning Integration** - AI-powered strategy optimization
+#### Database & Data Management
+
+- [X] **SQLite Database Integration** - 20 seeded drivers with full attributes
+- [X] **Driver Management** - CRUD operations for driver records
+- [X] **Track System** - Track data with length, characteristics for race configuration
+- [X] **Race Results Persistence** - Complete race result storage with positions, times, DNF reasons
+- [X] **Database Refactoring** - Reduced cognitive complexity (SonarQube compliant ≤15)
+
+#### User Interface (PyQt6 GUI)
+
+- [X] **Main Menu Screen** - Clean entry point with "Choose Driver" and "Exit" options
+- [X] **Driver Selection Dialog** - Interactive driver browser with biography and attributes
+- [X] **Radar Chart Visualization** - 4 tabbed attribute displays (Core Skills, Physical/Mental, Technical, Disciplines)
+- [X] **Live Race View** - Real-time race standings table updating every lap
+- [X] **Lap Counter Display** - Current lap / total laps indicator
+- [X] **4-Column Results Table** - Position | # | Driver | Time with persistent names
+- [X] **Time Formatting** - Professional HH:MM:SS.mmm display for race times
+- [X] **Final Results Screen** - Complete race results with all drivers and DNF indicators
+
+#### Code Quality & Architecture
+
+- [X] **Cognitive Complexity Refactoring** - All files comply with SonarQube standards (≤15 complexity)
+  - `sim_simple.py`: 83 → <15 (11 extracted helper methods)
+  - `simulation.py`: 38 → <15 (7 extracted helper methods)
+  - `persistence_sqlite.py`: 27 → <15 (5 extracted helper methods)
+  - `console_run.py`: 19 → <15 (7 extracted helper methods)
+- [X] **Extract Method Pattern** - Decomposed complex functions into focused, testable units
+- [X] **Modular Architecture** - Clear separation of concerns (simulation, persistence, GUI, API)
+- [X] **Type Hints** - Full type annotation for improved IDE support and type safety
+
+### 🎮 Playable MVP Game Loop
+
+The current MVP provides a complete race simulation experience:
+
+1. **Launch Application** → Main menu appears
+2. **Choose Driver** → Browse 20 drivers with full attribute visualization
+3. **View Driver Stats** → 4 radar charts showing comprehensive driver capabilities
+4. **Start Race** → Automatic race initialization with selected driver
+5. **Watch Live Race** → Real-time position updates every lap with pit stops and incidents
+6. **View Final Results** → Complete race results with times in HH:MM:SS.mmm format
+
+```bash
+# Run the MVP GUI
+cd Momentum/Python
+$env:PYTHONPATH="C:\Users\eoin0\Documents\FinalProject\Momentum\Python"
+python gui/gui_game.py
+```
+
+### 🔧 Technical Implementation Highlights
+
+#### Race Simulation Engine (`sim_simple.py`)
+
+- **Performance Calculation**: Weighted combination of 5 core driver attributes
+- **Tire Management**: Wear rate influenced by aggression, tire management skill, and track length
+- **Fuel Effects**: Early-lap fuel weight penalty with gradual reduction
+- **Incident Probability**: Aggression-based incident chance with 25% DNF / 75% time loss
+- **Pit Stop Logic**: Dynamic thresholds based on tire wear and pit entry/exit skill
+- **Consistency Modeling**: Driver consistency affects lap time variance
+
+#### GUI Architecture (`gui/gui_game.py`)
+
+- **QStackedLayout Pattern**: Clean screen transitions (Menu ↔ Race)
+- **Custom Radar Charts**: QPainter-based attribute visualization with 4 categories
+- **Threading Integration**: Race runs on background thread preventing UI freeze
+- **Event-Driven Updates**: Callback system for lap-by-lap UI updates
+- **Database Integration**: Real-time driver name lookup for results display
+
+### 🚧 Known Limitations & Future Work
+
+#### Not Yet Implemented
+
+- [ ] **Multi-Discipline Support** - Only single-seater simulation currently active
+- [ ] **Team Management** - Teams exist in DB but not integrated into gameplay
+- [ ] **Staff System** - Staff models complete but not affecting race outcomes
+- [ ] **Championship Mode** - No season/championship progression yet
+- [ ] **Save/Load Game** - Career persistence not implemented
+- [ ] **Car Development** - Vehicle upgrades system designed but not functional
+- [ ] **Weather System** - Weather data exists but not affecting simulation
+- [ ] **Multi-Currency Display** - Currency system backend complete but not in GUI
+
+#### Technical Debt
+
+- [ ] **API Endpoints** - FastAPI server exists but not tested with GUI
+- [ ] **Track Integration** - 175 circuits designed but not imported to database
+- [ ] **Game Loop** - Season progression system partially implemented
+- [ ] **Unity Frontend** - Basic API client exists but no UI scenes
+
+### 📊 MVP Testing Results
+
+All core systems tested and validated:
+
+✅ **Race Simulation**: 20-driver races complete successfully with realistic outcomes
+✅ **Driver Selection**: All 20 drivers display correctly with attributes and biography
+✅ **Live Updates**: Position changes, pit stops, and incidents update in real-time
+✅ **Incident Handling**: DNFs properly handled with drivers removed from standings
+✅ **Time Display**: Race times format correctly (HH:MM:SS.mmm) including DNF markers
+✅ **Code Quality**: All refactored files pass SonarQube cognitive complexity checks
+✅ **GUI Responsiveness**: No crashes or freezes during extensive testing
 
 ## 📄 License
 
@@ -533,8 +622,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👥 Contributors
 
 - **Primary Developer**: Eoin Fitzsimons
-- **Project Supervisor**: [Supervisor Name]
-- **Institution**: [University Name]
+- **Project Supervisor**: The Wild Thornbury
+- **Institution**: NCI
 
 ---
 

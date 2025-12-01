@@ -13,10 +13,8 @@ from persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
 
-def main():
-    db = PersistenceSQLite()
-    db.ensure_schema()
-
+def _load_drivers(db):
+    """Load drivers from database or seed if empty."""
     drivers = []
     for did in range(1, 21):
         d = db.get_driver(did)
@@ -27,38 +25,69 @@ def main():
         print("No drivers found in DB, seeding demo drivers...")
         db.seed_sample_data(count=20)
         drivers = db.list_drivers()
+    
+    return drivers
 
+def _print_lap_start(lap_num):
+    """Print lap start header."""
+    print(f"\n=== Lap {lap_num} start ===")
+
+def _print_standings(lap_num, standings):
+    """Print top 10 standings."""
+    print(f"Standings (lap {lap_num}):")
+    for r in standings[:10]:
+        name = r.get('name')
+        time_s = r.get('time_seconds')
+        pos = r.get('position')
+        print(f" {pos:2d}. {name:20s} {time_s:8.2f}s")
+
+def _print_pit(driver_id, lap_num, pit_time):
+    """Print pit stop event."""
+    print(f"PIT: driver {driver_id} lap {lap_num} (pit_time={pit_time})")
+
+def _print_incident(subtype, driver_id, lap_num):
+    """Print incident event."""
+    print(f"INCIDENT: {subtype} driver {driver_id} lap {lap_num}")
+
+def _print_race_results(results):
+    """Print final race results."""
+    print("\nRace finished. Final results:")
+    for r in results:
+        print(f" {r.get('position'):2d}. {r.get('driver_id'):3d} {r.get('time_seconds'):8.2f}s")
+
+def _create_event_callback():
+    """Create event callback for race simulation."""
+    def evcb(e: dict):
+        event_type = e.get("type")
+        if event_type == "lap_start":
+            _print_lap_start(e.get('lap'))
+        elif event_type == "standings":
+            _print_standings(e.get('lap'), e.get("standings", []))
+        elif event_type == "pit":
+            _print_pit(e.get('driver_id'), e.get('lap'), e.get('pit_time'))
+        elif event_type == "incident":
+            _print_incident(e.get('subtype'), e.get('driver_id'), e.get('lap'))
+        elif event_type == "race_finished":
+            _print_race_results(e.get('results', []))
+    return evcb
+
+def main():
+    db = PersistenceSQLite()
+    db.ensure_schema()
+
+    drivers = _load_drivers(db)
     track = db.get_track(1)
+    
     print("Loaded drivers:")
     for d in drivers:
         print(f" - {d.id}: {d.name}")
     print("Track:", track.name if track else "(none)")
 
-    def evcb(e: dict):
-        t = e.get("type")
-        if t == "lap_start":
-            print(f"\n=== Lap {e.get('lap')} start ===")
-        elif t == "standings":
-            s = e.get("standings", [])
-            print(f"Standings (lap {e.get('lap')}):")
-            for r in s[:10]:
-                name = r.get('name')
-                time_s = r.get('time_seconds')
-                pos = r.get('position')
-                print(f" {pos:2d}. {name:20s} {time_s:8.2f}s")
-        elif t == "pit":
-            print(f"PIT: driver {e.get('driver_id')} lap {e.get('lap')} (pit_time={e.get('pit_time')})")
-        elif t == "incident":
-            print(f"INCIDENT: {e.get('subtype')} driver {e.get('driver_id')} lap {e.get('lap')}")
-        elif t == "race_finished":
-            print("\nRace finished. Final results:")
-            res = e.get('results', [])
-            for r in res:
-                print(f" {r.get('position'):2d}. {r.get('driver_id'):3d} {r.get('time_seconds'):8.2f}s")
-
+    evcb = _create_event_callback()
+    
     print("Starting simulation (console)...\n")
     results = simulate_race(drivers, track, seed=None, verbose=False, event_callback=evcb, lap_delay=0.1)
-    # Save results back to DB (non-destructive)
+    
     try:
         db.save_race_results(race_id=1, results=results)
     except Exception as exc:
