@@ -20,70 +20,59 @@ class PersistenceSQLite(PersistenceIface):
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
 
-    def ensure_schema(self) -> None:
-        cur = self.conn.cursor()
-        # Try to create the canonical schema. Some older DB files may have a
-        # legacy `drivers` table that lacks new columns; in that case a CREATE
-        # INDEX or other statement can fail. Catch that specific error and
-        # perform a lightweight migration before retrying.
-        try:
-            cur.executescript(SCHEMA_SQL)
+    def _migrate_team_id_column(self, cur) -> None:
+        """Add current_team_id column if missing."""
+        cur.execute("PRAGMA table_info(drivers)")
+        existing = [r[1] for r in cur.fetchall()]
+        if 'current_team_id' not in existing:
+            cur.execute("ALTER TABLE drivers ADD COLUMN current_team_id INTEGER;")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);")
             self.conn.commit()
-        except sqlite3.OperationalError as oe:
-            msg = str(oe).lower()
-            # If failure is due to missing column on existing table, attempt
-            # a safe migration: add the missing `current_team_id` column and
-            # any helper indexes, then re-run the schema script.
-            try:
-                if 'current_team_id' in msg or 'no such column: current_team_id' in msg:
-                    cur.execute("PRAGMA table_info(drivers)")
-                    existing = [r[1] for r in cur.fetchall()]
-                    if 'current_team_id' not in existing:
-                        cur.execute("ALTER TABLE drivers ADD COLUMN current_team_id INTEGER;")
-                        cur.execute("CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);")
-                        self.conn.commit()
-                    # retry schema application (safe to call again)
-                    cur.executescript(SCHEMA_SQL)
-                    self.conn.commit()
-                else:
-                    # re-raise if it's an unrelated operational error
-                    raise
-            except Exception:
-                # If migration or retry fails, don't crash the application.
-                # The GUI will surface an error event instead.
-                pass
-        # Verify that the `drivers` table contains the expected core columns
+
+    def _verify_and_recreate_drivers_table(self, cur) -> None:
+        """Verify drivers table has required columns, recreate if incompatible."""
         try:
             cur.execute("PRAGMA table_info(drivers)")
             cols = [r[1] for r in cur.fetchall()]
             required = {'name', 'nationality', 'birth_date', 'raw_speed'}
             if not required.issubset(set(cols)):
-                # Existing table is incompatible with MVP schema; recreate
-                try:
-                    cur.execute("DROP TABLE IF EXISTS race_results")
-                    cur.execute("DROP TABLE IF EXISTS drivers")
-                    cur.execute("DROP TABLE IF EXISTS tracks")
-                    self.conn.commit()
-                    cur.executescript(SCHEMA_SQL)
-                    self.conn.commit()
-                except Exception:
-                    # If we cannot recreate, ignore and allow caller to handle errors
-                    pass
+                cur.execute("DROP TABLE IF EXISTS race_results")
+                cur.execute("DROP TABLE IF EXISTS drivers")
+                cur.execute("DROP TABLE IF EXISTS tracks")
+                self.conn.commit()
+                cur.executescript(SCHEMA_SQL)
+                self.conn.commit()
         except Exception:
             pass
-        # Ensure race_results has `time_seconds` column for MVP persistence
+
+    def _ensure_time_seconds_column(self, cur) -> None:
+        """Ensure race_results has time_seconds column."""
         try:
             cur.execute("PRAGMA table_info(race_results)")
             rcols = [r[1] for r in cur.fetchall()]
             if 'time_seconds' not in rcols:
-                try:
-                    cur.execute("ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;")
-                    self.conn.commit()
-                except Exception:
-                    # If we cannot add the column (older SQLite limitations), ignore.
-                    pass
+                cur.execute("ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;")
+                self.conn.commit()
         except Exception:
             pass
+
+    def ensure_schema(self) -> None:
+        cur = self.conn.cursor()
+        try:
+            cur.executescript(SCHEMA_SQL)
+            self.conn.commit()
+        except sqlite3.OperationalError as oe:
+            msg = str(oe).lower()
+            if 'current_team_id' in msg or 'no such column: current_team_id' in msg:
+                try:
+                    self._migrate_team_id_column(cur)
+                    cur.executescript(SCHEMA_SQL)
+                    self.conn.commit()
+                except Exception:
+                    pass  # Silently fail migration; caller will handle missing data
+        
+        self._verify_and_recreate_drivers_table(cur)
+        self._ensure_time_seconds_column(cur)
 
     def seed_sample_data(self, count: int = 20, force: bool = False) -> None:
         """Populate the DB with a small sample dataset for demos.
@@ -183,38 +172,34 @@ class PersistenceSQLite(PersistenceIface):
 
         return self._row_to_dataclass(r, _Track)
 
+    def _extract_result_field(self, res, field: str, default=None):
+        """Extract field from result object or dict."""
+        try:
+            if hasattr(res, field):
+                return getattr(res, field)
+            return res.get(field, default) if isinstance(res, dict) else default
+        except Exception:
+            return default
+
+    def _parse_team_id(self, res) -> int:
+        """Parse and validate team_id, returning 0 if invalid."""
+        team_id = self._extract_result_field(res, 'team_id', 0)
+        if team_id is None:
+            return 0
+        try:
+            return int(team_id)
+        except Exception:
+            return 0
+
     def save_race_results(self, race_id: int, results: List) -> None:
         cur = self.conn.cursor()
         cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+        
         for res in results:
-            # Accept either objects (with attributes) or dict-like results
-            try:
-                driver_id = getattr(res, 'driver_id') if hasattr(res, 'driver_id') else res.get('driver_id')
-            except Exception:
-                driver_id = None
-            try:
-                position = getattr(res, 'position') if hasattr(res, 'position') else res.get('position')
-            except Exception:
-                position = None
-            # Coerce team_id to a non-null integer (MVP: use 0 when unknown)
-            try:
-                if hasattr(res, 'team_id'):
-                    team_id = getattr(res, 'team_id')
-                else:
-                    team_id = res.get('team_id', 0) if isinstance(res, dict) else 0
-            except Exception:
-                team_id = 0
-            if team_id is None:
-                team_id = 0
-            try:
-                team_id = int(team_id)
-            except Exception:
-                team_id = 0
-            # time_seconds may be attribute or dict key
-            try:
-                time_sec = getattr(res, 'time_seconds') if hasattr(res, 'time_seconds') else res.get('time_seconds', 0.0)
-            except Exception:
-                time_sec = 0.0
+            driver_id = self._extract_result_field(res, 'driver_id')
+            position = self._extract_result_field(res, 'position')
+            team_id = self._parse_team_id(res)
+            time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
 
             try:
                 cur.execute(
@@ -222,8 +207,7 @@ class PersistenceSQLite(PersistenceIface):
                     (race_id, driver_id, team_id, position, time_sec),
                 )
             except sqlite3.IntegrityError as ie:
-                # Raise a clearer error including the parameters to aid debugging
-                raise Exception(
+                raise ValueError(
                     f"IntegrityError inserting race_result: {ie}; params=(race_id={race_id}, driver_id={driver_id}, team_id={team_id}, position={position}, time_seconds={time_sec})"
                 )
         self.conn.commit()
