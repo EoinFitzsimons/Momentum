@@ -81,6 +81,10 @@ else:
 from persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
+# Global settings
+class AppSettings:
+    display_mode = "borderless"  # windowed, borderless, fullscreen
+
 
 class TelemetryLogger:
     def __init__(self, out_dir: str = "saves"):
@@ -103,6 +107,33 @@ class TelemetryLogger:
             extra["pit_time"] = event["pit_time"]
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(f"{etype},{subtype},{lap},{driver},{extra}\n")
+
+
+class PositionTracker:
+    """Track driver positions lap-by-lap for visualization."""
+    def __init__(self):
+        self.laps = []  # List of dicts: {lap_num: int, positions: {driver_id: pos}}
+        self.driver_names = {}  # {driver_id: name}
+    
+    def add_lap(self, lap_num: int, standings: list):
+        """Record positions for a lap."""
+        positions = {}
+        for s in standings:
+            driver_id = s.get("driver_id")
+            position = s.get("position")
+            name = s.get("name", f"Driver {driver_id}")
+            if driver_id:
+                positions[driver_id] = position
+                self.driver_names[driver_id] = name
+        self.laps.append({"lap_num": lap_num, "positions": positions})
+    
+    def get_position_history(self, driver_id):
+        """Get list of positions for a driver across all laps."""
+        return [lap["positions"].get(driver_id) for lap in self.laps]
+    
+    def get_all_drivers(self):
+        """Get list of all driver IDs that participated."""
+        return list(self.driver_names.keys())
 
 
 if not HAS_QT:
@@ -132,23 +163,92 @@ else:
         def __init__(self, drivers: list, parent=None):
             super().__init__(parent)
             self.setWindowTitle("Select Your Driver")
-            self.setGeometry(150, 150, 1000, 700)
             self.drivers = drivers
             self.selected_driver = None
+            self.setFixedSize(1920, 1080)
+            
+            # Apply Momentum color scheme
+            self.setStyleSheet("""
+                QDialog {
+                    background-color: #353839;
+                    color: #B9F2FF;
+                }
+                QLabel {
+                    color: #B9F2FF;
+                }
+                QGroupBox {
+                    color: #B9F2FF;
+                    border: 1px solid #B9F2FF;
+                    margin-top: 10px;
+                    padding-top: 10px;
+                }
+                QGroupBox::title {
+                    subcontrol-origin: margin;
+                    subcontrol-position: top left;
+                    padding: 0 5px;
+                }
+                QListWidget {
+                    background-color: #FFFFFF;
+                    color: #353839;
+                    border: 1px solid #B9F2FF;
+                }
+                QPushButton {
+                    background-color: #B9F2FF;
+                    color: #353839;
+                    border: none;
+                    padding: 8px 16px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #DD2D4A;
+                    color: #FFFFFF;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #B9F2FF;
+                    background-color: #353839;
+                }
+                QTabBar::tab {
+                    background-color: #252627;
+                    color: #B9F2FF;
+                    padding: 8px 16px;
+                    border: 1px solid #B9F2FF;
+                }
+                QTabBar::tab:selected {
+                    background-color: #B9F2FF;
+                    color: #353839;
+                }
+            """)
             
             layout = QtWidgets.QHBoxLayout(self)
+            layout.setContentsMargins(20, 20, 20, 20)
+            layout.setSpacing(20)
             
             # Left panel: driver list
             left_panel = QtWidgets.QVBoxLayout()
-            left_panel.addWidget(QtWidgets.QLabel("<h2>Available Drivers</h2>"))
+            
+            title_label = QtWidgets.QLabel("<h1>Available Drivers</h1>")
+            try:
+                from PyQt6.QtCore import Qt
+                title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            except (ImportError, AttributeError):
+                pass
+            left_panel.addWidget(title_label)
             
             self.driver_list = QtWidgets.QListWidget()
+            self.driver_list.setMinimumWidth(300)
+            try:
+                from PyQt6.QtGui import QFont
+                font = QFont("Inter", 12)
+                self.driver_list.setFont(font)
+            except (ImportError, AttributeError):
+                pass
             for driver in drivers:
                 self.driver_list.addItem(f"{driver.name} ({driver.nationality})")
             getattr(self.driver_list.currentRowChanged, "connect")(self.on_driver_selected)
             left_panel.addWidget(self.driver_list)
             
             confirm_btn = QtWidgets.QPushButton("Select Driver")
+            confirm_btn.setMinimumHeight(60)
             getattr(confirm_btn.clicked, "connect")(self.accept)
             left_panel.addWidget(confirm_btn)
             
@@ -156,12 +256,20 @@ else:
             
             # Right panel: driver details
             right_panel = QtWidgets.QVBoxLayout()
+            right_panel.setSpacing(15)
             
             # Biography section
-            bio_group = QtWidgets.QGroupBox("Biography")
+            bio_group = QtWidgets.QGroupBox("Driver Biography")
+            bio_group.setFixedHeight(250)
             bio_layout = QtWidgets.QVBoxLayout(bio_group)
             self.bio_label = QtWidgets.QLabel("Select a driver to view details")
             self.bio_label.setWordWrap(True)
+            try:
+                from PyQt6.QtGui import QFont
+                bio_font = QFont("Inter", 11)
+                self.bio_label.setFont(bio_font)
+            except (ImportError, AttributeError):
+                pass
             bio_layout.addWidget(self.bio_label)
             right_panel.addWidget(bio_group)
             
@@ -170,27 +278,27 @@ else:
             
             # Core Skills tab
             self.core_canvas = QtWidgets.QLabel()
-            self.core_canvas.setMinimumSize(400, 400)
+            self.core_canvas.setFixedSize(1200, 700)
             attr_tabs.addTab(self.core_canvas, "Core Skills")
             
             # Physical & Mental tab
             self.physical_canvas = QtWidgets.QLabel()
-            self.physical_canvas.setMinimumSize(400, 400)
+            self.physical_canvas.setFixedSize(1200, 700)
             attr_tabs.addTab(self.physical_canvas, "Physical & Mental")
             
             # Technical tab
             self.technical_canvas = QtWidgets.QLabel()
-            self.technical_canvas.setMinimumSize(400, 400)
+            self.technical_canvas.setFixedSize(1200, 700)
             attr_tabs.addTab(self.technical_canvas, "Technical")
             
             # Discipline Aptitudes tab
             self.discipline_canvas = QtWidgets.QLabel()
-            self.discipline_canvas.setMinimumSize(400, 400)
+            self.discipline_canvas.setFixedSize(1200, 700)
             attr_tabs.addTab(self.discipline_canvas, "Disciplines")
             
             right_panel.addWidget(attr_tabs)
             
-            layout.addLayout(right_panel, 2)
+            layout.addLayout(right_panel, 3)
             
             # Select first driver by default
             if drivers:
@@ -278,7 +386,7 @@ else:
             width = canvas.width()
             height = canvas.height()
             pixmap = QPixmap(width, height)
-            pixmap.fill(QColor(255, 255, 255))
+            pixmap.fill(QColor(0x35, 0x38, 0x39))  # Charcoal Grey background
             
             painter = QPainter(pixmap)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -294,14 +402,14 @@ else:
                 return
             
             # Draw concentric circles for scale (0, 25, 50, 75, 100)
-            painter.setPen(QPen(QColor(220, 220, 220), 1))
+            painter.setPen(QPen(QColor(0x60, 0x60, 0x60), 1))  # Subtle grid lines
             for scale in [0.25, 0.5, 0.75, 1.0]:
                 r = int(radius * scale)
                 painter.drawEllipse(center_x - r, center_y - r, r * 2, r * 2)
             
             # Draw axes and labels
-            painter.setPen(QPen(QColor(150, 150, 150), 1))
-            painter.setFont(QFont("Arial", 9))
+            painter.setPen(QPen(QColor(0xB9, 0xF2, 0xFF), 1))  # Cyan Blue axes
+            painter.setFont(QFont("Inter", 9))
             
             points = []
             for i, (label, value) in enumerate(attributes):
@@ -327,14 +435,14 @@ else:
             
             # Draw filled polygon for attributes
             if points:
-                painter.setBrush(QBrush(QColor(100, 150, 255, 100)))
-                painter.setPen(QPen(QColor(50, 100, 200), 2))
+                painter.setBrush(QBrush(QColor(0xB9, 0xF2, 0xFF, 100)))  # Cyan Blue with transparency
+                painter.setPen(QPen(QColor(0xB9, 0xF2, 0xFF), 2))  # Cyan Blue outline
                 from PyQt6.QtGui import QPolygonF as _QPolygonF
                 polygon = _QPolygonF(points)
                 painter.drawPolygon(polygon)
                 
                 # Draw points
-                painter.setBrush(QBrush(QColor(50, 100, 200)))
+                painter.setBrush(QBrush(QColor(0xDD, 0x2D, 0x4A)))  # Racing Red points for contrast
                 for point in points:
                     painter.drawEllipse(point, 4, 4)
             
@@ -345,11 +453,185 @@ else:
             return self.selected_driver
 
 
+    class RaceResultsGraph(QtWidgets.QWidget):
+        """Widget to display race position changes over laps as a line graph."""
+        
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.position_tracker = None
+        
+        def set_data(self, position_tracker: PositionTracker):
+            """Load position tracking data and trigger repaint."""
+            self.position_tracker = position_tracker
+            self.update()
+        
+        def paintEvent(self, event):
+            """Draw the position graph."""
+            if not self.position_tracker or not self.position_tracker.laps:
+                return
+            
+            try:
+                from PyQt6.QtGui import QPainter, QPen, QColor, QFont
+                from PyQt6.QtCore import Qt
+            except ImportError:
+                return
+            
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # Set background
+            painter.fillRect(self.rect(), QColor(0x35, 0x38, 0x39))  # Charcoal Grey
+            
+            # Chart dimensions with proper margins to prevent overflow
+            margin_left = 50
+            margin_right = 150  # Extra space for driver names
+            margin_top = 50
+            margin_bottom = 50
+            width = self.width() - margin_left - margin_right
+            height = self.height() - margin_top - margin_bottom
+            
+            num_laps = len(self.position_tracker.laps)
+            drivers = self.position_tracker.get_all_drivers()
+            max_position = len(drivers)
+            
+            if num_laps < 2 or max_position < 1:
+                return
+            
+            # Draw title
+            painter.setPen(QPen(QColor(0xB9, 0xF2, 0xFF)))  # Cyan Blue
+            painter.setFont(QFont("Inter", 14, 600))
+            painter.drawText(margin_left, 30, "Race Position Changes")
+            
+            # Draw grid lines and labels
+            painter.setPen(QPen(QColor(0x60, 0x60, 0x60), 1))  # Subtle grid
+            painter.setFont(QFont("Inter", 9))
+            
+            # Vertical grid (positions)
+            for pos in range(1, max_position + 1):
+                y = margin_top + (pos - 1) * (height / max(max_position - 1, 1))
+                painter.drawLine(margin_left, int(y), margin_left + width, int(y))
+                painter.setPen(QPen(QColor(0xB9, 0xF2, 0xFF)))  # Cyan labels
+                painter.drawText(10, int(y) + 5, f"P{pos}")
+                painter.setPen(QPen(QColor(0x60, 0x60, 0x60), 1))
+            
+            # Horizontal grid (laps)
+            for lap_idx in range(0, num_laps, max(1, num_laps // 10)):
+                x = margin_left + lap_idx * (width / max(num_laps - 1, 1))
+                painter.drawLine(int(x), margin_top, int(x), margin_top + height)
+                painter.setPen(QPen(QColor(0xB9, 0xF2, 0xFF)))  # Cyan labels
+                painter.drawText(int(x) - 10, margin_top + height + 20, f"L{lap_idx}")
+                painter.setPen(QPen(QColor(0x60, 0x60, 0x60), 1))
+            
+            # Draw position lines for each driver
+            colors = [
+                QColor(0xB9, 0xF2, 0xFF),  # Cyan Blue (brand)
+                QColor(0xDD, 0x2D, 0x4A),  # Racing Red (brand)
+                QColor(0xF5, 0xF5, 0xF5),  # Snow White (brand)
+                QColor(0xFF, 0xA5, 0x00),  # Orange
+                QColor(0x00, 0xFF, 0x7F),  # Spring Green
+                QColor(0xFF, 0xFF, 0x00),  # Yellow
+                QColor(0xFF, 0x00, 0xFF),  # Magenta
+                QColor(0x00, 0xBF, 0xFF),  # Deep Sky Blue
+                QColor(0xFF, 0x69, 0xB4),  # Hot Pink
+                QColor(0x7F, 0xFF, 0x00),  # Chartreuse
+            ]
+            
+            for idx, driver_id in enumerate(drivers[:10]):  # Show top 10
+                color = colors[idx % len(colors)]
+                painter.setPen(QPen(color, 2))
+                
+                positions = self.position_tracker.get_position_history(driver_id)
+                points = []
+                
+                for lap_idx, pos in enumerate(positions):
+                    if pos is None:
+                        continue
+                    x = margin_left + lap_idx * (width / max(num_laps - 1, 1))
+                    y = margin_top + (pos - 1) * (height / max(max_position - 1, 1))
+                    points.append((int(x), int(y)))
+                
+                # Draw line segments
+                for i in range(len(points) - 1):
+                    painter.drawLine(points[i][0], points[i][1], points[i+1][0], points[i+1][1])
+                
+                # Draw driver name at final position
+                if points:
+                    final_x, final_y = points[-1]
+                    driver_name = self.position_tracker.driver_names.get(driver_id, f"D{driver_id}")
+                    painter.drawText(final_x + 5, final_y + 5, driver_name[:15])
+            
+            painter.end()
+
+
     class MainWindow(_BaseWindow):
         def __init__(self):
             super().__init__()
             self.setWindowTitle("Momentum - Motorsport Management")
-            self.setGeometry(200, 200, 800, 600)
+            self.apply_display_mode()
+            
+            # Apply Momentum color scheme
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #353839;
+                    color: #B9F2FF;
+                }
+                QWidget {
+                    background-color: #353839;
+                    color: #B9F2FF;
+                }
+                QLabel {
+                    color: #B9F2FF;
+                }
+                QPushButton {
+                    background-color: #B9F2FF;
+                    color: #353839;
+                    border: none;
+                    padding: 10px 20px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    min-height: 40px;
+                }
+                QPushButton:hover {
+                    background-color: #DD2D4A;
+                    color: #FFFFFF;
+                }
+                QPushButton:disabled {
+                    background-color: #555555;
+                    color: #888888;
+                }
+                QListWidget {
+                    background-color: #252627;
+                    color: #B9F2FF;
+                    border: 1px solid #B9F2FF;
+                }
+                QTableWidget {
+                    background-color: #FFFFFF;
+                    color: #353839;
+                    border: 1px solid #B9F2FF;
+                    gridline-color: #B9F2FF;
+                    alternate-background-color: #F5F5F5;
+                }
+                QTableWidget::item {
+                    padding: 8px;
+                }
+                QHeaderView::section {
+                    background-color: #B9F2FF;
+                    color: #353839;
+                    padding: 10px;
+                    border: 1px solid #353839;
+                    font-weight: bold;
+                    font-size: 14px;
+                }
+                QProgressBar {
+                    border: 1px solid #B9F2FF;
+                    background-color: #252627;
+                    text-align: center;
+                    color: #B9F2FF;
+                }
+                QProgressBar::chunk {
+                    background-color: #B9F2FF;
+                }
+            """)
 
             # Central widget with stacked layout for menu/race views
             self.central = QtWidgets.QWidget()
@@ -379,6 +661,25 @@ else:
             self._stop_event: Optional[threading.Event] = None
             self.telemetry = TelemetryLogger()
             self.selected_driver = None
+            self.position_tracker = PositionTracker()
+        
+        def apply_display_mode(self):
+            """Apply the current display mode setting."""
+            try:
+                from PyQt6.QtCore import Qt
+            except ImportError:
+                return
+            
+            if AppSettings.display_mode == "fullscreen":
+                self.showFullScreen()
+            elif AppSettings.display_mode == "borderless":
+                self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+                self.setGeometry(0, 0, 1920, 1080)
+                self.show()
+            else:  # windowed
+                self.setWindowFlags(Qt.WindowType.Window)
+                self.resize(1920, 1080)
+                self.show()
 
         def _create_menu_screen(self):
             """Create the main menu screen with Choose Driver and Exit buttons."""
@@ -410,6 +711,13 @@ else:
             choose_driver_btn.setStyleSheet("font-size: 16px; font-weight: bold;")
             getattr(choose_driver_btn.clicked, "connect")(self.on_choose_driver)
             button_layout.addWidget(choose_driver_btn)
+            
+            # Options button
+            options_btn = QtWidgets.QPushButton("Options")
+            options_btn.setMinimumHeight(50)
+            options_btn.setStyleSheet("font-size: 16px;")
+            getattr(options_btn.clicked, "connect")(self.show_options)
+            button_layout.addWidget(options_btn)
             
             # Exit button
             exit_btn = QtWidgets.QPushButton("Exit")
@@ -447,6 +755,12 @@ else:
             
             controls.addStretch()
             
+            # View Results Graph button
+            self.view_graph_btn = QtWidgets.QPushButton("View Position Graph")
+            self.view_graph_btn.setEnabled(False)
+            getattr(self.view_graph_btn.clicked, "connect")(self.show_results_graph)
+            controls.addWidget(self.view_graph_btn)
+            
             # Back to menu button
             back_btn = QtWidgets.QPushButton("Back to Menu")
             getattr(back_btn.clicked, "connect")(self.back_to_menu)
@@ -458,7 +772,13 @@ else:
             self.progress = QtWidgets.QProgressBar()
             layout.addWidget(self.progress)
             
-            # Splitter for event feed and standings
+            # Tabs for different views
+            self.race_tabs = QtWidgets.QTabWidget()
+            
+            # Live view tab (splitter with event feed and standings)
+            live_widget = QtWidgets.QWidget()
+            live_layout = QtWidgets.QVBoxLayout(live_widget)
+            
             splitter = QtWidgets.QSplitter()
             
             # Event feed
@@ -468,9 +788,26 @@ else:
             # Standings table
             self.table = QtWidgets.QTableWidget(0, 4)
             self.table.setHorizontalHeaderLabels(["Pos", "#", "Driver", "Time"])
+            self.table.setAlternatingRowColors(True)
+            try:
+                from PyQt6.QtWidgets import QHeaderView
+                header = self.table.horizontalHeader()
+                header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+                header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+                header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+                header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            except (ImportError, AttributeError):
+                pass
             splitter.addWidget(self.table)
             
-            layout.addWidget(splitter)
+            live_layout.addWidget(splitter)
+            self.race_tabs.addTab(live_widget, "Live Race")
+            
+            # Results graph tab
+            self.results_graph = RaceResultsGraph()
+            self.race_tabs.addTab(self.results_graph, "Position Graph")
+            
+            layout.addWidget(self.race_tabs)
             
             # Wire up start/stop buttons
             getattr(self.start_btn.clicked, "connect")(self.start_race)
@@ -485,6 +822,72 @@ else:
             
             return race_widget
 
+        def show_options(self):
+            """Show options dialog for display settings."""
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Options")
+            dialog.setFixedSize(500, 300)
+            dialog.setStyleSheet(self.styleSheet())
+            
+            layout = QtWidgets.QVBoxLayout(dialog)
+            layout.setSpacing(20)
+            
+            # Title
+            title = QtWidgets.QLabel("<h2>Display Settings</h2>")
+            try:
+                from PyQt6.QtCore import Qt
+                title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            except (ImportError, AttributeError):
+                pass
+            layout.addWidget(title)
+            
+            # Display mode group
+            mode_group = QtWidgets.QGroupBox("Display Mode")
+            mode_layout = QtWidgets.QVBoxLayout(mode_group)
+            
+            self.windowed_radio = QtWidgets.QRadioButton("Windowed (1920x1080)")
+            self.borderless_radio = QtWidgets.QRadioButton("Borderless Windowed (1920x1080)")
+            self.fullscreen_radio = QtWidgets.QRadioButton("Fullscreen")
+            
+            # Set current mode
+            if AppSettings.display_mode == "windowed":
+                self.windowed_radio.setChecked(True)
+            elif AppSettings.display_mode == "borderless":
+                self.borderless_radio.setChecked(True)
+            else:
+                self.fullscreen_radio.setChecked(True)
+            
+            mode_layout.addWidget(self.windowed_radio)
+            mode_layout.addWidget(self.borderless_radio)
+            mode_layout.addWidget(self.fullscreen_radio)
+            layout.addWidget(mode_group)
+            
+            layout.addStretch()
+            
+            # Buttons
+            button_layout = QtWidgets.QHBoxLayout()
+            apply_btn = QtWidgets.QPushButton("Apply")
+            cancel_btn = QtWidgets.QPushButton("Cancel")
+            
+            def apply_settings():
+                if self.windowed_radio.isChecked():
+                    AppSettings.display_mode = "windowed"
+                elif self.borderless_radio.isChecked():
+                    AppSettings.display_mode = "borderless"
+                else:
+                    AppSettings.display_mode = "fullscreen"
+                self.apply_display_mode()
+                dialog.accept()
+            
+            getattr(apply_btn.clicked, "connect")(apply_settings)
+            getattr(cancel_btn.clicked, "connect")(dialog.reject)
+            
+            button_layout.addWidget(apply_btn)
+            button_layout.addWidget(cancel_btn)
+            layout.addLayout(button_layout)
+            
+            dialog.exec()
+        
         def on_choose_driver(self):
             """Handle Choose Driver button - show driver selection then switch to race screen."""
             db = PersistenceSQLite()
@@ -516,6 +919,10 @@ else:
             self.append_event(f"Selected driver: {self.selected_driver.name}")
             self.setWindowTitle(f"Momentum - {self.selected_driver.name}")
         
+        def show_results_graph(self):
+            """Switch to the position graph tab."""
+            self.race_tabs.setCurrentIndex(1)
+        
         def back_to_menu(self):
             """Return to main menu screen."""
             # Stop any running race
@@ -527,6 +934,9 @@ else:
             self.table.setRowCount(0)
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
+            self.view_graph_btn.setEnabled(False)
+            self.position_tracker = PositionTracker()  # Reset tracker
+            self.race_tabs.setCurrentIndex(0)  # Back to live view
             
             # Switch to menu
             self.main_layout.setCurrentIndex(0)
@@ -571,9 +981,18 @@ else:
                 results = ev.get("results", [])
                 # At race finish show final table (results are minimal dicts)
                 self.update_table(results)
+                # Enable results graph viewing
+                self.view_graph_btn.setEnabled(True)
+                self.results_graph.set_data(self.position_tracker)
             elif et == "standings":
                 # Live per-lap standings: update table with names and times
                 standings = ev.get("standings", [])
+                lap = ev.get("lap")
+                
+                # Track positions for graph
+                if lap is not None:
+                    self.position_tracker.add_lap(lap, standings)
+                
                 # Convert standings to table rows with Pos/#/Driver/Time
                 self.table.setRowCount(len(standings))
                 for i, r in enumerate(standings):
@@ -676,9 +1095,12 @@ else:
             
             self.start_btn.setEnabled(False)
             self.stop_btn.setEnabled(True)
+            self.view_graph_btn.setEnabled(False)
             self._stop_flag.clear()
             self.event_list.clear()
             self.table.setRowCount(0)
+            self.position_tracker = PositionTracker()  # Reset tracker for new race
+            self.race_tabs.setCurrentIndex(0)  # Switch to live view
 
             # run simulation in background thread
             def runner():

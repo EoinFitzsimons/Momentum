@@ -15,11 +15,11 @@ This document formalises the Momentum colour palette and provides practical guid
 
 ### Quick tokens
 
-- Background: `--bg: #F5F5F5`
-- Surface / Panel: usually `#FFFFFF` on top of background (use subtle shadows)
-- Primary text: `--text-primary: #353839`
-- Accent / Interactive: `--accent: #B9F2FF`
-- Critical / Error: `--danger: #DD2D4A`
+- Background: `--bg: #353839` (Charcoal Grey)
+- Surface / Panel: `--surface: #FFFFFF` (Snow White) — use for panels and cards on top of the dark background
+- Primary text: `--text-primary: #B9F2FF` (Cyan Blue)
+- Secondary text / on-dark-high-contrast: `--text-on-dark: #FFFFFF` (Snow White)
+- Critical / Alert text: `--danger-text: #DD2D4A` (Racing Red)
 
 ---
 
@@ -27,16 +27,16 @@ This document formalises the Momentum colour palette and provides practical guid
 
 ### UI Structure
 
-- Use **Snow White** (`#F5F5F5`) as the canvas and panel base. Keep large areas light to maintain clarity.
-- Use **Charcoal Grey** (`#353839`) for headings, body copy and structural UI elements (sidebars, cards).
-- Use **Cyan Blue** (`#B9F2FF`) for primary interactive elements: active nav, selected rows, hover highlights and small data accents.
-- Reserve **Racing Red** (`#DD2D4A`) for true critical alerts and important attention-grabbing elements. Use sparingly.
+- Use **Charcoal Grey** (`#353839`) as the overall canvas/background. Large areas of the app should sit on this dark base.
+- Use **Snow White** (`#F5F5F5`) for surface panels and cards placed on top of the dark background to create readable containers.
+- Use **Cyan Blue** (`#B9F2FF`) as the primary text colour across the app (headings, body copy, labels).
+- Use **Racing Red** (`#DD2D4A`) and **Snow White** as alternate text colours where needed — e.g. red for critical labels/alerts, white for very small or low-contrast cases.
 
 ### Data Visualisation
 
 - Positive/Improving values: Cyan Blue (`#B9F2FF`)
 - Negative/Critical: Racing Red (`#DD2D4A`)
-- Neutral or baseline: Charcoal Grey (30–60% opacity for less emphasis)
+- Neutral or baseline: Snow White at reduced opacity (use panels) or subtle greys laid over panels — avoid relying on Charcoal Grey (background) alone for data marks.
 
 ### Discipline theming (recommended)
 
@@ -50,11 +50,11 @@ This document formalises the Momentum colour palette and provides practical guid
 
 ---
 
-## Accessibility
+### Accessibility
 
-- `#353839` on `#F5F5F5` yields very high contrast (~15:1). This comfortably meets WCAG AA and AAA for body and heading text.
-- Use Racing Red only for high-severity information and pair with icons/patterns for colour-blind users.
-- For charts/tables, never rely on colour alone. Use shaped markers or text labels.
+- The primary colour pairing is **Cyan Blue** text on a **Charcoal Grey** background. Test for text-size contrast: large and medium-sized text will be high-contrast, but very small text may fall short of WCAG AA. Where contrast is marginal, use `--text-on-dark: #FFFFFF` (Snow White) for small captions or low-emphasis copy.
+- Use Racing Red (`#DD2D4A`) for critical alerts; always pair with icons or patterns for accessibility.
+- For charts/tables, never rely on colour alone. Use shaped markers, text labels, or dual encodings.
 
 ---
 
@@ -79,21 +79,32 @@ Suggested scale (desktop):
 
 ```css
 :root {
-  --color-bg: #F5F5F5;
-  --color-surface: #FFFFFF;
-  --color-text: #353839;
-  --color-accent: #B9F2FF;
-  --color-danger: #DD2D4A;
+  --color-bg: #353839; /* Charcoal Grey background */
+  --color-surface: #FFFFFF; /* Snow White panels */
+  --color-text: #B9F2FF; /* Cyan Blue primary text */
+  --color-text-on-dark: #FFFFFF; /* White for small/low-contrast text */
+  --color-danger-text: #DD2D4A; /* Racing Red for critical text */
 }
 
-.button-primary {
-  background: var(--color-accent);
+body {
+  background: var(--color-bg);
   color: var(--color-text);
 }
 
+.panel {
+  background: var(--color-surface);
+  color: var(--color-bg); /* dark text on light panels if needed */
+}
+
+.button-primary {
+  background: transparent; /* keep focus on text-based UI — use surface for click targets */
+  color: var(--color-text);
+  border: 1px solid rgba(185,242,255,0.12);
+}
+
 .alert-danger {
-  background: var(--color-danger);
-  color: #fff;
+  color: var(--color-danger-text);
+  background: transparent;
 }
 ```
 
@@ -108,10 +119,10 @@ using UnityEngine;
 
 public static class ColorPalette
 {
-    public static readonly Color CyanBlue = new Color32(0xB9, 0xF2, 0xFF, 0xFF);
-    public static readonly Color CharcoalGrey = new Color32(0x35, 0x38, 0x39, 0xFF);
-    public static readonly Color RacingRed = new Color32(0xDD, 0x2D, 0x4A, 0xFF);
-    public static readonly Color SnowWhite = new Color32(0xF5, 0xF5, 0xF5, 0xFF);
+    public static readonly Color CyanBlue = new Color32(0xB9, 0xF2, 0xFF, 0xFF); // primary text
+    public static readonly Color CharcoalGrey = new Color32(0x35, 0x38, 0x39, 0xFF); // background
+    public static readonly Color RacingRed = new Color32(0xDD, 0x2D, 0x4A, 0xFF); // critical text
+    public static readonly Color SnowWhite = new Color32(0xF5, 0xF5, 0xF5, 0xFF); // panel / alternate text
 }
 ```
 
