@@ -43,22 +43,39 @@ if not HAS_QT:
     pyqtSignal: Any = None
     QObject: Any = None
 
-# Define an EventEmitter class that uses Qt signals when available,
-# otherwise provide a minimal stub. Declared here so both runtime and
-# static analysis see a single definition.
-if HAS_QT:
-    class EventEmitter(QObject):
-        event = pyqtSignal(object)
-else:
-    class EventEmitter:
+# Define an EventEmitter that uses Qt signals when available, otherwise a stub.
+# We avoid redeclaring the same symbol twice (Pylance warns) by creating a
+# small adapter: when Qt is available we create a thin subclass, otherwise a
+# plain Python stub is used and assigned to the name `EventEmitter` once.
+if TYPE_CHECKING:
+    # Provide a typing-time-only EventEmitter shape so static analysis is happy.
+    class EventEmitter:  # pragma: no cover - typing-only stub
+        event: Any
+
         def __init__(self):
-            self.event = self
+            ...
 
         def connect(self, *_args, **_kwargs):
-            return None
+            ...
 
         def emit(self, *_args, **_kwargs):
-            return None
+            ...
+else:
+    if HAS_QT:
+        class _QtEventEmitter(QObject):
+            event = pyqtSignal(object)
+
+        EventEmitter = _QtEventEmitter
+    else:
+        class EventEmitter:
+            def __init__(self):
+                self.event = self
+
+            def connect(self, *_args, **_kwargs):
+                return None
+
+            def emit(self, *_args, **_kwargs):
+                return None
 
 from persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
@@ -97,7 +114,15 @@ if not HAS_QT:
 else:
 
 
-    class MainWindow(QMainWindow):
+    if TYPE_CHECKING:
+        _BaseWindow = _QMainWindow
+    elif HAS_QT:
+        _BaseWindow = QMainWindow
+    else:
+        _BaseWindow = object
+
+
+    class MainWindow(_BaseWindow):
         def __init__(self):
             super().__init__()
             self.setWindowTitle("Momentum - Basic Race MVP")
