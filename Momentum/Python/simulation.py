@@ -31,10 +31,12 @@ Version: 1.0.0
 Compatible with: Python 3.8+, FastAPI 0.100+
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Any, Optional
+from dataclasses import asdict
+import uuid
 import uvicorn
 
 from database.database_manager import DatabaseManager
@@ -234,6 +236,243 @@ def get_all_drivers():
     except Exception as e:
         # Handle database errors and provide meaningful error messages
         raise HTTPException(status_code=500, detail=f"Failed to get drivers: {str(e)}")
+
+
+@app.get("/drivers/{driver_id}")
+def get_driver(driver_id: int):
+    """
+    Get single driver by ID (UC-1)
+
+    Validation:
+      - driver_id must be a positive integer (400)
+      - driver must exist (404)
+      - driver must be eligible (409) e.g. not retired
+
+    Errors:
+      - Database read failure -> 503 with diagnostic id
+    """
+    if not isinstance(driver_id, int) or driver_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid driver_id; must be positive integer")
+
+    try:
+        db = DatabaseManager()
+        driver = db.get_driver(driver_id)
+    except Exception:
+        diag = uuid.uuid4().hex
+        raise HTTPException(status_code=503, detail=f"Database read failure (diag={diag})")
+
+    if driver is None:
+        raise HTTPException(status_code=404, detail=f"Driver with id {driver_id} not found")
+
+    # Simple eligibility rule: career_phase != 'retired'
+    try:
+        if getattr(driver, 'career_phase', None) == 'retired':
+            raise HTTPException(status_code=409, detail=f"Driver {driver_id} is ineligible: retired")
+    except HTTPException:
+        raise
+    except Exception:
+        # ignore unexpected attribute errors and continue
+        pass
+
+    # Return full driver payload (dataclass -> dict)
+    try:
+        payload = asdict(driver)
+    except Exception:
+        # fallback: use __dict__
+        payload = getattr(driver, '__dict__', {})
+
+    return JSONResponse(content={"driver": payload})
+
+
+@app.get("/races/{race_id}/config")
+def get_race_config(race_id: int):
+    """
+    Return full event/race configuration (UC-2)
+
+    Validates race_id and composes configuration from race, track and championship.
+    Returns partial:true if fields are missing.
+    """
+    if not isinstance(race_id, int) or race_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid race_id; must be positive integer")
+
+    db = DatabaseManager()
+    try:
+        race = db.get_race(race_id)
+    except Exception:
+        diag = uuid.uuid4().hex
+        raise HTTPException(status_code=503, detail=f"Database read failure (diag={diag})")
+
+    partial = False
+    warnings = []
+
+    if race is None:
+        # try fallback temporary race generator
+        race = db.get_race_by_id(race_id)
+        if race is None:
+            raise HTTPException(status_code=404, detail=f"Race with id {race_id} not found")
+        partial = True
+        warnings.append("Race record missing in DB; using temporary placeholder")
+
+    # Track
+    try:
+        track = db.get_track(getattr(race, 'track_id', 1))
+        if track is None:
+            partial = True
+            warnings.append("Track data missing for race")
+            track_payload = {}
+        else:
+            # convert dataclass to dict where possible
+            try:
+                track_payload = asdict(track)
+            except Exception:
+                track_payload = getattr(track, '__dict__', {})
+    except Exception:
+        diag = uuid.uuid4().hex
+        raise HTTPException(status_code=503, detail=f"Database read failure (diag={diag})")
+
+    # Championship / ruleset
+    champ_payload = {}
+    try:
+        champ = db.get_championship(getattr(race, 'championship_id', 1))
+        if champ is None:
+            partial = True
+            warnings.append("Championship data missing for race")
+        else:
+            try:
+                champ_payload = asdict(champ)
+            except Exception:
+                champ_payload = getattr(champ, '__dict__', {})
+    except Exception:
+        diag = uuid.uuid4().hex
+        raise HTTPException(status_code=503, detail=f"Database read failure (diag={diag})")
+
+    config = {
+        "race_id": race_id,
+        "track": track_payload,
+        "race": {
+            "laps": getattr(race, 'total_laps', getattr(race, 'laps', None)),
+            "scheduled_date": getattr(race, 'race_date', None),
+            "weather_default": getattr(race, 'weather_conditions', 'dry'),
+            "status": getattr(race, 'status', 'scheduled')
+        },
+        "championship": champ_payload,
+        "partial": partial,
+        "warnings": warnings
+    }
+
+    return JSONResponse(content={"configuration": config})
+
+
+@app.post("/races/{race_id}/results")
+def post_race_results(race_id: int, request: Request):
+    """
+    Persist race results atomically and enqueue standings recalculation (UC-3)
+
+    Expects JSON body: { "results": [ { driver_id, team_id, position, points, fastest_lap?, dnf_reason?, grid_position? }, ... ] }
+    """
+    if not isinstance(race_id, int) or race_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid race_id; must be positive integer")
+
+    try:
+        payload = request.json() if hasattr(request, 'json') else None
+    except Exception:
+        # For FastAPI Request we need to read async; but function is sync so use .json() via starlette
+        payload = None
+
+    # FastAPI will pass dict directly when using function param typing; support both
+    if payload is None:
+        try:
+            payload = request._body if hasattr(request, '_body') else {}
+        except Exception:
+            payload = {}
+
+    # Accept either dict or object created by FastAPI body binding
+    if isinstance(payload, bytes):
+        try:
+            import json as _json
+            payload = _json.loads(payload.decode('utf-8'))
+        except Exception:
+            payload = {}
+
+    if not isinstance(payload, dict):
+        # Try to use request.json() coroutine
+        try:
+            import asyncio
+            payload = asyncio.get_event_loop().run_until_complete(request.json())
+        except Exception:
+            payload = {}
+
+    results = payload.get('results') if isinstance(payload, dict) else None
+    if not isinstance(results, list) or len(results) == 0:
+        raise HTTPException(status_code=400, detail="Invalid payload: 'results' must be a non-empty list")
+
+    db = DatabaseManager()
+    # Check race status if exists
+    try:
+        race = db.get_race(race_id)
+        if race is not None and getattr(race, 'status', None) == 'completed':
+            raise HTTPException(status_code=409, detail=f"Race {race_id} is already finalised")
+    except HTTPException:
+        raise
+    except Exception:
+        # ignore and proceed (fallbacks below)
+        race = None
+
+    # Validate each result entry minimally
+    for idx, r in enumerate(results):
+        if not isinstance(r, dict):
+            raise HTTPException(status_code=400, detail=f"Invalid result at index {idx}: must be object")
+        required = ['driver_id', 'team_id', 'position', 'points']
+        for field in required:
+            if field not in r:
+                raise HTTPException(status_code=400, detail=f"Missing field '{field}' in result at index {idx}")
+
+    # Persist atomically using a single connection/transaction
+    try:
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            # Insert/replace each result
+            for r in results:
+                cur.execute(
+                    "INSERT OR REPLACE INTO race_results (race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        race_id,
+                        int(r.get('driver_id')),
+                        int(r.get('team_id')),
+                        int(r.get('position')),
+                        int(r.get('points')),
+                        1 if r.get('fastest_lap') else 0,
+                        r.get('dnf_reason'),
+                        int(r.get('grid_position', 1))
+                    )
+                )
+
+            # Mark race completed if races table exists
+            try:
+                cur.execute("UPDATE races SET status = ? WHERE id = ?", ('completed', race_id))
+            except Exception:
+                # ignore if races table not present or other issue
+                pass
+
+            conn.commit()
+        finally:
+            conn.close()
+
+    except Exception as e:
+        diag = uuid.uuid4().hex
+        raise HTTPException(status_code=500, detail=f"Failed to persist results (diag={diag}): {str(e)}")
+
+    # Trigger standings recalculation (synchronous minimal implementation)
+    try:
+        # If race had championship_id, calculate standings for it; fallback to 1
+        championship_id = getattr(race, 'championship_id', 1) if race is not None else 1
+        season = getattr(race, 'season', getattr(race, 'season', 2025)) if race is not None else 2025
+        standings = db.get_championship_standings(championship_id, season)
+    except Exception:
+        standings = []
+
+    return JSONResponse(content={"status": "ok", "race_id": race_id, "standings": standings})
 
 @app.get("/teams")
 def get_teams(discipline: Optional[str] = None):

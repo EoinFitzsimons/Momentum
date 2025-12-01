@@ -168,11 +168,11 @@ def simulate_race(
             current = []
             for d in drivers:
                 s = state[d.id]
-                t = float(s['total_time']) if s['running'] else getattr(s, 'total_time', float(1e9))
+                time_sec = float(s['total_time']) if s['running'] else float(1e9)
                 current.append({
                     "driver_id": d.id,
                     "name": d.name,
-                    "time_seconds": float(s['total_time']) if s['running'] else float(1e9),
+                    "time_seconds": time_sec,
                     "running": bool(s['running']),
                 })
             # sort by time and assign positions
