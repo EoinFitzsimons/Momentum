@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Momentum is a comprehensive motorsport management simulation spanning **7 racing disciplines** (Single Seater, Production/Touring, Rally/Stage, Urban/Street, Drag/Acceleration, Sprint/Rallycross, Endurance). The architecture consists of a **Python FastAPI backend** providing race simulation and game logic, with planned Unity frontend integration. The backend is ~60-70% playable with core simulation working but game loop/progression incomplete.
+Momentum is a comprehensive motorsport management simulation spanning **7 racing disciplines** (Single Seater, Production/Touring, Rally/Stage, Urban/Street, Drag/Acceleration, Sprint/Rallycross, Endurance). The architecture consists of a **Python FastAPI backend** providing race simulation and game logic, with **PyQt6 desktop GUI** for user interface. The backend is ~60-70% playable with core simulation working but game loop/progression incomplete.
 
 ## Architecture
 
@@ -144,7 +144,7 @@ teams = db.get_teams_by_discipline("SINGLE_SEATER")
 
 Key endpoints in `simulation.py`:
 
-- `GET /health` - Health check (use for Unity connectivity tests)
+- `GET /health` - Health check (verify API availability)
 - `GET /drivers` - Returns all 1,781 drivers with attributes
 - `GET /teams?discipline=SINGLE_SEATER` - Filtered team queries
 - `POST /simulate/race` - Core race simulation endpoint
@@ -203,11 +203,12 @@ Driver skills are 0-100 floats. Key attributes by discipline:
 - Hiring/firing/contract endpoints not implemented
 - Performance multiplier system designed but not integrated into simulation
 
-### ⚠️ Unity Frontend (Status: 5% complete)
+### ⚠️ PyQt6 GUI (Status: 60% complete)
 
-- `UnityApiClient.cs` provides basic HTTP client
-- See `Momentum/Unity/README.md` for CORS setup
-- No UI scenes, just API connectivity example
+- `gui/gui_game.py` provides playable game interface (PRIMARY testing method)
+- Race simulation screen functional
+- Garage/workshop screens in development (`gui/gui_garage.py`)
+- Log viewer tool available (`gui/log_viewer.py`)
 
 ## Dependencies & Build
 
