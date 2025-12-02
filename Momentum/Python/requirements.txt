@@ -26,6 +26,10 @@ Faker
 python-dotenv
 requests
 
+# Geometry and track generation
+shapely
+bezier
+
 # Dev & Test tools (included while coding)
 pytest
 pytest-cov
