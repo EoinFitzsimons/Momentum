@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QFont
 
-from persistence_sqlite import PersistenceSQLite
+from services.persistence_sqlite import PersistenceSQLite
 from database.models import Driver as DBDriver, Track as DBTrack
 
 # Import the full Monte Carlo simulation engine

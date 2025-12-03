@@ -1,75 +1,205 @@
-# Simulation Attribute Mapping
+# Real-Time Agent-Based Simulation Attribute Mapping
 
-Purpose: map existing driver and track attributes (from `database/models.py`) to simulation factors used by the lap-by-lap engine. This document should be used as the canonical reference when refactoring `sim_simple.py` to use the full schema.
+**Purpose:** Map driver and track attributes (from `database/models.py`) to real-time physics calculations in the 30 FPS agent-based simulation engine (`realtime_race_engine.py`). This replaces the previous lap-by-lap statistical approach.
 
-Conventions
-- All driver attributes are in the 0–100 scale. Normalize to 0.0–1.0 for formulas: norm(x) = x/100.
-- Positive effects: higher value improves performance (may reduce lap time). Negative effects: higher value increases cost (e.g., tyre wear). Document sign clearly.
-- Use weighted linear combinations for initial implementation. Replace by calibrated non-linear functions if needed later.
+**Architecture:** Each driver is an autonomous agent with continuous position updates at 30 FPS. Physics calculations occur every frame (0.033 seconds) based on driver skills, team capability, environmental conditions, and AI decision-making.
 
-1) Core lap-time formula (high-level)
+## Conventions
+- All driver attributes use 0–100 scale. Normalize to 0.0–1.0: `norm(x) = x/100`
+- Physics operates at **30 FPS** (timestep = 1/30 = 0.033 seconds)
+- Position integration: `position_m += velocity_mps * timestep`
+- Higher attribute values → better performance (except wear/fuel consumption)
+- Racing modes affect speed multipliers and resource consumption
 
-BaseLapTime (s) = track.length_km * 60.0
+## 1) Core Speed Calculation (Per-Frame Physics)
 
-DriverPerformanceFactor = w_speed * (1 - norm(raw_speed))
-                       + w_corner * (1 - norm(cornering_skill)) * track.corner_factor
-                       + w_brake * (1 - norm(braking_technique)) * track.braking_factor
-                       + w_accel * (1 - norm(acceleration_control)) * track.accel_factor
+**Implemented in:** `RealtimeRaceEngine._calculate_speed()`
 
-LapTime = BaseLapTime * (1 + DriverPerformanceFactor) * TyrePenalty * FuelPenalty + RandomNoise
+```python
+base_speed_mps = (
+    0.40 * weighted_driver_skills +
+    0.30 * team_capability_normalized +
+    0.20 * tire_condition +
+    0.10 * (1.0 - fuel_load * 0.02)
+)
 
-Where:
-- TyrePenalty = 1 + tyre_wear * tyre_penalty_scale (see tyre wear mapping)
-- FuelPenalty = 1 + fuel_load_factor * fuel_penalty_scale
-- RandomNoise is scaled by (1 - norm(consistency)) to reflect lap-to-lap variance
+# Weighted driver skills (example for Single Seater)
+weighted_skills = (
+    0.25 * norm(raw_speed) +
+    0.20 * norm(cornering_skill) +
+    0.15 * norm(racecraft) +
+    0.12 * norm(consistency) +
+    0.10 * norm(physical_fitness) +
+    0.08 * norm(setup_knowledge) +
+    0.10 * norm(tire_management)
+)
 
-Recommended initial weights (tuneable):
-- w_speed = 0.45
-- w_corner = 0.20
-- w_brake = 0.10
-- w_accel = 0.10
-- remaining 0.05 reserved for strategy/other
+# Slipstream bonus (within 50m)
+if gap_ahead < 50.0:
+    base_speed_mps *= 1.05  # +5% in slipstream
 
-2) Tyre management & wear
+# Racing mode multipliers
+mode_multipliers = {
+    RacingMode.ATTACK: 1.03,   # +3% speed, high tire wear
+    RacingMode.DEFEND: 0.98,   # -2% speed, blocking
+    RacingMode.MANAGE: 1.00,   # Optimal balance
+    RacingMode.CRUISE: 0.97    # -3% speed, conserving
+}
 
-Inputs:
-- `tyre_management` (driver): higher reduces wear rate
-- `aggression` inferred from (raw_speed vs consistency): aggression = clamp((raw_speed - consistency) / 50, 0, 1)
-- track.surface_grip (if present) or `track.grip_modifier`
+final_speed_mps = base_speed_mps * mode_multipliers[racing_mode]
+final_speed_mps *= track_speed_scale  # Track-specific (e.g., 50 m/s average)
+```
 
-WearRatePerLap = base_wear + aggression * aggression_wear + (1 - norm(tyre_management)) * management_factor + track_abrasion
+**Key Changes from Lap-by-Lap:**
+- ❌ **Removed:** `BaseLapTime`, lap-based formulas
+- ✅ **Added:** Continuous velocity in meters/second
+- ✅ **Added:** Real-time position integration
+- ✅ **Added:** Racing mode multipliers
 
-Where base_wear = 0.01..0.03, aggression_wear ~= 0.01..0.03, management_factor ~= 0.02
+## 2) Tire Degradation (Per-Frame)
 
-TyrePenalty = 1.0 + (accumulated_wear * tyre_penalty_scale)  # tyre_penalty_scale ~= 0.35
+**Implemented in:** `RealtimeRaceEngine._update_driver_state()`
 
-Pit decision: pit when accumulated_wear > threshold OR when expected remaining laps * predicted_wear would exceed safe limit.
+**Inputs:**
+- `tire_management` (driver): Higher reduces wear rate
+- `racing_mode`: ATTACK increases wear significantly
+- Track surface abrasiveness
 
-3) Reliability / incidents / DNF
+**Per-Frame Wear Calculation:**
+```python
+base_wear_per_second = 0.0001  # 0.01% per second baseline
 
-Inputs:
-- `mechanical_sympathy`, `reliability` (if present), `concentration`, `fatigue` (derived from laps)
+# Racing mode wear multipliers
+mode_wear = {
+    RacingMode.ATTACK: 2.0,   # Double wear rate
+    RacingMode.DEFEND: 1.3,   # Elevated wear
+    RacingMode.MANAGE: 1.0,   # Normal wear
+    RacingMode.CRUISE: 0.7    # Reduced wear
+}
 
-BaseIncidentRate = baseline (e.g., 0.002 per lap)
-ReliabilityModifier = (1 - norm(mechanical_sympathy)) * reliability_weight
-ConcentrationModifier = (1 - norm(concentration)) * concentration_weight
+# Driver skill mitigation
+management_factor = 1.0 - (norm(tire_management) * 0.4)
 
-IncidentChance = BaseIncidentRate + ReliabilityModifier + ConcentrationModifier + track_hazard
+# Calculate wear for this frame
+wear_this_frame = (
+    base_wear_per_second * 
+    timestep * 
+    mode_wear[racing_mode] * 
+    management_factor *
+    track_abrasion_factor
+)
 
-If Incident occurs: 25% chance of DNF (retirement), otherwise time loss random(5..35s)
+tire_condition -= wear_this_frame  # 1.0 = new, 0.0 = destroyed
+tire_condition = max(0.0, tire_condition)
+```
 
-4) Overtaking & racecraft
+**Speed Impact:**
+- Tire condition directly affects speed calculation (20% weight in speed formula)
+- `speed_mps *= (0.2 * tire_condition)` component
 
-Inputs:
-- `racecraft`, `overtaking`, `defensive_driving`, `spatial_awareness`, `raw_speed`
+**AI Response:**
+- When `tire_condition < 0.6`, AI switches to MANAGE mode
+- Reduces wear rate and preserves remaining tire life
 
-RelativePerformance = small delta in lap_time between two drivers
-OvertakeProbability ~ sigmoid( alpha*(attacker_advantage) + beta*racecraft + gamma*overtaking - delta*defensive )
+## 3) Incidents & DNF (Per-Frame Probability)
 
-Initial simple model: per-lap, if attacker cumulative time < defender cumulative time - gap_threshold, then attempt overtake with probability P where
-P = clamp(0.05 + 0.4*(norm(overtaking)) + 0.3*(norm(racecraft)) - 0.2*(norm(defensive_driving)) + 0.2*(speed_diff_norm), 0.01, 0.9)
+**Implemented in:** `RealtimeRaceEngine._check_incident()`
 
-Successful overtake reduces attacker total_time by small amount (1-3s) and increases defender time by similar amount to simulate position change.
+**Inputs:**
+- `mechanical_sympathy`, `professionalism`, `adrenaline_management`
+- Racing mode (ATTACK/DEFEND increases risk)
+
+**Per-Frame Incident Probability:**
+```python
+base_incident_per_second = 0.00001  # 0.001% per second
+
+# Racing mode risk multipliers
+mode_risk = {
+    RacingMode.ATTACK: 2.5,   # High risk
+    RacingMode.DEFEND: 1.8,   # Elevated risk
+    RacingMode.MANAGE: 1.0,   # Normal
+    RacingMode.CRUISE: 0.5    # Low risk
+}
+
+# Driver skill mitigation
+skill_factor = (
+    norm(mechanical_sympathy) * 0.4 +
+    norm(professionalism) * 0.3 +
+    norm(adrenaline_management) * 0.3
+)
+
+incident_probability = (
+    base_incident_per_second * 
+    timestep * 
+    mode_risk[racing_mode] *
+    (1.5 - skill_factor)  # Lower skill = higher risk
+)
+
+if random() < incident_probability:
+    driver.dnf = True
+    EMIT event: driver_retired
+```
+
+**Key Changes:**
+- ❌ **Removed:** Lap-based incident checks
+- ✅ **Added:** Continuous per-frame probability
+- ✅ **Added:** Racing mode affects risk (ATTACK mode = 2.5x base risk)
+
+## 4) AI Decision-Making & Racing Modes
+
+**Implemented in:** `RealtimeRaceEngine._update_racing_mode()`
+
+**Inputs:**
+- `gap_ahead`, `gap_behind` (spatial awareness)
+- `tire_condition`, `fuel_load`
+- `overtaking`, `defensive_driving`, `racecraft`
+
+**Mode Selection Algorithm:**
+```python
+def determine_racing_mode(driver_state):
+    # Overtaking opportunity
+    if gap_ahead < 20.0 and tire_condition > 0.6:
+        return RacingMode.ATTACK
+    
+    # Defending position
+    if gap_behind < 15.0:
+        return RacingMode.DEFEND
+    
+    # Tire preservation
+    if tire_condition < 0.6:
+        return RacingMode.MANAGE
+    
+    # Comfortable lead/out of contention
+    if gap_ahead > 100.0 and gap_behind > 100.0:
+        return RacingMode.CRUISE
+    
+    # Default competitive pace
+    return RacingMode.MANAGE
+```
+
+**Spatial Awareness System:**
+```python
+# Calculate gaps to nearby cars
+gap_ahead = next_car.position_m - current_car.position_m
+gap_behind = current_car.position_m - previous_car.position_m
+
+# Detect slipstream (within 50m)
+if gap_ahead < 50.0:
+    slipstream_active = True
+    speed_bonus = 1.05  # +5% speed
+
+# Find nearby cars for AI context
+nearby_cars = [
+    car for car in all_cars 
+    if abs(car.position_m - current_car.position_m) < 100.0
+]
+```
+
+**Key Changes:**
+- ❌ **Removed:** Lap-based overtake probability calculations
+- ✅ **Added:** Continuous AI decision-making every frame
+- ✅ **Added:** Four racing modes with distinct behaviors
+- ✅ **Added:** Spatial awareness (gaps, slipstream, nearby cars)
 
 5) Strategy & pit behaviour
 

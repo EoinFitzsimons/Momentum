@@ -22,8 +22,8 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHB
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath
 
-from persistence_sqlite import PersistenceSQLite
-from race_simulation_api import simulate_race
+from services.persistence_sqlite import PersistenceSQLite
+from services.race_simulation_api import simulate_race
 
 
 @dataclass
@@ -274,10 +274,20 @@ class TrackWidget(QWidget):
             lap: Current lap number
             velocity_mps: Current velocity in meters per second
         """
+        # Thread safety: check if widget is still valid
+        if not hasattr(self, 'cars') or not self.cars or not hasattr(self, 'track_points'):
+            return
+        
         for car in self.cars:
             if car.driver_id == driver_id:
-                # Update position directly from simulation
-                car.s = position_m  # Position in meters along track
+                # Map engine position to visual track: find closest track point
+                if self.track_length > 0 and len(self.track_points) > 0:
+                    # Normalize position to track range
+                    normalized_pos = position_m % self.track_length
+                    idx = int((normalized_pos / self.track_length) * len(self.track_points)) % len(self.track_points)
+                    car.s = self.track_points[idx].s  # Use visual track position
+                else:
+                    car.s = position_m  # Fallback
                 car.lap = lap
                 car.velocity_mps = velocity_mps
                 break
@@ -294,6 +304,9 @@ class TrackWidget(QWidget):
     
     def mark_dnf(self, driver_id: int):
         """Mark car as DNF."""
+        # Thread safety: check if widget is still valid
+        if not hasattr(self, 'cars') or not self.cars:
+            return
         for car in self.cars:
             if car.driver_id == driver_id:
                 car.dnf = True
@@ -389,27 +402,34 @@ class RaceWindow(QMainWindow):
     """Main race window with track display and controls."""
     
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Momentum - Race Visualization")
-        self.setGeometry(100, 100, 1600, 900)
-        
-        # Race state
-        self.db: Optional[PersistenceSQLite] = None
-        self.drivers = []
-        self.track = None
-        self.race_thread: Optional[threading.Thread] = None
-        self.stop_event: Optional[threading.Event] = None
-        self.driver_lap_times: Dict[int, float] = {}  # Track last lap time per driver
-        self.race_start_time: float = 0.0
-        
-        # Event emitter
-        self.emitter = EventEmitter()
-        self.emitter.position_update.connect(self._on_position_update)
-        self.emitter.race_finished.connect(self._on_race_finished)
-        self.emitter.event.connect(self._on_event)
-        
-        self._setup_ui()
-        self._load_data()
+        try:
+            super().__init__()
+            self.setWindowTitle("Momentum - Race Visualization")
+            self.setGeometry(100, 100, 1600, 900)
+            # Race state
+            self.db: Optional[PersistenceSQLite] = None
+            self.drivers = []
+            self.track = None
+            self.race_thread: Optional[threading.Thread] = None
+            self.stop_event: Optional[threading.Event] = None
+            self.driver_lap_times: Dict[int, float] = {}  # Track last lap time per driver
+            self.race_start_time: float = 0.0
+            # Event emitter
+            self.emitter = EventEmitter()
+            self.emitter.position_update.connect(self._on_position_update)
+            self.emitter.race_finished.connect(self._on_race_finished)
+            self.emitter.event.connect(self._on_event)
+            self._setup_ui()
+            self._load_data()
+            # No auto-start: user must click Start Race manually
+            print("[INFO] GUI ready - click Start Race when ready")
+        except Exception as e:
+            import traceback
+            print("[ERROR] Exception in RaceWindow.__init__:", e)
+            traceback.print_exc()
+            raise
+
+    # Auto-start logic removed: user must click Start Race manually
     
     def _setup_ui(self):
         """Setup user interface."""
@@ -568,6 +588,9 @@ class RaceWindow(QMainWindow):
                 
                 track_length = track_points[-1].s if track_points else 5000
                 print(f"Generated circuit with {len(track_points)} points, length: {track_length:.0f}m")
+                
+                # Store track_points for passing to engine
+                self.track_points = track_points
             except Exception as e:
                 self.info_label.setText(f"Circuit generation failed: {e}")
                 self.start_btn.setEnabled(False)
@@ -595,7 +618,7 @@ class RaceWindow(QMainWindow):
                 traceback.print_exc()
                 return
             
-            # Create cars
+            # Create cars with grid alignment
             try:
                 colors = [
                     QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
@@ -605,11 +628,19 @@ class RaceWindow(QMainWindow):
                 ]
                 
                 cars = []
+                # Grid alignment: place each car at a grid slot on the track
+                grid_spacing = 10  # meters between cars on grid
                 for i, driver in enumerate(self.drivers):
+                    # Find grid position for this car (i * spacing meters from start)
+                    grid_position_m = i * grid_spacing
+                    # Find closest track point to this position
+                    grid_idx = min(int((grid_position_m / track_length) * len(track_points)), len(track_points) - 1)
+                    grid_s = track_points[grid_idx].s
+                    
                     cars.append(Car(
                         driver_id=driver.id,
                         driver_name=driver.name,
-                        s=0.0,
+                        s=grid_s,
                         color=colors[i % len(colors)],
                         total_time=0.0,
                         avg_lap_time=60.0,
@@ -617,7 +648,7 @@ class RaceWindow(QMainWindow):
                     ))
                 
                 self.track_widget.set_cars(cars)
-                print(f"Created {len(cars)} cars")
+                print(f"Created {len(cars)} cars with grid alignment (spacing: {grid_spacing}m)")
             except Exception as e:
                 self.info_label.setText(f"Failed to create cars: {e}")
                 self.start_btn.setEnabled(False)
@@ -648,6 +679,8 @@ class RaceWindow(QMainWindow):
             print(f"ERROR: Unexpected error in _load_data: {e}")
             import traceback
             traceback.print_exc()
+    
+    # _auto_start_race method removed: user must click Start Race manually
     
     def _start_race(self):
         """Start the race simulation."""
@@ -764,6 +797,8 @@ class RaceWindow(QMainWindow):
                         traceback.print_exc()
                 
                 print("Starting simulate_race with comprehensive engine...")
+                # Get track_points safely
+                track_pts = getattr(self, 'track_points', None)
                 results = simulate_race(
                     self.drivers,
                     self.track,
@@ -772,7 +807,8 @@ class RaceWindow(QMainWindow):
                     event_callback=event_callback,
                     stop_event=self.stop_event,
                     lap_delay=0.5,
-                    db=self.db  # Pass database for team data
+                    db=self.db,  # Pass database for team data
+                    track_points=track_pts  # Pass visual track for unified position mapping
                 )
                 
                 print(f"Race simulation complete, {len(results) if results else 0} results")
@@ -893,9 +929,23 @@ class RaceWindow(QMainWindow):
 
 
 def main():
+    import traceback
+    from PyQt6.QtWidgets import QMessageBox
     app = QApplication(sys.argv)
-    window = RaceWindow()
-    window.show()
+    try:
+        window = RaceWindow()
+        window.show()
+        print("[DEBUG] RaceWindow created and shown.")
+        # Show a message box to confirm GUI launch
+        msg = QMessageBox()
+        msg.setWindowTitle("Momentum GUI Test")
+        msg.setText("Momentum GUI window launched successfully. If you see this, the window is visible.")
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
+    except Exception as e:
+        print("[ERROR] Exception during GUI launch:", e)
+        traceback.print_exc()
+        raise
     sys.exit(app.exec())
 
 

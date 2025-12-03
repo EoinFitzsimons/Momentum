@@ -4,7 +4,7 @@ This will prove the engine works correctly with proper Driver attributes
 """
 import sys
 from database.database_manager import DatabaseManager
-from race_simulation_api import simulate_race
+from services.race_simulation_api import simulate_race
 
 def test_full_race():
     print("=" * 70)

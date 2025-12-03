@@ -9,9 +9,9 @@ Date: December 2025
 """
 
 from typing import List, Callable, Optional
-from persistence_iface import PersistenceIface
+from services.persistence_iface import PersistenceIface
 from database.models import Driver, Track, RaceResult, Team
-from realtime_race_engine import RealtimeRaceEngine
+from disciplines.realtime_race_engine import RealtimeRaceEngine
 
 
 def simulate_race(
@@ -24,6 +24,7 @@ def simulate_race(
     stop_event=None,
     lap_delay: float = 0.0,
     db: Optional[PersistenceIface] = None,
+    track_points: Optional[List] = None,
 ) -> List[RaceResult]:
     """
     Run real-time agent-based race simulation at 30 FPS
@@ -75,7 +76,7 @@ def simulate_race(
         print(f"Expected updates: ~{2700 * laps * len(drivers):,}")
         print(f"{'='*70}\n")
     
-    # Run simulation
+    # Run simulation with visual track
     try:
         results_list = engine.simulate_race(
             drivers=drivers,
@@ -83,7 +84,8 @@ def simulate_race(
             track=track,
             total_laps=laps,
             event_callback=event_callback,
-            realtime_speed=5.0  # 5x real-time speed for watchable racing
+            realtime_speed=5.0,  # 5x real-time speed for watchable racing
+            track_points=track_points  # Visual track for unified position mapping
         )
     except Exception as e:
         if verbose:
