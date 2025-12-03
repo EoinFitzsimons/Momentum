@@ -9,7 +9,7 @@ Console runner for the Basic Race MVP.
 from __future__ import annotations
 
 import time
-from persistence_sqlite import PersistenceSQLite
+from services.persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
 

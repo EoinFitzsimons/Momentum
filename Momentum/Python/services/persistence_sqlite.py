@@ -4,7 +4,7 @@ from typing import List, Optional
 
 # Use canonical DB models and schema
 from database.models import Driver as DBDriver, Track as DBTrack, SCHEMA_SQL
-from persistence_iface import PersistenceIface
+from services.persistence_iface import PersistenceIface
 
 
 class PersistenceSQLite(PersistenceIface):

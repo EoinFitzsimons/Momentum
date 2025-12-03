@@ -1,4 +1,4 @@
-from persistence_sqlite import PersistenceSQLite
+from services.persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 from typing import List
 
@@ -25,7 +25,7 @@ def run_mvp(db_path: str | None = None, seed: int = 42, verbose: bool = False) -
 def main():
     results = run_mvp(seed=42)
     print("Basic race results:")
-    from persistence_sqlite import PersistenceSQLite as _PS
+    from services.persistence_sqlite import PersistenceSQLite as _PS
     db = _PS()
     for r in results:
         d = db.get_driver(r.driver_id)

@@ -78,7 +78,7 @@ else:
             def emit(self, *_args, **_kwargs):
                 return None
 
-from persistence_sqlite import PersistenceSQLite
+from services.persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
 # Global settings

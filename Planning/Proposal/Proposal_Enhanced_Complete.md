@@ -1,12 +1,13 @@
+
 National College of Ireland
 
 Project Proposal
 
-**Momentum: Multi-Discipline Motorsport Management Simulator**
+Momentum: Multi-Discipline Motorsport Management Simulator
 
 2nd December 2025
 
-Computing – Software Development
+Computing - Software Development
 
 2025/2026
 
@@ -16,83 +17,93 @@ X23151374
 
 X23151374@student.ncirl.ie
 
-# 1 Objectives
+Objectives
 
-Momentum addresses the market gap between Football Manager's simulation depth and existing motorsport titles' limited scope. From building open-wheelers that stick at full speed around circuit turns driven by aerodynamic downforce, to rally racing through blizzards whilst managing snow tyre condition and co-driver pace notes, the system encompasses the breadth of competitive motorsport within a unified framework. This aligns with established frameworks on simulation engagement and procedural generation (Sweetser and Wyeth, 2005; Shaker, Togelius and Nelson, 2016).
+Momentum will create a multi-discipline motorsport management simulator addressing the current market gap between Football Manager's depth and existing motorsport titles' limited scope. From building open wheelers that stick at full speed around circuit turns driven by aerodynamic downforce, to rally racing through blizzards whilst managing snow tyre condition and co-driver pace notes, the system encompasses the breadth of competitive motorsport within a unified framework. A persistent world enables emergent narratives as all championships progress simultaneously regardless of player focus.
 
-**Core Technical Goals:**
+Core Technical Goals:
 
-* Event-driven race simulation generating lap-by-lap outcomes with real-time position tracking
-* Procedural championship generation with automated balance validation
-* Multi-discipline architecture using abstract base classes for code reuse
-* Desktop GUI enabling race-by-race player interaction and career management
+Real-time agent-based race simulation at 30 FPS with AI decision-making and spatial awareness
 
-**Novel Contributions:**
+Procedural championship generation with automated balance validation
 
-* Extensible discipline engine architecture enabling new racing categories without core simulation rewrites
-* Automated statistical validation ensuring competitive balance through correlation testing and distribution analysis (Silver, 2012)
-* Python-based implementation demonstrating complex multi-league simulation without enterprise engines
+Multi-discipline architecture using abstract base classes for code reuse
 
-# 2 Background
+Desktop GUI enabling race-by-race player interaction with live car movement visualization
 
-Long-term engagement in simulation games connects strongly to emergent narrative behaviour and complex state spaces (Sweetser and Wyeth, 2005). Football Manager demonstrates this with median engagement exceeding 1,000 hours for substantial portions of its player base (Sports Interactive, 2019). Having invested 6,890 hours since 2015, I recognise its appeal stems from systemic depth rather than sport preference.
+Novel Contributions:
 
-Motorsport management games have not replicated this engagement. F1 Manager 2024 achieves median playtime of 14.7 hours (SteamDB, 2024) despite motorsport's global following (F1: 445M viewers, WRC: 800M cumulative audience). Motorsport Manager (446K sales, abandoned 2017) demonstrated multi-discipline viability but had limited scale (200 drivers) and discontinued development (SteamSpy, 2023).
+Extensible discipline engine architecture enabling new racing categories without core simulation rewrites
 
-**Meeting Objectives:**
+Automated procedural validation ensuring competitive balance through statistical testing
 
-**Real-Time Race Simulation:** Event-driven race simulation generates lap-by-lap outcomes with trackable incidents (overtakes, tyre wear, damage, fuel management, pit strategy). Driver attributes (50+ per individual) feed weighted performance calculations (40% skill, 30% vehicle, 20% environment, 10% randomness). On-track view displays race progression with visual position tracking. Statistical validation tests verify correlation (r > 0.7) between attributes and results.
+Python-based implementation demonstrating complex multi-league simulation without enterprise engines
 
-**Competitive Balance:** Automated validation provides baseline testing through simulated seasons, flagging extreme imbalances (single team >40% wins, failed normality tests). Developer tuning establishes competitive orders that evolve through comprehensive development systems and regulation changes, mirroring real motorsport dynamics.
+Background
 
-**Extensible Architecture:** Abstract base class defines simulation interface (`simulate_race()`, `calculate_performance_weights()`). New disciplines inherit this foundation without modifying core engine. Demonstrates software engineering principles for complex domain modelling.
+Having invested 6,890 hours in Football Manager since 2015, I recognise its appeal stems from emergent simulation depth rather than football itself. Existing motorsport managers fail to replicate this despite motorsport's global following (F1: 445M viewers, WRC: 800M cumulative audience). F1 Manager 2024 achieves only 14.7 hours median playtime versus Football Manager's 89.3 hours, whilst Motorsport Manager (446K sales, abandoned 2017) proved multi-discipline appetite but failed on execution.
 
-**Persistent World:** SQLite database tracks all entities (drivers, teams, tracks, championships) with career progression driven by performance vs expectations, contract cycles, and hidden potential curves. All leagues advance concurrently regardless of player focus.
+Meeting Objectives:
 
-# 3 State of the Art
+Real-Time Race Simulation: Continuous 30 FPS agent-based simulation where AI drivers make decisions based on race situation (gaps, position, tire condition, fuel load). Driver attributes (50+ per individual) influence physics calculations, AI behavior, and spatial awareness. Drivers actively choose racing modes (ATTACK/DEFEND/MANAGE/CRUISE) based on gaps to nearby cars and their own skills (overtaking, defensive_driving, tire_management). On-track view displays live car movement with position tracking updated every frame. Validation tests verify AI decision-making responds correctly to race situations and position updates maintain 30 FPS performance.
 
-| Title                                                | Strengths                                                                                     | Critical Gaps                                                                                                 |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Football Manager 2024** (Sports Interactive) | 143 leagues, persistent world, emergent narratives, 1,000+ hour engagement, extensive modding | Team sport structure incompatible with motorsport, licensing model unsuitable                                 |
-| **F1 Manager 2024** (Frontier)                 | Authentic presentation, detailed development mechanics, real-time decisions                   | Predictable AI, linear progression, single discipline (F1/F2), static driver potential, 14.7h median playtime |
-| **Motorsport Manager** (Playsport, 2016)       | Multi-discipline framework, accessible pricing, fictional universe                            | Static world (no procedural generation), small scale (200 drivers), abandoned 2017                            |
+Competitive Balance: Automated validation provides baseline testing through simulated seasons, flagging extreme imbalances (single team >40% wins, failed normality tests). Developer tuning establishes competitive orders that evolve through comprehensive development systems and regulation changes, mirroring real motorsport dynamics.
 
-**How Momentum Differentiates:**
+Extensible Architecture: Abstract base class defines simulation interface (simulate_race(), calculate_performance_weights()). New disciplines inherit this foundation without modifying core engine. Demonstrates software engineering principles for complex domain modelling.
 
-**Procedural Generation vs Static Content:** Existing titles use handcrafted rosters with limited scale (F1 Manager: 44 drivers, Motorsport Manager: 200). Momentum generates drivers/teams/championships algorithmically with hidden potential enabling larger roster depth (1,000+ drivers) and emergent narratives.
+Persistent World: SQLite database tracks all entities (drivers, teams, tracks, championships) with career progression driven by performance vs expectations, contract cycles, and hidden potential curves. All leagues advance concurrently regardless of player focus.
 
-**Extensible Architecture vs Monolithic Design:** Adding new racing categories to F1 Manager or Motorsport Manager requires fundamental rewrites. Momentum's abstract base class architecture enables new disciplines through inheritance without touching core simulation logic.
+State of the Art
 
-**Extensible Architecture vs Monolithic Design:** Adding new racing categories to F1 Manager or Motorsport Manager requires fundamental rewrites. Momentum's abstract base class architecture enables new disciplines through inheritance without touching core simulation logic.
+| Title                                     | Strengths                                                                                     | Critical Gaps                                                                                                 |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Football Manager 2024(Sports Interactive) | 143 leagues, persistent world, emergent narratives, 1,000+ hour engagement, extensive modding | Team sport structure incompatible with motorsport, licensing model unsuitable                                 |
+| F1 Manager 2024(Frontier)                 | Authentic presentation, detailed development mechanics, real-time decisions                   | Predictable AI, linear progression, single discipline (F1/F2), static driver potential, 14.7h median playtime |
+| Motorsport Manager(Playsport, 2016)       | Multi-discipline framework, accessible pricing, fictional universe                            | Static world (no procedural generation), small scale (200 drivers), abandoned 2017                            |
 
-**Open Architecture:** Python/SQLite stack with GPL licensing enables academic transparency and potential community extensions, contrasting with proprietary closed engines.
+How Momentum Differentiates:
 
-# 4 Technical Approach
+Procedural Generation vs Static Content: Existing titles use handcrafted rosters with limited scale (F1 Manager: 44 drivers, Motorsport Manager: 200). Momentum generates drivers/teams/championships algorithmically with hidden potential enabling larger roster depth (1,000+ drivers) and emergent narratives.
 
-**Architecture:**
+Extensible Architecture vs Monolithic Design: Adding new racing categories to F1 Manager or Motorsport Manager requires fundamental rewrites. Momentum's abstract base class architecture enables new disciplines through inheritance without touching core simulation logic.
 
-* Backend: Python + FastAPI REST API, SQLite database, async request handling
-* Frontend: PyQt6 desktop GUI with direct Python integration and native UI components
-* Rationale: Prioritises simulation depth over visual spectacle, enables rapid prototyping, eliminates licensing costs
+Extensible Architecture vs Monolithic Design: Adding new racing categories to F1 Manager or Motorsport Manager requires fundamental rewrites. Momentum's abstract base class architecture enables new disciplines through inheritance without touching core simulation logic.
 
-**Multi-Discipline Engine:**
+Open Architecture: Python/SQLite stack with GPL licensing enables academic transparency and potential community extensions, contrasting with proprietary closed engines.
 
-Abstract `BaseDisciplineEngine` class defines interface for all seven disciplines. Each implements `simulate_race(context)` with discipline-specific logic and `calculate_performance_weights()` defining attribute importance.
+Technical Approach
 
-Performance formula: Driver Skill (40%) + Vehicle (30%) + Environment (20%) + Randomness (10%)
+Architecture:
+
+Backend: Python + FastAPI REST API, SQLite database, async request handling
+
+Frontend: PyQt6 desktop GUI with direct Python integration and native UI components
+
+Rationale: Prioritises simulation depth over visual spectacle, enables rapid prototyping, eliminates licensing costs
+
+Multi-Discipline Engine:
+
+RealtimeRaceEngine class provides continuous 30 FPS simulation with physics-based speed calculations and AI decision-making. Each discipline can extend this base with discipline-specific logic.
+
+Physics formula per frame: speed_mps = base_speed × (driver_skill × team_performance × push_intensity × tire_penalty × fuel_bonus × slipstream × corner_factor)
+
+AI Decision-Making: Drivers analyze race situation every frame and select racing mode based on gaps (ATTACK if gap_ahead < 1.0s, DEFEND if gap_behind < 0.5s, MANAGE for tire conservation, CRUISE when comfortable)
 
 Discipline differentiation examples:
 
-* Single-Seater: Qualifying pace, aerodynamics, DRS strategy
-* Rally: Surface adaptation, co-driver communication, pace notes
-* Endurance: Consistency, mechanical sympathy, multi-driver fatigue
-* Drag: Reaction time, launch control, bracket elimination
+Single-Seater: Aerodynamics, slipstream effects, cornering_skill emphasis
 
-**Event-Driven Race Simulation:**
+Rally: Surface adaptation, co-driver communication, pace notes
 
-Lap-by-lap race progression with real-time incident generation (overtakes, slipstream, dirty air effects, tyre degradation, damage, refuelling where applicable). Driver attributes influence event probabilities and outcomes. On-track view visualises race progression with position tracking. Future scope includes 3D rendering post-graduation; current implementation uses 2D position indicators around track layouts.
+Endurance: Tire/fuel management, consistency over speed, mechanical_sympathy
 
-**Procedural Generation:**
+Drag: Reaction time, acceleration_control, launch technique
+
+Real-Time Continuous Simulation:
+
+Physics-based simulation at 30 FPS (0.033s timestep) with continuous position updates, speed calculations, and AI decision-making. Driver attributes directly influence speed (raw_speed, cornering_skill, consistency), AI behavior (overtaking, defensive_driving, racecraft), and degradation (tire_management, mechanical_sympathy). Spatial awareness system tracks gaps to nearby cars (<100m), detects slipstream opportunities (<50m), and enables AI to respond to race situations. On-track view visualizes live car movement with position updated every frame. 2D track visualization shows cars moving around circuit in real-time.
+
+Procedural Generation:
 
 Championships generated with three-tier budget distribution (Tier 1: 90-100% cap, Tier 2: 60-80%, Tier 3: 40-60%). Drivers generated with base attributes 40-60, specialisation boosts, and hidden potential curves.
 
@@ -100,83 +111,99 @@ Validation: Automated testing runs 1,000 simulated seasons verifying competitive
 
 Cultural authenticity via Faker library (24 locales) ensures regional naming patterns per discipline.
 
-# 5 Technical Details
+Technical Details
 
-**Implementation Language and Libraries:**
+Implementation Language and Libraries:
 
-* **Backend:** Python 3.11, FastAPI (async REST API), SQLite (embedded database), NumPy/SciPy (statistical calculations), Faker (multi-locale name generation), Pydantic (data validation)
-* **Frontend:** PyQt6 (desktop GUI), Matplotlib (data visualisation), Qt Designer (UI prototyping)
-* **Development:** Git/GitHub (version control), Black (code formatting), mypy (type checking), pytest (testing)
+Backend: Python 3.11, FastAPI (async REST API), SQLite (embedded database), NumPy/SciPy (statistical calculations), Faker (multi-locale name generation), Pydantic (data validation)
 
-**Database Design:**
+Frontend: PyQt6 (desktop GUI), Matplotlib (data visualisation), Qt Designer (UI prototyping)
+
+Development: Git/GitHub (version control), Black (code formatting), mypy (type checking), pytest (testing)
+
+Database Design:
 
 Normalised schema (3NF) with seven core entities:
 
-* **Driver:** 50+ attributes across technical, mental, physical, racecraft, and discipline-specific categories (0-100 scale)
-* **Team:** Budget, discipline, vehicle performance, facility ratings
-* **Track:** Dimensions, surface, IMA grading, compatible disciplines
-* **Championship:** Calendar, points system, budget cap, technical regulations
-* **Race, RaceResult, Staff:** Supporting entities for event management
+Driver: 50+ attributes across technical, mental, physical, racecraft, and discipline-specific categories (0-100 scale)
+
+Team: Budget, discipline, vehicle performance, facility ratings
+
+Track: Dimensions, surface, IMA grading, compatible disciplines
+
+Championship: Calendar, points system, budget cap, technical regulations
+
+Race, RaceResult, Staff: Supporting entities for event management
 
 Foreign key constraints enforce referential integrity. Indexes on frequently queried columns (discipline, rating, team_id).
 
-**API Structure:**
+API Structure:
 
-REST endpoints for race simulation (`POST /simulate/race`), championship management (`POST /season/create`, `GET /season/standings`), and entity queries (`GET /drivers`, `/teams`, `/tracks`). OpenAPI documentation auto-generated.
+REST endpoints for race simulation (POST /simulate/race), championship management (POST /season/create, GET /season/standings), and entity queries (GET /drivers, /teams, /tracks). OpenAPI documentation auto-generated.
 
-**Testing Approach:**
+Testing Approach:
 
-* **Unit Tests:** Attribute calculations, simulation convergence, database operations (80% coverage target)
-* **Integration Tests:** Full race workflows, championship progression, multi-discipline consistency
-* **Performance Tests:** Concurrent race handling, memory profiling, query optimisation
-* **Statistical Validation:** Normal distribution verification (Shapiro-Wilk test), correlation analysis (r > 0.7), competitive balance metrics
-* **User Acceptance:** Developer self-testing with potential informal feedback (not committed)
+Unit Tests: Attribute calculations, Monte Carlo convergence, database operations (80% coverage target)
 
-# 6 Special Resources Required
+Integration Tests: Full race workflows, championship progression, multi-discipline consistency
 
-**Hardware:** Development machine (i5-9400F, 16GB RAM) suitable for target workload. No specialised GPU required (CPU-bound simulation).
+Performance Tests: Concurrent race handling, memory profiling, query optimisation
 
-**Software:** Entirely open-source stack (Python, FastAPI, SQLite, PyQt6, NumPy, Git). PyQt6 GPL license suitable for academic use. VS Code for development environment.
+Statistical Validation: Normal distribution verification (Shapiro-Wilk test), correlation analysis (r > 0.7), competitive balance metrics
 
-**Data Sources:** Circuit database (tracks designed for race table integration, no licensing required). Faker library for procedural name generation (24 locales).
+User Acceptance: 5-10 testers evaluating realism, engagement, balance, longevity
 
-**Cost:** €0 total development cost. All software open-source, existing hardware sufficient.
+Special Resources Required
 
-**Supervision Requirements:** Weekly meetings (student-led agendas) for architecture review, statistical validation guidance, and testing strategy feedback.
+Hardware: Development machine (i5-9400F, 16GB RAM) suitable for target workload. No specialised GPU required (CPU-bound simulation).
 
-# 7 Project Plan
+Software: Entirely open-source stack (Python, FastAPI, SQLite, PyQt6, NumPy, Git). PyQt6 GPL license suitable for academic use. VS Code for development environment.
 
-**Semester 1 (September-December 2025):**
+Data Sources: Circuit database (tracks designed for race table integration, no licensing required). Faker library for procedural name generation (24 locales).
 
-**Months 1-2 (Sep-Oct):** Requirements engineering (use cases, functional/non-functional requirements, acceptance criteria). Architecture design (ERD, API structure, discipline engine hierarchy). Monte Carlo engine implementation with statistical validation.
+Cost: €0 total development cost. All software open-source, existing hardware sufficient.
 
-**Month 3 (November):** Database schema implementation with procedural generation system. Multiple discipline engines (single-seater, rally, endurance, drag). Initial GUI prototyping.
+Supervision Requirements: Fortnightly meetings for architecture review, statistical validation guidance, and testing strategy feedback.
 
-**Month 4 (December):** API endpoint implementation and integration. Comprehensive testing suite (unit, integration, performance). Midpoint documentation and presentation preparation.
+Project Plan
 
-**Midpoint Deliverable (December 12, 2025):**
+Semester 1 (September-December 2025):
+
+Months 1-2 (Sep-Oct): Requirements engineering (use cases, functional/non-functional requirements, acceptance criteria). Architecture design (ERD, API structure, discipline engine hierarchy). Monte Carlo engine implementation with statistical validation.
+
+Month 3 (November): Database schema implementation with procedural generation system. Multiple discipline engines (single-seater, rally, endurance, drag). Initial GUI prototyping.
+
+Month 4 (December): API endpoint implementation and integration. Comprehensive testing suite (unit, integration, performance). Midpoint documentation and presentation preparation.
+
+Midpoint Deliverable (December 12, 2025):
 
 GitHub tracking: 16 issues across 2 milestones (Midpoint Submission, Final Submission).
 
-*HIGH Priority (Midpoint):*
+HIGH Priority (Midpoint):
 
-* Issue #2-4: Core API endpoints (UC-1: Read Driver Details, UC-2: Read Race Configuration, UC-3: Create Race Result)
-* Issue #5: Monte Carlo simulation engine (<1s race completion, r > 0.7 correlation)
-* Issue #6: Database schema with procedural generation (drivers, teams, tracks, staff)
-* Issue #11: Technical documentation (requirements engineering, diagrams, use cases)
-* Issue #12: Presentation slides with live demo preparation
-* Issue #13: Working PyQt6 GUI demonstrating race workflow
-* Issue #14: Testing suite (unit, integration, performance, statistical validation)
+Issue #2-4: Core API endpoints (UC-1: Read Driver Details, UC-2: Read Race Configuration, UC-3: Create Race Result)
 
-**Semester 2 (January-May 2026):**
+Issue #5: Monte Carlo simulation engine (<1s race completion, r > 0.7 correlation)
 
-**Months 5-6 (Jan-Feb):** Career mode foundation (save/load, calendar system, event management). AI decision engine for contract negotiations and team strategy. GUI enhancement with data visualisation.
+Issue #6: Database schema with procedural generation (drivers, teams, tracks, staff)
 
-**Month 7 (March):** Complete remaining disciplines. Advanced visualisation (race charts, telemetry, championship graphs). Integration of all seven discipline engines.
+Issue #11: Technical documentation (requirements engineering, diagrams, use cases)
 
-**Months 8-9 (Apr-May):** Comprehensive testing to 80% coverage. Statistical validation and balance verification. Technical report completion. Final presentation preparation. **Submission May 13, 2026.**
+Issue #12: Presentation slides with live demo preparation
 
-**Risk Management:**
+Issue #13: Working PyQt6 GUI demonstrating race workflow
+
+Issue #14: Testing suite (unit, integration, performance, statistical validation)
+
+Semester 2 (January-May 2026):
+
+Months 5-6 (Jan-Feb): Career mode foundation (save/load, calendar system, event management). AI decision engine for contract negotiations and team strategy. GUI enhancement with data visualisation.
+
+Month 7 (March): Complete remaining disciplines. Advanced visualisation (race charts, telemetry, championship graphs). Integration of all seven discipline engines.
+
+Months 8-9 (Apr-May): Comprehensive testing to 80% coverage. Statistical validation and balance verification. Technical report completion. Final presentation preparation. Submission May 13, 2026.
+
+Risk Management:
 
 | Risk                    | Probability | Mitigation                                                                      | Contingency                                               |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
@@ -186,29 +213,35 @@ GitHub tracking: 16 issues across 2 milestones (Midpoint Submission, Final Submi
 | Scope creep             | High        | Strict MVP definition, feature freeze April 1, prioritisation matrix            | Defer lower-priority disciplines post-submission          |
 | Time management         | Medium      | 25-35 hours weekly, weekly supervision (student-led agendas), daily Git commits | Submit functional subset (3-4 disciplines minimum)        |
 
-**Quality Assurance:** PEP 8 compliance, type hints, comprehensive docstrings, daily Git commits, feature branch workflow, tagged releases (v0.1 midpoint, v1.0 final).
+Quality Assurance: PEP 8 compliance, type hints, comprehensive docstrings, daily Git commits, feature branch workflow, tagged releases (v0.1 midpoint, v1.0 final).
 
-**Gantt Chart:** See appendix for visual timeline (September 2025 - May 2026).
+Gantt Chart:
 
-# 8 Testing
+![](blob:vscode-webview://1knau8j0787evpd56fvmreg35b7l4dfq1uquc2t84ulekvo44mee/efd4b708-2f31-4a57-aa03-54ddf96b6d83)
 
-**Unit Testing:** pytest framework targeting 80% coverage for core simulation. Test categories include attribute calculations (weighting formula verification), Monte Carlo convergence (statistical validity), database operations (CRUD integrity), API validation (Pydantic schema enforcement).
+Testing
 
-**Integration Testing:** Full race simulation workflows with known inputs. Verify race completion, championship points allocation, driver state updates, database transaction consistency. Multi-discipline independence testing ensures concurrent races don't interfere.
+Unit Testing:pytest framework targeting 80% coverage for core simulation. Test categories include physics calculations (speed formula verification), AI decision-making (racing mode selection logic), frame-rate consistency (30 FPS sustained performance), database operations (CRUD integrity), API validation (Pydantic schema enforcement).
 
-**Performance Testing:** Race event generation accuracy, concurrent race handling, database query optimisation, memory profiling across extended gameplay sessions. Load testing for scalability validation.
+Integration Testing: Full race simulation workflows with known inputs. Verify race completion, championship points allocation, driver state updates, database transaction consistency. Multi-discipline independence testing ensures concurrent races don't interfere.
 
-**Statistical Validation:** Normal distribution verification (Shapiro-Wilk test), correlation analysis between driver attributes and results (r > 0.7 target), competitive balance metrics (no single driver/team dominance), systematic bias detection (pole position advantage, weather impacts).
+Performance Testing: Race event generation accuracy, concurrent race handling, database query optimisation, memory profiling across extended gameplay sessions. Load testing for scalability validation.
 
-**User Acceptance Testing:** Developer self-testing with potential informal feedback from interested parties (not committed). Evaluation criteria:
+Performance Validation: Frame-rate consistency testing (30 FPS sustained over 47-lap races), AI behavior verification (racing mode switches based on gaps), spatial awareness accuracy (gap calculations, slipstream detection), competitive balance metrics (varied finishing orders across races), position update integrity (no teleporting or negative positions).
 
-1. Realism (subjective assessment of race events and career progression)
-2. Engagement (continued playability across multiple sessions)
-3. UI Clarity (intuitive navigation and information presentation)
-4. Competitive Balance (varied race outcomes, no systematic dominance)
-5. Career Longevity (sustained interest across multiple seasons)
+User Acceptance Testing: Developer self-testing with potential informal feedback from interested parties (not committed). Evaluation criteria:
 
-**Comparative Success Metrics:**
+Realism (subjective assessment of race events and career progression)
+
+Engagement (continued playability across multiple sessions)
+
+UI Clarity (intuitive navigation and information presentation)
+
+Competitive Balance (varied race outcomes, no systematic dominance)
+
+Career Longevity (sustained interest across multiple seasons)
+
+Comparative Success Metrics:
 
 | Feature            | Momentum Target | F1 Manager 2024 | Motorsport Manager |
 | ------------------ | --------------- | --------------- | ------------------ |
@@ -217,8 +250,11 @@ GitHub tracking: 16 issues across 2 milestones (Midpoint Submission, Final Submi
 | Driver Pool        | 1,000+          | 44              | 200                |
 | Career Depth       | Unlimited       | Unlimited       | Unlimited          |
 
-**Bug Tracking:** GitHub Issues with priority labels (critical, high, medium, low) and category tags (simulation, database, api, ui). Response time: Critical (same day), High (3 days), Medium (1 week), Low (backlog).
+Bug Tracking: GitHub Issues with priority labels (critical, high, medium, low) and category tags (simulation, database, api, ui). Response time: Critical (same day), High (3 days), Medium (1 week), Low (backlog).
 
-**Profiling:** cProfile (performance), memory_profiler (RAM usage), Qt Performance Analyser (GUI responsiveness).
+Profiling:cProfile (performance), memory_profiler (RAM usage), Qt Performance Analyser (GUI responsiveness).
 
-# 9 References
+* 
+* [•••]()
+* 
+* Go to[ ] Page

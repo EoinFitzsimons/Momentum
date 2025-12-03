@@ -31,6 +31,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from database.models import Driver, Team, Track
+from disciplines.track_physics import TrackMap, TrackSection, RacingLine
+from disciplines.overtaking_system import (
+    OvertakeAttempt, OvertakeAttemptType, DefensiveAction,
+    evaluate_overtaking_opportunity, calculate_defensive_action,
+    resolve_overtake_outcome
+)
+from services.driver_attributes import get_safe_attribute
 
 
 class RacingMode(Enum):
@@ -56,6 +63,7 @@ class DriverState:
     
     # Physical state (updated every timestep)
     position_m: float = 0.0         # Absolute position from start line (meters)
+    prev_position_m: float = 0.0    # Previous position (for lap detection)
     velocity_mps: float = 0.0       # Current velocity (meters per second)
     lap: int = 0                    # Current lap number
     
@@ -68,6 +76,7 @@ class DriverState:
     # Strategic state
     racing_mode: RacingMode = RacingMode.MANAGE
     push_intensity: float = 0.7     # How hard pushing (0.5=conserve, 1.0=maximum attack)
+    racing_line: RacingLine = RacingLine.IDEAL  # Current racing line choice
     
     # Component degradation
     tire_condition: float = 1.0     # 1.0=new tires, 0.0=completely worn
@@ -115,6 +124,10 @@ class RealtimeRaceEngine:
         """Initialize engine with random generator"""
         self.rng = np.random.default_rng(seed)
         
+        # Track-aware racing physics
+        self.track_map: Optional[TrackMap] = None
+        self.active_overtakes: Dict[Tuple[int, int], OvertakeAttempt] = {}  # (attacker_id, defender_id) -> attempt
+        
         # Physics constants
         self.BASE_SPEED_MPS = 70.0  # ~250 km/h base racing speed
         self.MAX_SPEED_MPS = 90.0   # ~324 km/h maximum speed
@@ -130,9 +143,9 @@ class RealtimeRaceEngine:
         self.DEFEND_THRESHOLD_GAP = 0.5  # Defend if car within 0.5s behind
         self.NEARBY_DISTANCE_M = 100.0   # Consider cars within 100m as "nearby"
         
-        # Incident probabilities (per timestep)
-        self.BASE_INCIDENT_RATE = 0.000001
-        self.OVERTAKE_INCIDENT_MULTIPLIER = 5.0
+        # Incident probabilities (per timestep) - Now track-aware
+        self.BASE_INCIDENT_RATE = 0.0000002  # Base rate for normal driving
+        self.OVERTAKE_INCIDENT_MULTIPLIER = 3.0  # Multiplier during overtakes
     
     def simulate_race(
         self,
@@ -141,7 +154,8 @@ class RealtimeRaceEngine:
         track: Track,
         total_laps: int = 50,
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-        realtime_speed: float = 1.0  # 1.0=real-time, 2.0=2x speed, 0.5=half speed
+        realtime_speed: float = 1.0,  # 1.0=real-time, 2.0=2x speed, 0.5=half speed
+        track_points: Optional[List[Any]] = None  # Visual track points for unified position mapping
     ) -> List[Dict[str, Any]]:
         """
         Simulate complete race with real-time updates
@@ -157,6 +171,16 @@ class RealtimeRaceEngine:
         Returns:
             Final race results
         """
+        # Initialize track map for racing physics
+        print(f"→ Generating track map for {track.name}...")
+        self.track_map = TrackMap(track=track)
+        print(f"  ✓ Track map ready: {len(self.track_map.corners)} corners, {len(self.track_map.drs_zones)} DRS zones")
+        
+        # Store visual track points for unified position mapping
+        self.track_points = track_points
+        if track_points:
+            print(f"  ✓ Using visual track with {len(track_points)} points for position mapping")
+        
         # Initialize race state
         track_length_m = track.length_km * 1000.0
         race_state = self._initialize_race(drivers, teams, track_length_m, total_laps)
@@ -188,11 +212,13 @@ class RealtimeRaceEngine:
                 
                 # Update position
                 distance_this_step = speed_mps * timestep
+                state.prev_position_m = state.position_m
                 state.position_m += distance_this_step
                 state.velocity_mps = speed_mps
-                
-                # Check for lap completion
-                if state.position_m >= track_length_m * (state.lap + 1):
+                # Lap completion: detect crossing start/finish line
+                prev_lap = int(state.prev_position_m // track_length_m)
+                curr_lap = int(state.position_m // track_length_m)
+                if curr_lap > prev_lap:
                     self._complete_lap(state, race_state, track_length_m)
                 
                 # Update degradation
@@ -280,57 +306,111 @@ class RealtimeRaceEngine:
         """
         AI Decision Making: Update driver's racing mode and push intensity
         
-        Drivers actively decide how to race based on their situation and attributes.
+        Uses advanced track-aware overtaking evaluation.
         """
         driver = state.driver
         
         # Base push intensity from driver attributes
-        overtaking_tendency = driver.overtaking / 100.0  # Attack tendency
+        overtaking_tendency = driver.overtaking / 100.0
         consistency = driver.consistency / 100.0
-        risk_tolerance = (100.0 - driver.professionalism) / 100.0  # Higher risk with lower professionalism
-        adrenaline_control = driver.adrenaline_management / 100.0  # Controlled aggression
+        risk_tolerance = (100.0 - driver.professionalism) / 100.0
+        adrenaline_control = driver.adrenaline_management / 100.0
         
-        # Analyze race situation
+        # Track-aware overtaking evaluation
         if state.gap_ahead < self.ATTACK_THRESHOLD_GAP and state.position > 1:
-            # Car ahead is close - consider attacking
-            overtaking_skill = driver.overtaking / 100.0
-            racecraft_quality = driver.racecraft / 100.0
-            
-            # More aggressive drivers attack more readily
-            attack_probability = overtaking_tendency * racecraft_quality
-            
-            if self.rng.random() < attack_probability * 0.1:  # Dampen to avoid constant mode switching
-                state.racing_mode = RacingMode.ATTACK
-                state.push_intensity = 0.9 + (risk_tolerance * adrenaline_control) * 0.1  # Push 90-100%
+            # Find car ahead
+            car_ahead = self._get_car_ahead(state, race_state)
+            if car_ahead and self.track_map:
+                # Get track section and corner data
+                section_type, corner = self.track_map.get_section_at_position(
+                    state.position_m % race_state.track_length_m
+                )
+                is_overtaking_zone = self.track_map.is_overtaking_zone(
+                    state.position_m % race_state.track_length_m
+                )
+                
+                # Evaluate overtaking opportunity
+                gap_m = state.gap_ahead * state.velocity_mps
+                
+                should_attempt, success_prob, attempt_type = evaluate_overtaking_opportunity(
+                    attacker=driver,
+                    defender=car_ahead.driver,
+                    attacker_speed_kmh=state.velocity_mps * 3.6,
+                    defender_speed_kmh=car_ahead.velocity_mps * 3.6,
+                    gap_m=gap_m,
+                    section=section_type,
+                    corner=corner
+                )
+                
+                if should_attempt:
+                    # Start overtaking attempt
+                    state.racing_mode = RacingMode.ATTACK
+                    state.push_intensity = 0.9 + risk_tolerance * 0.1
+                    
+                    # Create or update active overtake
+                    key = (state.driver_id, car_ahead.driver_id)
+                    if key not in self.active_overtakes:
+                        self.active_overtakes[key] = OvertakeAttempt(
+                            attacker_id=state.driver_id,
+                            defender_id=car_ahead.driver_id,
+                            attempt_type=attempt_type,
+                            position_m=state.position_m,
+                            gap_m=gap_m,
+                            speed_advantage_kmh=(state.velocity_mps - car_ahead.velocity_mps) * 3.6,
+                            corner=corner
+                        )
+                else:
+                    state.racing_mode = RacingMode.MANAGE
+                    state.push_intensity = 0.7 + overtaking_tendency * 0.2
             else:
-                state.racing_mode = RacingMode.MANAGE
-                state.push_intensity = 0.7 + overtaking_tendency * 0.2
+                # Fallback to simple logic
+                state.racing_mode = RacingMode.ATTACK
+                state.push_intensity = 0.85
         
         elif state.gap_behind < self.DEFEND_THRESHOLD_GAP and state.position < len(race_state.driver_states):
-            # Car behind is close - defend position
-            defensive_skill = driver.defensive_driving / 100.0
-            
-            state.racing_mode = RacingMode.DEFEND
-            state.push_intensity = 0.8 + defensive_skill * 0.15
+            # Defensive driving with track awareness
+            car_behind = self._get_car_behind(state, race_state)
+            if car_behind and self.track_map:
+                section_type, corner = self.track_map.get_section_at_position(
+                    state.position_m % race_state.track_length_m
+                )
+                
+                # Convert gap from seconds to meters
+                gap_m = state.gap_behind * state.velocity_mps
+                
+                # Calculate defensive action
+                defensive_action, racing_line = calculate_defensive_action(
+                    defender=driver,
+                    attacker=car_behind.driver,
+                    gap_m=gap_m,
+                    section=section_type,
+                    corner=corner
+                )
+                
+                state.racing_mode = RacingMode.DEFEND
+                state.push_intensity = 0.8 + (driver.defensive_driving / 100.0) * 0.15
+                # Store racing line for speed calculation
+                state.racing_line = racing_line
+            else:
+                state.racing_mode = RacingMode.DEFEND
+                state.push_intensity = 0.8
         
         elif state.gap_ahead > 3.0 and state.gap_behind > 3.0:
-            # Comfortable gap - manage tires and fuel
-            tire_mgmt = driver.tire_management / 100.0
-            
+            # Comfortable gap - manage
             state.racing_mode = RacingMode.MANAGE
-            # Better tire managers can push harder while still managing
-            state.push_intensity = 0.6 + tire_mgmt * 0.2
+            state.push_intensity = 0.6 + (driver.tire_management / 100.0) * 0.2
+            state.racing_line = RacingLine.IDEAL
         
         else:
-            # Cruising - no immediate pressure
             state.racing_mode = RacingMode.CRUISE
             state.push_intensity = 0.65 + overtaking_tendency * 0.1
+            state.racing_line = RacingLine.IDEAL
         
-        # Tire condition affects push intensity
+        # Tire condition affects push
         if state.tire_condition < 0.5:
             state.push_intensity *= (0.7 + state.tire_condition * 0.6)
         
-        # Consistency reduces variance in push intensity
+        # Consistency variance
         variance = (1.0 - consistency) * 0.1
         state.push_intensity += self.rng.normal(0, variance)
         state.push_intensity = np.clip(state.push_intensity, 0.4, 1.0)
@@ -342,42 +422,76 @@ class RealtimeRaceEngine:
         track_length_m: float
     ) -> float:
         """
-        Calculate current speed based on driver skill, mode, and conditions
+        Calculate current speed using track-aware physics
         
         Returns speed in meters per second.
         """
         driver = state.driver
         team = state.team
         
-        # Base speed from driver and team attributes
+        # Base speed from driver and team
         raw_speed = driver.raw_speed / 100.0
         team_performance = self._get_team_multiplier(team)
-        
         base_speed = self.BASE_SPEED_MPS * (0.7 + raw_speed * 0.3) * (0.85 + team_performance * 0.15)
         
-        # Modify by push intensity
-        speed = base_speed * (0.8 + state.push_intensity * 0.2)
+        # Track-aware corner physics
+        if self.track_map:
+            position_on_track = state.position_m % track_length_m
+            section_type, corner = self.track_map.get_section_at_position(position_on_track)
+            
+            if corner:
+                # Use advanced corner performance calculation
+                from disciplines.track_physics import calculate_corner_performance
+                
+                perf = calculate_corner_performance(
+                    driver=driver,
+                    corner=corner,
+                    racing_line=state.racing_line,
+                    tire_condition=state.tire_condition,
+                    cars_nearby=len(state.cars_nearby)
+                )
+                
+                # Use calculated exit speed (convert km/h to m/s)
+                corner_speed_mps = perf["exit_speed_kmh"] / 3.6
+                
+                # Apply push intensity to corner exit
+                corner_speed_mps *= (0.85 + state.push_intensity * 0.15)
+                
+                # Blend corner speed with base speed based on section type
+                if section_type == TrackSection.BRAKING_ZONE:
+                    speed = corner_speed_mps * 0.6 + base_speed * 0.4
+                elif section_type in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER]:
+                    speed = corner_speed_mps * 0.8 + base_speed * 0.2
+                elif section_type == TrackSection.FAST_CORNER:
+                    speed = corner_speed_mps * 0.5 + base_speed * 0.5
+                else:
+                    speed = base_speed
+            else:
+                # Straight section - use base speed
+                speed = base_speed
+        else:
+            # Fallback to simple calculation
+            speed = base_speed
+            position_in_lap = (state.position_m % track_length_m) / track_length_m
+            corner_factor = 0.85 + 0.15 * np.sin(position_in_lap * 2 * np.pi * 8)
+            cornering_skill = driver.cornering_skill / 100.0
+            corner_speed_retention = 0.7 + cornering_skill * 0.3
+            speed *= (corner_factor * corner_speed_retention + (1.0 - corner_factor))
         
-        # Tire degradation effect
-        tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.3  # Up to 30% slower on worn tires
+        # Modify by push intensity
+        speed *= (0.8 + state.push_intensity * 0.2)
+        
+        # Tire degradation
+        tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.3
         speed *= tire_penalty
         
-        # Fuel weight effect (lighter = faster)
-        fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.02  # Up to 2% faster on low fuel
+        # Fuel weight
+        fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.02
         speed *= fuel_bonus
         
-        # Slipstream effect
+        # Slipstream
         if state.in_slipstream:
             speed *= (1.0 + self.SLIPSTREAM_BONUS)
-        
-        # Corner speed variance (simplified - assume varied track sections)
-        position_in_lap = (state.position_m % track_length_m) / track_length_m
-        corner_factor = 0.85 + 0.15 * np.sin(position_in_lap * 2 * np.pi * 8)  # 8 "corners" per lap
-        
-        cornering_skill = driver.cornering_skill / 100.0
-        corner_speed_retention = 0.7 + cornering_skill * 0.3
-        
-        speed *= (corner_factor * corner_speed_retention + (1.0 - corner_factor))
         
         # Consistency variance
         consistency = driver.consistency / 100.0
@@ -465,27 +579,144 @@ class RealtimeRaceEngine:
         race_state.lap_start_positions[state.driver_id] = state.position_m
     
     def _check_incident(self, state: DriverState, race_state: RaceState) -> bool:
-        """Check if driver has incident this timestep"""
-        consistency = state.driver.consistency / 100.0
+        """
+        Advanced incident checking with overtaking combat resolution
         
-        # Base incident rate modified by consistency
+        Returns True if driver suffers incident (DNF).
+        """
+        # Update active overtakes
+        self._resolve_active_overtakes(race_state)
+        
+        # Base incident rate for normal driving
+        consistency = state.driver.consistency / 100.0
         incident_rate = self.BASE_INCIDENT_RATE * (1.5 - consistency * 0.5)
         
-        # Increase risk during overtaking attempts
-        if state.racing_mode == RacingMode.ATTACK and state.gap_ahead < 0.5:
-            incident_rate *= self.OVERTAKE_INCIDENT_MULTIPLIER
-        
-        # Tire condition affects incident rate
+        # Tire condition dramatically increases risk
         if state.tire_condition < 0.3:
             incident_rate *= 2.0
         
+        # Check for solo incident (spin, off-track, mechanical)
         if self.rng.random() < incident_rate:
-            # Determine incident type
-            incident_types = ["collision", "spin", "mechanical", "off_track"]
+            incident_types = ["spin", "mechanical", "off_track"]
             state.dnf_reason = self.rng.choice(incident_types)
             return True
         
         return False
+    
+    def _resolve_active_overtakes(self, race_state: RaceState):
+        """
+        Resolve all active overtaking attempts
+        
+        Updates positions and tracks incidents from wheel-to-wheel combat.
+        """
+        if not self.track_map:
+            return
+        
+        # Update each active overtake
+        completed_attempts = []
+        
+        for key, attempt in self.active_overtakes.items():
+            attacker_id, defender_id = key
+            attacker_state = race_state.driver_states.get(attacker_id)
+            defender_state = race_state.driver_states.get(defender_id)
+            
+            if not attacker_state or not defender_state:
+                completed_attempts.append(key)
+                continue
+            
+            if not attacker_state.running or not defender_state.running:
+                completed_attempts.append(key)
+                continue
+            
+            # Get track section
+            position_on_track = attacker_state.position_m % race_state.track_length_m
+            section_type, corner = self.track_map.get_section_at_position(position_on_track)
+            
+            # Calculate lateral overlap (simulated from speed difference)
+            speed_diff = attacker_state.velocity_mps - defender_state.velocity_mps
+            gap_meters = attacker_state.gap_ahead * attacker_state.velocity_mps
+            
+            # Estimate lateral overlap based on gap closing rate
+            if gap_meters < 5.0:  # Very close - side by side
+                lateral_overlap = min(0.8, 0.2 + (5.0 - gap_meters) * 0.12)
+            else:
+                lateral_overlap = max(0.0, attempt.lateral_overlap - 0.05)  # Decay if not close
+            
+            # Update attempt state
+            attempt.gap_m = gap_meters
+            attempt.speed_advantage_kmh = speed_diff * 3.6
+            attempt.lateral_overlap = lateral_overlap
+            
+            # Update frames
+            timestep = 1.0 / 30.0  # 30 FPS
+            outcome = attempt.update(timestep)
+            
+            # Check if attempt should be resolved (use outcome from update or resolve manually)
+            if outcome or attempt.frames_active > 30 or lateral_overlap > 0.7 or attacker_state.gap_ahead > 2.0:
+                # Use outcome from update() or resolve manually
+                if not outcome:
+                    result, incident_type = resolve_overtake_outcome(
+                        attacker=attacker_state.driver,
+                        defender=defender_state.driver,
+                        overtake_attempt=attempt,
+                        rng=self.rng
+                    )
+                else:
+                    result = outcome
+                    incident_type = None
+                
+                if result == "success":
+                    print(f"  \u2713 {attacker_state.driver_name} overtakes {defender_state.driver_name}! ({attempt.attempt_type.value})")
+                    # Swap positions will happen naturally in next update
+                elif result == "incident":
+                    # Collision occurred
+                    # For simplicity, both cars out (can refine later with fault assignment)
+                    attacker_state.running = False
+                    attacker_state.dnf_reason = "collision"
+                    defender_state.running = False
+                    defender_state.dnf_reason = "collision"
+                    print(f"  \u2718 COLLISION! {attacker_state.driver_name} and {defender_state.driver_name} crash!")
+                else:
+                    # Failed attempt - defender holds position
+                    pass
+                
+                completed_attempts.append(key)
+        
+        # Remove completed attempts
+        for key in completed_attempts:
+            del self.active_overtakes[key]
+    
+    def _get_car_ahead(self, state: DriverState, race_state: RaceState) -> Optional[DriverState]:
+        """Find the car directly ahead"""
+        ahead_car = None
+        min_gap = float('inf')
+        
+        for other_state in race_state.driver_states.values():
+            if other_state.driver_id == state.driver_id or not other_state.running:
+                continue
+            if other_state.position == state.position - 1:
+                gap = state.position_m - other_state.position_m if state.lap == other_state.lap else 999
+                if gap < min_gap:
+                    min_gap = gap
+                    ahead_car = other_state
+        
+        return ahead_car
+    
+    def _get_car_behind(self, state: DriverState, race_state: RaceState) -> Optional[DriverState]:
+        """Find the car directly behind"""
+        behind_car = None
+        min_gap = float('inf')
+        
+        for other_state in race_state.driver_states.values():
+            if other_state.driver_id == state.driver_id or not other_state.running:
+                continue
+            if other_state.position == state.position + 1:
+                gap = other_state.position_m - state.position_m if state.lap == other_state.lap else 999
+                if gap < min_gap:
+                    min_gap = gap
+                    behind_car = other_state
+        
+        return behind_car
     
     def _race_finished(self, race_state: RaceState) -> bool:
         """Check if race is complete"""

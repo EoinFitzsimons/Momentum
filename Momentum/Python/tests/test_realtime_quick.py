@@ -3,7 +3,7 @@ Quick test of realtime race engine with correct Driver attributes
 """
 import sys
 from database.database_manager import DatabaseManager
-from race_simulation_api import simulate_race
+from services.race_simulation_api import simulate_race
 
 def main():
     print("=" * 70)

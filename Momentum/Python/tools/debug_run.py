@@ -1,4 +1,4 @@
-from persistence_sqlite import PersistenceSQLite
+from services.persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
 if __name__ == '__main__':
