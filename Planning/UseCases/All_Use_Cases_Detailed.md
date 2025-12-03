@@ -4,221 +4,259 @@
 
 ### Scope
 
-Provide the simulation service with a complete driver profile and runtime status required to instantiate the driver in a race simulation.
+Retrieve a complete driver profile with 50+ attributes across 7 categories (technical, mental, physical, racecraft, personality, discipline preferences) from the SQLite database for race simulation initialisation.
 
 ### Description
 
-Return a driver's full profile and runtime status so the Simulation Service can initialise the driver in race simulations.
+The GUI or Simulation Service queries the database manager to retrieve a driver record containing all racing attributes, team assignment, and current status. The system returns the full driver object which is used to initialise the AI agent for real-time race simulation.
 
 ### Actors
 
-- `Simulation Service` - requests driver payloads for simulation initialisation.
-- `Drivers DB` - stores driver records and runtime state.
-
-### Use Case Diagram
-
-The system is in initialisation mode for a race; the driver record exists and the driver is eligible for selection.
+- `GUI` - requests driver data for race setup screens and displays.
+- `Simulation Service` - requests driver profiles for real-time race engine initialisation.
+- `Database Manager` - executes SQL queries against the SQLite database and returns driver objects.
 
 ### Flow Description
 
+#### Precondition
+
+The system has loaded the database; driver records exist with complete attribute sets.
+
 #### Activation
 
-This use case starts when the Simulation Service requests a driver's data for race setup.
+This use case starts when the GUI loads the race setup screen or when the Simulation Service initialises a race session.
 
 #### Main flow
 
-The system identifies the requested `driverId` and validates its format.
-
-1. The Simulation Service requests the driver's profile from the backend.
-2. The system retrieves the driver record and runtime state from the database.
-3. The system returns the payload and initialises the driver object for the race.
+1. The GUI or Simulation Service calls `DatabaseManager.get_all_drivers()` or `get_driver(driver_id)`.
+2. The Database Manager executes a `SELECT` query against the `drivers` table.
+3. The system validates that driver records contain all required attributes (0-100 scale for skills).
+4. The system returns `Driver` objects with full attribute payloads.
+5. For race simulation, each driver is instantiated as an AI agent with decision-making capabilities.
 
 #### Alternate flow
 
-A1: Requested `driverId` invalid - return `400 Bad Request` with validation errors.
-A2: Driver is ineligible (injured/unavailable) - return `409 Conflict` with status and reason.
+A1: Requested `driverId` does not exist - return `None` and GUI displays error message.
+A2: Database file not found - GUI displays connection error and prompts database regeneration.
 
 #### Exceptional flow
 
-E1: Database read failure - return `503 Service Unavailable` and include diagnostic id.
+E1: Database read failure or corruption - GUI catches exception, logs to `logs/` directory, and displays user-friendly error with regeneration option.
+E2: Missing or invalid attributes - Database Manager logs warning and uses default values (50.0) for missing skills.
 
 #### Termination
 
-Client receives driver payload and proceeds with race initialisation.
+Client receives driver objects and proceeds with race initialisation or display rendering.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC1_ReadDriverDetails.drawio`
 
 ## UC-2: Read Race Configuration
 
 ### Scope
 
-The backend returns the configuration used for a given event so the Simulation Service and UI prepare appropriate settings.
+Retrieve track information (175 circuits with IMA grading, surface types, characteristics) and race parameters from the SQLite database to configure the real-time race simulation engine.
 
 ### Description
 
-Return the full event configuration payload so the Simulation Service and clients can prepare simulations and UI displays.
+The GUI and Simulation Service query track records containing length, surface type, corners, and IMA characteristics. The system loads this data to initialise the track map with 100 evenly-spaced checkpoints, corner types (slow/medium/fast), and DRS zones for the physics engine.
 
 ### Actors
 
-- `Simulation Service` - consumes configuration for simulations.
-- `Client UI` - displays configuration to users.
+- `GUI` - requests track data for race setup and displays circuit information.
+- `Simulation Service` - loads track configuration to initialise the `TrackMap` and physics calculations.
+- `Database Manager` - queries the `tracks` table and returns `Track` objects.
 
-### Use Case Diagram
+### Flow Description
 
 #### Precondition
 
+Database contains 175 circuit definitions imported from `data/circuits_database.json`.
+
 #### Activation
 
-Starts when a client or the Simulation Service requests event configuration.
+Starts when the GUI loads the race setup screen and requests available tracks, or when the Simulation Service begins a race session.
 
 #### Main flow
 
-1. The caller requests configuration for an `eventId`.
-2. The system validates `eventId`, fetches track, laps, weather and ruleset, and returns the configuration.
+1. GUI calls `DatabaseManager.get_all_tracks()` or `get_track(track_id)`.
+2. Database Manager executes `SELECT` query against the `tracks` table.
+3. System returns `Track` objects containing name, length (km), country, surface type, and IMA grading.
+4. For simulation, the engine generates a `TrackMap` with corner sections and racing physics parameters.
+5. The circuit is rendered in the GUI with 100 checkpoint markers at 1% intervals.
 
 #### Alternate flow
 
-A1: Invalid `eventId` - return `400` with validation errors.
-A2: Partial configuration - return available fields with `partial: true` and a warning flag.
+A1: Invalid `track_id` requested - return `None` and GUI displays error or fallback message.
+A2: No tracks available in database - GUI prompts user to run `scripts/import_circuits.py` to populate track data.
 
 #### Exceptional flow
 
-E1: Database read error or connection timeout - return `503 Service Unavailable`.
-E2: Permission denied - return `403 Forbidden`.
+E1: Database read error - GUI logs exception to `logs/database_generation.log` and displays connection error.
+E2: Missing track characteristics - System uses default values (medium corners, standard grip) and logs warning.
 
-Caller proceeds to initialisation.
+#### Termination
+
+Caller receives track configuration and proceeds to simulation or display rendering.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC2_ReadRaceConfiguration.drawio`
 
 ## UC-3: Create Race Result
 
 ### Scope
 
-Persist race outcomes (positions, times, incidents) and trigger standings updates.
+Capture race outcomes from the real-time simulation engine (positions, lap times, DNF reasons, incidents) and persist results to the SQLite database for historical tracking and future standings calculations.
 
 ### Description
 
-Accept a race result payload from the Simulation Service or operator, validate it, persist the results atomically, and enqueue standings recalculation.
+The real-time race engine runs a physics simulation at 30 FPS where each driver is controlled by an AI decision-making agent. These agents process track conditions, competitor positions, and vehicle state to make strategic decisions (overtaking, defending, pit strategy) every frame. Upon race completion, the engine returns classification data including final positions, lap times, DNF status, and incident details. Results are validated and persisted to the database with atomic transactions.
 
 ### Actors
 
-- `Simulation Service` - submits generated race results.
-- `Standings Service` - recalculates standings from persisted results.
+- `Real-time Race Engine` - executes race simulation and generates position updates every frame (30 FPS).
+- `GUI` - receives race results and displays final classification to the user.
+- `Database Manager` - persists race results to the `race_results` table (planned feature).
 
 ### Flow Description
 
 #### Precondition
 
-Race event exists and is writable.
+Race simulation has been initialised with drivers, teams, and track configuration; simulation is running or has completed.
 
 #### Activation
 
-Starts when the simulation finishes or an operator submits results.
+Starts when the race simulation completes all laps or is terminated early via the stop button.
 
 #### Main flow
 
-1. The Simulation Service submits the result payload.
-2. The system validates the payload and event state, stores `race_results` in a transaction, and marks the event complete.
-3. The system enqueues a standings recalculation job and returns acknowledgement.
+1. The Real-time Race Engine completes the simulation loop and generates final classification.
+2. Engine returns a list of `RaceResult` objects containing driver ID, position, laps completed, best lap time, total time, and DNF reason if applicable.
+3. GUI receives the `race_finished` event with results payload.
+4. System validates that all drivers are accounted for and positions are sequential.
+5. (Planned) Database Manager persists results using `INSERT INTO race_results` within a transaction.
+6. GUI displays final standings table with positions, times, and gaps.
 
 #### Alternate flow
 
-A1: Validation failure - return `400` with field-level errors.
-A2: Event already finalised - return `409 Conflict` and provide adjustment options.
+A1: Race stopped early by user - engine returns partial results with current positions and marks race as incomplete.
+A2: All drivers DNF - return valid results with DNF status for all participants and log reason distribution.
 
 #### Exceptional flow
 
-E1: Database write failure - return `500` and include diagnostic id.
+E1: Database write failure during persistence - log error to `logs/` directory, display results in GUI but warn that they were not saved.
+E2: Results validation failure (missing drivers, duplicate positions) - log detailed diagnostic and display what data is available.
 
 #### Termination
 
-Event status updated; standings update job queued.
+Race results displayed in GUI standings table; system ready for next race or user action.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC3_CreateRaceResult.drawio`
 
 ## UC-4: Read Race Results
 
 ### Scope
 
-Return stored race results for display and historical access.
+Retrieve historical race results from the database for display in the GUI, including final classification, lap times, and DNF information.
 
 ### Description
 
-Provide classification, lap and penalty data for completed events.
+The system queries completed race records to display historical results. Results include finishing positions, lap times, DNF reasons, and incident details for analysis and comparison.
 
-- `Client UI` - requests and displays results.
-- `Reporting Service` - consumes results for summaries.
+### Actors
 
-### Use Case Diagram
+- `GUI` - requests and displays historical race results.
+- `Database Manager` - queries the `race_results` table and joins with driver/team data.
 
 ### Flow Description
 
 #### Precondition
 
-Results exist for the requested event.
+Race results have been persisted to the database from previous simulations.
 
 #### Activation
 
-Starts when client requests results by `eventId`.
+Starts when user navigates to race history screen or requests results for a specific event.
 
 #### Main flow
 
-1. Validate `eventId`.
-2. Retrieve classification and related data.
-3. Return results to caller.
+1. GUI calls `DatabaseManager.get_race_results(race_id)` or `get_championship_results(championship_id)`.
+2. Database Manager executes `SELECT` query joining `race_results`, `drivers`, and `teams` tables.
+3. System returns ordered list of results with driver names, positions, times, and DNF reasons.
+4. GUI displays results in standings table format.
 
 #### Alternate flow
 
-A1: No results found - return `404 Not Found`.
-A2: Provisional results - return `provisional: true` with timestamp.
+A1: No results found for requested race - GUI displays "No results available" message.
+A2: Partial results due to incomplete race - GUI displays available data and marks as "Race Incomplete".
 
 #### Exceptional flow
 
-E1: Database read failure - return `503` and optionally a cached snapshot.
-E2: Deserialization error - return `500` with error reference.
+E1: Database read failure - GUI logs error and displays cached results if available from previous session.
+E2: Corrupt result data - System logs validation errors and displays partial data with warning.
 
 #### Termination
 
-Client displays results.
+GUI displays historical results and awaits user navigation.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC4_ReadRaceResults.drawio`
 
 ## UC-5: Read Championship Details
 
 ### Scope
 
-Return championship metadata, calendar and standings snapshot.
+Retrieve championship information including season parameters, calendar of events, current standings, and points allocations across 7 racing disciplines.
 
 ### Description
 
+The system maintains championship records tracking season-long competitions. Each championship contains a calendar of races, points standings, and discipline-specific rules for the simulation.
+
 ### Actors
 
-- `Client UI` - displays championship metadata and standings.
-- `Analytics` - consumes standings for reports.
-
-### Use Case Diagram
+- `GUI` - displays championship standings, calendar, and season progress.
+- `Game Loop` - manages season progression and championship state (planned feature).
+- `Database Manager` - queries championship, standings, and calendar data.
 
 ### Flow Description
 
 #### Precondition
 
-Championship exists.
+Championship has been created with discipline, season year, and initial calendar.
 
 #### Activation
 
-Starts when client requests championship details.
+Starts when user navigates to championship screen or game loop initialises a season.
 
 #### Main flow
 
-1. Validate `championshipId`.
-2. Aggregate metadata, calendar and standings.
-3. Return combined payload.
+1. GUI or Game Loop requests championship data via `DatabaseManager.get_championship(championship_id)`.
+2. System retrieves championship metadata (discipline, year, points system).
+3. System queries calendar entries and aggregates standings from race results.
+4. GUI displays championship overview with standings table and upcoming races.
 
 #### Alternate flow
 
-A1: Championship archived - return `readOnly: true` and archive date.
-A2: Partial standings - return `partial: true` and link to computation job.
+A1: Championship has no races yet - display empty calendar with option to schedule events.
+A2: Standings unavailable - calculate standings from existing race results or display zero points.
 
 #### Exceptional flow
 
-E1: DB query timeout - return `503` with diagnostic id.
-E2: Permission denied - return `403`.
+E1: Database query failure - GUI displays error and offers retry or cached data.
+E2: Invalid championship structure - System logs diagnostic and prompts database verification.
 
 #### Termination
 
-Client displays championship view.
+GUI displays championship view with standings and calendar; system awaits user interaction.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC5_ReadChampionshipDetails.drawio`
 
 ## UC-6: Update Championship Standings
 
@@ -232,8 +270,6 @@ Recalculate and persist championship standings after results are recorded.
 
 - `Standings Service` - triggers recalculation and consumes updated standings.
 - `Admin` - may invoke recalculation manually.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -265,6 +301,10 @@ E2: Persistence error - roll back and queue retry.
 
 Standings persisted.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC6_UpdateChampionshipStandings.drawio`
+
 ## UC-7: Create Race Event
 
 ### Scope
@@ -279,8 +319,6 @@ An admin or scheduler submits an event; the backend validates and persists the e
 
 - `Admin` - creates and manages race events.
 - `Scheduler` - schedules events programmatically.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -312,6 +350,10 @@ E2: External sync failure - create event in draft and return `202 Accepted` with
 
 Calendar updated; notifications may be sent.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC7_CreateRaceEvent.drawio`
+
 ## UC-8: Read Race Schedule
 
 ### Scope
@@ -326,8 +368,6 @@ Return ordered list of events with dates, tracks and statuses.
 
 - `User / UI` - requests the schedule for display.
 - `Calendar Service` - synchronises events externally when configured.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -363,6 +403,10 @@ Client displays schedule.
 
 System awaits next request.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC8_ReadRaceSchedule.drawio`
+
 ## UC-9: Update Race Status
 
 ### Scope
@@ -378,8 +422,6 @@ Update event lifecycle state and notify dependent systems.
 - `Simulation/Service` - updates status during simulation.
 - `Admin` - may manually change status.
 - `Notification Service` - receives lifecycle events.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -415,6 +457,10 @@ Event status updated and notifications sent.
 
 System awaits next lifecycle event.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC9_UpdateRaceStatus.drawio`
+
 ## UC-10: Create Championship
 
 ### Scope
@@ -430,8 +476,6 @@ On season rollover the Game Loop computes the next season parameters, instantiat
 - `Game Loop / Scheduler` - triggers automatic season rollover and championship creation.
 - `Policy Service` - validates or supplies rulesets.
 - `Event Scheduler` - consumes the new championship to populate events.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -466,56 +510,65 @@ Championship record created and downstream systems notified.
 
 Event Scheduler and AI begin populating events and participants for the new season.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC10_CreateChampionship.drawio`
+
 ## UC-11: Read Team Details
 
 ### Scope
 
-Return full team profile for team screen (budget, staff, vehicles, drivers).
+Retrieve complete team profile including budget (€130M cap for top-tier Single Seater), tier classification, headquarters, discipline specialisation, and assigned drivers.
 
 ### Description
 
-Provide aggregated team information for display or simulation.
+The system maintains 1,095 team records across 7 racing disciplines. Each team has budget constraints, tier classification (tier1/tier2/tier3), and performance multipliers that affect simulation outcomes.
 
 ### Actors
 
-- `Player / UI` - views team details.
-- `Simulation Service` - requests team data for simulation.
-
-### Use Case Diagram
+- `GUI` - displays team information on management screens.
+- `Simulation Service` - requests team data to calculate performance multipliers for race simulation.
+- `Database Manager` - queries the `teams` table and joins with driver assignments.
 
 ### Flow Description
 
 #### Precondition
 
-Team exists.
+Team records exist in database with complete attribute sets.
 
 #### Activation
 
-Starts when client requests team by id.
+Starts when GUI loads team management screen or simulation engine initialises a race.
 
 #### Main flow
 
-1. Validate `teamId`.
-2. Retrieve roster, staff and financials.
-3. Return payload.
+1. GUI or Simulation Service calls `DatabaseManager.get_team(team_id)` or `get_teams_by_discipline(discipline)`.
+2. Database Manager executes `SELECT` query against `teams` table.
+3. System retrieves team metadata including budget, tier, headquarters, and discipline.
+4. For simulation, engine calculates team performance multiplier (0.55 to 0.95) based on tier and budget.
+5. GUI displays team profile or simulation applies multipliers to driver performance.
 
 #### Alternate flow
 
-A1: Team is private or restricted - return `403 Forbidden` with guidance on access requirements.
-A2: Partial data due to missing financials - return available roster and staff but mark `financials: unavailable`.
+A1: Invalid `team_id` - return `None` and GUI displays "Team not found" error.
+A2: Team has no assigned drivers - display team info with empty roster.
 
 #### Exceptional flow
 
-E1: Database read timeout - return `503 Service Unavailable` and a diagnostic id; offer cached response if available.
-E2: Denormalised join failure (aggregations) - return `500` and suggest requesting individual endpoints as workaround.
+E1: Database read failure - GUI logs error to `logs/` and displays connection error with retry option.
+E2: Missing team attributes - System uses default values (tier2, €100M budget) and logs warning.
 
 #### Termination
 
-Client displays team screen.
+GUI displays team screen or simulation proceeds with team performance calculations.
 
 #### Post condition
 
-System awaits next request.
+System awaits next team query or user action.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC11_ReadTeamDetails.drawio`
 
 ## UC-12: Create New Team
 
@@ -531,8 +584,6 @@ Player or admin creates a team; the system allocates starting assets or placehol
 
 - `Player/Admin` - initiates team creation.
 - `Provisioning Service` - reserves starting resources.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -568,6 +619,10 @@ Team visible in lists.
 
 System awaits next management action.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC12_CreateNewTeam.drawio`
+
 ## UC-13: Read Team Details (player team)
 
 ### Scope
@@ -582,8 +637,6 @@ Provide editable team data for the player's management screen.
 
 - `Player` - owner of the team and primary editor.
 - `Auth Service` - validates ownership and permissions.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -617,6 +670,10 @@ Player views editable team screen.
 
 System awaits further edits.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC13_ReadTeamDetailsPlayerTeam.drawio`
+
 ## UC-14: Update Team Attributes
 
 ### Scope
@@ -631,8 +688,6 @@ Player or admin updates team settings which are validated and persisted.
 
 - `Player/Admin` - submits updates.
 - `Finance Service` - validates budget changes.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -668,6 +723,10 @@ Changes reflected on subsequent reads.
 
 System awaits next request.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC14_UpdateTeamAttributes.drawio`
+
 ## UC-15: Read Available Drivers
 
 ### Scope
@@ -682,8 +741,6 @@ Provide filtered and paginated driver pool for the market UI.
 
 - `Player` - browses and filters available drivers.
 - `Team AI` - automated consumer of driver listings.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -718,6 +775,10 @@ Client displays candidate drivers.
 
 System awaits next query.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC15_ReadAvailableDrivers.drawio`
+
 ## UC-16: Update Driver Contract
 
 ### Scope
@@ -732,8 +793,6 @@ Persist contract terms and adjust availability and team budgets.
 
 - `Team Manager` - negotiates and confirms driver contracts.
 - `Admin` - enforces or modifies contract rules when required.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -769,6 +828,10 @@ Driver assigned and availability updated.
 
 System awaits next contract action.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC16_UpdateDriverContract.drawio`
+
 ## UC-17: Read Available Staff
 
 ### Scope
@@ -783,8 +846,6 @@ Provide paginated staff pool for recruitment screens.
 
 - `Player` - requests staff listings.
 - `HR Service` - provides staff filters and pools.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -819,6 +880,10 @@ Client displays staff candidates.
 
 System awaits next request.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC17_ReadAvailableStaff.drawio`
+
 ## UC-18: Update Staff Contract
 
 ### Scope
@@ -833,8 +898,6 @@ Assign staff to teams, record salary and update budgets.
 
 - `Player` - initiates hiring/renegotiation.
 - `Team Manager` - manages staff assignments.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -870,6 +933,10 @@ Staff assigned and salary deducted from budget.
 
 System awaits further HR actions.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC18_UpdateStaffContract.drawio`
+
 ## UC-19: Update Driver Skills/Age
 
 ### Scope
@@ -884,8 +951,6 @@ Perform end-of-season or scheduled updates to driver skills and ages; mark retir
 
 - `Scheduler` (Game Loop) - triggers seasonal maintenance jobs.
 - `Admin` - may invoke manual progression runs.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -921,6 +986,10 @@ Driver records updated for next season.
 
 System awaits next scheduled update.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC19_UpdateDriverSkillsAge.drawio`
+
 ## UC-20: Update Team Budget
 
 ### Scope
@@ -935,8 +1004,6 @@ Apply transactions affecting a team's budget and persist them.
 
 - `Finance System` - posts transactions affecting team budgets.
 - `Game Loop` - triggers periodic income/expense events.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -959,6 +1026,18 @@ Starts when a transaction affecting budget occurs.
 A1: Insufficient funds for debit - reject the transaction with `402 Payment Required` (or `422`) and suggest corrective actions (sponsor, loan, adjust expenses).
 A2: Pending transactions that affect available balance - return `409 Conflict` with pending transaction list.
 
+#### Exceptional flow
+
+E1: Database write failure - return `500` and enqueue transaction for replay.
+
+#### Termination
+
+Team budget updated and awaiting next transaction.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC20_UpdateTeamBudget.drawio`
+
 ## UC-21: Create New Driver
 
 ### Scope
@@ -974,8 +1053,6 @@ Maintain and expand the hireable driver pool to support roster growth, replaceme
 - `Admin` - requests manual creation.
 - `System` - scheduled or policy-driven generator.
 - `Generator Service` - produces seeded attribute payloads for new drivers.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1015,6 +1092,10 @@ Driver record created and visible in the hireable pool.
 
 Driver returned in subsequent listing endpoints and system awaits next generation task.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC21_CreateNewDriver.drawio`
+
 ## UC-22: Create New Staff Member (staff generation)
 
 ### Scope
@@ -1028,8 +1109,6 @@ Create or recycle staff records for hireable pool expansion.
 ### Actors
 
 - `Admin/System` - triggers staff generation or pool maintenance.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1064,6 +1143,10 @@ Staff visible in hiring pool.
 
 System awaits next generation.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC22_CreateNewStaffMember.drawio`
+
 ## UC-23: Delete Championship
 
 ### Scope
@@ -1077,8 +1160,6 @@ Delete or archive championship and related resources according to retention poli
 ### Actors
 
 - `Admin` - authorised to delete or archive championships.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1114,6 +1195,10 @@ Championship removed or archived.
 
 System awaits next admin action.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC23_DeleteChampionship.drawio`
+
 ## UC-24: Create Custom Track
 
 ### Scope
@@ -1127,8 +1212,6 @@ Designer or admin submits track metadata and layout which becomes available for 
 ### Actors
 
 - `Designer/Admin` - submits track definitions and layout files.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1164,6 +1247,10 @@ Track available for event creation.
 
 System awaits next track management action.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC24_CreateCustomTrack.drawio`
+
 ## UC-25: Update Track Characteristics
 
 ### Scope
@@ -1177,8 +1264,6 @@ Admin updates track metadata and future events use revised parameters.
 ### Actors
 
 - `Admin` - submits track updates.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1213,6 +1298,10 @@ Track updated for future events.
 
 System awaits next management action.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC25_UpdateTrackCharacteristics.drawio`
+
 ## UC-26: Delete Track
 
 ### Scope
@@ -1226,8 +1315,6 @@ Admin removes track or archives it if scheduled in future.
 ### Actors
 
 - `Admin` - initiates deletion or archiving of tracks.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1261,6 +1348,10 @@ Track removed or archived.
 
 System awaits further track management.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC26_DeleteTrack.drawio`
+
 ## UC-27: Read Staff Performance Modifiers
 
 ### Scope
@@ -1274,8 +1365,6 @@ Provide staff-based modifiers (mechanic efficiency, strategist value) to the Sim
 ### Actors
 
 - `Simulation Service` - requests computed modifiers for a team.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1310,6 +1399,10 @@ Simulation applies modifiers.
 
 System awaits next modifier request.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC27_ReadStaffPerformanceModifiers.drawio`
+
 ## UC-28: Update Driver Appearance
 
 ### Scope
@@ -1324,8 +1417,6 @@ Player edits and saves driver appearance assets which are stored and served to U
 
 - `Player` - creates or edits appearance assets.
 - `Storage Service` - stores and serves asset files.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1361,6 +1452,10 @@ Appearance updated for reads.
 
 System awaits further edits.
 
+### Use Case Diagram
+
+See `Planning/UseCases/UC28_UpdateDriverAppearance.drawio`
+
 ## UC-29: Update Team Branding
 
 ### Scope
@@ -1375,8 +1470,6 @@ Player or admin uploads branding assets and updates team metadata for display in
 
 - `Player/Admin` - uploads branding assets.
 - `Storage/DB` - stores branding files and metadata.
-
-### Use Case Diagram
 
 ### Flow Description
 
@@ -1411,3 +1504,7 @@ Branding served to UI.
 #### Post condition
 
 System awaits next update.
+
+### Use Case Diagram
+
+See `Planning/UseCases/UC29_UpdateTeamBranding.drawio`

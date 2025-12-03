@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2025-12-03T00:00:00.000Z" agent="GitHub Copilot" version="24.0.0">
+  <diagram name="UC-26: Delete Track" id="uc26">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <mxCell id="boundary" value="Momentum Racing Simulator" style="swimlane;startSize=30;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="50" width="800" height="600" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="mainUC" value="Delete Track" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="300" y="60" width="200" height="80" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc1" value="Verify Admin Authorization&lt;br/&gt;(deletion rights)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="80" y="180" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc2" value="Check Scheduled Events&lt;br/&gt;(future race dependencies)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="310" y="180" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc3" value="Confirm Deletion Policy&lt;br/&gt;(delete vs archive)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="540" y="180" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc4" value="Delete Track Record&lt;br/&gt;(or mark archived)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="195" y="280" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc5" value="Clean Up Assets&lt;br/&gt;(layout files, images)" style="ellipse;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="boundary">
+          <mxGeometry x="425" y="280" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="uc6" value="Return Confirmation&lt;br/&gt;(200 OK or archived)" style="ellipse;whiteSpace=wrap;html=1;" vertex="1" parent="boundary">
+          <mxGeometry x="310" y="380" width="180" height="70" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="actorAdmin" value="Admin" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="250" width="60" height="100" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="actorDB" value="Database&lt;br/&gt;Manager" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="300" width="60" height="100" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="assoc1" value="" style="endArrow=none;html=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="actorAdmin" target="mainUC">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="assoc2" value="" style="endArrow=none;html=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="actorDB" target="uc4">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="incl1" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="mainUC" target="uc1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="incl2" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="mainUC" target="uc2">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="incl3" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="mainUC" target="uc3">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="incl4" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="uc2" target="uc4">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="ext1" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="uc5" target="uc4">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="incl5" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="uc4" target="uc6">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
