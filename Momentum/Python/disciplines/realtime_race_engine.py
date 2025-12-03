@@ -134,7 +134,17 @@ class RealtimeRaceEngine:
         self.MIN_SPEED_MPS = 30.0   # ~108 km/h minimum speed in corners
         
         # Performance factors
-        self.SLIPSTREAM_BONUS = 0.05     # 5% speed boost in draft
+        # === SLIPSTREAM/DRAFTING EFFECT ===
+        # When car is within 2 car lengths (50m) behind another, gets speed boost
+        # from reduced air resistance. Real F1 data shows 5-10% boost.
+        self.SLIPSTREAM_BONUS = 0.07     # 7% speed boost when drafting
+        self.SLIPSTREAM_DISTANCE = 50.0  # Meters - effective draft range
+        
+        # === DIRTY AIR EFFECT ===
+        # When following closely in corners, turbulent air reduces downforce
+        # Real F1: 10-30% downforce loss, translates to ~5% speed loss in corners
+        self.DIRTY_AIR_PENALTY = 0.05    # 5% speed loss in corners when following
+        self.DIRTY_AIR_DISTANCE = 100.0  # Meters - dirty air affects up to this distance
         self.TIRE_DEGRADATION_RATE = 0.00001  # Per timestep degradation
         self.FUEL_BURN_RATE = 0.00002    # Per timestep fuel consumption
         
@@ -154,6 +164,7 @@ class RealtimeRaceEngine:
         track: Track,
         total_laps: int = 50,
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        stop_event=None,  # Threading event to signal early termination
         realtime_speed: float = 1.0,  # 1.0=real-time, 2.0=2x speed, 0.5=half speed
         track_points: Optional[List[Any]] = None  # Visual track points for unified position mapping
     ) -> List[Dict[str, Any]]:
@@ -197,6 +208,11 @@ class RealtimeRaceEngine:
             event_callback(self._create_position_event(race_state, frame))
         
         while not self._race_finished(race_state):
+            # Check if user requested stop
+            if stop_event and stop_event.is_set():
+                print("\n[RACE ENGINE] Stop requested - terminating simulation")
+                break
+            
             frame_start = time.time()
             
             # Update each driver
@@ -240,12 +256,29 @@ class RealtimeRaceEngine:
             # Update race situation (gaps, positions, nearby cars)
             self._update_race_situation(race_state)
             
+            # === COMPREHENSIVE LOGGING: Track every car every second ===
+            if frame % 30 == 0:  # Every 1 second at 30 FPS
+                print(f"\n[FRAME {frame}] Race time: {race_state.current_time:.1f}s")
+                active_count = sum(1 for s in race_state.driver_states.values() if s.running)
+                print(f"  Active cars: {active_count}/{len(race_state.driver_states)}")
+                
+                # Log each car's state
+                for driver_id, state in sorted(race_state.driver_states.items()):
+                    status = "RUNNING" if state.running else f"DNF({state.dnf_reason})"
+                    print(f"  Car {driver_id} ({state.driver_name}): "
+                          f"P{state.position} | L{state.lap} | "
+                          f"pos={state.position_m:.1f}m | v={state.velocity_mps:.1f}m/s | {status}")
+            
             # Emit position update every frame (30 FPS)
             frame += 1
             race_state.current_time += timestep
             
             if event_callback:
-                event_callback(self._create_position_event(race_state, frame))
+                position_event = self._create_position_event(race_state, frame)
+                # Log how many positions we're sending
+                if frame % 90 == 0:  # Every 3 seconds
+                    print(f"  → Emitting {len(position_event['positions'])} car positions to GUI")
+                event_callback(position_event)
             
             # Throttle to realtime_speed if needed
             if realtime_speed < 100:  # Don't throttle if running very fast
@@ -284,8 +317,10 @@ class RealtimeRaceEngine:
             if not team:
                 continue
             
-            # Stagger starting positions (2m between cars)
-            starting_position = -i * 2.0
+            # Stagger starting positions: 2 cars per row, 15m between rows
+            # Matches the GUI starting grid layout
+            row = i // 2
+            starting_position = row * 15.0
             
             state = DriverState(
                 driver_id=driver.id,
@@ -489,9 +524,47 @@ class RealtimeRaceEngine:
         fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.02
         speed *= fuel_bonus
         
-        # Slipstream
+        # === SLIPSTREAM BOOST (straights) ===
+        # Following closely reduces air resistance, increases top speed
         if state.in_slipstream:
             speed *= (1.0 + self.SLIPSTREAM_BONUS)
+        
+        # === DIRTY AIR PENALTY (corners) ===
+        # Following closely in corners disrupts airflow, reduces downforce
+        # Only applies in corners, not on straights
+        if hasattr(self, 'track_map') and self.track_map:
+            position_on_track = state.position_m % track_length_m
+            section_type, _ = self.track_map.get_section_at_position(position_on_track)
+            
+            # TrackSection already imported at top of file
+            is_corner = section_type in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER, 
+                                         TrackSection.FAST_CORNER, TrackSection.BRAKING_ZONE]
+            
+            # Check if in dirty air (only if car ahead exists and velocity is non-zero)
+            if is_corner and state.velocity_mps > 1.0 and state.gap_ahead < self.DIRTY_AIR_DISTANCE / state.velocity_mps:
+                # In dirty air in corner - reduce speed
+                speed *= (1.0 - self.DIRTY_AIR_PENALTY)
+        
+        # === COLLISION AVOIDANCE ===
+        # Slow down when too close to car ahead to prevent driving into them
+        if state.gap_ahead < 3.0:  # Less than 3 seconds gap
+            CAR_LENGTH = 5.0  # meters
+            MINIMUM_GAP = CAR_LENGTH * 4  # Need at least 4 car lengths (20m)
+            
+            # Calculate actual distance gap in meters
+            if state.velocity_mps > 0.1:
+                distance_gap = state.gap_ahead * state.velocity_mps
+                
+                if distance_gap < MINIMUM_GAP:
+                    # Too close! Reduce speed to avoid collision
+                    # The closer we are, the more we need to slow down
+                    safety_factor = distance_gap / MINIMUM_GAP
+                    safety_factor = max(0.4, safety_factor)  # Minimum 40% speed
+                    speed *= safety_factor
+                    
+                    # Extra braking if dangerously close
+                    if distance_gap < CAR_LENGTH * 1.5:
+                        speed *= 0.6  # Heavy braking to avoid rear-end
         
         # Consistency variance
         consistency = driver.consistency / 100.0
@@ -521,24 +594,34 @@ class RealtimeRaceEngine:
         for i, (driver_id, state) in enumerate(active_drivers):
             state.position = i + 1
             
-            # Gap ahead
+            # Gap ahead (in SECONDS, not laps)
             if i > 0:
                 ahead_state = active_drivers[i - 1][1]
+                
+                # Calculate actual position difference accounting for lap differences
                 if ahead_state.lap == state.lap:
                     distance_gap = ahead_state.position_m - state.position_m
-                    # Convert to time gap (approximate)
-                    state.gap_ahead = distance_gap / self.BASE_SPEED_MPS
-                    
-                    # Check slipstream (within 50m and similar lap)
-                    if distance_gap < 50.0:
-                        state.in_slipstream = True
-                    else:
-                        state.in_slipstream = False
+                elif ahead_state.lap > state.lap:
+                    # Car ahead is on later lap
+                    distance_gap = (race_state.track_length_m - state.position_m) + ahead_state.position_m
                 else:
-                    state.gap_ahead = 999.0
+                    # We're ahead (shouldn't happen with proper sorting)
+                    distance_gap = race_state.track_length_m
+                
+                # Convert distance to TIME GAP in seconds using current velocity
+                if state.velocity_mps > 0.1:
+                    state.gap_ahead = distance_gap / state.velocity_mps
+                else:
+                    state.gap_ahead = 999.0  # Very large gap if stationary
+                
+                # Check slipstream (within effective draft range)
+                if distance_gap < self.SLIPSTREAM_DISTANCE and ahead_state.lap == state.lap:
+                    state.in_slipstream = True
+                else:
                     state.in_slipstream = False
             else:
                 state.gap_ahead = 999.0
+                state.in_slipstream = False
                 state.in_slipstream = False
             
             # Gap behind
@@ -580,25 +663,97 @@ class RealtimeRaceEngine:
     
     def _check_incident(self, state: DriverState, race_state: RaceState) -> bool:
         """
-        Advanced incident checking with overtaking combat resolution
+        *** PHYSICS-BASED COLLISION DETECTION ***
+        
+        NO RANDOM PROBABILITY - Collisions emerge from actual position overlap!
         
         Returns True if driver suffers incident (DNF).
+        
+        Detection logic:
+        1. Check if car occupies same physical space as another car
+        2. If position difference < CAR_LENGTH and on same lap
+        3. Check if it's a racing incident (both at fault) or solo spin
+        4. Use driver skill to determine if they can avoid/recover
         """
         # Update active overtakes
         self._resolve_active_overtakes(race_state)
         
-        # Base incident rate for normal driving
-        consistency = state.driver.consistency / 100.0
-        incident_rate = self.BASE_INCIDENT_RATE * (1.5 - consistency * 0.5)
+        # === POSITION-BASED COLLISION DETECTION ===
+        # Collisions occur when two cars occupy the same physical space
+        CAR_LENGTH = 5.0  # meters
+        CAR_WIDTH = 2.0   # meters
+        SAFE_FOLLOWING_DISTANCE = 8.0  # minimum safe gap
         
-        # Tire condition dramatically increases risk
-        if state.tire_condition < 0.3:
-            incident_rate *= 2.0
+        # Check all other cars
+        for other_id, other_state in race_state.driver_states.items():
+            if other_id == state.driver_id or not other_state.running:
+                continue
+            
+            # Only check cars on same lap (or within track length wrap)
+            if other_state.lap != state.lap:
+                continue
+            
+            # Longitudinal separation (along track)
+            longitudinal_gap = abs(state.position_m - other_state.position_m) % race_state.track_length_m
+            if longitudinal_gap > race_state.track_length_m / 2:
+                longitudinal_gap = race_state.track_length_m - longitudinal_gap
+            
+            # If cars are very close longitudinally
+            if longitudinal_gap < SAFE_FOLLOWING_DISTANCE:
+                # Assume lateral separation based on racing behavior
+                # Cars in ATTACK/DEFEND mode are trying to overtake (side-by-side)
+                # Cars in MANAGE/CRUISE maintain racing line (not side-by-side)
+                
+                is_overtaking = (state.racing_mode == RacingMode.ATTACK or 
+                                state.racing_mode == RacingMode.DEFEND or
+                                other_state.racing_mode == RacingMode.ATTACK or
+                                other_state.racing_mode == RacingMode.DEFEND)
+                
+                if is_overtaking and longitudinal_gap < CAR_LENGTH * 1.5:
+                    # Side-by-side racing - small chance of contact
+                    # Skill determines if they can race wheel-to-wheel safely
+                    my_racecraft = (state.driver.vehicle_control + state.driver.spatial_awareness + 
+                                   state.driver.racecraft) / 300.0
+                    other_racecraft = (other_state.driver.vehicle_control + other_state.driver.spatial_awareness +
+                                      other_state.driver.racecraft) / 300.0
+                    
+                    combined_skill = (my_racecraft + other_racecraft) / 2.0
+                    
+                    # Tire condition affects car control
+                    control_factor = min(state.tire_condition, other_state.tire_condition)
+                    
+                    # Very small chance of contact even with good skills
+                    contact_probability = 0.0001 * (1.0 - combined_skill * control_factor)
+                    
+                    if self.rng.random() < contact_probability:
+                        state.dnf_reason = "contact_during_overtake"
+                        other_state.running = False
+                        other_state.dnf_reason = "contact_during_overtake"
+                        print(f"  *** RACING INCIDENT! {state.driver_name} and {other_state.driver_name} "
+                              f"made contact at position {state.position_m:.0f}m")
+                        return True
+                
+                elif not is_overtaking and longitudinal_gap < CAR_LENGTH:
+                    # Not overtaking but too close = rear-end collision
+                    # This shouldn't happen with proper AI spacing
+                    print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
+                    state.dnf_reason = "rear_end_collision"
+                    return True
         
-        # Check for solo incident (spin, off-track, mechanical)
-        if self.rng.random() < incident_rate:
-            incident_types = ["spin", "mechanical", "off_track"]
-            state.dnf_reason = self.rng.choice(incident_types)
+        # === SOLO INCIDENTS (mechanical, tire failure) ===
+        # Very rare - only if tires are completely dead or mechanical issues
+        if state.tire_condition < 0.1:
+            # Tires are destroyed - high chance of spin
+            consistency = state.driver.consistency / 100.0
+            if self.rng.random() > consistency:
+                state.dnf_reason = "tire_failure_spin"
+                print(f"  ✘ {state.driver_name} spins off - tire condition critical!")
+                return True
+        
+        # Mechanical DNF (extremely rare)
+        if self.rng.random() < 0.00001:  # 0.001% per frame
+            state.dnf_reason = "mechanical"
+            print(f"  ✘ {state.driver_name} retires - mechanical failure!")
             return True
         
         return False
@@ -734,12 +889,15 @@ class RealtimeRaceEngine:
         positions = []
         
         for driver_id, state in race_state.driver_states.items():
+            # Wrap position to track length for GUI rendering
+            display_position = state.position_m % race_state.track_length_m
+            
             positions.append({
                 "driver_id": driver_id,
                 "driver_name": state.driver_name,
                 "position": state.position,
                 "lap": state.lap,
-                "position_m": state.position_m,
+                "position_m": display_position,
                 "velocity_mps": state.velocity_mps,
                 "racing_mode": state.racing_mode.value,
                 "push_intensity": state.push_intensity,

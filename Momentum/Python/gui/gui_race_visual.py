@@ -162,34 +162,101 @@ class CircuitGenerator:
     
     @staticmethod
     def _add_closure(state):
-        """Add simple closure section."""
+        """
+        Add proper closure to create a complete closed loop.
+        
+        CRITICAL FUNCTION: This creates the connection back to the start of the track.
+        Without this, the track would be an open path, not a loop.
+        
+        Strategy:
+        1. Calculate angle deficit (how much rotation needed to point back to start)
+        2. Add corners to turn the track back toward start point
+        3. Add straight section to close the physical gap
+        4. DO NOT force exact closure - let modulo wrapping handle the loop
+        
+        WHY: Forcing exact closure causes teleportation. Instead, we let the
+        rendering code wrap positions using modulo arithmetic (position % track_length).
+        """
         segments = state['segments']
         start_x, start_y = segments[0].x, segments[0].y
+        
+        # Calculate gap to start point
         dx = start_x - state['current_x']
         dy = start_y - state['current_y']
         dist = math.hypot(dx, dy)
+        
+        # Calculate angle deficit (need to turn 360° total for closed loop)
         angle_deficit = 2 * math.pi - state['total_angle']
         
+        print(f"  [CLOSURE] Gap to start: {dist:.1f}m, Angle deficit: {math.degrees(angle_deficit):.1f}°")
+        
+        # Step 1: Add corners to close angle deficit
         if abs(angle_deficit) > math.radians(5):
             turn_dir = 1 if angle_deficit > 0 else -1
             remaining = abs(angle_deficit)
             
             if remaining > math.radians(60):
+                # Large deficit: split into two corners
                 angles = [remaining * 0.55 * turn_dir, remaining * 0.45 * turn_dir]
                 for angle in angles:
                     CircuitGenerator._add_straight(180, state)
                     CircuitGenerator._add_corner(angle, 100, 50, 0.0001, state)
             else:
+                # Small deficit: single corner
                 CircuitGenerator._add_straight(180, state)
                 CircuitGenerator._add_corner(angle_deficit, 120, 52, 0.00009, state)
         
-        CircuitGenerator._add_straight(int(max(100, dist * 0.12)), state)
+        # Step 2: Add straight to close physical gap
+        dx = start_x - state['current_x']
+        dy = start_y - state['current_y']
+        dist = math.hypot(dx, dy)
+        
+        if dist > 5:
+            # Add final straight section pointing toward start
+            num_points = int(dist)
+            for i in range(num_points):
+                state['current_x'] += math.cos(state['current_theta'])
+                state['current_y'] += math.sin(state['current_theta'])
+                segments.append(TrackPoint(
+                    state['current_s'] + i,
+                    state['current_x'],
+                    state['current_y'],
+                    state['current_theta'],
+                    0
+                ))
+            state['current_s'] += num_points
+        
+        # Step 3: Store track length for modulo wrapping
+        # The track is now a closed loop, but NOT perfectly closed
+        # The rendering code will use modulo to wrap positions
+        print(f"  [CLOSURE] Track loop complete, total length: {state['current_s']}m")
     
     @staticmethod
     def _finalize_circuit(segments):
-        """Scale and center circuit."""
+        """Add wraparound points and scale/center circuit."""
         if not segments:
             return
+        
+        # CRITICAL FIX FOR TELEPORTATION:
+        # Duplicate the first 150 points at the end of the array
+        # This creates a seamless visual loop when cars wrap from end to start
+        # Without this, cars jump visually when position wraps via modulo
+        original_length = len(segments)
+        wraparound_count = min(150, original_length)
+        print(f"  [FINALIZE] Adding {wraparound_count} wraparound points to prevent teleportation")
+        
+        for i in range(wraparound_count):
+            original_pt = segments[i]
+            wrap_pt = TrackPoint(
+                original_length + i,  # Extended arc-length
+                original_pt.x,
+                original_pt.y,
+                original_pt.theta,
+                original_pt.curvature
+            )
+            segments.append(wrap_pt)
+        
+        print(f"  [FINALIZE] Track now has {len(segments)} points (original: {original_length})")
         
         min_x = min(seg.x for seg in segments)
         max_x = max(seg.x for seg in segments)
@@ -266,31 +333,100 @@ class TrackWidget(QWidget):
     
     def update_car_realtime(self, driver_id: int, position_m: float, lap: int, velocity_mps: float):
         """
-        Update car position from real-time simulation (30 FPS updates)
+        *** CRITICAL FUNCTION: Real-time car position updates from race engine ***
+        
+        This function is called 30 times per second (30 FPS) by the race engine.
+        It updates the visual position of each car on the track.
         
         Args:
-            driver_id: Driver identifier
-            position_m: Absolute position in meters from lap start
-            lap: Current lap number
+            driver_id: Unique driver identifier (1-10)
+            position_m: Absolute position in meters from race start (can exceed track length)
+            lap: Current lap number (0 = formation lap, 1+ = racing)
             velocity_mps: Current velocity in meters per second
+        
+        HOW IT WORKS:
+        1. Receives position from physics engine (meters from race start)
+        2. Maps to visual track using modulo (wraps position to track length)
+        3. Updates car object with new position and lap
+        4. Triggers repaint so car appears in new location
+        
+        THREADING:
+        - Called from race simulation thread (NOT main GUI thread)
+        - Must be thread-safe (check widget validity before accessing)
+        - Uses Qt signals to ensure thread safety
         """
-        # Thread safety: check if widget is still valid
+        # === SAFETY CHECK 1: Widget may have been deleted/closed ===
+        try:
+            if not self.isVisible():
+                return  # Window was closed, stop updating
+        except RuntimeError:
+            # Widget has been deleted from memory
+            return
+        
+        # === DEBUG: Track zero velocity (cars stopping) ===
+        if velocity_mps < 0.1:
+            print(f"WARNING: Car {driver_id} has near-zero velocity: {velocity_mps:.2f} m/s at pos={position_m:.1f}m, lap={lap}")
+        
+        # === SAFETY CHECK 2: Required attributes exist ===
         if not hasattr(self, 'cars') or not self.cars or not hasattr(self, 'track_points'):
             return
         
+        # === FIND AND UPDATE THE MATCHING CAR ===
+        car_found = False
         for car in self.cars:
             if car.driver_id == driver_id:
-                # Map engine position to visual track: find closest track point
+                car_found = True
+                
+                # === POSITION MAPPING: Engine → Visual Track ===
+                # The engine uses absolute position (meters from race start)
+                # The visual track is circular (0 to track_length)
+                # Arc-length directly maps to track point index (1m = 1 point)
                 if self.track_length > 0 and len(self.track_points) > 0:
-                    # Normalize position to track range
+                    # Wrap position to track length (NO TELEPORTATION)
                     normalized_pos = position_m % self.track_length
-                    idx = int((normalized_pos / self.track_length) * len(self.track_points)) % len(self.track_points)
-                    car.s = self.track_points[idx].s  # Use visual track position
+                    
+                    # Direct arc-length to index mapping
+                    idx = int(normalized_pos)
+                    idx = max(0, min(idx, len(self.track_points) - 1))
+                    
+                    # Store previous position to calculate actual movement direction
+                    if not hasattr(car, 'prev_s'):
+                        car.prev_s = normalized_pos
+                    
+                    # Update position
+                    car.s = normalized_pos
+                    
+                    # Track movement direction for rotation
+                    car.movement_direction = normalized_pos - car.prev_s
+                    # Handle wrap-around
+                    if car.movement_direction < -self.track_length / 2:
+                        car.movement_direction += self.track_length
+                    elif car.movement_direction > self.track_length / 2:
+                        car.movement_direction -= self.track_length
+                    
+                    car.prev_s = normalized_pos
                 else:
-                    car.s = position_m  # Fallback
+                    # Fallback if track not loaded
+                    car.s = position_m
+                
+                # Update car state
                 car.lap = lap
                 car.velocity_mps = velocity_mps
+                
+                # === DEBUG TRACKING: Monitor which cars are updating ===
+                if not hasattr(self, '_update_count'):
+                    self._update_count = {}
+                self._update_count[driver_id] = self._update_count.get(driver_id, 0) + 1
+                
+                # Log every 60 frames (2 seconds at 30 FPS)
+                if self._update_count[driver_id] % 60 == 0:
+                    print(f"  [CAR UPDATE] {car.driver_name} (ID:{driver_id}): "
+                          f"{self._update_count[driver_id]} updates received, "
+                          f"position={car.s:.1f}m, lap={lap}")
                 break
+        
+        if not car_found:
+            print(f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
         
         # Trigger repaint
         self.update()
@@ -369,6 +505,20 @@ class TrackWidget(QWidget):
                 hw = 10
                 painter.drawLine(int(pt.x - normal_x * hw), int(pt.y - normal_y * hw),
                                 int(pt.x + normal_x * hw), int(pt.y + normal_y * hw))
+            
+            # 100 CHECKPOINT MARKERS (1% intervals)
+            # These help visualize car progression and calculate gaps accurately
+            if len(self.track_points) > 100:
+                painter.setPen(QPen(QColor(100, 100, 100), 1))  # Gray checkpoints
+                checkpoint_interval = len(self.track_points) // 100
+                for i in range(0, len(self.track_points), checkpoint_interval):
+                    if i < len(self.track_points):
+                        pt = self.track_points[i]
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        hw = 5  # Smaller than start/finish
+                        painter.drawLine(int(pt.x - normal_x * hw), int(pt.y - normal_y * hw),
+                                        int(pt.x + normal_x * hw), int(pt.y + normal_y * hw))
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
     
@@ -378,6 +528,7 @@ class TrackWidget(QWidget):
             if not self.track_points or self.track_length <= 0:
                 return
             
+            cars_drawn = 0
             for car in self.cars:
                 try:
                     if car.dnf:
@@ -385,15 +536,75 @@ class TrackWidget(QWidget):
                     
                     # Find track point at car's arc-length
                     if self.track_length > 0 and len(self.track_points) > 0:
-                        idx = int((car.s / self.track_length) * len(self.track_points)) % len(self.track_points)
+                        # === STEP 1: MODULO WRAPPING ===
+                        # This is CRITICAL for preventing teleportation!
+                        # When car.s exceeds track_length, it wraps back to 0
+                        # Example: If track is 6000m and car.s = 6100m, normalized_s = 100m
+                        normalized_s = car.s % self.track_length
+                        
+                        # === STEP 2: MAP TO TRACK POINT INDEX ===
+                        # Convert position (0 to track_length) into array index
+                        # The track_points array has wraparound points at the end for seamless looping
+                        # So we can directly use normalized_s as the index (with safety clamp)
+                        idx = int(normalized_s)
+                        # Safety clamp - allow using wraparound points at end of array
+                        idx = max(0, min(idx, len(self.track_points) - 1))
                         pt = self.track_points[idx]
                         
-                        # Draw car
+                        # === STEP 3: LATERAL POSITIONING (SIDE-BY-SIDE RACING) ===
+                        # Spread cars across track width to simulate racing lines
+                        # Grid position determines if car is on left or right side of track
+                        
+                        # Base offset: Grid position (odd = left, even = right)
+                        # This creates pairs of cars side-by-side at the start
+                        grid_position = car.driver_id % 2  # 0 or 1
+                        base_offset = (grid_position - 0.5) * 6  # -3 or +3 pixels
+                        
+                        # Dynamic offset: Small variation during racing
+                        # Much smaller than before to keep cars ON the track
+                        lap_progress = (normalized_s / self.track_length)
+                        dynamic_offset = math.sin(lap_progress * 6 * math.pi + car.driver_id * 0.7) * 2
+                        
+                        total_lateral_offset = base_offset + dynamic_offset
+                        
+                        # === STEP 4: CALCULATE PERPENDICULAR OFFSET ===
+                        # Track angle (theta) points along the track direction
+                        # To move sideways, we rotate 90° (pi/2 radians)
+                        track_angle = pt.theta
+                        offset_x = pt.x + total_lateral_offset * math.cos(track_angle + math.pi/2)
+                        offset_y = pt.y + total_lateral_offset * math.sin(track_angle + math.pi/2)
+                        
+                        # === STEP 5: DRAW CAR (actual 5m length) ===
+                        # Calculate rotation based on ACTUAL MOVEMENT, not just track angle
+                        if hasattr(car, 'movement_direction') and abs(car.movement_direction) > 0.1:
+                            # Car is moving - use direction of motion
+                            # Positive movement = forward, negative = backward (shouldn't happen)
+                            movement_angle = track_angle if car.movement_direction > 0 else track_angle + math.pi
+                        else:
+                            # Car stationary - use track direction
+                            movement_angle = track_angle
+                        
+                        car_length = 5.0  # 5 meters
+                        car_width = 2.0   # 2 meters
+                        
                         painter.setBrush(QBrush(car.color))
                         painter.setPen(QPen(Qt.GlobalColor.white, 1))
-                        painter.drawEllipse(QPointF(pt.x, pt.y), 4, 4)
+                        
+                        # Draw rectangle oriented to movement direction
+                        painter.save()
+                        painter.translate(offset_x, offset_y)
+                        painter.rotate(math.degrees(movement_angle))  # Rotate to MOVEMENT direction (reversed)
+                        painter.drawRect(int(-car_length/2), int(-car_width/2), 
+                                        int(car_length), int(car_width))
+                        painter.restore()
+                        cars_drawn += 1
                 except Exception as e:
-                    print(f"ERROR drawing car {car.driver_id}: {e}")
+                    print(f"ERROR drawing car {car.driver_id} (s={car.s:.1f}): {e}")
+            
+            # Debug: Print if not all cars are being drawn
+            if cars_drawn < len([c for c in self.cars if not c.dnf]):
+                active_cars = len([c for c in self.cars if not c.dnf])
+                print(f"WARNING: Only drew {cars_drawn}/{active_cars} active cars")
         except Exception as e:
             print(f"ERROR in _draw_cars: {e}")
 
@@ -472,11 +683,11 @@ class RaceWindow(QMainWindow):
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_panel.addWidget(self.info_label)
         
-        # Standings table
+        # Standings table (row order = position, no need for Pos column)
         right_panel.addWidget(QLabel("<h3>Live Standings</h3>"))
         self.standings_table = QTableWidget()
-        self.standings_table.setColumnCount(4)
-        self.standings_table.setHorizontalHeaderLabels(["Pos", "Driver", "Lap", "Gap"])
+        self.standings_table.setColumnCount(3)
+        self.standings_table.setHorizontalHeaderLabels(["Driver", "Lap", "Gap"])
         self.standings_table.setMinimumWidth(400)
         right_panel.addWidget(self.standings_table)
         
@@ -628,19 +839,20 @@ class RaceWindow(QMainWindow):
                 ]
                 
                 cars = []
-                # Grid alignment: place each car at a grid slot on the track
-                grid_spacing = 10  # meters between cars on grid
+                # Starting grid: Stagger cars along track direction (not side-to-side)
+                # Formation: 2 cars per row, 10m spacing between rows
+                # Row 1: positions 0, 0 (side by side via lateral offset)
+                # Row 2: positions 15, 15
+                # Row 3: positions 30, 30, etc.
                 for i, driver in enumerate(self.drivers):
-                    # Find grid position for this car (i * spacing meters from start)
-                    grid_position_m = i * grid_spacing
-                    # Find closest track point to this position
-                    grid_idx = min(int((grid_position_m / track_length) * len(track_points)), len(track_points) - 1)
-                    grid_s = track_points[grid_idx].s
+                    row = i // 2  # 0,1 -> row 0; 2,3 -> row 1; etc.
+                    grid_spacing = 15.0  # meters between rows
+                    start_position = row * grid_spacing
                     
                     cars.append(Car(
                         driver_id=driver.id,
                         driver_name=driver.name,
-                        s=grid_s,
+                        s=start_position,  # Staggered start positions
                         color=colors[i % len(colors)],
                         total_time=0.0,
                         avg_lap_time=60.0,
@@ -648,7 +860,8 @@ class RaceWindow(QMainWindow):
                     ))
                 
                 self.track_widget.set_cars(cars)
-                print(f"Created {len(cars)} cars with grid alignment (spacing: {grid_spacing}m)")
+                print(f"Created {len(cars)} cars at start line")
+                print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
             except Exception as e:
                 self.info_label.setText(f"Failed to create cars: {e}")
                 self.start_btn.setEnabled(False)
@@ -657,14 +870,13 @@ class RaceWindow(QMainWindow):
                 traceback.print_exc()
                 return
             
-            # Initialize standings table
+            # Initialize standings table (row order = position)
             try:
                 self.standings_table.setRowCount(len(self.drivers))
                 for i, driver in enumerate(self.drivers):
-                    self.standings_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
-                    self.standings_table.setItem(i, 1, QTableWidgetItem(driver.name))
-                    self.standings_table.setItem(i, 2, QTableWidgetItem("0"))
-                    self.standings_table.setItem(i, 3, QTableWidgetItem("-"))
+                    self.standings_table.setItem(i, 0, QTableWidgetItem(driver.name))
+                    self.standings_table.setItem(i, 1, QTableWidgetItem("0"))
+                    self.standings_table.setItem(i, 2, QTableWidgetItem("-"))
                 print("Standings table initialized")
             except Exception as e:
                 print(f"WARNING: Standings table initialization failed: {e}")
@@ -698,14 +910,14 @@ class RaceWindow(QMainWindow):
         
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.info_label.setText("Race in progress...")
+        self.info_label.setText("Race starting... waiting for data")
         
-        # Start smooth animation
-        try:
-            self.track_widget.start_animation()
-            print("Animation started")
-        except Exception as e:
-            print(f"WARNING: Failed to start animation: {e}")
+        # === CRITICAL FIX: Don't start animation yet! ===
+        # Starting animation before first data arrives causes freeze
+        # Animation will auto-start when first position update arrives
+        if not hasattr(self, '_animation_started'):
+            self._animation_started = False
+        print("[RACE START] Waiting for simulation to send first position data...")
         
         def race_runner():
             try:
@@ -717,6 +929,19 @@ class RaceWindow(QMainWindow):
                         event_type = event.get("type")
                         
                         if event_type == "position_update":
+                            # === AUTO-START ANIMATION ON FIRST DATA ===
+                            # Prevents freeze where animation waits for data
+                            if not self._animation_started:
+                                print("[ANIMATION] First position data received - starting animation NOW")
+                                if self.track_widget:
+                                    try:
+                                        self.track_widget.start_animation()
+                                        print("[ANIMATION] Animation timer started")
+                                    except Exception as e:
+                                        print(f"[ERROR] Failed to start animation: {e}")
+                                self._animation_started = True
+                                self.info_label.setText("Race in progress...")
+                            
                             # Real-time position updates at 30 FPS
                             frame = event.get("frame", 0)
                             race_time = event.get("time", 0.0)
@@ -736,23 +961,21 @@ class RaceWindow(QMainWindow):
                                     if driver_id is None:
                                         continue
                                     
-                                    # Update track widget with absolute position
+                                    # Update track widget with position
                                     if self.track_widget and pos_data.get("running", True):
-                                        # Convert absolute position to track position (0-1 scale)
+                                        # position_m from engine is already lap-relative (0 to track_length)
+                                        # DO NOT subtract lap * track_length (causes negative positions!)
                                         position_m = pos_data.get("position_m", 0.0)
-                                        track_length_m = self.track.length_km * 1000.0
-                                        
-                                        # Normalize to 0-track_length for current lap
                                         lap = pos_data.get("lap", 0)
-                                        lap_position = position_m - (lap * track_length_m)
+                                        velocity_mps = pos_data.get("velocity_mps", 0.0)
                                         
                                         # Update car position
                                         if hasattr(self.track_widget, 'update_car_realtime'):
                                             self.track_widget.update_car_realtime(
                                                 driver_id=driver_id,
-                                                position_m=lap_position,
+                                                position_m=position_m,
                                                 lap=lap,
-                                                velocity_mps=pos_data.get("velocity_mps", 0.0)
+                                                velocity_mps=velocity_mps
                                             )
                                         else:
                                             # Fallback to old method
@@ -829,14 +1052,32 @@ class RaceWindow(QMainWindow):
     
     def _stop_race(self):
         """Stop the race simulation."""
+        print("[STOP RACE] User requested race stop")
+        
+        # Signal the race thread to stop
         if self.stop_event:
             self.stop_event.set()
-        self.info_label.setText("Stopping race...")
-        self.stop_btn.setEnabled(False)
+            print("[STOP RACE] Stop event set")
         
         # Stop animation
         if self.track_widget:
             self.track_widget.stop_animation()
+            print("[STOP RACE] Animation stopped")
+        
+        # Wait for race thread to finish (with timeout)
+        if self.race_thread and self.race_thread.is_alive():
+            print("[STOP RACE] Waiting for race thread to terminate...")
+            self.race_thread.join(timeout=2.0)
+            if self.race_thread.is_alive():
+                print("[STOP RACE] WARNING: Race thread did not stop cleanly")
+            else:
+                print("[STOP RACE] Race thread terminated")
+        
+        # Re-enable start button
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.info_label.setText("Race stopped")
+        print("[STOP RACE] Stop complete")
     
     def _on_position_update(self, data: dict):
         """Handle position update from simulation."""
@@ -904,26 +1145,112 @@ class RaceWindow(QMainWindow):
             traceback.print_exc()
     
     def _on_event(self, message: str):
-        """Handle general events."""
+        """
+        *** Handle general race events from simulation ***
+        
+        This receives string messages from the race engine containing:
+        - standings_update: Position changes during race
+        - General info messages
+        
+        STANDINGS UPDATE FORMAT:
+        "standings_update|driver_id|position|lap|time_seconds|position_m"
+        
+        Example: "standings_update|5|1|3|185.4|19234.5"
+        Means: Driver 5 is in P1, on lap 3, at 185.4 seconds, position 19234.5m
+        """
         # Check if this is a standings update
         if message.startswith("standings_update|"):
             try:
-                _, driver_id_str, position_str, lap_str = message.split("|")
-                driver_id = int(driver_id_str)
-                position = int(position_str)
-                lap = int(lap_str)
+                # Parse the message
+                parts = message.split("|")
+                driver_id = int(parts[1])
+                race_position = int(parts[2])
+                lap = int(parts[3])
+                time_seconds = float(parts[4]) if len(parts) > 4 else 0.0
+                position_m = float(parts[5]) if len(parts) > 5 else 0.0
                 
-                # Update standings table
-                for row in range(self.standings_table.rowCount()):
-                    item = self.standings_table.item(row, 1)  # Driver name column
-                    if item:
-                        driver = next((d for d in self.drivers if d.name == item.text()), None)
-                        if driver and driver.id == driver_id:
-                            self.standings_table.setItem(row, 0, QTableWidgetItem(str(position)))
-                            self.standings_table.setItem(row, 2, QTableWidgetItem(str(lap)))
-                            break
+                # === STORE RACE STATE FOR EACH DRIVER ===
+                # We need to track all drivers to calculate gaps properly
+                if not hasattr(self, '_race_state'):
+                    self._race_state = {}  # {driver_id: {position, lap, time, distance}}
+                
+                driver = next((d for d in self.drivers if d.id == driver_id), None)
+                if driver:
+                    self._race_state[driver_id] = {
+                        'name': driver.name,
+                        'position': race_position,
+                        'lap': lap,
+                        'time': time_seconds,
+                        'distance': position_m
+                    }
+                
+                # === REBUILD STANDINGS TABLE ===
+                # We need to sort by TOTAL PROGRESS (lap * track_length + position_m)
+                # This gives us the true racing order
+                standings_list = []
+                for did, data in self._race_state.items():
+                    # Calculate total progress
+                    total_progress = data['lap'] * 6350 + (data['distance'] % 6350)
+                    standings_list.append({
+                        'driver_id': did,
+                        'name': data['name'],
+                        'position': data['position'],
+                        'lap': data['lap'],
+                        'time': data['time'],
+                        'distance': data['distance'],
+                        'total_progress': total_progress
+                    })
+                
+                # === SORT BY TOTAL PROGRESS (DESCENDING) ===
+                # Car with most progress is leader
+                standings_list.sort(key=lambda x: -x['total_progress'])
+                
+                # === FIND LEADER FOR GAP CALCULATION ===
+                leader_time = standings_list[0]['time'] if standings_list else 0.0
+                leader_lap = standings_list[0]['lap'] if standings_list else 0
+                
+                # === UPDATE TABLE ROWS ===
+                for row, entry in enumerate(standings_list):
+                    # Column 0: Driver Name
+                    self.standings_table.setItem(row, 0, QTableWidgetItem(entry['name']))
+                    
+                    # Column 1: Current Lap
+                    self.standings_table.setItem(row, 1, QTableWidgetItem(str(entry['lap'])))
+                    
+                    # Column 2: Gap to Leader
+                    if row == 0:
+                        # Leader shows "-"
+                        gap_text = "-"
+                    else:
+                        # Calculate gap
+                        lap_diff = leader_lap - entry['lap']
+                        if lap_diff > 0:
+                            # Multiple laps behind
+                            gap_text = f"+{lap_diff}L"
+                        else:
+                            # Same lap - show time gap
+                            time_gap = entry['time'] - leader_time
+                            if time_gap > 0:
+                                gap_text = f"+{time_gap:.2f}s"
+                            else:
+                                gap_text = "-"
+                    
+                    self.standings_table.setItem(row, 2, QTableWidgetItem(gap_text))
+                
+                # === DEBUG: Log standings every 3 seconds ===
+                if not hasattr(self, '_last_standings_log'):
+                    self._last_standings_log = 0
+                import time
+                if time.time() - self._last_standings_log > 3.0:
+                    self._last_standings_log = time.time()
+                    print(f"\n  [STANDINGS] Current order:")
+                    for i, entry in enumerate(standings_list[:5]):
+                        print(f"    P{i+1}: {entry['name']} (L{entry['lap']}, {entry['time']:.1f}s)")
+                    
             except Exception as e:
-                print(f"ERROR updating standings: {e}")
+                print(f"  [ERROR] Failed to update standings: {e}")
+                import traceback
+                traceback.print_exc()
         else:
             self.info_label.setText(message)
 

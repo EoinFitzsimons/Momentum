@@ -314,17 +314,19 @@ def calculate_incident_risk(
     
     Returns probability (0.0-1.0) of contact/crash
     """
-    # Base risk depends on section
+    # === TEMPORARY: COLLISION TESTING DISABLED ===
+    # Base risks set to near-zero for testing car movement and positioning
+    # TODO: Re-enable realistic collision rates once car rendering is verified
     base_risks = {
-        TrackSection.STRAIGHT: 0.01,
-        TrackSection.BRAKING_ZONE: 0.08,
-        TrackSection.SLOW_CORNER: 0.15,
-        TrackSection.MEDIUM_CORNER: 0.12,
-        TrackSection.FAST_CORNER: 0.25,
-        TrackSection.ACCELERATION_ZONE: 0.05
+        TrackSection.STRAIGHT: 0.0001,        # 0.01% - testing only
+        TrackSection.BRAKING_ZONE: 0.0001,    # 0.01% - testing only
+        TrackSection.SLOW_CORNER: 0.0001,     # 0.01% - testing only
+        TrackSection.MEDIUM_CORNER: 0.0001,   # 0.01% - testing only
+        TrackSection.FAST_CORNER: 0.0002,     # 0.02% - testing only
+        TrackSection.ACCELERATION_ZONE: 0.0001  # 0.01% - testing only
     }
     
-    base_risk = base_risks.get(section, 0.10)
+    base_risk = base_risks.get(section, 0.0001)  # 0.01% default for testing
     
     # Skill mitigates risk
     attacker_control = (
