@@ -1,36 +1,31 @@
-from typing import List, Dict, Callable, Optional
-import random
-import time
-import threading
+"""
+Simple Race Simulator - Real-time agent-based racing
+
+Wrapper for real-time racing engine that simulates at 30 FPS with drivers
+actively making decisions based on their surroundings and attributes.
+
+Key Features:
+- 30 FPS simulation (2,700 updates per 90s lap)
+- AI agents make live racing decisions (attack/defend/manage)
+- Spatial awareness and overtaking logic
+- Live position updates for smooth GUI visualization
+
+Authors: Final Year Project - Computer Science
+Date: December 2025
+"""
+
+from typing import List, Callable, Optional
 from persistence_iface import PersistenceIface
 from database.models import Driver as DBDriver, Track as DBTrack
-from database.models import RaceResult as DBRaceResult
+from database.models import RaceResult as DBRaceResult, Team as DBTeam
+
+# Import real-time racing engine
+from realtime_race_engine import RealtimeRaceEngine
 
 
-def _norm(x: float) -> float:
-    """Normalize attribute value to 0-1 range."""
-    return max(0.0, min(1.0, x / 100.0))
-
-
-def _calculate_performance_score(driver: DBDriver) -> float:
-    """Calculate weighted performance score from driver attributes."""
-    return (
-        0.45 * _norm(driver.raw_speed)
-        + 0.20 * _norm(driver.cornering_skill)
-        + 0.10 * _norm(driver.braking_technique)
-        + 0.10 * _norm(driver.acceleration_control)
-        + 0.05 * _norm(driver.race_pace)
-    )
-
-
-def _calculate_lap_time(
-    driver: DBDriver,
-    driver_state: Dict,
-    base_lap_factor: float,
-    current_lap: int,
-    total_laps: int,
-    rnd: random.Random
-) -> float:
+# ============================================================================
+# MAIN SIMULATION FUNCTION
+# ============================================================================
     """Calculate lap time considering performance, tyre wear, fuel, and randomness."""
     perf_score = _calculate_performance_score(driver)
     
@@ -301,44 +296,129 @@ def simulate_race(
     laps: int | None = None,
     verbose: bool = False,
     event_callback: Optional[Callable[[dict], None]] = None,
-    stop_event: Optional[threading.Event] = None,
-    lap_delay: float = 0.0,
+    stop_event=None,  # Not used in real-time engine
+    lap_delay: float = 0.0,  # Not used - real-time engine controls pacing
+    db: Optional[PersistenceIface] = None,
 ) -> List[DBRaceResult]:
     """
-    Lap-by-lap race simulator.
-
-    Features:
-    - Per-lap times influenced by `raw_speed`, tyre wear, fuel effect and randomness
-    - Simple pit-stop logic (tyre-driven) and pit time penalty
-    - Incidents with small DNF chance
-    - Reproducible via `seed`
-
-    Returns list of `RaceResult` sorted by finishing order.
-    """
-    rnd = random.Random(seed) if seed is not None else random.Random()
-    laps = _calculate_laps(track, laps)
-    state = _initialize_driver_states(drivers)
-
-    pit_time = 22.0
-    base_lap_factor = track.length_km * 60.0
-
-    # simulate each lap
-    for lap in range(1, laps + 1):
-        if _check_stop_event(stop_event, lap, verbose):
-            break
-        
-        if verbose:
-            print(f"--- Lap {lap}/{laps} ---")
-        if event_callback:
-            event_callback({"type": "lap_start", "lap": lap})
-
-        # Process each driver's lap
-        for d in drivers:
-            _process_driver_lap(d, state[d.id], lap, laps, base_lap_factor, track, pit_time, rnd, verbose, event_callback)
-
-        _emit_standings(drivers, state, lap, event_callback)
-        
-        if lap_delay and lap < laps:
-            time.sleep(lap_delay)
+    Real-time agent-based race simulator at 30 FPS
     
-    return _build_results(drivers, state, event_callback)
+    NEW ARCHITECTURE: Drivers are AI agents making live decisions based on:
+    - Position relative to other cars
+    - Gaps ahead/behind
+    - Their attributes (aggression, overtaking, tire_management, etc.)
+    - Current race situation (attack/defend/manage/cruise modes)
+    
+    Simulation runs at 30 FPS (0.033s timesteps):
+    - 90s lap = 2,700 position updates per lap
+    - 20 cars × 50 laps = 2,700,000 total updates
+    
+    Features:
+    - Spatial awareness: drivers know where other cars are
+    - Active decision-making: push harder to attack, conserve to manage tires
+    - Real-time overtaking with skill-based outcomes
+    - Slipstream/drafting effects
+    - Tire degradation and fuel consumption
+    - Live position updates for smooth GUI visualization
+    
+    Args:
+        drivers: List of drivers participating in race
+        track: Track with length and characteristics
+        seed: Random seed for reproducibility
+        laps: Number of laps (default 50)
+        verbose: Print race updates to console
+        event_callback: Callback for position updates (called at 30 FPS)
+        db: Database interface to fetch team data
+
+    Returns:
+        List of RaceResult objects sorted by finishing order
+    """
+    # Initialize real-time racing engine
+    engine = RealtimeRaceEngine(seed=seed)
+    
+    # Calculate laps if not specified
+    if laps is None:
+        laps = max(20, min(int(300 / track.length_km), 80))  # 20-80 laps depending on track length
+    
+    # Fetch team data for all drivers
+    teams_dict = {}
+    if db:
+        try:
+            team_ids = set(d.current_team_id for d in drivers if d.current_team_id)
+            for team_id in team_ids:
+                team = None
+                if hasattr(db, 'get_team'):
+                    team = db.get_team(team_id)
+                
+                if team:
+                    teams_dict[team_id] = team
+        except Exception as e:
+            if verbose:
+                print(f"Warning: Could not fetch team data: {e}")
+    
+    # Create dummy teams if none found
+    if not teams_dict:
+        for driver in drivers:
+            if driver.current_team_id not in teams_dict:
+                teams_dict[driver.current_team_id] = DBTeam(
+                    id=driver.current_team_id,
+                    name=f"Team {driver.current_team_id}",
+                    nationality="USA",
+                    founded_year=2020,
+                    discipline="formula",
+                    tier="tier2",
+                    budget=100.0,
+                    headquarters="Unknown",
+                    team_principal="Unknown"
+                )
+    
+    # Run real-time simulation
+    if verbose:
+        print(f"\nStarting real-time race: {len(drivers)} drivers, {laps} laps, {track.length_km:.2f}km track")
+        print(f"Simulation rate: 30 FPS (2,700 updates per 90s lap)")
+        print(f"Total expected updates: ~{2700 * laps * len(drivers):,}\n")
+    
+    try:
+        results_list = engine.simulate_race(
+            drivers=drivers,
+            teams=teams_dict,
+            track=track,
+            total_laps=laps,
+            event_callback=event_callback,
+            realtime_speed=100.0  # Run as fast as possible (no throttling)
+        )
+    except Exception as e:
+        if verbose:
+            print(f"Error in simulation: {e}")
+            import traceback
+            traceback.print_exc()
+        raise
+    
+    # Convert results to DBRaceResult objects (for backward compatibility)
+    db_results = []
+    for result in results_list:
+        rr = DBRaceResult(
+            id=0,
+            race_id=0,
+            driver_id=result["driver_id"],
+            team_id=result["team_id"],
+            position=result["position"],
+            points=0,  # TODO: Add points calculation
+            fastest_lap=False,
+            dnf_reason=result["dnf_reason"],
+            grid_position=result["position"]
+        )
+        # Store additional data
+        setattr(rr, 'laps_completed', result["laps_completed"])
+        setattr(rr, 'best_lap_time', result.get("best_lap_time"))
+        setattr(rr, 'average_lap_time', result.get("average_lap_time"))
+        db_results.append(rr)
+    
+    if verbose:
+        print("\n=== Final Results ===")
+        for i, result in enumerate(results_list[:10], 1):
+            status = "DNF" if result["dnf_reason"] else f"{result['laps_completed']} laps"
+            best_lap = f"{result['best_lap_time']:.2f}s" if result.get('best_lap_time') else "N/A"
+            print(f"{i}. {result['driver_name']} - {status} (Best: {best_lap})")
+    
+    return db_results
