@@ -84,6 +84,7 @@ def simulate_race(
             track=track,
             total_laps=laps,
             event_callback=event_callback,
+            stop_event=stop_event,  # Pass stop event for cancellation
             realtime_speed=5.0,  # 5x real-time speed for watchable racing
             track_points=track_points  # Visual track for unified position mapping
         )
