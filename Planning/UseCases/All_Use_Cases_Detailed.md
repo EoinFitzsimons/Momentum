@@ -50,8 +50,6 @@ Client receives driver objects and proceeds with race initialisation or display 
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC1_ReadDriverDetails.drawio`
-
 ## UC-2: Read Race Configuration
 
 ### Scope
@@ -101,8 +99,6 @@ E2: Missing track characteristics - System uses default values (medium corners, 
 Caller receives track configuration and proceeds to simulation or display rendering.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC2_ReadRaceConfiguration.drawio`
 
 ## UC-3: Create Race Result
 
@@ -155,8 +151,6 @@ Race results displayed in GUI standings table; system ready for next race or use
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC3_CreateRaceResult.drawio`
-
 ## UC-4: Read Race Results
 
 ### Scope
@@ -204,8 +198,6 @@ E2: Corrupt result data - System logs validation errors and displays partial dat
 GUI displays historical results and awaits user navigation.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC4_ReadRaceResults.drawio`
 
 ## UC-5: Read Championship Details
 
@@ -256,8 +248,6 @@ GUI displays championship view with standings and calendar; system awaits user i
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC5_ReadChampionshipDetails.drawio`
-
 ## UC-6: Update Championship Standings
 
 ### Scope
@@ -302,8 +292,6 @@ E2: Persistence error - roll back and queue retry.
 Standings persisted.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC6_UpdateChampionshipStandings.drawio`
 
 ## UC-7: Create Race Event
 
@@ -351,8 +339,6 @@ E2: External sync failure - create event in draft and return `202 Accepted` with
 Calendar updated; notifications may be sent.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC7_CreateRaceEvent.drawio`
 
 ## UC-8: Read Race Schedule
 
@@ -404,8 +390,6 @@ Client displays schedule.
 System awaits next request.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC8_ReadRaceSchedule.drawio`
 
 ## UC-9: Update Race Status
 
@@ -459,8 +443,6 @@ System awaits next lifecycle event.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC9_UpdateRaceStatus.drawio`
-
 ## UC-10: Create Championship
 
 ### Scope
@@ -511,8 +493,6 @@ Championship record created and downstream systems notified.
 Event Scheduler and AI begin populating events and participants for the new season.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC10_CreateChampionship.drawio`
 
 ## UC-11: Read Team Details
 
@@ -568,8 +548,6 @@ System awaits next team query or user action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC11_ReadTeamDetails.drawio`
-
 ## UC-12: Create New Team
 
 ### Scope
@@ -621,8 +599,6 @@ System awaits next management action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC12_CreateNewTeam.drawio`
-
 ## UC-13: Read Team Details (player team)
 
 ### Scope
@@ -671,8 +647,6 @@ Player views editable team screen.
 System awaits further edits.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC13_ReadTeamDetailsPlayerTeam.drawio`
 
 ## UC-14: Update Team Attributes
 
@@ -725,8 +699,6 @@ System awaits next request.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC14_UpdateTeamAttributes.drawio`
-
 ## UC-15: Read Available Drivers
 
 ### Scope
@@ -776,8 +748,6 @@ Client displays candidate drivers.
 System awaits next query.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC15_ReadAvailableDrivers.drawio`
 
 ## UC-16: Update Driver Contract
 
@@ -830,8 +800,6 @@ System awaits next contract action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC16_UpdateDriverContract.drawio`
-
 ## UC-17: Read Available Staff
 
 ### Scope
@@ -881,8 +849,6 @@ Client displays staff candidates.
 System awaits next request.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC17_ReadAvailableStaff.drawio`
 
 ## UC-18: Update Staff Contract
 
@@ -935,8 +901,6 @@ System awaits further HR actions.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC18_UpdateStaffContract.drawio`
-
 ## UC-19: Update Driver Skills/Age
 
 ### Scope
@@ -988,8 +952,6 @@ System awaits next scheduled update.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC19_UpdateDriverSkillsAge.drawio`
-
 ## UC-20: Update Team Budget
 
 ### Scope
@@ -1035,8 +997,6 @@ E1: Database write failure - return `500` and enqueue transaction for replay.
 Team budget updated and awaiting next transaction.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC20_UpdateTeamBudget.drawio`
 
 ## UC-21: Create New Driver
 
@@ -1094,8 +1054,6 @@ Driver returned in subsequent listing endpoints and system awaits next generatio
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC21_CreateNewDriver.drawio`
-
 ## UC-22: Create New Staff Member (staff generation)
 
 ### Scope
@@ -1144,8 +1102,6 @@ Staff visible in hiring pool.
 System awaits next generation.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC22_CreateNewStaffMember.drawio`
 
 ## UC-23: Delete Championship
 
@@ -1197,8 +1153,6 @@ System awaits next admin action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC23_DeleteChampionship.drawio`
-
 ## UC-24: Create Custom Track
 
 ### Scope
@@ -1249,8 +1203,6 @@ System awaits next track management action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC24_CreateCustomTrack.drawio`
-
 ## UC-25: Update Track Characteristics
 
 ### Scope
@@ -1300,8 +1252,6 @@ System awaits next management action.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC25_UpdateTrackCharacteristics.drawio`
-
 ## UC-26: Delete Track
 
 ### Scope
@@ -1349,8 +1299,6 @@ Track removed or archived.
 System awaits further track management.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC26_DeleteTrack.drawio`
 
 ## UC-27: Read Staff Performance Modifiers
 
@@ -1400,8 +1348,6 @@ Simulation applies modifiers.
 System awaits next modifier request.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC27_ReadStaffPerformanceModifiers.drawio`
 
 ## UC-28: Update Driver Appearance
 
@@ -1454,8 +1400,6 @@ System awaits further edits.
 
 ### Use Case Diagram
 
-See `Planning/UseCases/UC28_UpdateDriverAppearance.drawio`
-
 ## UC-29: Update Team Branding
 
 ### Scope
@@ -1506,5 +1450,3 @@ Branding served to UI.
 System awaits next update.
 
 ### Use Case Diagram
-
-See `Planning/UseCases/UC29_UpdateTeamBranding.drawio`
