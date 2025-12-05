@@ -438,7 +438,7 @@ class MainMenuWindow(QMainWindow):
             "<p>A multi-discipline motorsport management simulator.</p>"
             "<p><b>Developer:</b> Eoin Fitzsimons</p>"
             "<p><b>Project:</b> Final Year Computer Science Project</p>"
-            "<p><b>Year:</b> 2024-2025</p>"
+            "<p><b>Year:</b> 2025-2026</p>"
         )
     
     def _on_race_start(self, config: dict):

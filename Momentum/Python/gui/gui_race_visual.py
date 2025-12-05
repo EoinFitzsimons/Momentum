@@ -1879,7 +1879,6 @@ class RaceWindow(QMainWindow):
                     verbose=True,  # Enable verbose for terminal output
                     event_callback=event_callback,
                     stop_event=self.stop_event,
-                    lap_delay=0.5,
                     db=cast(Any, self.db),  # Pass database for team data
                     track_points=track_pts,  # Pass visual track for unified position mapping
                     player_driver_id=self.player_driver_id,  # Player-controlled driver
