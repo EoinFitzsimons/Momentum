@@ -56,14 +56,8 @@ def export_drawio_to_png(drawio_file, png_file):
 
 def main():
     diagrams_dir = Path(__file__).parent
-    drawio_files = [
-        'ARCHITECTURE_DIAGRAM.drawio',
-        'DATABASE_ER_DIAGRAM.drawio',
-        'EVENT_LOOP_30FPS.drawio',
-        'AGENT_STATE_MACHINE.drawio',
-        'DEPLOYMENT_ARCHITECTURE.drawio',
-        'SYSTEM_USE_CASES.drawio'
-    ]
+    # Export every .drawio file in this directory
+    drawio_files = [p.name for p in diagrams_dir.glob('*.drawio')]
     
     os.chdir(diagrams_dir)
     
@@ -73,8 +67,8 @@ def main():
             print(f"✗ File not found: {drawio_file}")
             continue
         
-        png_file = drawio_file.replace('.drawio', '.png')
-        if export_drawio_to_png(drawio_file, png_file):
+        png_file = str(diagrams_dir / drawio_file.replace('.drawio', '.png'))
+        if export_drawio_to_png(str(diagrams_dir / drawio_file), png_file):
             success_count += 1
     
     print(f"\n{'='*60}")
