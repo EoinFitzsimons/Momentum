@@ -45,13 +45,13 @@ Having invested 6,890 hours in Football Manager since 2015, I recognise its appe
 
 Meeting Objectives:
 
-Real-Time Race Simulation: Continuous 30 FPS agent-based simulation where AI drivers make decisions based on race situation (gaps, position, tire condition, fuel load). Driver attributes (50+ per individual) influence physics calculations, AI behavior, and spatial awareness. Drivers actively choose racing modes (ATTACK/DEFEND/MANAGE/CRUISE) based on gaps to nearby cars and their own skills (overtaking, defensive_driving, tire_management). On-track view displays live car movement with position tracking updated every frame. Validation tests verify AI decision-making responds correctly to race situations and position updates maintain 30 FPS performance.
+**Real-Time Race Simulation:** Will implement continuous 30 FPS agent-based simulation where AI drivers make frame-by-frame decisions based on race situation (gaps, position, tire condition, fuel load). Driver attributes (50+ per individual) will influence physics calculations, AI behavior, and spatial awareness. Drivers will actively choose racing modes (ATTACK/DEFEND/MANAGE/CRUISE) based on gaps to nearby cars and their own skills (overtaking, defensive_driving, tire_management). On-track view will display live car movement with position tracking updated every frame. Validation tests will verify AI decision-making responds correctly to race situations and position updates maintain 30 FPS performance.
 
-Competitive Balance: Automated validation provides baseline testing through simulated seasons, flagging extreme imbalances (single team >40% wins, failed normality tests). Developer tuning establishes competitive orders that evolve through comprehensive development systems and regulation changes, mirroring real motorsport dynamics.
+**Competitive Balance:** Will implement automated validation through simulated seasons, flagging extreme imbalances (single team >40% wins, failed normality tests). Developer tuning will establish competitive orders that evolve through comprehensive development systems and regulation changes, mirroring real motorsport dynamics.
 
-Extensible Architecture: Abstract base class defines simulation interface (simulate_race(), calculate_performance_weights()). New disciplines inherit this foundation without modifying core engine. Demonstrates software engineering principles for complex domain modelling.
+**Extensible Architecture:** Will define abstract base class simulation interface (simulate_race(), calculate_performance_weights()). New disciplines will inherit this foundation without modifying core engine, demonstrating software engineering principles for complex domain modelling.
 
-Persistent World: SQLite database tracks all entities (drivers, teams, tracks, championships) with career progression driven by performance vs expectations, contract cycles, and hidden potential curves. All leagues advance concurrently regardless of player focus.
+**Persistent World:** Will use SQLite database to track all entities (drivers, teams, tracks, championships) with career progression driven by performance vs expectations, contract cycles, and hidden potential curves. All leagues will advance concurrently regardless of player focus.
 
 State of the Art
 
@@ -81,35 +81,35 @@ Frontend: PyQt6 desktop GUI with direct Python integration and native UI compone
 
 Rationale: Prioritises simulation depth over visual spectacle, enables rapid prototyping, eliminates licensing costs
 
-Multi-Discipline Engine:
+Multi-Discipline Engine (Target Implementation):
 
-RealtimeRaceEngine class provides continuous 30 FPS simulation with physics-based speed calculations and AI decision-making. Each discipline can extend this base with discipline-specific logic.
+RealtimeRaceEngine class will provide continuous 30 FPS simulation with physics-based speed calculations and AI decision-making. Each discipline will extend this base with discipline-specific logic.
 
-Physics formula per frame: speed_mps = base_speed × (driver_skill × team_performance × push_intensity × tire_penalty × fuel_bonus × slipstream × corner_factor)
+Physics formula per frame (to be implemented): speed_mps = base_speed × (driver_skill × team_performance × push_intensity × tire_penalty × fuel_bonus × slipstream × corner_factor)
 
-AI Decision-Making: Drivers analyze race situation every frame and select racing mode based on gaps (ATTACK if gap_ahead < 1.0s, DEFEND if gap_behind < 0.5s, MANAGE for tire conservation, CRUISE when comfortable)
+AI Decision-Making: Drivers will analyze race situation every frame and select racing mode based on gaps (ATTACK if gap_ahead < 1.0s, DEFEND if gap_behind < 0.5s, MANAGE for tire conservation, CRUISE when comfortable)
 
-Discipline differentiation examples:
+Planned discipline differentiation:
 
-Single-Seater: Aerodynamics, slipstream effects, cornering_skill emphasis
+- **Single-Seater:** Aerodynamics, slipstream effects, cornering_skill emphasis
+- **Rally:** Surface adaptation, co-driver communication, pace notes  
+- **Endurance:** Tire/fuel management, consistency over speed, mechanical_sympathy
+- **Drag:** Reaction time, acceleration_control, launch technique
+- **Street Racing:** Urban circuits, damage risks, spectator interaction
+- **Rallycross:** Mixed surface transitions, controlled chaos, adaptability
+- **Production/Touring:** Balance of performance, reliability emphasis, accessibility
 
-Rally: Surface adaptation, co-driver communication, pace notes
+Real-Time Continuous Simulation (Target Implementation):
 
-Endurance: Tire/fuel management, consistency over speed, mechanical_sympathy
+Physics-based simulation will run at 30 FPS (0.033s timestep) with continuous position updates, speed calculations, and AI decision-making. Driver attributes will directly influence speed (raw_speed, cornering_skill, consistency), AI behavior (overtaking, defensive_driving, racecraft), and degradation (tire_management, mechanical_sympathy). Spatial awareness system will track gaps to nearby cars (<100m), detect slipstream opportunities (<50m), and enable AI to respond to race situations. On-track view will visualize live car movement with position updated every frame. 2D track visualization will show cars moving around circuit in real-time, enabling player observation of strategy and AI decision-making.
 
-Drag: Reaction time, acceleration_control, launch technique
+Procedural Generation (Planned for Final Implementation):
 
-Real-Time Continuous Simulation:
+Championships will be generated with three-tier budget distribution (Tier 1: 90-100% cap, Tier 2: 60-80%, Tier 3: 40-60%). Drivers will be generated with base attributes 40-60, specialisation boosts, and hidden potential curves. Teams will be procedurally created with realistic capability profiles.
 
-Physics-based simulation at 30 FPS (0.033s timestep) with continuous position updates, speed calculations, and AI decision-making. Driver attributes directly influence speed (raw_speed, cornering_skill, consistency), AI behavior (overtaking, defensive_driving, racecraft), and degradation (tire_management, mechanical_sympathy). Spatial awareness system tracks gaps to nearby cars (<100m), detects slipstream opportunities (<50m), and enables AI to respond to race situations. On-track view visualizes live car movement with position updated every frame. 2D track visualization shows cars moving around circuit in real-time.
+Validation: Automated testing will run 1,000 simulated seasons verifying competitive balance (no team >40% wins, normal distribution of outcomes, realistic performance spread).
 
-Procedural Generation:
-
-Championships generated with three-tier budget distribution (Tier 1: 90-100% cap, Tier 2: 60-80%, Tier 3: 40-60%). Drivers generated with base attributes 40-60, specialisation boosts, and hidden potential curves.
-
-Validation: Automated testing runs 1,000 simulated seasons verifying competitive balance (no team >40% wins, normal distribution of outcomes, realistic performance spread).
-
-Cultural authenticity via Faker library (24 locales) ensures regional naming patterns per discipline.
+Cultural authenticity will be ensured via Faker library (24 locales) to provide regional naming patterns per discipline, creating authentic-feeling fictional universes.
 
 Technical Details
 
@@ -141,13 +141,13 @@ API Structure:
 
 REST endpoints for race simulation (POST /simulate/race), championship management (POST /season/create, GET /season/standings), and entity queries (GET /drivers, /teams, /tracks). OpenAPI documentation auto-generated.
 
-Testing Approach:
+Testing Approach (Target for Final Submission):
 
-Unit Tests: Attribute calculations, Monte Carlo convergence, database operations (80% coverage target)
+Unit Tests: Attribute calculations, physics formula verification, database operations (80% coverage target)
 
-Integration Tests: Full race workflows, championship progression, multi-discipline consistency
+Integration Tests: Full race workflows, championship progression, multi-discipline consistency, player control responsiveness
 
-Performance Tests: Concurrent race handling, memory profiling, query optimisation
+Performance Tests: Concurrent race handling, memory profiling, query optimisation, frame-rate consistency (30 FPS sustained)
 
 Statistical Validation: Normal distribution verification (Shapiro-Wilk test), correlation analysis (r > 0.7), competitive balance metrics
 
