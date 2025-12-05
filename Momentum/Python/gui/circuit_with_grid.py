@@ -344,11 +344,14 @@ class SmoothCircuitWithGrid(QWidget):
         painter.drawText(20, 50, f"Circuit length: {self.track_length:.0f}m | Starting straight: 400m")
         painter.drawText(20, 68, "Grid: 10 cars in 2x2 formation (8m row spacing, 6m lane width)")
         
-        # Transform to center view (circuit is already scaled to fit)
+        # Transform to center view with increased zoom
         painter.translate(700, 450)
-        painter.scale(1, -1)
+        painter.scale(1.8, -1.8)  # Increased zoom from 1.0 to 1.8
         
-        # Draw track
+        # Draw track infrastructure
+        self.draw_pit_lane(painter)
+        self.draw_grandstands(painter)
+        self.draw_garages(painter)
         self.draw_track(painter)
         
         # Draw cars
@@ -356,6 +359,51 @@ class SmoothCircuitWithGrid(QWidget):
         
         painter.end()
     
+    def draw_pit_lane(self, painter):
+        """Draw pit lane parallel to main straight."""
+        if not self.track_points:
+            return
+        # Pit lane along first 250m of track (offset 18m to the right)
+        painter.setPen(QPen(QColor(80, 80, 80), 8))
+        for i, pt in enumerate(self.track_points):
+            if pt.s < 250:
+                offset_x = -math.sin(pt.theta) * 18
+                offset_y = math.cos(pt.theta) * 18
+                if i > 0 and self.track_points[i-1].s < 250:
+                    prev = self.track_points[i-1]
+                    prev_offset_x = -math.sin(prev.theta) * 18
+                    prev_offset_y = math.cos(prev.theta) * 18
+                    painter.drawLine(
+                        int(prev.x + prev_offset_x), int(prev.y + prev_offset_y),
+                        int(pt.x + offset_x), int(pt.y + offset_y)
+                    )
+
+    def draw_grandstands(self, painter):
+        """Draw grandstands along major straights."""
+        if not self.track_points:
+            return
+        painter.setBrush(QBrush(QColor(40, 60, 80)))
+        painter.setPen(QPen(QColor(60, 80, 100), 1))
+        # Place grandstands at s=200-400m and s=800-1000m (offset 30m from centerline)
+        for i, pt in enumerate(self.track_points):
+            if ((200 < pt.s < 400) or (800 < pt.s < 1000)) and (i % 15 == 0):
+                offset_x = -math.sin(pt.theta) * 30
+                offset_y = math.cos(pt.theta) * 30
+                painter.drawRect(int(pt.x + offset_x - 5), int(pt.y + offset_y - 5), 10, 10)
+
+    def draw_garages(self, painter):
+        """Draw garage buildings near pit lane entrance."""
+        if not self.track_points:
+            return
+        painter.setBrush(QBrush(QColor(60, 60, 60)))
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        # Place garages at s=10-30m (behind pit lane)
+        for i, pt in enumerate(self.track_points):
+            if 10 < pt.s < 30 and i % 8 == 0:  # Every 8th point
+                offset_x = -math.sin(pt.theta) * 35
+                offset_y = math.cos(pt.theta) * 35
+                painter.drawRect(int(pt.x + offset_x - 8), int(pt.y + offset_y - 8), 16, 16)
+
     def draw_track(self, painter):
         """Draw smooth track using QPainterPath."""
         # Create centerline path

@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QButtonGroup, QMessageBox, QListWidget, QListWidgetItem, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QKeyEvent
 
 from database.database_manager import DatabaseManager
 
@@ -35,6 +35,77 @@ class MainMenuWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Momentum - Main Menu")
         self.setMinimumSize(1000, 700)
+        
+        # Apply brand colors
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #353839;
+            }
+            QWidget {
+                background-color: #353839;
+                color: #B9F2FF;
+            }
+            QGroupBox {
+                border: 3px solid #B9F2FF;
+                border-radius: 12px;
+                margin-top: 15px;
+                padding: 20px;
+                font-weight: bold;
+                color: #B9F2FF;
+                background-color: #353839;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 8px;
+                color: #DD2D4A;
+                font-size: 16px;
+            }
+            QLabel {
+                color: #B9F2FF;
+            }
+            QPushButton {
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 3px solid #B9F2FF;
+                border-radius: 10px;
+                padding: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+                border-color: #B9F2FF;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+                border-color: #DD2D4A;
+            }
+            QPushButton:disabled {
+                background-color: #353839;
+                color: #666;
+                border-color: #555;
+            }
+            QRadioButton {
+                color: #B9F2FF;
+                spacing: 8px;
+            }
+            QRadioButton::indicator {
+                width: 20px;
+                height: 20px;
+            }
+            QRadioButton::indicator:unchecked {
+                background-color: #353839;
+                border: 2px solid #B9F2FF;
+                border-radius: 10px;
+            }
+            QRadioButton::indicator:checked {
+                background-color: #DD2D4A;
+                border: 2px solid #DD2D4A;
+                border-radius: 10px;
+            }
+        """)
         
         # Display settings
         self.display_mode = "borderless"  # Default: borderless windowed
@@ -67,6 +138,7 @@ class MainMenuWindow(QMainWindow):
         title_font.setBold(True)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("color: #B9F2FF; font-weight: bold;")
         main_layout.addWidget(title)
         
         subtitle = QLabel("Multi-Discipline Motorsport Manager")
@@ -74,6 +146,7 @@ class MainMenuWindow(QMainWindow):
         subtitle_font.setPointSize(16)
         subtitle.setFont(subtitle_font)
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet("color: #DD2D4A; font-weight: bold;")
         main_layout.addWidget(subtitle)
         
         main_layout.addSpacing(30)
@@ -95,6 +168,26 @@ class MainMenuWindow(QMainWindow):
         # Exit button at bottom
         exit_btn = QPushButton("Exit")
         exit_btn.setMinimumHeight(50)
+        exit_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 16px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 3px solid #B9F2FF;
+                border-radius: 10px;
+                padding: 15px;
+            }
+            QPushButton:hover {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+                border-color: #DD2D4A;
+            }
+            QPushButton:pressed {
+                background-color: #8B0000;
+                color: #F5F5F5;
+            }
+        """)
         exit_btn.clicked.connect(self.close)
         main_layout.addWidget(exit_btn)
     
@@ -107,14 +200,57 @@ class MainMenuWindow(QMainWindow):
         # Quick Race button
         quick_race_btn = QPushButton("Quick Race")
         quick_race_btn.setMinimumHeight(80)
-        quick_race_btn.setStyleSheet("font-size: 18px; font-weight: bold;")
+        quick_race_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 4px solid #B9F2FF;
+                border-radius: 12px;
+                padding: 20px;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+                border-color: #DD2D4A;
+            }
+        """)
         quick_race_btn.clicked.connect(self._show_quick_race_setup)
         layout.addWidget(quick_race_btn)
         
         # Championship Mode (placeholder)
         championship_btn = QPushButton("Championship Mode")
         championship_btn.setMinimumHeight(80)
-        championship_btn.setStyleSheet("font-size: 18px; font-weight: bold;")
+        championship_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 4px solid #B9F2FF;
+                border-radius: 12px;
+                padding: 20px;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+                border-color: #DD2D4A;
+            }
+            QPushButton:disabled {
+                background-color: #353839;
+                color: #666;
+                border-color: #555;
+            }
+        """)
         championship_btn.setEnabled(False)  # Not implemented yet
         championship_btn.setToolTip("Coming Soon")
         layout.addWidget(championship_btn)
@@ -122,7 +258,31 @@ class MainMenuWindow(QMainWindow):
         # Career Mode (placeholder)
         career_btn = QPushButton("Career Mode")
         career_btn.setMinimumHeight(80)
-        career_btn.setStyleSheet("font-size: 18px; font-weight: bold;")
+        career_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 20px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 4px solid #B9F2FF;
+                border-radius: 12px;
+                padding: 20px;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+                border-color: #DD2D4A;
+            }
+            QPushButton:disabled {
+                background-color: #353839;
+                color: #666;
+                border-color: #555;
+            }
+        """)
         career_btn.setEnabled(False)  # Not implemented yet
         career_btn.setToolTip("Coming Soon")
         layout.addWidget(career_btn)
@@ -169,6 +329,25 @@ class MainMenuWindow(QMainWindow):
         # Apply button
         apply_btn = QPushButton("Apply Display Settings")
         apply_btn.setMinimumHeight(50)
+        apply_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 3px solid #B9F2FF;
+                border-radius: 10px;
+                padding: 12px;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+            }
+        """)
         apply_btn.clicked.connect(self._apply_display_mode)
         layout.addWidget(apply_btn)
         
@@ -177,6 +356,25 @@ class MainMenuWindow(QMainWindow):
         # About button
         about_btn = QPushButton("About")
         about_btn.setMinimumHeight(50)
+        about_btn.setStyleSheet("""
+            QPushButton {
+                font-size: 14px;
+                font-weight: bold;
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 3px solid #B9F2FF;
+                border-radius: 10px;
+                padding: 12px;
+            }
+            QPushButton:hover {
+                background-color: #B9F2FF;
+                color: #353839;
+            }
+            QPushButton:pressed {
+                background-color: #DD2D4A;
+                color: #F5F5F5;
+            }
+        """)
         about_btn.clicked.connect(self._show_about)
         layout.addWidget(about_btn)
         
@@ -195,7 +393,8 @@ class MainMenuWindow(QMainWindow):
     
     def _apply_display_mode(self):
         """Apply current display mode to main menu window."""
-        screen = QApplication.primaryScreen().geometry()
+        screen_obj = QApplication.primaryScreen()
+        screen = screen_obj.geometry() if screen_obj else None
         
         if self.display_mode == "windowed":
             self.setWindowFlags(Qt.WindowType.Window)
@@ -205,7 +404,8 @@ class MainMenuWindow(QMainWindow):
         
         elif self.display_mode == "borderless":
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            self.setGeometry(screen)
+            if screen is not None:
+                self.setGeometry(screen)
             self.showMaximized()
             print("[INFO] Applied borderless windowed fullscreen")
         
@@ -247,9 +447,11 @@ class MainMenuWindow(QMainWindow):
         self.start_race_signal.emit(config)
         self.hide()  # Hide main menu while racing
     
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, a0: Optional[QKeyEvent]):
         """Handle ESC key to exit fullscreen/borderless modes."""
-        if event.key() == Qt.Key.Key_Escape:
+        if a0 is None:
+            return
+        if a0.key() == Qt.Key.Key_Escape:
             if self.display_mode in ["fullscreen", "borderless"]:
                 # Return to windowed mode
                 for button in self.display_button_group.buttons():
@@ -262,7 +464,7 @@ class MainMenuWindow(QMainWindow):
                 # In windowed mode, ESC does nothing (or could close)
                 pass
         else:
-            super().keyPressEvent(event)
+            super().keyPressEvent(a0)
 
 class QuickRaceSetupWindow(QDialog):
     """Quick race setup dialog with driver selection and race controls."""

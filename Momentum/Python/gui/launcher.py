@@ -68,7 +68,7 @@ class MomentumLauncher:
         # Player driver is selected, pace/overtake are controlled during race
         driver_name = getattr(config['driver'], 'name', 'Unknown Driver')
         print(f"[LAUNCHER] Race started with player: {driver_name}")
-        print(f"[LAUNCHER] Pace and overtaking controls are available in the race window")
+        print("[LAUNCHER] Pace and overtaking controls are available in the race window")
     
     def return_to_menu(self):
         """Return from race to main menu."""
