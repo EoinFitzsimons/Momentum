@@ -1,0 +1,22 @@
+<mxfile host="app.diagrams.net" modified="2025-12-05T18:10:00.000Z" agent="5.0" etag="wireframes" version="24.0.0" type="device">
+  <diagram id="wireframes" name="Wireframes - Main Screens">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Wireframes: Main UI Screens" style="text;fontSize=16;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="200" y="20" width="800" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="screen1" value="Dashboard\n- Team summary\n- Next race\n- Quick actions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="80" y="80" width="320" height="420" as="geometry"/>
+        </mxCell>
+        <mxCell id="screen2" value="Garage\n- Car stats\n- Upgrade buttons" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="440" y="80" width="320" height="420" as="geometry"/>
+        </mxCell>
+        <mxCell id="screen3" value="Race Screen\n- Telemetry\n- Positions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="800" y="80" width="320" height="420" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

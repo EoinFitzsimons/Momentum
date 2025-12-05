@@ -169,7 +169,7 @@ Project Plan
 
 Semester 1 (September-December 2025):
 
-Months 1-2 (Sep-Oct): Requirements engineering (use cases, functional/non-functional requirements, acceptance criteria). Architecture design (ERD, API structure, discipline engine hierarchy). Monte Carlo engine implementation with statistical validation.
+Months 1-2 (Sep-Oct): Requirements engineering (use cases, functional/non-functional requirements, acceptance criteria). Architecture design (ERD, API structure, discipline engine hierarchy). Agent-based engine implementation with statistical validation.
 
 Month 3 (November): Database schema implementation with procedural generation system. Multiple discipline engines (single-seater, rally, endurance, drag). Initial GUI prototyping.
 
@@ -183,7 +183,7 @@ HIGH Priority (Midpoint):
 
 Issue #2-4: Core API endpoints (UC-1: Read Driver Details, UC-2: Read Race Configuration, UC-3: Create Race Result)
 
-Issue #5: Monte Carlo simulation engine (<1s race completion, r > 0.7 correlation)
+Issue #5: Agent-based simulation engine (<1s race completion, r > 0.7 correlation)
 
 Issue #6: Database schema with procedural generation (drivers, teams, tracks, staff)
 
@@ -207,7 +207,7 @@ Risk Management:
 
 | Risk                    | Probability | Mitigation                                                                      | Contingency                                               |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| Monte Carlo performance | Medium      | Early benchmarking, NumPy vectorisation, adaptive iteration counts              | Reduce iterations (sacrifice 2-3% accuracy for 50% speed) |
+| Simulation performance | Medium      | Early benchmarking, NumPy vectorisation, adaptive iteration counts              | Reduce iterations (sacrifice 2-3% accuracy for 50% speed) |
 | Procedural balance      | Medium      | Automated validation suite (1,000+ test seasons), manual oversight              | Pre-generate 50 canonical championships                   |
 | GUI complexity          | Medium      | Qt Designer rapid prototyping, usability testing, follow FM patterns            | Focus on core screens only (race, standings, garage)      |
 | Scope creep             | High        | Strict MVP definition, feature freeze April 1, prioritisation matrix            | Defer lower-priority disciplines post-submission          |

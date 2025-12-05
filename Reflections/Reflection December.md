@@ -16,7 +16,7 @@ What?
 So What?
 
 - The project now simulates live racing: cars move continuously and agents make per-frame decisions (attack/defend/manage/cruise).
-- This change gives visible, interactive behaviour for demos, but some core docs still describe the old Monte Carlo approach.
+-- This change gives visible, interactive behaviour for demos, but some core docs still describe the legacy Monte Carlo approach.
 - We also found balance issues: too many DNFs in long races that need tuning.
 
 Now What?

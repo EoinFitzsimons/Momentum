@@ -9,7 +9,7 @@
 
 **Momentum** is a comprehensive multi-discipline motorsport management simulation system designed as a final year Computer Science project. The system provides realistic race simulation capabilities across **seven major motorsport disciplines** with advanced team management, driver development, and staff operations.
 
-The Python backend serves as the core simulation engine, utilizing Monte Carlo statistical methods to generate authentic race outcomes based on comprehensive driver attributes (50+), team performance, staff capabilities (40+ attributes), budget constraints, and environmental factors.
+The Python backend serves as the core simulation engine, utilizing an agent-based simulation approach to generate authentic race outcomes based on comprehensive driver attributes (50+), team performance, staff capabilities (40+ attributes), budget constraints, and environmental factors.
 
 ### 🎯 Key Features
 
@@ -47,9 +47,9 @@ The Python backend serves as the core simulation engine, utilizing Monte Carlo s
 - **Staff salary management**: Multi-currency salary calculations and contract values
 - **Budget scaling**: Staff requirements and quality scale with team budgets (€800K to €12M+)
 
-#### 🎮 **Advanced Simulation Technology**
+-#### 🎮 **Advanced Simulation Technology**
 
-- **Monte Carlo Methods**: Advanced probabilistic race outcome generation
+- **Agent-based Simulation**: Continuous agent-driven race outcome generation
 - **Discipline-specific logic**: Each racing type has unique simulation characteristics
 - **Environmental factors**: Weather, track conditions, and surface variations
 - **Real-time performance**: Sub-second simulation for interactive gameplay
@@ -79,7 +79,7 @@ Momentum Python Backend
 │   ├── systems/staff_management.py   # Staff hiring & operations
 │   └── examples/staff_examples.py    # Realistic staff profiles
 │
-├── 🧠 Core Simulation Engine (Monte Carlo)
+├── 🧠 Core Simulation Engine (agent-based simulation)
 │   ├── core/race_simulation.py       # Base simulation framework
 │   ├── Race Outcome Calculation      # Probabilistic result generation
 │   ├── Driver Performance Modeling   # 50+ attribute integration
@@ -507,7 +507,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 
 #### Core Simulation Engine
 
-- [X] **Lap-by-Lap Race Simulation** - Complete Monte Carlo-based race engine with realistic lap times
+- [X] **Lap-by-Lap Race Simulation** - Complete agent-based race engine with realistic lap times
 - [X] **20-Driver Race Support** - Full grid simulation with overtaking, positioning, and race dynamics
 - [X] **Driver Performance Model** - 50+ attributes affecting race performance (speed, cornering, consistency, etc.)
 - [X] **Tire Wear & Degradation** - Dynamic tire performance degradation throughout race

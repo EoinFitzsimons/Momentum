@@ -85,7 +85,7 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 - **Financial Management:** Realistic budget caps, salary negotiations, operational costs scaled by discipline
 - **Name Generation:** Intelligent system using Faker library with 24 locales for authentic, culturally-appropriate international names
 - **Supplier System:** Engine, tire, and fuel suppliers with performance characteristics
-- **Monte Carlo Simulation:** Advanced probabilistic race outcome generation
+- **Agent-based Simulation:** Continuous agent-driven race outcome generation
 - **Database Layer:** SQLite persistence for teams, drivers, staff, races, championships
 
 **Key Features:**
@@ -101,7 +101,7 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 - **Backend:** Python 3.11+
 - **Database:** SQLite 3.7+ with SQLAlchemy ORM
 - **Web Framework:** FastAPI (optional, for future API exposure)
-- **Libraries:** NumPy, Pandas, SciPy (Monte Carlo simulation)
+- **Libraries:** NumPy, Pandas, SciPy (simulation math)
 - **Name Generation:** Faker library with comprehensive locale support (80+ countries, 24 locales)
 - **Currency:** Live exchange rate support via currency API
 - **Tools:** VS Code, GitHub Desktop, SQLite browser

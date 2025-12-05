@@ -1230,7 +1230,7 @@ Each circuit requires different setup approach:
 
 **Simulation Engine:**
 
-- Monte Carlo race simulation
+- Agent-based race simulation
 - Multi-discipline support
 - Weather impact modeling
 - Driver skill evaluation
