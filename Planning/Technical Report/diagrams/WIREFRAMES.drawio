@@ -4,17 +4,54 @@
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
-        <mxCell id="title" value="Wireframes: Main UI Screens" style="text;fontSize=16;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="200" y="20" width="800" height="30" as="geometry"/>
+        <mxCell id="title" value="Wireframes: Main UI Screens (Low‑Fidelity)" style="text;fontSize=20;fontStyle=1;fontFamily=Inter;fillColor=none;strokeColor=none;fontColor=#B9F2FF" vertex="1" parent="1">
+          <mxGeometry x="140" y="12" width="1120" height="34" as="geometry"/>
         </mxCell>
-        <mxCell id="screen1" value="Dashboard\n- Team summary\n- Next race\n- Quick actions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
-          <mxGeometry x="80" y="80" width="320" height="420" as="geometry"/>
+
+        <!-- Top navigation -->
+        <mxCell id="topbar" value="Momentum — Dashboard" style="rectangle;rounded=0;whiteSpace=wrap;html=1;fillColor=#353839;strokeColor=#353839;fontSize=14;fontFamily=Inter;fontColor=#B9F2FF;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="60" width="1080" height="48" as="geometry"/>
         </mxCell>
-        <mxCell id="screen2" value="Garage\n- Car stats\n- Upgrade buttons" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
-          <mxGeometry x="440" y="80" width="320" height="420" as="geometry"/>
+
+        <!-- Sidebar -->
+        <mxCell id="sidebar" value="Navigation\n- Dashboard\n- Drivers\n- Garage\n- Championships\n- Store\n- Settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#BDBDBD;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="180" height="520" as="geometry"/>
         </mxCell>
-        <mxCell id="screen3" value="Race Screen\n- Telemetry\n- Positions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF;strokeColor=#BDBDBD;strokeWidth=2;fontSize=11;align=left;verticalAlign=top;spacing=8;" vertex="1" parent="1">
-          <mxGeometry x="800" y="80" width="320" height="420" as="geometry"/>
+
+        <!-- Dashboard frame -->
+        <mxCell id="frame_dashboard" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="120" width="880" height="520" as="geometry"/>
+        </mxCell>
+        <mxCell id="db_header" value="Team Summary" style="text;fontSize=14;fontFamily=Inter;fillColor=none;strokeColor=none;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="260" y="132" width="300" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="db_card1" value="Budget: €3,200,000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#E0E0E0;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="260" y="164" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="db_card2" value="Next Race: Silverstone — 3 days" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#E0E0E0;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="540" y="164" width="260" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="db_quick" value="Quick Actions\n[Enter Race] [Hire Driver] [Upgrade Car]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="820" y="164" width="260" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- Driver Browser frame (example wireframe) -->
+        <mxCell id="frame_drivers" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#BDBDBD;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="240" y="292" width="880" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="drivers_header" value="Drivers" style="text;fontSize=14;fontFamily=Inter;fillColor=none;strokeColor=none;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="260" y="304" width="300" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="drivers_list" value="[Search]  |  Filters: Age / Skill / Availability\n\n- Driver 1 — Team A — 84\n- Driver 2 — Team B — 78\n- Driver 3 — Free Agent — 70" style="rectangle;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#E0E0E0;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="260" y="336" width="540" height="272" as="geometry"/>
+        </mxCell>
+        <mxCell id="drivers_detail" value="Driver Detail (selected)\n- Name, Age, Skills\n- Contract status\n- Hire / Offer buttons" style="rectangle;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#E0E0E0;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;padding=8;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="820" y="336" width="320" height="272" as="geometry"/>
+        </mxCell>
+
+        <!-- Annotations / callouts -->
+        <mxCell id="callout1" value="CTA: primary actions here" style="text;fontSize=11;fontFamily=Inter;fillColor=none;strokeColor=none;fontColor=#B9F2FF" vertex="1" parent="1">
+          <mxGeometry x="820" y="312" width="200" height="16" as="geometry"/>
         </mxCell>
       </root>
     </mxGraphModel>
