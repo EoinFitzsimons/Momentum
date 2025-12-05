@@ -25,6 +25,8 @@ from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent,
 
 from database.database_manager import DatabaseManager
 from services.race_simulation_api import simulate_race
+from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
+from database.models import Team
 
 
 @dataclass
@@ -1245,6 +1247,7 @@ class RaceWindow(QMainWindow):
             # Player control
             self.player_driver_id: Optional[int] = None
             self.player_overrides: Dict[str, float] = {'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
+            self.tuning_preset: str = 'balanced'  # Simulation tuning preset
             
             # Player telemetry tracking
             self.player_telemetry = {
@@ -1868,22 +1871,44 @@ class RaceWindow(QMainWindow):
                         print(f"ERROR in event_callback: {e}")
                         traceback.print_exc()
                 
-                print("Starting simulate_race with comprehensive engine...")
+                print("Starting simulate_race with comprehensive engine via RaceContext...")
                 # Get track_points safely
                 track_pts = getattr(self, 'track_points', None)
-                results = simulate_race(
-                    self.drivers,
-                    self.track,
-                    seed=None,
-                    laps=3,  # Testing with 3 laps
-                    verbose=True,  # Enable verbose for terminal output
-                    event_callback=event_callback,
-                    stop_event=self.stop_event,
-                    db=cast(Any, self.db),  # Pass database for team data
-                    track_points=track_pts,  # Pass visual track for unified position mapping
-                    player_driver_id=self.player_driver_id,  # Player-controlled driver
-                    player_overrides=self.player_overrides  # Live player's pace and overtake settings
+
+                # Build a minimal teams dictionary if possible (empty dict is acceptable)
+                teams = {}
+                try:
+                    db_any = cast(Any, self.db)
+                    get_team_fn = getattr(db_any, 'get_team', None)
+                    if callable(get_team_fn):
+                        team_ids = {d.current_team_id for d in self.drivers if d.current_team_id}
+                        for team_id in team_ids:
+                            team = get_team_fn(team_id)
+                            if team:
+                                teams[team_id] = team
+                except Exception:
+                    teams = {}
+
+                # Create RaceContext and populate track_conditions for discipline adapter
+                context = RaceContext(
+                    discipline=RacingDiscipline.SINGLE_SEATER,
+                    track=self.track,
+                    drivers=self.drivers,
+                    teams=teams,
+                    total_laps=3,
+                    event_callback=event_callback
                 )
+
+                # Populate track_conditions keys expected by SingleSeaterEngine
+                tc = context.track_conditions
+                tc['player_driver_id'] = self.player_driver_id
+                tc['player_overrides'] = self.player_overrides
+                tc['track_points'] = track_pts
+                tc['realtime_speed'] = 5.0
+                tc['stop_event'] = self.stop_event
+                tc['tuning_preset'] = self.tuning_preset
+
+                results = simulate_race(context=context, verbose=True, db=cast(Any, self.db))
                 
                 print(f"Race simulation complete, {len(results) if results else 0} results")
                 
@@ -2218,6 +2243,11 @@ class RaceWindow(QMainWindow):
             print(f"[RACE WINDOW] Player driver set: {driver.name} (ID: {driver.id})")
         else:
             self.player_driver_id = None
+    
+    def set_tuning_preset(self, preset: str):
+        """Set the simulation tuning preset."""
+        self.tuning_preset = preset or 'balanced'
+        print(f"[RACE WINDOW] Tuning preset set: {self.tuning_preset}")
     
     def _set_camera_mode(self, mode: str):
         """Set camera mode: 'full' or 'follow'."""

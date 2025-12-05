@@ -23,8 +23,11 @@ Date: January 2025
 """
 
 import time
-from typing import List, Dict, Any
-from base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
+from typing import List, Dict, Any, Optional
+
+# Use the realtime agent engine for single-seater demo
+from RaceLogic.realtime_race_engine import RealtimeRaceEngine
+from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
 from database.models import Driver, Team
 
 
@@ -100,69 +103,108 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
         """
-        Simulate complete single seater race lap-by-lap
-        
-        Args:
-            context: Race context with drivers, track, conditions, total_laps
-            
-        Returns:
-            List of final results with positions, times, DNF reasons
+        Delegate simulation to the real-time agent-based engine.
+
+        This adapter configures the `RealtimeRaceEngine` with single-seater
+        tuned parameters (high downforce, sensitive dirty-air effects,
+        aggressive overtaking thresholds) and forwards events to the
+        provided `context.event_callback` for GUI integration.
+
+        Returns the list of result dictionaries produced by the realtime engine.
         """
-        # Initialize race state
-        race_state = self._initialize_race_state(context)
-        
-        # Lap-by-lap simulation
-        for lap in range(1, context.total_laps + 1):
-            # Emit lap start event
-            self.emit_event("lap_start", {"lap": lap}, context)
-            
-            # Simulate lap for each active driver
-            for driver_id in list(race_state["active_drivers"]):
-                driver = race_state["drivers_by_id"][driver_id]
-                team = context.teams.get(driver.current_team_id)
-                
-                if not team:
-                    continue
-                
-                # Calculate lap time
-                current_position = race_state["positions"][driver_id]
-                lap_time = self.calculate_lap_time(driver, team, context, lap, current_position)
-                
-                # Check for mechanical failure
-                dnf_reason = self.check_mechanical_failure(team, context, lap)
-                if dnf_reason:
-                    self._handle_dnf(driver_id, dnf_reason, lap, race_state, context)
-                    continue
-                
-                # Check for race incident
-                dnf_reason = self.check_race_incident(driver, context, lap, current_position)
-                if dnf_reason:
-                    self._handle_dnf(driver_id, dnf_reason, lap, race_state, context)
-                    continue
-                
-                # Add lap time to total
-                race_state["total_times"][driver_id] += lap_time
-                race_state["laps_completed"][driver_id] = lap
-            
-            # Update positions after lap completion
-            self._update_positions(race_state)
-            
-            # Emit standings event
-            self._emit_standings(lap, race_state, context)
-            
-            # Optional delay for visualization (controlled by lap_delay in context)
-            lap_delay = context.track_conditions.get("lap_delay", 0.0)
-            if lap_delay > 0:
-                time.sleep(lap_delay)
-        
-        # Emit race finished event
-        self.emit_event("race_finished", {
-            "total_laps": context.total_laps,
-            "finishers": len(race_state["active_drivers"])
-        }, context)
-        
-        # Compile final results
-        return self._compile_results(race_state, context)
+
+        # Instantiate realtime engine and tune for single-seater behaviour
+        engine = RealtimeRaceEngine(seed=None)
+
+        # Apply default single-seater tuning, then override via preset
+        def apply_base_tuning():
+            engine.BASE_SPEED_MPS = 75.0
+            engine.MAX_SPEED_MPS = 100.0
+            engine.MIN_SPEED_MPS = 30.0
+            engine.DIRTY_AIR_PENALTY = 0.22
+            engine.DIRTY_AIR_DISTANCE = 160.0
+            engine.SLIPSTREAM_BONUS = 0.06
+            engine.SLIPSTREAM_DISTANCE = 45.0
+            engine.ATTACK_THRESHOLD_GAP = 2.5
+            engine.DEFEND_THRESHOLD_GAP = 1.5
+            engine.NEARBY_DISTANCE_M = 140.0
+            engine.TIRE_DEGRADATION_RATE = 0.000012
+            engine.FUEL_BURN_RATE = 0.000025
+            engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.5
+
+        def apply_preset(preset: str):
+            preset = (preset or "balanced").lower()
+            # Balanced: the default above
+            if preset == 'balanced':
+                apply_base_tuning()
+            elif preset == 'aggressive':
+                # More overtakes, lower dirty-air penalty, stronger slipstream
+                apply_base_tuning()
+                engine.DIRTY_AIR_PENALTY = 0.14
+                engine.DIRTY_AIR_DISTANCE = 120.0
+                engine.SLIPSTREAM_BONUS = 0.12
+                engine.SLIPSTREAM_DISTANCE = 80.0
+                engine.ATTACK_THRESHOLD_GAP = 1.6
+                engine.DEFEND_THRESHOLD_GAP = 1.0
+                engine.NEARBY_DISTANCE_M = 160.0
+                engine.OVERTAKE_INCIDENT_MULTIPLIER = 3.2
+                engine.TIRE_DEGRADATION_RATE = 0.00001
+            elif preset == 'tyre_sensitive':
+                # Tyre sensitivity: more wear, larger lap time swing, conservative overtakes
+                apply_base_tuning()
+                engine.DIRTY_AIR_PENALTY = 0.26
+                engine.DIRTY_AIR_DISTANCE = 180.0
+                engine.SLIPSTREAM_BONUS = 0.04
+                engine.SLIPSTREAM_DISTANCE = 40.0
+                engine.ATTACK_THRESHOLD_GAP = 3.0
+                engine.DEFEND_THRESHOLD_GAP = 2.0
+                engine.NEARBY_DISTANCE_M = 120.0
+                engine.TIRE_DEGRADATION_RATE = 0.000018
+                engine.FUEL_BURN_RATE = 0.000028
+                engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.0
+            else:
+                # Unknown preset, fallback to balanced
+                apply_base_tuning()
+
+        # Extract preset choice from context.track_conditions if provided
+        tc = context.track_conditions if isinstance(context.track_conditions, dict) else {}
+        preset_choice = tc.get('tuning_preset', tc.get('preset', 'balanced'))
+        apply_preset(preset_choice)
+
+        if isinstance(preset_choice, str):
+            print(f"→ SingleSeaterEngine tuning preset applied: {preset_choice}")
+
+        # Build teams dictionary if not supplied
+        teams = getattr(context, 'teams', {}) or {}
+
+        # Player overrides: safely extract typed values from track_conditions
+        tc = context.track_conditions if isinstance(context.track_conditions, dict) else {}
+        pdid = tc.get('player_driver_id')
+        player_driver_id: Optional[int] = int(pdid) if isinstance(pdid, int) or (isinstance(pdid, float) and pdid.is_integer()) else None
+
+        po = tc.get('player_overrides')
+        player_overrides: Optional[Dict[str, float]] = po if isinstance(po, dict) else None
+
+        # Realtime speed multiplier for demo; default to 5.0 (watchable)
+        realtime_speed = float(tc.get('realtime_speed')) if tc.get('realtime_speed') is not None else 5.0
+
+        # Delegate to realtime engine
+        results = engine.simulate_race(
+            drivers=context.drivers,
+            teams=teams,
+            track=context.track,
+            total_laps=context.total_laps,
+            event_callback=context.event_callback,
+            stop_event=tc.get('stop_event'),
+            realtime_speed=realtime_speed,
+            track_points=tc.get('track_points'),
+            player_driver_id=player_driver_id,
+            player_overrides=player_overrides
+        )
+
+        # The realtime engine returns a list of result dicts compatible with the
+        # BaseDisciplineEngine expectations, so return directly.
+        return results
     
     def calculate_lap_time(self, driver: Driver, team: Team, context: RaceContext,
                           lap_number: int, current_position: int) -> float:

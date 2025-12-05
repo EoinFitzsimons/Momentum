@@ -56,6 +56,10 @@ class MomentumLauncher:
         if player_driver:
             self.race_window.set_player_driver(player_driver)
         
+        # Set tuning preset
+        tuning_preset = config.get('tuning_preset', 'balanced')
+        self.race_window.set_tuning_preset(tuning_preset)
+        
         # Apply display mode from config
         display_mode = config.get("display_mode", "borderless")
         self.race_window.set_display_mode(display_mode)

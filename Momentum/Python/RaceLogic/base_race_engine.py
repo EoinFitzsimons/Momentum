@@ -67,7 +67,7 @@ class RaceContext:
         "visibility": 100.0       # Percentage
     })
     
-    track_conditions: Dict[str, float] = field(default_factory=lambda: {
+    track_conditions: Dict[str, Any] = field(default_factory=lambda: {
         "grip_level": 1.0,        # 1.0 = optimal grip
         "surface_temp": 25.0,     # Celsius
         "rubbering": 0.5,         # Track rubber buildup (0-1)
