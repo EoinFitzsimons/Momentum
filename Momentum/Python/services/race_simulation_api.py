@@ -8,15 +8,49 @@ Authors: Final Year Project - Computer Science
 Date: December 2025
 """
 
-from typing import List, Callable, Optional, Dict
+from typing import List, Callable, Optional, Dict, Any
 from services.persistence_iface import PersistenceIface
 from database.models import Driver, Track, RaceResult, Team
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
+from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
+import importlib
+import inspect
+
+
+def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) -> Optional[BaseDisciplineEngine]:
+    """Dynamically load a discipline adapter matching the context.discipline.
+
+    Strategy:
+    - Derive module path from discipline enum value (lowercase). Example:
+      RacingDiscipline.SINGLE_SEATER -> module `RaceLogic.disciplines.single_seater.single_seater_discipline`
+    - Import module and find the first class that subclasses BaseDisciplineEngine.
+    - Instantiate with seed and return instance.
+    - Return None on failure to allow fallback to RealtimeRaceEngine.
+    """
+    if not context or not getattr(context, 'discipline', None):
+        return None
+
+    disc_name = context.discipline.value.lower()
+    module_path = f"RaceLogic.disciplines.{disc_name}.{disc_name}_discipline"
+    try:
+        mod = importlib.import_module(module_path)
+    except Exception:
+        return None
+
+    # Find first concrete subclass of BaseDisciplineEngine
+    for _, cls in inspect.getmembers(mod, inspect.isclass):
+        try:
+            if issubclass(cls, BaseDisciplineEngine) and cls is not BaseDisciplineEngine:
+                return cls(seed=seed)
+        except Exception:
+            continue
+
+    return None
 
 
 def simulate_race(
-    drivers: List[Driver],
-    track: Track,
+    drivers: Optional[List[Driver]] = None,
+    track: Optional[Track] = None,
     seed: Optional[int] = None,
     laps: Optional[int] = None,
     verbose: bool = False,
@@ -26,6 +60,7 @@ def simulate_race(
     track_points: Optional[List] = None,
     player_driver_id: Optional[int] = None,
     player_overrides: Optional[Dict[str, float]] = None,
+    context: Optional[RaceContext] = None,
 ) -> List[RaceResult]:
     """
     Run real-time agent-based race simulation at 30 FPS
@@ -33,13 +68,41 @@ def simulate_race(
     Drivers are AI agents making live racing decisions (attack/defend/manage)
     based on gaps, position, and their attributes.
     """
-    engine = RealtimeRaceEngine(seed=seed)
+    # If a full RaceContext is provided prefer discipline-specific engines
+    if context is not None:
+        # Try to dynamically load a discipline adapter
+        adapter = _load_discipline_engine(context, seed=seed)
+        if adapter is not None:
+            if verbose:
+                print(f"Using discipline adapter: {adapter.__class__.__name__} for {context.discipline}")
+            return adapter.simulate_race(context)
+
+        # Otherwise, fall back to RealtimeRaceEngine using the context fields
+        engine = RealtimeRaceEngine(seed=seed)
+        drivers = context.drivers
+        track = context.track
+        laps = context.total_laps
+        event_callback = context.event_callback
+        # Provide teams if available on context
+        teams_dict = getattr(context, 'teams', {}) or {}
+        # Pull track_points and player overrides from context.track_conditions if present
+        if isinstance(getattr(context, 'track_conditions', None), dict):
+            track_points = context.track_conditions.get('track_points', track_points)
+            player_driver_id = context.track_conditions.get('player_driver_id', player_driver_id)
+            player_overrides = context.track_conditions.get('player_overrides', player_overrides)
+        if laps is None:
+            laps = max(20, min(int(300 / track.length_km), 80))
+
+    else:
+        engine = RealtimeRaceEngine(seed=seed)
     
-    if laps is None:
-        laps = max(20, min(int(300 / track.length_km), 80))
+    if context is None:
+        if laps is None:
+            laps = max(20, min(int(300 / track.length_km), 80))
     
-    # Fetch team data
-    teams_dict = {}
+    # Fetch team data if not provided via context
+    if 'teams_dict' not in locals():
+        teams_dict = {}
     if db:
         try:
             team_ids = {d.current_team_id for d in drivers if d.current_team_id}

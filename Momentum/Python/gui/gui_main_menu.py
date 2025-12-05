@@ -504,6 +504,13 @@ class QuickRaceSetupWindow(QDialog):
         
         self.driver_list = QListWidget()
         self.driver_list.setMinimumHeight(200)
+        self.driver_list.setStyleSheet("""
+            QListWidget::item:selected {
+                background-color: #FFD700;
+                color: #353839;
+                font-weight: bold;
+            }
+        """)
         
         # Populate driver list
         for driver in self.drivers[:20]:  # Show first 20 drivers
@@ -517,6 +524,58 @@ class QuickRaceSetupWindow(QDialog):
         driver_layout.addWidget(self.driver_list)
         
         layout.addWidget(driver_group)
+        
+        # Tuning preset selection
+        preset_group = QGroupBox("Race Tuning Preset")
+        preset_layout = QVBoxLayout(preset_group)
+        
+        preset_label = QLabel("Choose simulation style:")
+        preset_layout.addWidget(preset_label)
+        
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItem("Balanced (Default)", "balanced")
+        self.preset_combo.addItem("Aggressive (More Overtakes)", "aggressive")
+        self.preset_combo.addItem("Tyre Sensitive (Strategic)", "tyre_sensitive")
+        self.preset_combo.setCurrentIndex(0)
+        self.preset_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 2px solid #B9F2FF;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 8px solid #B9F2FF;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #353839;
+                color: #B9F2FF;
+                selection-background-color: #DD2D4A;
+                selection-color: #F5F5F5;
+                border: 2px solid #B9F2FF;
+            }
+        """)
+        preset_layout.addWidget(self.preset_combo)
+        
+        # Preset descriptions
+        preset_desc = QLabel(
+            "<b>Balanced:</b> Moderate dirty-air, balanced overtaking<br>"
+            "<b>Aggressive:</b> More slipstream, easier overtakes, exciting racing<br>"
+            "<b>Tyre Sensitive:</b> High degradation, strategic pit stops"
+        )
+        preset_desc.setWordWrap(True)
+        preset_desc.setStyleSheet("font-size: 11px; color: #999;")
+        preset_layout.addWidget(preset_desc)
+        
+        layout.addWidget(preset_group)
         
         # Info note about controls
         info_label = QLabel("💡 Race pace and overtaking controls are available during the race")
@@ -550,10 +609,14 @@ class QuickRaceSetupWindow(QDialog):
         
         self.selected_driver = current_item.data(Qt.ItemDataRole.UserRole)
         
+        # Get selected tuning preset
+        selected_preset = self.preset_combo.currentData()
+        
         # Build config (pace and overtake will be controlled during race)
         config = {
             "driver": self.selected_driver,
-            "display_mode": self.display_mode
+            "display_mode": self.display_mode,
+            "tuning_preset": selected_preset
         }
         
         driver_name = getattr(self.selected_driver, 'name', 
