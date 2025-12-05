@@ -8,7 +8,7 @@ Authors: Final Year Project - Computer Science
 Date: December 2025
 """
 
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Dict
 from services.persistence_iface import PersistenceIface
 from database.models import Driver, Track, RaceResult, Team
 from disciplines.realtime_race_engine import RealtimeRaceEngine
@@ -25,6 +25,8 @@ def simulate_race(
     lap_delay: float = 0.0,
     db: Optional[PersistenceIface] = None,
     track_points: Optional[List] = None,
+    player_driver_id: Optional[int] = None,
+    player_overrides: Optional[Dict[str, float]] = None,
 ) -> List[RaceResult]:
     """
     Run real-time agent-based race simulation at 30 FPS
@@ -86,7 +88,9 @@ def simulate_race(
             event_callback=event_callback,
             stop_event=stop_event,  # Pass stop event for cancellation
             realtime_speed=5.0,  # 5x real-time speed for watchable racing
-            track_points=track_points  # Visual track for unified position mapping
+            track_points=track_points,  # Visual track for unified position mapping
+            player_driver_id=player_driver_id,  # Player-controlled driver
+            player_overrides=player_overrides  # Player's pace and overtake settings
         )
     except Exception as e:
         if verbose:

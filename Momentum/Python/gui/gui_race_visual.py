@@ -20,9 +20,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath
+from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
 
-from services.persistence_sqlite import PersistenceSQLite
+from database.database_manager import DatabaseManager
 from services.race_simulation_api import simulate_race
 
 
@@ -69,12 +69,15 @@ class CircuitGenerator:
             'current_x': 0,
             'current_y': 0,
             'current_theta': 0,
-            'total_angle': 0
+            'total_angle': 0,
+            'target_length_m': track_length_km * 1000  # Store target for post-scaling
         }
         
         # Scale circuit instructions based on track length
+        # Note: This is approximate - final track will be rescaled to exact length
         scale = track_length_km / 6.0  # Base is ~6km
         
+        # Interesting varied circuit - closure will be calculated dynamically
         circuit_instructions = [
             ('S', int(600 * scale)),
             ('C', 45, 170, 60, 0.00008),
@@ -95,22 +98,159 @@ class CircuitGenerator:
             ('S', int(160 * scale)),
             ('C', 50, 135, 56, 0.00009),
             ('S', int(320 * scale)),
+            # Closure corners will be added automatically by _process_instructions
         ]
         
         CircuitGenerator._process_instructions(circuit_instructions, state)
-        CircuitGenerator._add_closure(state)
+        CircuitGenerator._rescale_to_target_length(segments, state)
         CircuitGenerator._finalize_circuit(segments)
         
         return segments
     
     @staticmethod
     def _process_instructions(instructions, state):
+        segments = state['segments']
+        start_x, start_y = 0, 0  # Track starts at origin
+        
+        # Process all instructions
         for instruction in instructions:
             if instruction[0] == 'S':
                 CircuitGenerator._add_straight(instruction[1], state)
             elif instruction[0] == 'C':
                 angle_deg, radius, clothoid_len, k = instruction[1:5]
                 CircuitGenerator._add_corner(angle_deg * math.pi / 180, radius, clothoid_len, k, state)
+        
+        # NOW: Calculate what we need to close the loop
+        dx = start_x - state['current_x']
+        dy = start_y - state['current_y']
+        distance_to_start = math.hypot(dx, dy)
+        angle_to_start = math.atan2(dy, dx)
+        
+        # Calculate heading error
+        heading_error = angle_to_start - state['current_theta']
+        while heading_error > math.pi:
+            heading_error -= 2 * math.pi
+        while heading_error < -math.pi:
+            heading_error += 2 * math.pi
+        
+        # Calculate angle deficit (how much we need to turn to complete 360 degrees)
+        angle_deficit = 2 * math.pi - state['total_angle']
+        
+        print(f"  [CLOSURE] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
+        
+        # Strategy: Add corners and straights to navigate back to start
+        # We need to balance: 1) Turn to complete 360 degrees, 2) Turn to point at start, 3) Cover remaining distance
+        
+        if abs(angle_deficit) > 0.1 or distance_to_start > 50:
+            # Split the angular deficit into interesting corners
+            if abs(angle_deficit) > math.radians(120):
+                # Large angle: Create S-bend with 3 alternating corners
+                CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+                CircuitGenerator._add_corner(angle_deficit * 0.35, 110, 50, 0.00009, state)
+                
+                CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+                CircuitGenerator._add_corner(angle_deficit * -0.15, 120, 52, 0.00009, state)
+                
+                CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+                CircuitGenerator._add_corner(angle_deficit * 0.80, 100, 48, 0.00009, state)
+            elif abs(angle_deficit) > math.radians(60):
+                # Medium angle: 2-corner S-bend
+                CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+                CircuitGenerator._add_corner(angle_deficit * 0.6, 115, 52, 0.00009, state)
+                
+                CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+                CircuitGenerator._add_corner(angle_deficit * 0.4, 125, 54, 0.00009, state)
+            else:
+                # Small angle: Single corner
+                CircuitGenerator._add_straight(int(distance_to_start * 0.3), state)
+                CircuitGenerator._add_corner(angle_deficit, 130, 55, 0.00008, state)
+            
+            # Recalculate position after closure corners
+            final_dx = start_x - state['current_x']
+            final_dy = start_y - state['current_y']
+            final_distance = math.hypot(final_dx, final_dy)
+            final_angle = math.atan2(final_dy, final_dx)
+            final_heading_error = final_angle - state['current_theta']
+            
+            while final_heading_error > math.pi:
+                final_heading_error -= 2 * math.pi
+            while final_heading_error < -math.pi:
+                final_heading_error += 2 * math.pi
+            
+            # Iteratively refine closure - CORNERS ONLY to avoid overshooting
+            # Stop if gap starts increasing (diverging)
+            max_iterations = 12
+            prev_gap = float('inf')
+            for iteration in range(max_iterations):
+                # Recalculate where we are relative to start
+                gap_dx = start_x - state['current_x']
+                gap_dy = start_y - state['current_y']
+                gap_dist = math.hypot(gap_dx, gap_dy)
+                gap_angle = math.atan2(gap_dy, gap_dx)
+                gap_heading_error = gap_angle - state['current_theta']
+                
+                while gap_heading_error > math.pi:
+                    gap_heading_error -= 2 * math.pi
+                while gap_heading_error < -math.pi:
+                    gap_heading_error += 2 * math.pi
+                
+                print(f"  [CLOSURE ITER {iteration}] Gap: {gap_dist:.1f}m, Heading error: {math.degrees(gap_heading_error):.1f}deg")
+                
+                # STOP if gap is increasing (diverging)
+                if gap_dist > prev_gap * 1.2:
+                    print(f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {prev_gap:.1f}m to {gap_dist:.1f}m)")
+                    break
+                
+                # Convergence check: if gap is small AND heading is reasonable, stop
+                # Combined condition prevents risky corrections that could flip heading
+                # Tighter thresholds when gap is very small to avoid heading flips
+                heading_error_deg = abs(math.degrees(gap_heading_error))
+                if gap_dist < 100 and heading_error_deg < 20:
+                    print(f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+                    break
+                if gap_dist < 200 and heading_error_deg < 25:
+                    print(f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+                    break
+                
+                # PROPORTIONAL CORRECTION based on BOTH gap distance AND heading error
+                # Key insight: if heading is already good, be MORE conservative with corrections
+                
+                # Base correction factor on gap distance
+                if gap_dist > 300:
+                    base_factor = 0.6
+                elif gap_dist > 150:
+                    base_factor = 0.45
+                elif gap_dist > 75:
+                    base_factor = 0.3
+                else:
+                    base_factor = 0.2
+                
+                # REDUCE correction if heading error is small (already pointing the right way)
+                if heading_error_deg < 5:
+                    correction_factor = base_factor * 0.3  # Very gentle - heading is good
+                elif heading_error_deg < 15:
+                    correction_factor = base_factor * 0.5  # Gentle - heading is decent
+                elif heading_error_deg < 30:
+                    correction_factor = base_factor * 0.7  # Moderate
+                else:
+                    correction_factor = base_factor  # Full correction - heading is bad
+                
+                # Add corner to correct heading
+                if abs(gap_heading_error) > math.radians(1):
+                    CircuitGenerator._add_corner(gap_heading_error * correction_factor, 180, 60, 0.00006, state)
+                
+                prev_gap = gap_dist
+            
+            # Final straight to close remaining gap (NO FINAL CORNER - that made it worse)
+            final_gap_dist = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
+            print(f"  [CLOSURE FINAL] Gap before final straight: {final_gap_dist:.1f}m")
+            
+            if final_gap_dist > 2:
+                # Add slightly more than the gap to ensure closure
+                CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
+        
+        final_gap = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
+        print(f"  [CLOSURE] Final gap after closure: {final_gap:.1f}m")
     
     @staticmethod
     def _add_straight(length, state):
@@ -161,103 +301,40 @@ class CircuitGenerator:
         state['current_s'] += arc_length
     
     @staticmethod
-    def _add_closure(state):
-        """
-        Add proper closure to create a complete closed loop.
+    def _rescale_to_target_length(segments, state):
+        """Rescale all arc-length values to match target track length exactly."""
+        if not segments or 'target_length_m' not in state:
+            return
         
-        CRITICAL FUNCTION: This creates the connection back to the start of the track.
-        Without this, the track would be an open path, not a loop.
+        target_length = state['target_length_m']
+        actual_length = state['current_s']
         
-        Strategy:
-        1. Calculate angle deficit (how much rotation needed to point back to start)
-        2. Add corners to turn the track back toward start point
-        3. Add straight section to close the physical gap
-        4. DO NOT force exact closure - let modulo wrapping handle the loop
+        if actual_length == 0:
+            return
         
-        WHY: Forcing exact closure causes teleportation. Instead, we let the
-        rendering code wrap positions using modulo arithmetic (position % track_length).
-        """
-        segments = state['segments']
-        start_x, start_y = segments[0].x, segments[0].y
+        scale_factor = target_length / actual_length
+        print(f"  [RESCALE] Adjusting track length from {actual_length:.0f}m to {target_length:.0f}m (scale: {scale_factor:.3f})")
         
-        # Calculate gap to start point
-        dx = start_x - state['current_x']
-        dy = start_y - state['current_y']
-        dist = math.hypot(dx, dy)
+        # Rescale all arc-length values
+        for segment in segments:
+            segment.s = segment.s * scale_factor
         
-        # Calculate angle deficit (need to turn 360° total for closed loop)
-        angle_deficit = 2 * math.pi - state['total_angle']
-        
-        print(f"  [CLOSURE] Gap to start: {dist:.1f}m, Angle deficit: {math.degrees(angle_deficit):.1f}°")
-        
-        # Step 1: Add corners to close angle deficit
-        if abs(angle_deficit) > math.radians(5):
-            turn_dir = 1 if angle_deficit > 0 else -1
-            remaining = abs(angle_deficit)
-            
-            if remaining > math.radians(60):
-                # Large deficit: split into two corners
-                angles = [remaining * 0.55 * turn_dir, remaining * 0.45 * turn_dir]
-                for angle in angles:
-                    CircuitGenerator._add_straight(180, state)
-                    CircuitGenerator._add_corner(angle, 100, 50, 0.0001, state)
-            else:
-                # Small deficit: single corner
-                CircuitGenerator._add_straight(180, state)
-                CircuitGenerator._add_corner(angle_deficit, 120, 52, 0.00009, state)
-        
-        # Step 2: Add straight to close physical gap
-        dx = start_x - state['current_x']
-        dy = start_y - state['current_y']
-        dist = math.hypot(dx, dy)
-        
-        if dist > 5:
-            # Add final straight section pointing toward start
-            num_points = int(dist)
-            for i in range(num_points):
-                state['current_x'] += math.cos(state['current_theta'])
-                state['current_y'] += math.sin(state['current_theta'])
-                segments.append(TrackPoint(
-                    state['current_s'] + i,
-                    state['current_x'],
-                    state['current_y'],
-                    state['current_theta'],
-                    0
-                ))
-            state['current_s'] += num_points
-        
-        # Step 3: Store track length for modulo wrapping
-        # The track is now a closed loop, but NOT perfectly closed
-        # The rendering code will use modulo to wrap positions
-        print(f"  [CLOSURE] Track loop complete, total length: {state['current_s']}m")
+        # Update state to reflect new length
+        state['current_s'] = target_length
     
     @staticmethod
     def _finalize_circuit(segments):
-        """Add wraparound points and scale/center circuit."""
+        """Scale and center the circuit."""
         if not segments:
             return
         
-        # CRITICAL FIX FOR TELEPORTATION:
-        # Duplicate the first 150 points at the end of the array
-        # This creates a seamless visual loop when cars wrap from end to start
-        # Without this, cars jump visually when position wraps via modulo
-        original_length = len(segments)
-        wraparound_count = min(150, original_length)
-        print(f"  [FINALIZE] Adding {wraparound_count} wraparound points to prevent teleportation")
+        # Verify closure
+        start_x, start_y = segments[0].x, segments[0].y
+        end_x, end_y = segments[-1].x, segments[-1].y
+        gap = math.hypot(end_x - start_x, end_y - start_y)
+        print(f"  [FINALIZE] Track closure gap: {gap:.1f}m (should be near 0)")
         
-        for i in range(wraparound_count):
-            original_pt = segments[i]
-            wrap_pt = TrackPoint(
-                original_length + i,  # Extended arc-length
-                original_pt.x,
-                original_pt.y,
-                original_pt.theta,
-                original_pt.curvature
-            )
-            segments.append(wrap_pt)
-        
-        print(f"  [FINALIZE] Track now has {len(segments)} points (original: {original_length})")
-        
+        # Scale and center for display
         min_x = min(seg.x for seg in segments)
         max_x = max(seg.x for seg in segments)
         min_y = min(seg.y for seg in segments)
@@ -273,6 +350,8 @@ class CircuitGenerator:
         for seg in segments:
             seg.x = (seg.x - center_x) * scale
             seg.y = (seg.y - center_y) * scale
+        
+        print(f"  [FINALIZE] Track scaled and centered: {len(segments)} points")
 
 
 class TrackWidget(QWidget):
@@ -377,7 +456,7 @@ class TrackWidget(QWidget):
             if car.driver_id == driver_id:
                 car_found = True
                 
-                # === POSITION MAPPING: Engine → Visual Track ===
+                # === POSITION MAPPING: Engine -> Visual Track ===
                 # The engine uses absolute position (meters from race start)
                 # The visual track is circular (0 to track_length)
                 # Arc-length directly maps to track point index (1m = 1 point)
@@ -542,12 +621,20 @@ class TrackWidget(QWidget):
                         # Example: If track is 6000m and car.s = 6100m, normalized_s = 100m
                         normalized_s = car.s % self.track_length
                         
-                        # === STEP 2: MAP TO TRACK POINT INDEX ===
-                        # Convert position (0 to track_length) into array index
-                        # The track_points array has wraparound points at the end for seamless looping
-                        # So we can directly use normalized_s as the index (with safety clamp)
-                        idx = int(normalized_s)
-                        # Safety clamp - allow using wraparound points at end of array
+                        # === STEP 2: FIND MATCHING TRACK POINT ===
+                        # CRITICAL FIX: Track points were rescaled, so their .s values
+                        # don't match array indices. Must search for closest .s value!
+                        # Binary search for the track point with .s closest to normalized_s
+                        left, right = 0, len(self.track_points) - 1
+                        while left < right:
+                            mid = (left + right) // 2
+                            if self.track_points[mid].s < normalized_s:
+                                left = mid + 1
+                            else:
+                                right = mid
+                        
+                        idx = left
+                        # Safety clamp
                         idx = max(0, min(idx, len(self.track_points) - 1))
                         pt = self.track_points[idx]
                         
@@ -569,7 +656,7 @@ class TrackWidget(QWidget):
                         
                         # === STEP 4: CALCULATE PERPENDICULAR OFFSET ===
                         # Track angle (theta) points along the track direction
-                        # To move sideways, we rotate 90° (pi/2 radians)
+                        # To move sideways, we rotate 90 degrees (pi/2 radians)
                         track_angle = pt.theta
                         offset_x = pt.x + total_lateral_offset * math.cos(track_angle + math.pi/2)
                         offset_y = pt.y + total_lateral_offset * math.sin(track_angle + math.pi/2)
@@ -612,19 +699,32 @@ class TrackWidget(QWidget):
 class RaceWindow(QMainWindow):
     """Main race window with track display and controls."""
     
+    # Signals
+    return_to_menu = pyqtSignal()  # Signal to return to main menu
+    
     def __init__(self):
         try:
             super().__init__()
             self.setWindowTitle("Momentum - Race Visualization")
-            self.setGeometry(100, 100, 1600, 900)
+            # Display mode (default: borderless)
+            self.display_mode = "borderless"
+            # Borderless windowed fullscreen
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            screen = QApplication.primaryScreen().geometry()
+            self.setGeometry(screen)
+            self.showMaximized()
             # Race state
-            self.db: Optional[PersistenceSQLite] = None
+            self.db: Optional[DatabaseManager] = None
             self.drivers = []
             self.track = None
             self.race_thread: Optional[threading.Thread] = None
             self.stop_event: Optional[threading.Event] = None
             self.driver_lap_times: Dict[int, float] = {}  # Track last lap time per driver
             self.race_start_time: float = 0.0
+            
+            # Player control
+            self.player_driver_id: Optional[int] = None
+            self.player_overrides: Dict[str, float] = {'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
             # Event emitter
             self.emitter = EventEmitter()
             self.emitter.position_update.connect(self._on_position_update)
@@ -683,6 +783,53 @@ class RaceWindow(QMainWindow):
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_panel.addWidget(self.info_label)
         
+        # Player controls section
+        from PyQt6.QtWidgets import QSlider, QGroupBox
+        player_controls = QGroupBox("Your Controls")
+        player_layout = QVBoxLayout(player_controls)
+        
+        # Pace control
+        pace_label_top = QLabel("Race Pace: Balanced")
+        self.pace_value_label = pace_label_top
+        player_layout.addWidget(pace_label_top)
+        
+        self.pace_slider = QSlider(Qt.Orientation.Horizontal)
+        self.pace_slider.setMinimum(0)
+        self.pace_slider.setMaximum(100)
+        self.pace_slider.setValue(50)
+        self.pace_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.pace_slider.setTickInterval(10)
+        self.pace_slider.valueChanged.connect(self._on_pace_changed)
+        player_layout.addWidget(self.pace_slider)
+        
+        pace_hint = QLabel("Conservative ← → Aggressive")
+        pace_hint.setStyleSheet("font-size: 10px;")
+        pace_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        player_layout.addWidget(pace_hint)
+        
+        player_layout.addSpacing(10)
+        
+        # Overtake aggressiveness
+        overtake_label_top = QLabel("Overtaking: Moderate")
+        self.overtake_value_label = overtake_label_top
+        player_layout.addWidget(overtake_label_top)
+        
+        self.overtake_slider = QSlider(Qt.Orientation.Horizontal)
+        self.overtake_slider.setMinimum(0)
+        self.overtake_slider.setMaximum(100)
+        self.overtake_slider.setValue(50)
+        self.overtake_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.overtake_slider.setTickInterval(10)
+        self.overtake_slider.valueChanged.connect(self._on_overtake_changed)
+        player_layout.addWidget(self.overtake_slider)
+        
+        overtake_hint = QLabel("Cautious ← → Aggressive")
+        overtake_hint.setStyleSheet("font-size: 10px;")
+        overtake_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        player_layout.addWidget(overtake_hint)
+        
+        right_panel.addWidget(player_controls)
+        
         # Standings table (row order = position, no need for Pos column)
         right_panel.addWidget(QLabel("<h3>Live Standings</h3>"))
         self.standings_table = QTableWidget()
@@ -740,7 +887,8 @@ class RaceWindow(QMainWindow):
         try:
             # Initialize database
             try:
-                self.db = PersistenceSQLite()
+                from database.database_manager import DatabaseManager
+                self.db = DatabaseManager()
             except Exception as e:
                 self.info_label.setText(f"Database connection failed: {e}")
                 self.start_btn.setEnabled(False)
@@ -751,7 +899,7 @@ class RaceWindow(QMainWindow):
             
             # Load drivers
             try:
-                all_drivers = self.db.list_drivers()
+                all_drivers = self.db.get_all_drivers()
                 if not all_drivers:
                     self.info_label.setText("Error: No drivers in database")
                     self.start_btn.setEnabled(False)
@@ -759,7 +907,10 @@ class RaceWindow(QMainWindow):
                     return
                 
                 self.drivers = all_drivers[:10] if len(all_drivers) >= 10 else all_drivers
+                
                 print(f"Loaded {len(self.drivers)} drivers")
+                if self.drivers:
+                    print(f"First driver: id={self.drivers[0].id}, name={self.drivers[0].name}")
             except Exception as e:
                 self.info_label.setText(f"Failed to load drivers: {e}")
                 self.start_btn.setEnabled(False)
@@ -768,21 +919,44 @@ class RaceWindow(QMainWindow):
                 traceback.print_exc()
                 return
             
-            # Load track
+            # Load track - HARDCODED for now (database track system needs redesign)
             try:
-                # Get first track (track_id = 1)
-                self.track = self.db.get_track(1)
-                if not self.track:
-                    self.info_label.setText("Error: No tracks in database")
-                    self.start_btn.setEnabled(False)
-                    print("ERROR: No track with id=1 found in database")
-                    return
+                # Create a simple track object with fields needed by race simulation
+                from dataclasses import dataclass
+                
+                @dataclass
+                class SimpleTrack:
+                    name: str
+                    length_km: float
+                    turns: int = 12
+                    left_turns: int = 6
+                    right_turns: int = 6
+                    elevation_change_m: float = 15.0
+                    avg_corner_radius_m: float = 40.0
+                    min_corner_radius_m: float = 20.0
+                    max_corner_radius_m: float = 80.0
+                    tightest_corner_radius_m: float = 20.0
+                    longest_straight_m: float = 800.0
+                    shortest_straight_m: float = 150.0
+                    avg_speed_kmh: float = 180.0
+                    top_speed_kmh: float = 280.0
+                    surface: str = "asphalt"
+                    surface_type: str = "asphalt"
+                    surface_grip: float = 12.0
+                    surface_abrasiveness: float = 8.0
+                    climate: str = "temperate"
+                    drs_zones: int = 2
+                
+                self.track = SimpleTrack(
+                    name="Test Circuit",
+                    length_km=4.5
+                )
                 
                 print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
             except Exception as e:
-                self.info_label.setText(f"Failed to load track: {e}")
+                self.info_label.setText(f"Failed to create track: {e}")
                 self.start_btn.setEnabled(False)
-                print(f"ERROR: Failed to load track: {e}")
+                print(f"ERROR: Failed to create track: {e}")
                 import traceback
                 traceback.print_exc()
                 return
@@ -797,8 +971,10 @@ class RaceWindow(QMainWindow):
                     print("ERROR: Circuit generation returned empty list")
                     return
                 
-                track_length = track_points[-1].s if track_points else 5000
-                print(f"Generated circuit with {len(track_points)} points, length: {track_length:.0f}m")
+                # USE DATABASE TRACK LENGTH - this is the authoritative value
+                # The generated track points should wrap around this length using modulo
+                track_length = self.track.length_km * 1000  # Convert km to meters
+                print(f"Generated circuit with {len(track_points)} points, using database length: {track_length:.0f}m")
                 
                 # Store track_points for passing to engine
                 self.track_points = track_points
@@ -874,7 +1050,9 @@ class RaceWindow(QMainWindow):
             try:
                 self.standings_table.setRowCount(len(self.drivers))
                 for i, driver in enumerate(self.drivers):
-                    self.standings_table.setItem(i, 0, QTableWidgetItem(driver.name))
+                    driver_name = driver.name
+                    print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
+                    self.standings_table.setItem(i, 0, QTableWidgetItem(driver_name))
                     self.standings_table.setItem(i, 1, QTableWidgetItem("0"))
                     self.standings_table.setItem(i, 2, QTableWidgetItem("-"))
                 print("Standings table initialized")
@@ -1000,7 +1178,7 @@ class RaceWindow(QMainWindow):
                             driver_name = event.get("driver_name", f"Driver {driver_id}")
                             reason = event.get("reason", "unknown")
                             lap = event.get("lap", 0)
-                            print(f"❌ {driver_name} DNF on lap {lap}: {reason}")
+                            print(f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
                             
                             if self.track_widget and driver_id is not None:
                                 if hasattr(self.track_widget, 'mark_dnf'):
@@ -1010,9 +1188,30 @@ class RaceWindow(QMainWindow):
                             total_laps = event.get("total_laps", 0)
                             race_time = event.get("race_time", 0.0)
                             print(f"\n🏁 Race finished! {total_laps} laps in {race_time:.1f}s")
-                            
+
+                            # Emit actual results to the GUI if provided by the engine.
+                            # Previously this emitted an empty list which left the
+                            # standings unpopulated. Use the `results` field from
+                            # the event if available, otherwise fall back to an
+                            # empty list to avoid exceptions.
+                            results_payload = event.get('results') if isinstance(event, dict) else None
+                            if results_payload is None:
+                                # If the engine didn't include results in the event,
+                                # try to use a `results` variable in outer scope if set.
+                                results_payload = event.get('results', []) if isinstance(event, dict) else []
+
                             if hasattr(self.emitter, 'race_finished'):
-                                self.emitter.race_finished.emit([])
+                                try:
+                                    self.emitter.race_finished.emit(results_payload)
+                                except Exception as ex:
+                                    # Log exception to help debug malformed payloads
+                                    print(f"ERROR: failed to emit race_finished with payload type={type(results_payload)}: {ex}")
+                                    try:
+                                        traceback.print_exc()
+                                    except Exception:
+                                        pass
+                                    # Fallback to empty list to avoid GUI crash
+                                    self.emitter.race_finished.emit([])
                     
                     except Exception as e:
                         print(f"ERROR in event_callback: {e}")
@@ -1026,12 +1225,15 @@ class RaceWindow(QMainWindow):
                     self.drivers,
                     self.track,
                     seed=None,
+                    laps=3,  # Testing with 3 laps
                     verbose=True,  # Enable verbose for terminal output
                     event_callback=event_callback,
                     stop_event=self.stop_event,
                     lap_delay=0.5,
                     db=self.db,  # Pass database for team data
-                    track_points=track_pts  # Pass visual track for unified position mapping
+                    track_points=track_pts,  # Pass visual track for unified position mapping
+                    player_driver_id=self.player_driver_id,  # Player-controlled driver
+                    player_overrides=self.player_overrides.copy()  # Player's pace and overtake settings
                 )
                 
                 print(f"Race simulation complete, {len(results) if results else 0} results")
@@ -1253,6 +1455,77 @@ class RaceWindow(QMainWindow):
                 traceback.print_exc()
         else:
             self.info_label.setText(message)
+    
+    def _on_pace_changed(self, value):
+        """Handle pace slider change."""
+        if value < 33:
+            pace_text = "Conservative"
+        elif value < 67:
+            pace_text = "Balanced"
+        else:
+            pace_text = "Aggressive"
+        
+        # Map slider value (0-100) to push_intensity (0.5-1.0)
+        self.player_overrides['pace'] = 0.5 + (value / 100.0) * 0.5
+        self.pace_value_label.setText(f"Race Pace: {pace_text} ({value}%)")
+        print(f"[PLAYER] Pace adjusted to {value}% ({pace_text}) -> push_intensity: {self.player_overrides['pace']:.2f}")
+    
+    def _on_overtake_changed(self, value):
+        """Handle overtake aggressiveness slider change."""
+        if value < 33:
+            aggr_text = "Cautious"
+        elif value < 67:
+            aggr_text = "Moderate"
+        else:
+            aggr_text = "Aggressive"
+        
+        # Map slider value (0-100) to overtaking multiplier (0.0-1.0)
+        self.player_overrides['overtake'] = value / 100.0
+        self.overtake_value_label.setText(f"Overtaking: {aggr_text} ({value}%)")
+        print(f"[PLAYER] Overtake aggression adjusted to {value}% ({aggr_text}) -> multiplier: {self.player_overrides['overtake']:.2f}")
+    
+    def set_player_driver(self, driver):
+        """Set the player-controlled driver."""
+        if driver:
+            self.player_driver_id = driver.id
+            print(f"[RACE WINDOW] Player driver set: {driver.name} (ID: {driver.id})")
+        else:
+            self.player_driver_id = None
+    
+    def set_display_mode(self, mode: str):
+        """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
+        self.display_mode = mode
+        screen = QApplication.primaryScreen().geometry()
+        
+        if mode == "windowed":
+            self.setWindowFlags(Qt.WindowType.Window)
+            self.showNormal()
+            self.setGeometry(100, 100, 1600, 900)
+            print("[INFO] Race window: windowed mode (1600x900)")
+        
+        elif mode == "borderless":
+            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            self.setGeometry(screen)
+            self.showMaximized()
+            print("[INFO] Race window: borderless windowed fullscreen")
+        
+        elif mode == "fullscreen":
+            self.setWindowFlags(Qt.WindowType.Window)
+            self.showFullScreen()
+            print("[INFO] Race window: exclusive fullscreen")
+        
+        self.show()
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        """Handle keyboard events."""
+        if event.key() == Qt.Key.Key_Escape:
+            # ESC key: Stop race and return to menu
+            print("[INFO] ESC pressed - returning to main menu")
+            self.stop_race()
+            self.return_to_menu.emit()
+            self.close()
+        else:
+            super().keyPressEvent(event)
 
 
 def main():
@@ -1264,11 +1537,6 @@ def main():
         window.show()
         print("[DEBUG] RaceWindow created and shown.")
         # Show a message box to confirm GUI launch
-        msg = QMessageBox()
-        msg.setWindowTitle("Momentum GUI Test")
-        msg.setText("Momentum GUI window launched successfully. If you see this, the window is visible.")
-        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
-        msg.exec()
     except Exception as e:
         print("[ERROR] Exception during GUI launch:", e)
         traceback.print_exc()

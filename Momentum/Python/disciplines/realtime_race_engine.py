@@ -166,7 +166,9 @@ class RealtimeRaceEngine:
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         stop_event=None,  # Threading event to signal early termination
         realtime_speed: float = 1.0,  # 1.0=real-time, 2.0=2x speed, 0.5=half speed
-        track_points: Optional[List[Any]] = None  # Visual track points for unified position mapping
+        track_points: Optional[List[Any]] = None,  # Visual track points for unified position mapping
+        player_driver_id: Optional[int] = None,  # Player-controlled driver ID
+        player_overrides: Optional[Dict[str, float]] = None  # Player's pace and overtake settings
     ) -> List[Dict[str, Any]]:
         """
         Simulate complete race with real-time updates
@@ -191,6 +193,12 @@ class RealtimeRaceEngine:
         self.track_points = track_points
         if track_points:
             print(f"  ✓ Using visual track with {len(track_points)} points for position mapping")
+        
+        # Store player controls
+        self.player_driver_id = player_driver_id
+        self.player_overrides = player_overrides or {}
+        if player_driver_id:
+            print(f"  ✓ Player driver ID {player_driver_id} with overrides: {self.player_overrides}")
         
         # Initialize race state
         track_length_m = track.length_km * 1000.0
@@ -317,10 +325,9 @@ class RealtimeRaceEngine:
             if not team:
                 continue
             
-            # Stagger starting positions: 2 cars per row, 15m between rows
-            # Matches the GUI starting grid layout
-            row = i // 2
-            starting_position = row * 15.0
+            # Stagger starting positions: each car gets unique position
+            # Spacing must exceed SAFE_FOLLOWING_DISTANCE (8.0m) to avoid false collision
+            starting_position = i * 10.0  # 10m spacing between all cars
             
             state = DriverState(
                 driver_id=driver.id,
@@ -342,10 +349,42 @@ class RealtimeRaceEngine:
         AI Decision Making: Update driver's racing mode and push intensity
         
         Uses advanced track-aware overtaking evaluation.
+        For player-controlled drivers, overrides are applied from live UI controls.
         """
         driver = state.driver
         
-        # Base push intensity from driver attributes
+        # Check if this is the player-controlled driver
+        if hasattr(self, 'player_driver_id') and self.player_driver_id == state.driver_id:
+            # Apply player overrides from UI sliders
+            if hasattr(self, 'player_overrides') and self.player_overrides:
+                # Pace slider controls push_intensity (0.5 to 1.0 range)
+                if 'pace' in self.player_overrides:
+                    state.push_intensity = self.player_overrides['pace']
+                
+                # Overtake slider affects attack mode threshold and intensity
+                if 'overtake' in self.player_overrides:
+                    overtake_multiplier = self.player_overrides['overtake']
+                    
+                    # More aggressive overtaking with higher slider value
+                    if state.gap_ahead < (self.ATTACK_THRESHOLD_GAP * (1.5 - overtake_multiplier * 0.5)):
+                        state.racing_mode = RacingMode.ATTACK
+                        state.push_intensity = max(state.push_intensity, 0.8 + overtake_multiplier * 0.2)
+                    elif state.gap_behind < self.DEFEND_THRESHOLD_GAP:
+                        state.racing_mode = RacingMode.DEFEND
+                    else:
+                        state.racing_mode = RacingMode.MANAGE
+                
+                # Debug: Log player control every 5 seconds (150 frames at 30 FPS)
+                if not hasattr(self, '_player_log_counter'):
+                    self._player_log_counter = 0
+                self._player_log_counter += 1
+                if self._player_log_counter % 150 == 0:
+                    print(f"[PLAYER CONTROL] {driver.name}: push={state.push_intensity:.2f}, mode={state.racing_mode.value}, gap_ahead={state.gap_ahead:.1f}s")
+                
+                # Player control complete - skip AI logic
+                return
+        
+        # Base push intensity from driver attributes (AI drivers only)
         overtaking_tendency = driver.overtaking / 100.0
         consistency = driver.consistency / 100.0
         risk_tolerance = (100.0 - driver.professionalism) / 100.0
@@ -513,8 +552,9 @@ class RealtimeRaceEngine:
             corner_speed_retention = 0.7 + cornering_skill * 0.3
             speed *= (corner_factor * corner_speed_retention + (1.0 - corner_factor))
         
-        # Modify by push intensity
-        speed *= (0.8 + state.push_intensity * 0.2)
+        # Modify by push intensity - significant impact on speed
+        # Conservative (0.5): 0.8x speed, Balanced (0.7): 0.92x, Aggressive (1.0): 1.2x speed
+        speed *= (0.4 + state.push_intensity * 0.8)
         
         # Tire degradation
         tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.3
@@ -734,11 +774,22 @@ class RealtimeRaceEngine:
                         return True
                 
                 elif not is_overtaking and longitudinal_gap < CAR_LENGTH:
-                    # Not overtaking but too close = rear-end collision
-                    # This shouldn't happen with proper AI spacing
-                    print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
-                    state.dnf_reason = "rear_end_collision"
-                    return True
+                    # Not overtaking but too close = potential rear-end
+                    # Only trigger if rear car is going significantly faster (actual rear-end scenario)
+                    relative_velocity = state.velocity_mps - other_state.velocity_mps
+                    
+                    # Determine who is behind
+                    if state.position_m < other_state.position_m:
+                        # Other car is ahead - state is behind
+                        if relative_velocity > 5.0:  # Closing at >5 m/s = real rear-end risk
+                            print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
+                            state.dnf_reason = "rear_end_collision"
+                            return True
+                    else:
+                        # State is ahead - other car is behind
+                        if relative_velocity < -5.0:  # Other car closing fast
+                            # Other car will hit this car next frame
+                            pass  # Let it be handled when other car is checked
         
         # === SOLO INCIDENTS (mechanical, tire failure) ===
         # Very rare - only if tires are completely dead or mechanical issues
