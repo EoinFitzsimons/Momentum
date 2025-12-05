@@ -91,7 +91,7 @@
 
 **Completed (Midpoint):**
 
-- Core simulation engine (Monte Carlo, event-driven)
+- Core simulation engine (agent-based, event-driven)
 - Database schema and initial data generation (validated)
 - Working PyQt6 prototype demo
 - Abstract discipline architecture (7 disciplines designed, 3 implemented)
@@ -119,7 +119,7 @@
 1. **Extensibility:** How to add new disciplines without breaking existing code?
    - Solution: Abstract base class inheritance pattern
 2. **Realism vs. Performance:** How to simulate detailed physics without sacrificing speed?
-   - Solution: Monte Carlo statistical simulation with event-driven incidents
+  - Solution: agent-based simulation with event-driven incidents
 3. **Content Scale:** How to populate a world with thousands of entities?
    - Solution: Controlled procedural generation with validation
 
@@ -176,7 +176,7 @@ A: Three-stage validation: (1) Statistical tests on distributions (Shapiro–Wil
 A: Desktop-first for midpoint to demonstrate full simulation without network latency concerns. FastAPI backend allows future web/mobile clients without changing core logic. PyQt6 provides mature widget library for complex data visualisation.
 
 **Q: What's the performance bottleneck?**
-A: Monte Carlo iterations (currently 10,000 per race). Optimisation strategies for final submission: (1) Cython compilation of hot loops, (2) Caching common calculations, (3) Parallel race simulation for championships.
+A: Simulation iterations (currently 10,000 per race). Optimisation strategies for final submission: (1) Cython compilation of hot loops, (2) Caching common calculations, (3) Parallel race simulation for championships.
 
 **Q: How do you avoid copyright issues with real circuits/teams?**
 A: All content procedurally generated with collision detection against real-world trademarks. Circuit characteristics inspired by real-world patterns but names/branding are synthetic. No licensed content used.
@@ -205,7 +205,7 @@ A: All content procedurally generated with collision detection against real-worl
 
 - Professional but accessible (final year student presenting to academics and peers)
 - Emphasise engineering decisions and trade-offs
-- Avoid jargon without explanation (define "Monte Carlo", "event-driven" briefly)
+- Avoid jargon without explanation (define "agent-based simulation", "event-driven" briefly)
 
 ### Pacing
 
@@ -277,7 +277,7 @@ A: All content procedurally generated with collision detection against real-worl
 
 - **Shaker et al. (2016)** - Procedural Content Generation taxonomy
 - **Sports Interactive (2019)** - Football Manager simulation architecture (GDC talk)
-- **Silver (2012)** - Statistical prediction and Monte Carlo methods
+- **Silver (2012)** - Statistical prediction and simulation methods
 - **Wooldridge (2009)** - Multi-agent systems design patterns
 
 ### Technical Documentation Links

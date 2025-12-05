@@ -54,7 +54,7 @@ python gui\gui_race_visual.py
 **Success Metric**: Race completes, cars move smoothly
 
 **Priority 4: Quick Tech Report Scan (30 mins)**
-- Search for remaining "Monte Carlo" references
+- Search for remaining "Monte Carlo" references (to be replaced with agent-based wording)
 - Make list of sections still needing updates
 - Don't fix tonight, just identify
 
@@ -66,7 +66,7 @@ python gui\gui_race_visual.py
 **Goal**: Finish documentation updates
 
 **Morning (1 hour): Technical Report**
-- Update any remaining Monte Carlo references in Introduction
+- Update any remaining Monte Carlo references in Introduction (replace with agent-based)
 - Update testing methodology sections
 - Add actual test results (123,697 updates, 30 FPS)
 
@@ -196,7 +196,7 @@ for i in range(10):
 3. ✅ You **pivoted** successfully (Monte Carlo → Agent-based)
 4. ✅ You **documented** the architecture change (just completed today)
 
-**Monte Carlo Time Wasn't Wasted:**
+**Monte Carlo (historical) Time Wasn't Wasted:**
 - Taught you the problem domain
 - Helped you understand what you actually needed
 - Led to the better solution
