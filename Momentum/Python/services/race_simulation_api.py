@@ -43,10 +43,16 @@ def simulate_race(
     teams_dict = {}
     if db:
         try:
-            team_ids = set(d.current_team_id for d in drivers if d.current_team_id)
+            team_ids = {d.current_team_id for d in drivers if d.current_team_id}
+            # Some PersistenceIface implementations may provide get_team but the
+            # interface type does not declare it; access it dynamically and cast
+            # to Any to satisfy static type-checkers.
+            from typing import Any, cast
+            db_any = cast(Any, db)
+            get_team_fn = getattr(db_any, "get_team", None)
             for team_id in team_ids:
-                if hasattr(db, 'get_team'):
-                    team = db.get_team(team_id)
+                if callable(get_team_fn):
+                    team = get_team_fn(team_id)
                     if team:
                         teams_dict[team_id] = team
         except Exception as e:
@@ -71,7 +77,7 @@ def simulate_race(
     
     if verbose:
         print(f"\n{'='*70}")
-        print(f"REAL-TIME RACE SIMULATION - 30 FPS")
+        print("REAL-TIME RACE SIMULATION - 30 FPS")
         print(f"{'='*70}")
         print(f"Track: {track.name} ({track.length_km:.2f}km)")
         print(f"Drivers: {len(drivers)} | Laps: {laps}")
@@ -119,7 +125,7 @@ def simulate_race(
     
     if verbose:
         print(f"\n{'='*70}")
-        print(f"FINAL RESULTS")
+        print("FINAL RESULTS")
         print(f"{'='*70}")
         for i, result in enumerate(results_list[:10], 1):
             status = f"DNF ({result['dnf_reason']})" if result["dnf_reason"] else f"{result['laps_completed']} laps"

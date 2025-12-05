@@ -75,7 +75,7 @@ class DriverState:
     
     # Strategic state
     racing_mode: RacingMode = RacingMode.MANAGE
-    push_intensity: float = 0.7     # How hard pushing (0.5=conserve, 1.0=maximum attack)
+    push_intensity: float = 0.5     # MUST be set by _update_racing_mode()
     racing_line: RacingLine = RacingLine.IDEAL  # Current racing line choice
     
     # Component degradation
@@ -94,6 +94,10 @@ class DriverState:
     total_time: float = 0.0         # Total race time elapsed
     last_lap_time: float = 0.0      # Previous lap time
     best_lap_time: float = 999.0    # Personal best lap
+    
+    # Push fatigue and mistakes
+    push_fatigue: float = 0.0       # Accumulated fatigue from pushing hard (0.0-1.0)
+    frames_since_mistake: int = 999 # Frames since last mistake (cooldown)
 
 
 @dataclass
@@ -120,7 +124,7 @@ class RealtimeRaceEngine:
     their surroundings, attributes, and race situation.
     """
     
-    def __init__(self, seed: int = None):
+    def __init__(self, seed: Optional[int] = None):
         """Initialize engine with random generator"""
         self.rng = np.random.default_rng(seed)
         
@@ -140,18 +144,18 @@ class RealtimeRaceEngine:
         self.SLIPSTREAM_BONUS = 0.07     # 7% speed boost when drafting
         self.SLIPSTREAM_DISTANCE = 50.0  # Meters - effective draft range
         
-        # === DIRTY AIR EFFECT ===
+        # === DIRTY AIR EFFECT - MUCH STRONGER ===
         # When following closely in corners, turbulent air reduces downforce
         # Real F1: 10-30% downforce loss, translates to ~5% speed loss in corners
-        self.DIRTY_AIR_PENALTY = 0.05    # 5% speed loss in corners when following
-        self.DIRTY_AIR_DISTANCE = 100.0  # Meters - dirty air affects up to this distance
+        self.DIRTY_AIR_PENALTY = 0.15    # 15% speed loss in corners when following (was 5%)
+        self.DIRTY_AIR_DISTANCE = 150.0  # Meters - dirty air affects up to this distance (was 100m)
         self.TIRE_DEGRADATION_RATE = 0.00001  # Per timestep degradation
         self.FUEL_BURN_RATE = 0.00002    # Per timestep fuel consumption
         
-        # AI decision parameters
-        self.ATTACK_THRESHOLD_GAP = 1.0  # Attack if within 1 second
-        self.DEFEND_THRESHOLD_GAP = 0.5  # Defend if car within 0.5s behind
-        self.NEARBY_DISTANCE_M = 100.0   # Consider cars within 100m as "nearby"
+        # AI decision parameters - MUCH MORE AGGRESSIVE
+        self.ATTACK_THRESHOLD_GAP = 3.0  # Attack if within 3 seconds (was 1.0)
+        self.DEFEND_THRESHOLD_GAP = 2.0  # Defend if car within 2s behind (was 0.5s)
+        self.NEARBY_DISTANCE_M = 150.0   # Consider cars within 150m as "nearby" (was 100m)
         
         # Incident probabilities (per timestep) - Now track-aware
         self.BASE_INCIDENT_RATE = 0.0000002  # Base rate for normal driving
@@ -204,9 +208,6 @@ class RealtimeRaceEngine:
         track_length_m = track.length_km * 1000.0
         race_state = self._initialize_race(drivers, teams, track_length_m, total_laps)
         
-        # Calculate target lap time (used for pacing)
-        target_lap_time = track_length_m / self.BASE_SPEED_MPS
-        
         # Simulation loop at 30 FPS
         timestep = 1.0 / 30.0
         frame = 0
@@ -232,7 +233,12 @@ class RealtimeRaceEngine:
                 self._update_racing_mode(state, race_state)
                 
                 # Calculate performance for this timestep
-                speed_mps = self._calculate_speed(state, race_state, track_length_m)
+                speed_mps = self._calculate_speed(state, track_length_m)
+                
+                # Check for driver mistakes (overdriving)
+                mistake_occurred = self._check_driver_mistake(state)
+                if mistake_occurred:
+                    speed_mps *= 0.3  # Massive speed loss when mistake happens
                 
                 # Update position
                 distance_this_step = speed_mps * timestep
@@ -243,11 +249,20 @@ class RealtimeRaceEngine:
                 prev_lap = int(state.prev_position_m // track_length_m)
                 curr_lap = int(state.position_m // track_length_m)
                 if curr_lap > prev_lap:
-                    self._complete_lap(state, race_state, track_length_m)
+                    self._complete_lap(state, race_state)
                 
-                # Update degradation
+                # Update degradation and fatigue
                 state.tire_condition -= self.TIRE_DEGRADATION_RATE * state.push_intensity
                 state.fuel_load -= self.FUEL_BURN_RATE
+                
+                # Accumulate push fatigue (higher when pushing hard)
+                if state.push_intensity > 0.8:
+                    state.push_fatigue += 0.00035 * (state.push_intensity - 0.8)  # Builds up faster when overdriving
+                else:
+                    state.push_fatigue = max(0.0, state.push_fatigue - 0.00008)  # Slower recovery when backing off
+                
+                state.push_fatigue = min(1.0, state.push_fatigue)  # Cap at 1.0
+                state.frames_since_mistake += 1
                 
                 # Check for incidents
                 if self._check_incident(state, race_state):
@@ -329,6 +344,12 @@ class RealtimeRaceEngine:
             # Spacing must exceed SAFE_FOLLOWING_DISTANCE (8.0m) to avoid false collision
             starting_position = i * 10.0  # 10m spacing between all cars
             
+            # Calculate initial push intensity based on driver personality
+            raw_speed = driver.raw_speed / 100.0
+            aggression = driver.aggression / 100.0 if hasattr(driver, 'aggression') else 0.5
+            risk = driver.risk_taking / 100.0 if hasattr(driver, 'risk_taking') else ((100.0 - driver.professionalism) / 100.0)
+            initial_push = 0.3 + (raw_speed * 0.2) + (aggression * 0.3) + (risk * 0.2)  # Range: 0.3 to 1.0
+            
             state = DriverState(
                 driver_id=driver.id,
                 driver_name=driver.name,
@@ -336,8 +357,13 @@ class RealtimeRaceEngine:
                 team=team,
                 position_m=starting_position,
                 position=i + 1,
-                lap=0
+                lap=0,
+                push_fatigue=0.0,
+                frames_since_mistake=999,
+                push_intensity=initial_push
             )
+            
+            print(f"  [INIT] {driver.name}: raw_speed={driver.raw_speed:.1f} -> initial_push={initial_push:.2f}")
             
             race_state.driver_states[driver.id] = state
             race_state.lap_times[driver.id] = []
@@ -357,18 +383,23 @@ class RealtimeRaceEngine:
         if hasattr(self, 'player_driver_id') and self.player_driver_id == state.driver_id:
             # Apply player overrides from UI sliders
             if hasattr(self, 'player_overrides') and self.player_overrides:
-                # Pace slider controls push_intensity (0.5 to 1.0 range)
-                if 'pace' in self.player_overrides:
-                    state.push_intensity = self.player_overrides['pace']
+                # Use combined push intensity (average of pace and overtake sliders)
+                if 'push' in self.player_overrides:
+                    old_push = state.push_intensity
+                    state.push_intensity = self.player_overrides['push']
+                    
+                    # Debug first application
+                    if not hasattr(self, '_player_push_logged'):
+                        self._player_push_logged = True
+                        print(f"[PLAYER PUSH APPLIED] {driver.name}: {old_push:.2f} → {state.push_intensity:.2f} (from sliders)")
                 
-                # Overtake slider affects attack mode threshold and intensity
+                # Overtake slider affects racing mode only
                 if 'overtake' in self.player_overrides:
                     overtake_multiplier = self.player_overrides['overtake']
                     
                     # More aggressive overtaking with higher slider value
-                    if state.gap_ahead < (self.ATTACK_THRESHOLD_GAP * (1.5 - overtake_multiplier * 0.5)):
+                    if state.gap_ahead < (self.ATTACK_THRESHOLD_GAP * (1.5 - overtake_multiplier * 0.5)) and overtake_multiplier > 0.3:
                         state.racing_mode = RacingMode.ATTACK
-                        state.push_intensity = max(state.push_intensity, 0.8 + overtake_multiplier * 0.2)
                     elif state.gap_behind < self.DEFEND_THRESHOLD_GAP:
                         state.racing_mode = RacingMode.DEFEND
                     else:
@@ -384,11 +415,20 @@ class RealtimeRaceEngine:
                 # Player control complete - skip AI logic
                 return
         
-        # Base push intensity from driver attributes (AI drivers only)
-        overtaking_tendency = driver.overtaking / 100.0
+        # *** AI DRIVERS: USE ATTRIBUTES TO CREATE DRAMATIC VARIATION ***
+        # Use driver's actual attributes to determine their natural pace
+        raw_speed = driver.raw_speed / 100.0  # 0.0 to 1.0
+        aggression = driver.aggression / 100.0
         consistency = driver.consistency / 100.0
-        risk_tolerance = (100.0 - driver.professionalism) / 100.0
-        adrenaline_control = driver.adrenaline_management / 100.0
+        risk_tolerance = driver.risk_taking / 100.0 if hasattr(driver, 'risk_taking') else ((100.0 - driver.professionalism) / 100.0)
+        
+        # Base push intensity from driver personality (0.4 to 1.0)
+        # Aggressive, high-risk drivers naturally push harder
+        base_push = 0.4 + (raw_speed * 0.2) + (aggression * 0.2) + (risk_tolerance * 0.2)
+        # Add small per-driver variability (less for consistent drivers)
+        variability = (1.0 - consistency) * self.rng.uniform(-0.05, 0.05)
+        base_push = max(0.35, min(1.0, base_push + variability))
+        state.push_intensity = base_push
         
         # Track-aware overtaking evaluation
         if state.gap_ahead < self.ATTACK_THRESHOLD_GAP and state.position > 1:
@@ -397,9 +437,6 @@ class RealtimeRaceEngine:
             if car_ahead and self.track_map:
                 # Get track section and corner data
                 section_type, corner = self.track_map.get_section_at_position(
-                    state.position_m % race_state.track_length_m
-                )
-                is_overtaking_zone = self.track_map.is_overtaking_zone(
                     state.position_m % race_state.track_length_m
                 )
                 
@@ -417,9 +454,16 @@ class RealtimeRaceEngine:
                 )
                 
                 if should_attempt:
-                    # Start overtaking attempt
+                    # Start overtaking attempt - PUSH MUCH HARDER FOR AGGRESSIVE OVERTAKING
                     state.racing_mode = RacingMode.ATTACK
-                    state.push_intensity = 0.9 + risk_tolerance * 0.1
+                    state.push_intensity = min(1.0, base_push + 0.35)  # +35% when attacking (was +15%)
+                    
+                    # Log overtake attempts for visibility
+                    if not hasattr(self, '_overtake_log_counter'):
+                        self._overtake_log_counter = 0
+                    self._overtake_log_counter += 1
+                    if self._overtake_log_counter % 30 == 1:  # Log once per second
+                        print(f"  ⚡ {driver.name} OVERTAKING {car_ahead.driver.name}! Gap: {gap_m:.1f}m, Success chance: {success_prob*100:.0f}%")
                     
                     # Create or update active overtake
                     key = (state.driver_id, car_ahead.driver_id)
@@ -435,11 +479,11 @@ class RealtimeRaceEngine:
                         )
                 else:
                     state.racing_mode = RacingMode.MANAGE
-                    state.push_intensity = 0.7 + overtaking_tendency * 0.2
+                    # Stay at base push when managing
             else:
                 # Fallback to simple logic
                 state.racing_mode = RacingMode.ATTACK
-                state.push_intensity = 0.85
+                state.push_intensity = min(1.0, base_push + 0.15)
         
         elif state.gap_behind < self.DEFEND_THRESHOLD_GAP and state.position < len(race_state.driver_states):
             # Defensive driving with track awareness
@@ -453,7 +497,7 @@ class RealtimeRaceEngine:
                 gap_m = state.gap_behind * state.velocity_mps
                 
                 # Calculate defensive action
-                defensive_action, racing_line = calculate_defensive_action(
+                _, racing_line = calculate_defensive_action(
                     defender=driver,
                     attacker=car_behind.driver,
                     gap_m=gap_m,
@@ -462,110 +506,104 @@ class RealtimeRaceEngine:
                 )
                 
                 state.racing_mode = RacingMode.DEFEND
-                state.push_intensity = 0.8 + (driver.defensive_driving / 100.0) * 0.15
-                # Store racing line for speed calculation
+                # Push slightly harder when defending
+                state.push_intensity = min(1.0, base_push + 0.10)
                 state.racing_line = racing_line
             else:
                 state.racing_mode = RacingMode.DEFEND
-                state.push_intensity = 0.8
+                state.push_intensity = min(1.0, base_push + 0.10)
         
         elif state.gap_ahead > 3.0 and state.gap_behind > 3.0:
-            # Comfortable gap - manage
+            # Comfortable gap - conservative drivers back off more
             state.racing_mode = RacingMode.MANAGE
-            state.push_intensity = 0.6 + (driver.tire_management / 100.0) * 0.2
+            conservation_factor = 1.0 - (consistency * 0.3)  # Consistent drivers conserve more
+            state.push_intensity = base_push * conservation_factor
             state.racing_line = RacingLine.IDEAL
         
         else:
+            # Cruising - use base pace
             state.racing_mode = RacingMode.CRUISE
-            state.push_intensity = 0.65 + overtaking_tendency * 0.1
+            state.push_intensity = base_push
             state.racing_line = RacingLine.IDEAL
         
-        # Tire condition affects push
-        if state.tire_condition < 0.5:
-            state.push_intensity *= (0.7 + state.tire_condition * 0.6)
+        # Tire condition affects push - SIGNIFICANT IMPACT
+        if state.tire_condition < 0.7:
+            tire_factor = 0.5 + (state.tire_condition * 0.5)  # Can drop to 50% when tires dead
+            state.push_intensity *= tire_factor
         
-        # Consistency variance
-        variance = (1.0 - consistency) * 0.1
+        # Add some lap-to-lap variation for excitement
+        variance = (1.0 - consistency) * 0.15  # Inconsistent drivers vary more
         state.push_intensity += self.rng.normal(0, variance)
-        state.push_intensity = np.clip(state.push_intensity, 0.4, 1.0)
+        state.push_intensity = np.clip(state.push_intensity, 0.3, 1.0)  # Wider range
     
     def _calculate_speed(
         self,
         state: DriverState,
-        race_state: RaceState,
         track_length_m: float
     ) -> float:
         """
-        Calculate current speed using track-aware physics
+        Calculate current speed with DRAMATIC variation based on push_intensity
         
         Returns speed in meters per second.
         """
         driver = state.driver
         team = state.team
         
-        # Base speed from driver and team
+        # Base speed from driver skill and team capability
         raw_speed = driver.raw_speed / 100.0
+        cornering_skill = driver.cornering_skill / 100.0
         team_performance = self._get_team_multiplier(team)
-        base_speed = self.BASE_SPEED_MPS * (0.7 + raw_speed * 0.3) * (0.85 + team_performance * 0.15)
         
-        # Track-aware corner physics
-        if self.track_map:
-            position_on_track = state.position_m % track_length_m
-            section_type, corner = self.track_map.get_section_at_position(position_on_track)
-            
-            if corner:
-                # Use advanced corner performance calculation
-                from disciplines.track_physics import calculate_corner_performance
-                
-                perf = calculate_corner_performance(
-                    driver=driver,
-                    corner=corner,
-                    racing_line=state.racing_line,
-                    tire_condition=state.tire_condition,
-                    cars_nearby=len(state.cars_nearby)
-                )
-                
-                # Use calculated exit speed (convert km/h to m/s)
-                corner_speed_mps = perf["exit_speed_kmh"] / 3.6
-                
-                # Apply push intensity to corner exit
-                corner_speed_mps *= (0.85 + state.push_intensity * 0.15)
-                
-                # Blend corner speed with base speed based on section type
-                if section_type == TrackSection.BRAKING_ZONE:
-                    speed = corner_speed_mps * 0.6 + base_speed * 0.4
-                elif section_type in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER]:
-                    speed = corner_speed_mps * 0.8 + base_speed * 0.2
-                elif section_type == TrackSection.FAST_CORNER:
-                    speed = corner_speed_mps * 0.5 + base_speed * 0.5
-                else:
-                    speed = base_speed
-            else:
-                # Straight section - use base speed
-                speed = base_speed
+        # *** PUSH INTENSITY IS THE DOMINANT FACTOR ***
+        # Base speed: 80 m/s (288 km/h) - this is just the reference point
+        reference_speed = 80.0
+        
+        # Push multiplier creates MASSIVE speed differences
+        # Conservative (0.5): 0.60x = 48 m/s (173 km/h) - VERY SLOW
+        # Balanced (0.7): 0.92x = 74 m/s (266 km/h) - Normal racing
+        # Aggressive (1.0): 1.30x = 104 m/s (374 km/h) - FLYING
+        push_multiplier = 0.20 + (state.push_intensity * 1.10)
+        
+        # Driver skill modifies slightly (5-10% variation)
+        driver_modifier = 0.95 + (raw_speed * 0.10)
+        
+        # Team performance adds small bonus (0-5%)
+        team_modifier = 0.975 + (team_performance * 0.05)
+        
+        # Cornering skill affects corners only
+        position_in_lap = (state.position_m % track_length_m) / track_length_m
+        in_corner = abs(np.sin(position_in_lap * 2 * np.pi * 8)) > 0.5  # 8 corners per lap
+        
+        if in_corner:
+            corner_modifier = 0.85 + (cornering_skill * 0.15)  # 85-100% speed in corners
         else:
-            # Fallback to simple calculation
-            speed = base_speed
-            position_in_lap = (state.position_m % track_length_m) / track_length_m
-            corner_factor = 0.85 + 0.15 * np.sin(position_in_lap * 2 * np.pi * 8)
-            cornering_skill = driver.cornering_skill / 100.0
-            corner_speed_retention = 0.7 + cornering_skill * 0.3
-            speed *= (corner_factor * corner_speed_retention + (1.0 - corner_factor))
+            corner_modifier = 1.0  # Full speed on straights
         
-        # Modify by push intensity - significant impact on speed
-        # Conservative (0.5): 0.8x speed, Balanced (0.7): 0.92x, Aggressive (1.0): 1.2x speed
-        speed *= (0.4 + state.push_intensity * 0.8)
+        # Calculate final speed
+        speed = reference_speed * push_multiplier * driver_modifier * team_modifier * corner_modifier
         
-        # Tire degradation
-        tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.3
+        # DEBUG: Print actual calculation for first few frames
+        if not hasattr(self, '_speed_debug_counter'):
+            self._speed_debug_counter = 0
+        self._speed_debug_counter += 1
+        if self._speed_debug_counter < 50 or self._speed_debug_counter % 300 == 0:
+            print(f"  [SPEED] {state.driver_name}: push={state.push_intensity:.2f} -> mult={push_multiplier:.2f} -> speed={speed:.1f}m/s")
+        
+        # Tire degradation - worn tires lose grip
+        tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.25
         speed *= tire_penalty
         
-        # Fuel weight
-        fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.02
+        # Fuel weight - lighter car is faster
+        fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.03
         speed *= fuel_bonus
         
+        # Push fatigue - accumulated stress from pushing hard
+        # Increases mistake probability and slightly reduces performance
+        if state.push_fatigue > 0.3:
+            fatigue_penalty = 1.0 - (state.push_fatigue * 0.25)  # Up to 25% slower when exhausted
+            speed *= fatigue_penalty
+        
         # === SLIPSTREAM BOOST (straights) ===
-        # Following closely reduces air resistance, increases top speed
         if state.in_slipstream:
             speed *= (1.0 + self.SLIPSTREAM_BONUS)
         
@@ -585,11 +623,11 @@ class RealtimeRaceEngine:
                 # In dirty air in corner - reduce speed
                 speed *= (1.0 - self.DIRTY_AIR_PENALTY)
         
-        # === COLLISION AVOIDANCE ===
+        # === COLLISION AVOIDANCE - ALLOW MUCH CLOSER RACING ===
         # Slow down when too close to car ahead to prevent driving into them
-        if state.gap_ahead < 3.0:  # Less than 3 seconds gap
+        if state.gap_ahead < 0.8:  # Less than 0.8 seconds gap (was 1.5 - VERY AGGRESSIVE)
             CAR_LENGTH = 5.0  # meters
-            MINIMUM_GAP = CAR_LENGTH * 4  # Need at least 4 car lengths (20m)
+            MINIMUM_GAP = CAR_LENGTH * 1.2  # Need at least 1.2 car lengths (6m, was 2 = 10m)
             
             # Calculate actual distance gap in meters
             if state.velocity_mps > 0.1:
@@ -599,12 +637,12 @@ class RealtimeRaceEngine:
                     # Too close! Reduce speed to avoid collision
                     # The closer we are, the more we need to slow down
                     safety_factor = distance_gap / MINIMUM_GAP
-                    safety_factor = max(0.4, safety_factor)  # Minimum 40% speed
+                    safety_factor = max(0.65, safety_factor)  # Minimum 65% speed (was 40% - allows closer racing)
                     speed *= safety_factor
                     
                     # Extra braking if dangerously close
-                    if distance_gap < CAR_LENGTH * 1.5:
-                        speed *= 0.6  # Heavy braking to avoid rear-end
+                    if distance_gap < CAR_LENGTH * 0.7:  # Was 1.5 car lengths, now 0.7
+                        speed *= 0.75  # Heavy braking to avoid rear-end (was 0.6)
         
         # Consistency variance
         consistency = driver.consistency / 100.0
@@ -683,7 +721,7 @@ class RealtimeRaceEngine:
                     if distance < self.NEARBY_DISTANCE_M:
                         state.cars_nearby.append(other_id)
     
-    def _complete_lap(self, state: DriverState, race_state: RaceState, track_length_m: float):
+    def _complete_lap(self, state: DriverState, race_state: RaceState):
         """Handle lap completion"""
         state.lap += 1
         
@@ -700,6 +738,59 @@ class RealtimeRaceEngine:
             race_state.lap_times[state.driver_id].append(lap_time)
         
         race_state.lap_start_positions[state.driver_id] = state.position_m
+    
+    def _check_driver_mistake(self, state: DriverState) -> bool:
+        """
+        Check if driver makes a mistake (runs wide, locks up, etc.)
+        
+        Probability increases with:
+        - High push_intensity (overdriving)
+        - Low consistency skill
+        - Accumulated fatigue
+        - Worn tires
+        
+        Returns True if mistake occurs (causing time loss)
+        """
+        # Don't check too frequently - cooldown period
+        if state.frames_since_mistake < 150:  # 5 seconds cooldown
+            return False
+        
+        # Base mistake probability per frame - INCREASED 10x for visibility
+        base_probability = 0.0002
+        
+        # *** PUSH INTENSITY MULTIPLIER ***
+        # Conservative (0.5): 0.5x mistakes
+        # Balanced (0.7): 1.0x mistakes  
+        # Aggressive (1.0): 5.0x mistakes (MUCH higher risk)
+        if state.push_intensity > 0.8:
+            push_risk = 1.0 + ((state.push_intensity - 0.8) * 20.0)  # Exponential increase
+        else:
+            push_risk = state.push_intensity / 0.7  # Linear below aggressive threshold
+        
+        # Driver skill reduces mistakes
+        consistency = state.driver.consistency / 100.0
+        vehicle_control = state.driver.vehicle_control / 100.0
+        skill_factor = 2.0 - (consistency + vehicle_control)  # Range: 0.0 to 2.0
+        
+        # Fatigue increases mistakes
+        fatigue_multiplier = 1.0 + (state.push_fatigue * 3.0)  # Up to 4x when exhausted
+        
+        # Tire condition affects grip
+        tire_multiplier = 1.0 + ((1.0 - state.tire_condition) * 2.0)  # Up to 3x on worn tires
+        
+        # Calculate final probability
+        mistake_prob = base_probability * push_risk * skill_factor * fatigue_multiplier * tire_multiplier
+        
+        # Roll the dice
+        if self.rng.random() < mistake_prob:
+            state.frames_since_mistake = 0
+            # Determine severity
+            severity = "minor" if self.rng.random() > 0.3 else "major"
+            if severity == "major":
+                print(f"  ⚠️  {state.driver_name} runs wide! (push={state.push_intensity:.2f}, fatigue={state.push_fatigue:.2f})")
+            return True
+        
+        return False
     
     def _check_incident(self, state: DriverState, race_state: RaceState) -> bool:
         """
@@ -721,8 +812,7 @@ class RealtimeRaceEngine:
         # === POSITION-BASED COLLISION DETECTION ===
         # Collisions occur when two cars occupy the same physical space
         CAR_LENGTH = 5.0  # meters
-        CAR_WIDTH = 2.0   # meters
-        SAFE_FOLLOWING_DISTANCE = 8.0  # minimum safe gap
+        SAFE_FOLLOWING_DISTANCE = 15.0  # minimum safe gap (increased from 8m)
         
         # Check all other cars
         for other_id, other_state in race_state.driver_states.items():
@@ -762,8 +852,8 @@ class RealtimeRaceEngine:
                     # Tire condition affects car control
                     control_factor = min(state.tire_condition, other_state.tire_condition)
                     
-                    # Very small chance of contact even with good skills
-                    contact_probability = 0.0001 * (1.0 - combined_skill * control_factor)
+                    # Very small chance of contact even with good skills (reduced 50x)
+                    contact_probability = 0.000002 * (1.0 - combined_skill * control_factor)
                     
                     if self.rng.random() < contact_probability:
                         state.dnf_reason = "contact_during_overtake"
@@ -781,7 +871,7 @@ class RealtimeRaceEngine:
                     # Determine who is behind
                     if state.position_m < other_state.position_m:
                         # Other car is ahead - state is behind
-                        if relative_velocity > 5.0:  # Closing at >5 m/s = real rear-end risk
+                        if relative_velocity > 15.0:  # Closing at >15 m/s = real rear-end risk (increased from 5)
                             print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
                             state.dnf_reason = "rear_end_collision"
                             return True
@@ -836,7 +926,7 @@ class RealtimeRaceEngine:
             
             # Get track section
             position_on_track = attacker_state.position_m % race_state.track_length_m
-            section_type, corner = self.track_map.get_section_at_position(position_on_track)
+            _, _ = self.track_map.get_section_at_position(position_on_track)
             
             # Calculate lateral overlap (simulated from speed difference)
             speed_diff = attacker_state.velocity_mps - defender_state.velocity_mps
@@ -861,7 +951,7 @@ class RealtimeRaceEngine:
             if outcome or attempt.frames_active > 30 or lateral_overlap > 0.7 or attacker_state.gap_ahead > 2.0:
                 # Use outcome from update() or resolve manually
                 if not outcome:
-                    result, incident_type = resolve_overtake_outcome(
+                    result, _ = resolve_overtake_outcome(
                         attacker=attacker_state.driver,
                         defender=defender_state.driver,
                         overtake_attempt=attempt,
@@ -869,7 +959,6 @@ class RealtimeRaceEngine:
                     )
                 else:
                     result = outcome
-                    incident_type = None
                 
                 if result == "success":
                     print(f"  \u2713 {attacker_state.driver_name} overtakes {defender_state.driver_name}! ({attempt.attempt_type.value})")
@@ -952,6 +1041,7 @@ class RealtimeRaceEngine:
                 "velocity_mps": state.velocity_mps,
                 "racing_mode": state.racing_mode.value,
                 "push_intensity": state.push_intensity,
+                "push_fatigue": state.push_fatigue,
                 "tire_condition": state.tire_condition,
                 "fuel_load": state.fuel_load,
                 "gap_ahead": state.gap_ahead,

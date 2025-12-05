@@ -12,7 +12,8 @@ import os
 import math
 import time
 import threading
-from typing import List, Dict, Optional
+import traceback
+from typing import Any, List, Dict, Optional, cast
 from dataclasses import dataclass
 
 # Add parent directory to path for imports
@@ -20,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
-from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent
+from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QPaintEvent
 
 from database.database_manager import DatabaseManager
 from services.race_simulation_api import simulate_race
@@ -47,13 +48,16 @@ class Car:
     total_time: float = 0.0  # Total race time from simulation
     avg_lap_time: float = 60.0  # Average lap time in seconds
     last_lap: int = 0  # Last completed lap number
+    velocity_mps: float = 0.0
+    movement_direction: float = 0.0
+    prev_s: Optional[float] = None
 
 
 class EventEmitter(QObject):
     """Signal emitter for race events."""
     position_update = pyqtSignal(dict)  # {driver_id: {lap, position, total_time}}
     race_finished = pyqtSignal(list)
-    event = pyqtSignal(str)
+    event_signal = pyqtSignal(str)
 
 
 class CircuitGenerator:
@@ -109,7 +113,6 @@ class CircuitGenerator:
     
     @staticmethod
     def _process_instructions(instructions, state):
-        segments = state['segments']
         start_x, start_y = 0, 0  # Track starts at origin
         
         # Process all instructions
@@ -168,7 +171,6 @@ class CircuitGenerator:
             # Recalculate position after closure corners
             final_dx = start_x - state['current_x']
             final_dy = start_y - state['current_y']
-            final_distance = math.hypot(final_dx, final_dy)
             final_angle = math.atan2(final_dy, final_dx)
             final_heading_error = final_angle - state['current_theta']
             
@@ -362,14 +364,33 @@ class TrackWidget(QWidget):
         self.track_points = track_points
         self.track_length = track_length
         self.cars: List[Car] = []
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(1400, 900)
         self.race_active = False
         self.start_time = 0.0
+        
+        # Camera settings
+        self.camera_mode = 'full'
+        self.follow_car_id = None
+        self.camera_zoom = 1.0
+        self.camera_x = 0
+        self.camera_y = 0
+        self.camera_rotation = 0
         
         # Animation timer for smooth movement
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
         self.animation_timer.setInterval(16)  # ~60 FPS
+    
+    def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
+        """Set camera mode and target car."""
+        self.camera_mode = mode
+        self.follow_car_id = follow_car_id
+        if mode == 'full':
+            self.camera_zoom = 1.0
+            self.camera_rotation = 0
+        else:
+            self.camera_zoom = 3.0
+        self.update()
     
     def set_cars(self, cars: List[Car]):
         """Update car list."""
@@ -469,14 +490,15 @@ class TrackWidget(QWidget):
                     idx = max(0, min(idx, len(self.track_points) - 1))
                     
                     # Store previous position to calculate actual movement direction
-                    if not hasattr(car, 'prev_s'):
+                    if not hasattr(car, 'prev_s') or car.prev_s is None:
                         car.prev_s = normalized_pos
                     
                     # Update position
                     car.s = normalized_pos
                     
                     # Track movement direction for rotation
-                    car.movement_direction = normalized_pos - car.prev_s
+                    prev_s = car.prev_s if car.prev_s is not None else normalized_pos
+                    car.movement_direction = normalized_pos - prev_s
                     # Handle wrap-around
                     if car.movement_direction < -self.track_length / 2:
                         car.movement_direction += self.track_length
@@ -528,76 +550,570 @@ class TrackWidget(QWidget):
                 break
         self.update()
     
-    def paintEvent(self, event):
+    def paintEvent(self, a0: Optional[QPaintEvent]):
+        if a0 is None:
+            return
         try:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             
-            # Background
-            painter.fillRect(self.rect(), QColor(15, 20, 25))
+            # GRASS BACKGROUND
+            painter.fillRect(self.rect(), QColor(34, 139, 34))  # Forest green
             
-            # Transform: center view
-            painter.translate(600, 400)
-            painter.scale(1, -1)
+            # Center point for transformations
+            center_x = self.width() // 2
+            center_y = self.height() // 2
             
-            self._draw_track(painter)
-            self._draw_cars(painter)
+            # Save painter state
+            painter.save()
             
+            # Camera transform
+            if self.camera_mode == 'follow' and self.follow_car_id:
+                # Find followed car
+                followed_car = None
+                for car in self.cars:
+                    if car.driver_id == self.follow_car_id:
+                        followed_car = car
+                        break
+                
+                if followed_car and len(self.track_points) > 0:
+                    # Get car position - use binary search like _draw_cars does
+                    normalized_s = followed_car.s % self.track_length
+                    left, right = 0, len(self.track_points) - 1
+                    while left < right:
+                        mid = (left + right) // 2
+                        if self.track_points[mid].s < normalized_s:
+                            left = mid + 1
+                        else:
+                            right = mid
+                    idx = max(0, min(left, len(self.track_points) - 1))
+                    pt = self.track_points[idx]
+                    
+                    # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
+                    # 1. Translate viewport center to canvas origin
+                    # 2. Rotate based on car heading direction (track angle)
+                    # 3. Scale (flip Y for screen coords)
+                    # 4. Translate world so car is at origin
+                    painter.translate(center_x, center_y)
+                    painter.rotate(math.degrees(pt.theta))  # Rotate track ahead to "up" on screen
+                    painter.scale(self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
+                    painter.translate(-pt.x, -pt.y)  # Center on car position
+                else:
+                    # Fallback to full view
+                    painter.translate(center_x, center_y)
+                    painter.scale(1, -1)
+            else:
+                # Full track view with increased zoom
+                painter.translate(center_x, center_y)
+                painter.scale(1.5, -1.5)  # Reduced to 1.5x for better overview
+            
+            # CORRECT LAYER ORDER for visibility
+            self._draw_runoff_areas(painter)  # Layer 2
+            self._draw_grandstands(painter)    # Layer 3
+            self._draw_garages(painter)        # Layer 4
+            self._draw_pit_lane(painter)       # Layer 5
+            self._draw_track(painter)          # Layers 6-12
+            self._draw_cars(painter)           # Layer 13
+            
+            painter.restore()
             painter.end()
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
             import traceback
             traceback.print_exc()
     
+    def _draw_runoff_areas(self, painter):
+        """Draw red asphalt runoff zones on outside of fast corners."""
+        try:
+            if not self.track_points:
+                return
+            TRACK_WIDTH = 14
+            for i in range(0, len(self.track_points) - 1):
+                pt = self.track_points[i]
+                next_pt = self.track_points[i + 1]
+                
+                # Fast corners only (high curvature)
+                if abs(pt.curvature) > 0.004:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    next_normal_x = -math.sin(next_pt.theta)
+                    next_normal_y = math.cos(next_pt.theta)
+                    
+                    # Draw runoff on outside of corner (8m wide)
+                    runoff_inner = TRACK_WIDTH + 1
+                    runoff_outer = TRACK_WIDTH + 9
+                    
+                    painter.setPen(QPen(QColor(220, 90, 90), 8))  # Red asphalt
+                    if pt.curvature > 0:  # Left turn - runoff on right
+                        mid_offset = (runoff_inner + runoff_outer) / 2
+                        painter.drawLine(
+                            int(pt.x + normal_x * mid_offset),
+                            int(pt.y + normal_y * mid_offset),
+                            int(next_pt.x + next_normal_x * mid_offset),
+                            int(next_pt.y + next_normal_y * mid_offset)
+                        )
+                    else:  # Right turn - runoff on left
+                        mid_offset = (runoff_inner + runoff_outer) / 2
+                        painter.drawLine(
+                            int(pt.x - normal_x * mid_offset),
+                            int(pt.y - normal_y * mid_offset),
+                            int(next_pt.x - next_normal_x * mid_offset),
+                            int(next_pt.y - next_normal_y * mid_offset)
+                        )
+        except Exception:
+            pass
+    
+    def _draw_pit_lane(self, painter):
+        """Draw professional pit lane with boxes, entry/exit zones."""
+        try:
+            if not self.track_points:
+                return
+            
+            from PyQt6.QtGui import QPolygonF
+            
+            # Build pit lane as filled polygon (s=0 to 300m)
+            pit_inner_points = []  # 22m offset from centerline
+            pit_outer_points = []  # 40m offset (18m wide pit lane)
+            
+            for pt in self.track_points:
+                if pt.s < 300:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    
+                    inner_x = pt.x + normal_x * 22
+                    inner_y = pt.y + normal_y * 22
+                    outer_x = pt.x + normal_x * 40
+                    outer_y = pt.y + normal_y * 40
+                    
+                    pit_inner_points.append((inner_x, inner_y))
+                    pit_outer_points.append((outer_x, outer_y))
+            
+            # Draw filled polygon
+            polygon = QPolygonF()
+            for pt in pit_inner_points:
+                polygon.append(QPointF(pt[0], pt[1]))
+            for pt in reversed(pit_outer_points):
+                polygon.append(QPointF(pt[0], pt[1]))
+            
+            painter.setBrush(QBrush(QColor(110, 110, 110)))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(polygon)
+            
+            # Pit wall (inner edge)
+            painter.setPen(QPen(QColor(80, 80, 80), 2))
+            for i in range(len(pit_inner_points) - 1):
+                painter.drawLine(
+                    int(pit_inner_points[i][0]), int(pit_inner_points[i][1]),
+                    int(pit_inner_points[i+1][0]), int(pit_inner_points[i+1][1])
+                )
+            
+            # Pit boxes (10 boxes, 20m each, s=50 to 250)
+            painter.setPen(QPen(QColor(255, 255, 255), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            
+            for box_idx in range(10):
+                box_s = 50 + box_idx * 20
+                # Find points at box start and end
+                for i, pt in enumerate(self.track_points):
+                    if abs(pt.s - box_s) < 2:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        
+                        # Draw box rectangle rotated to track angle
+                        painter.save()
+                        painter.translate(pt.x + normal_x * 31, pt.y + normal_y * 31)
+                        painter.rotate(math.degrees(pt.theta))
+                        painter.drawRect(-10, -8, 20, 16)
+                        painter.restore()
+                        break
+            
+            # Pit entry chevrons (s=250-270)
+            painter.setPen(QPen(QColor(255, 255, 255), 3))
+            for stripe_idx in range(8):
+                stripe_s = 250 + stripe_idx * 2.5
+                for pt in self.track_points:
+                    if abs(pt.s - stripe_s) < 1:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        # Diagonal stripe from track edge to pit lane
+                        painter.drawLine(
+                            int(pt.x + normal_x * 14), int(pt.y + normal_y * 14),
+                            int(pt.x + normal_x * 26), int(pt.y + normal_y * 26)
+                        )
+                        break
+            
+            # Pit exit green light marker (s=285)
+            for pt in self.track_points:
+                if abs(pt.s - 285) < 2:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    painter.setBrush(QBrush(QColor(0, 255, 0)))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawEllipse(QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
+                    break
+            
+        except Exception:
+            pass
+
+    def _draw_grandstands(self, painter):
+        """Draw professional 3D grandstands facing the track."""
+        try:
+            if not self.track_points:
+                return
+            
+            # Main straight grandstands (s=320, 380, 440 - left side)
+            grandstand_positions = [320, 380, 440]
+            
+            for gs_s in grandstand_positions:
+                for pt in self.track_points:
+                    if abs(pt.s - gs_s) < 2:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        
+                        gs_x = pt.x - normal_x * 40  # LEFT side of track
+                        gs_y = pt.y - normal_y * 40
+                        
+                        painter.save()
+                        painter.translate(gs_x, gs_y)
+                        painter.rotate(math.degrees(pt.theta) + 90)  # Face track
+                        
+                        # Tier 1: Ground level (concrete base)
+                        painter.setBrush(QBrush(QColor(100, 100, 100)))
+                        painter.setPen(QPen(QColor(80, 80, 80), 1))
+                        painter.drawRect(-20, 0, 40, 10)
+                        
+                        # Tier 2: Lower seating (blue)
+                        painter.setBrush(QBrush(QColor(60, 100, 180)))
+                        painter.setPen(QPen(QColor(50, 80, 150), 1))
+                        painter.drawRect(-19, -5, 38, 8)
+                        
+                        # Tier 3: Middle seating (lighter blue)
+                        painter.setBrush(QBrush(QColor(80, 120, 200)))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.drawRect(-18, -10, 36, 8)
+                        
+                        # Tier 4: Upper seating (lightest blue)
+                        painter.setBrush(QBrush(QColor(100, 140, 220)))
+                        painter.drawRect(-17, -15, 34, 6)
+                        
+                        # Roof structure (overhangs)
+                        painter.setBrush(QBrush(QColor(200, 200, 200)))
+                        painter.setPen(QPen(QColor(180, 180, 180), 1))
+                        painter.drawRect(-22, -20, 44, 3)
+                        
+                        # Support columns (4 pillars)
+                        painter.setPen(QPen(QColor(90, 90, 90), 3))
+                        for pillar_x in [-18, -6, 6, 18]:
+                            painter.drawLine(pillar_x, -17, pillar_x, 10)
+                        
+                        # Seating rows (horizontal detail lines)
+                        painter.setPen(QPen(QColor(40, 70, 140), 1))
+                        for row_offset in [-13, -11, -9, -7, -3, -1, 1, 3]:
+                            painter.drawLine(-18, row_offset, 18, row_offset)
+                        
+                        painter.restore()
+                        break
+            
+            # Corner grandstands (smaller, at high curvature points)
+            for i, pt in enumerate(self.track_points):
+                if abs(pt.curvature) > 0.006 and i % 50 == 0:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    
+                    # Position on inside of corner
+                    if pt.curvature > 0:
+                        gs_x = pt.x - normal_x * 35
+                        gs_y = pt.y - normal_y * 35
+                    else:
+                        gs_x = pt.x + normal_x * 35
+                        gs_y = pt.y + normal_y * 35
+                    
+                    painter.save()
+                    painter.translate(gs_x, gs_y)
+                    painter.rotate(math.degrees(pt.theta) + 90)
+                    
+                    # Smaller 3-tier grandstand
+                    painter.setBrush(QBrush(QColor(100, 100, 100)))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawRect(-12, 0, 24, 8)
+                    
+                    painter.setBrush(QBrush(QColor(70, 110, 190)))
+                    painter.drawRect(-11, -4, 22, 6)
+                    
+                    painter.setBrush(QBrush(QColor(90, 130, 210)))
+                    painter.drawRect(-10, -8, 20, 6)
+                    
+                    painter.setBrush(QBrush(QColor(190, 190, 190)))
+                    painter.drawRect(-13, -11, 26, 2)
+                    
+                    painter.restore()
+            
+        except Exception:
+            pass
+
+    def _draw_garages(self, painter):
+        """Draw continuous professional paddock garage building."""
+        try:
+            if not self.track_points:
+                return
+            
+            # Continuous building structure (s=10 to 280m)
+            # Layer 1: Building base segments
+            painter.setBrush(QBrush(QColor(140, 140, 140)))
+            painter.setPen(QPen(QColor(120, 120, 120), 1))
+            
+            for i, pt in enumerate(self.track_points):
+                if 10 < pt.s < 280 and i % 3 == 0:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    
+                    painter.save()
+                    painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+                    painter.rotate(math.degrees(pt.theta))
+                    painter.drawRect(-6, 0, 12, 25)
+                    painter.restore()
+            
+            # Layer 2: Team garage bays (10 bays)
+            team_colors = [
+                QColor(6, 0, 239),    # Blue
+                QColor(0, 210, 190),  # Teal
+                QColor(220, 0, 0),    # Red
+                QColor(245, 150, 0),  # Orange
+                QColor(0, 144, 255),  # Light Blue
+                QColor(182, 186, 189),# Silver
+                QColor(53, 140, 117), # Green
+                QColor(201, 45, 75),  # Pink
+                QColor(255, 220, 0),  # Yellow
+                QColor(100, 100, 100) # Grey
+            ]
+            
+            for bay_idx in range(10):
+                bay_s = 20 + bay_idx * 26
+                for pt in self.track_points:
+                    if abs(pt.s - bay_s) < 2:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        
+                        painter.save()
+                        painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+                        painter.rotate(math.degrees(pt.theta))
+                        
+                        # Roof (light grey overhang)
+                        painter.setBrush(QBrush(QColor(180, 180, 180)))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.drawRect(-15, -2, 30, 29)
+                        
+                        # Three garage door openings
+                        painter.setBrush(QBrush(QColor(40, 40, 40)))
+                        for door in range(3):
+                            painter.drawRect(-11 + door * 7, 5, 6, 18)
+                        
+                        # Team color panel above doors
+                        painter.setBrush(QBrush(team_colors[bay_idx]))
+                        painter.drawRect(-12, 1, 24, 3)
+                        
+                        painter.restore()
+                        break
+            
+        except Exception:
+            pass
+
     def _draw_track(self, painter):
-        """Draw track centerline."""
+        """Draw track with professional surface, smooth kerbs, checkered start/finish."""
         try:
             if not self.track_points or len(self.track_points) < 2:
                 return
             
-            path = QPainterPath()
-            path.moveTo(self.track_points[0].x, self.track_points[0].y)
+            TRACK_WIDTH = 14  # Half-width of track surface
             
-            for i in range(1, len(self.track_points), 3):
-                if i + 2 < len(self.track_points):
-                    p1 = self.track_points[i]
-                    p2 = self.track_points[i + 1]
-                    p3 = self.track_points[i + 2]
-                    path.cubicTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y)
+            # Build centerline path
+            centerline = QPainterPath()
+            centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
             
-            path.lineTo(self.track_points[0].x, self.track_points[0].y)
+            for i in range(1, len(self.track_points)):
+                pt = self.track_points[i]
+                centerline.lineTo(pt.x, pt.y)
             
-            # Track surface
-            painter.setPen(QPen(QColor(80, 80, 80), 20))
-            painter.drawPath(path)
+            centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+
+            # === Infield fill: match outer grass and add water pool ===
+            try:
+                from PyQt6.QtGui import QPolygonF
+                infield_points = []
+                for pt in self.track_points:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    # Move inward from centerline towards infield by TRACK_WIDTH - 2
+                    ix = pt.x - normal_x * (TRACK_WIDTH - 2)
+                    iy = pt.y - normal_y * (TRACK_WIDTH - 2)
+                    infield_points.append(QPointF(ix, iy))
+
+                if infield_points:
+                    poly = QPolygonF(infield_points)
+                    # Fill with same forest green as background
+                    painter.setBrush(QBrush(QColor(34, 139, 34)))
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.drawPolygon(poly)
+
+                    # Add a water pool matching the infield shape (scaled down), rotated clockwise 20°
+                    cx = sum(p.x() for p in infield_points) / len(infield_points)
+                    cy = sum(p.y() for p in infield_points) / len(infield_points)
+                    scale = 0.6  # scale down the infield polygon to make the pool
+                    raw_poly = []
+                    for p in infield_points:
+                        sx = cx + (p.x() - cx) * scale
+                        sy = cy + (p.y() - cy) * scale
+                        raw_poly.append((sx, sy))
+
+                    # Rotate polygon clockwise by 20 degrees (clockwise -> negative angle)
+                    rot_rad = math.radians(-20)
+                    cos_t = math.cos(rot_rad)
+                    sin_t = math.sin(rot_rad)
+                    pool_poly = QPolygonF()
+                    for (sx, sy) in raw_poly:
+                        dx = sx - cx
+                        dy = sy - cy
+                        rx = cx + (dx * cos_t - dy * sin_t)
+                        ry = cy + (dx * sin_t + dy * cos_t)
+                        pool_poly.append(QPointF(rx, ry))
+
+                    # Use requested water color #006994 (deeper, realistic) and darker edge
+                    water_color = QColor("#006994")
+                    water_edge = QColor("#004A66")
+                    painter.setBrush(QBrush(water_color))
+                    painter.setPen(QPen(water_edge, 2))
+                    painter.drawPolygon(pool_poly)
+
+                    # Small specular highlight near upper-left of pool (relative)
+                    if len(pool_poly) > 0:
+                        hp = pool_poly[int(len(pool_poly) * 0.22)]
+                        painter.setBrush(QBrush(QColor(255, 255, 255, 140)))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.drawEllipse(QPointF(hp.x() + 8, hp.y() + 6), 14, 7)
+            except Exception:
+                pass
+
+            # LAYER 6: Base track surface (lighter grey off-line)
+            painter.setPen(QPen(QColor(85, 85, 85), TRACK_WIDTH * 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawPath(centerline)
             
-            # Centerline
-            painter.setPen(QPen(QColor(200, 200, 200), 1))
-            painter.drawPath(path)
+            # LAYER 7: Racing line (darker worn surface)
+            painter.setPen(QPen(QColor(45, 45, 45), TRACK_WIDTH * 1.2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            painter.drawPath(centerline)
             
-            # Start/finish line
-            if len(self.track_points) > 200:
-                pt = self.track_points[200]
-                painter.setPen(QPen(Qt.GlobalColor.white, 3))
+            # LAYER 9: Track edges (clean white lines)
+            painter.setPen(QPen(QColor(240, 240, 240), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for i in range(0, len(self.track_points) - 1):
+                pt = self.track_points[i]
+                next_pt = self.track_points[i + 1]
                 normal_x = -math.sin(pt.theta)
                 normal_y = math.cos(pt.theta)
-                hw = 10
-                painter.drawLine(int(pt.x - normal_x * hw), int(pt.y - normal_y * hw),
-                                int(pt.x + normal_x * hw), int(pt.y + normal_y * hw))
+                next_normal_x = -math.sin(next_pt.theta)
+                next_normal_y = math.cos(next_pt.theta)
+                # Left edge
+                painter.drawLine(
+                    int(pt.x - normal_x * TRACK_WIDTH), int(pt.y - normal_y * TRACK_WIDTH),
+                    int(next_pt.x - next_normal_x * TRACK_WIDTH), int(next_pt.y - next_normal_y * TRACK_WIDTH)
+                )
+                # Right edge
+                painter.drawLine(
+                    int(pt.x + normal_x * TRACK_WIDTH), int(pt.y + normal_y * TRACK_WIDTH),
+                    int(next_pt.x + next_normal_x * TRACK_WIDTH), int(next_pt.y + next_normal_y * TRACK_WIDTH)
+                )
             
-            # 100 CHECKPOINT MARKERS (1% intervals)
-            # These help visualize car progression and calculate gaps accurately
-            if len(self.track_points) > 100:
-                painter.setPen(QPen(QColor(100, 100, 100), 1))  # Gray checkpoints
-                checkpoint_interval = len(self.track_points) // 100
-                for i in range(0, len(self.track_points), checkpoint_interval):
-                    if i < len(self.track_points):
-                        pt = self.track_points[i]
+            # LAYER 10: SMOOTH STRIPED KERBS on INSIDE (apex)
+            # Build continuous kerb paths for each corner
+            current_corner = []
+            in_corner = False
+            
+            for i, pt in enumerate(self.track_points):
+                if abs(pt.curvature) > 0.003:
+                    current_corner.append(pt)
+                    in_corner = True
+                elif in_corner and len(current_corner) > 5:
+                    # Draw smooth kerb for this corner
+                    first_curv = current_corner[0].curvature
+                    kerb_offset = 12  # Inside edge
+                    
+                    segment_length = 0
+                    stripe_toggle = True
+                    
+                    for j in range(len(current_corner) - 1):
+                        pt = current_corner[j]
+                        next_pt = current_corner[j + 1]
+                        
                         normal_x = -math.sin(pt.theta)
                         normal_y = math.cos(pt.theta)
-                        hw = 5  # Smaller than start/finish
-                        painter.drawLine(int(pt.x - normal_x * hw), int(pt.y - normal_y * hw),
-                                        int(pt.x + normal_x * hw), int(pt.y + normal_y * hw))
+                        next_normal_x = -math.sin(next_pt.theta)
+                        next_normal_y = math.cos(next_pt.theta)
+                        
+                        # Calculate segment distance
+                        dx = next_pt.x - pt.x
+                        dy = next_pt.y - pt.y
+                        dist = math.sqrt(dx*dx + dy*dy)
+                        segment_length += dist
+                        
+                        # Toggle stripe every 5m
+                        if segment_length > 5:
+                            stripe_toggle = not stripe_toggle
+                            segment_length = 0
+                        
+                        color = QColor(221, 45, 74) if stripe_toggle else QColor(255, 255, 255)
+                        painter.setPen(QPen(color, 4))
+                        
+                        if first_curv > 0:  # Left turn - kerb on LEFT
+                            painter.drawLine(
+                                int(pt.x - normal_x * kerb_offset),
+                                int(pt.y - normal_y * kerb_offset),
+                                int(next_pt.x - next_normal_x * kerb_offset),
+                                int(next_pt.y - next_normal_y * kerb_offset)
+                            )
+                        else:  # Right turn - kerb on RIGHT
+                            painter.drawLine(
+                                int(pt.x + normal_x * kerb_offset),
+                                int(pt.y + normal_y * kerb_offset),
+                                int(next_pt.x + next_normal_x * kerb_offset),
+                                int(next_pt.y + next_normal_y * kerb_offset)
+                            )
+                    
+                    current_corner = []
+                    in_corner = False
+            
+            # LAYER 11: Centerline (subtle dashed)
+            painter.setPen(QPen(QColor(200, 200, 200), 0.5, Qt.PenStyle.DashLine))
+            painter.drawPath(centerline)
+            
+            # LAYER 12: START/FINISH LINE at s=0 (proper checkered flag)
+            for pt in self.track_points:
+                if pt.s < 5:  # At start of lap
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    
+                    painter.save()
+                    # Move the finish line to the right of the screen (world +X) by 200 units
+                    # and rotate it 90 degrees relative to the track heading so it appears perpendicular
+                    painter.translate(pt.x + 200, pt.y)
+                    painter.rotate(math.degrees(pt.theta) + 90)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    
+                    # Bold checkered pattern - 8 squares across track width
+                    square_size = 3.5
+                    for col in range(8):
+                        if col % 2 == 0:
+                            painter.setBrush(QBrush(QColor(255, 255, 255)))
+                        else:
+                            painter.setBrush(QBrush(QColor(0, 0, 0)))
+                        painter.drawRect(
+                            int(col * square_size - TRACK_WIDTH), 
+                            int(-square_size), 
+                            int(square_size), 
+                            int(square_size * 2)
+                        )
+                    
+                    painter.restore()
+                    break
+            
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
     
@@ -710,8 +1226,10 @@ class RaceWindow(QMainWindow):
             self.display_mode = "borderless"
             # Borderless windowed fullscreen
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            screen = QApplication.primaryScreen().geometry()
-            self.setGeometry(screen)
+            screen_obj = QApplication.primaryScreen()
+            screen = screen_obj.geometry() if screen_obj else None
+            if screen is not None:
+                self.setGeometry(screen)
             self.showMaximized()
             # Race state
             self.db: Optional[DatabaseManager] = None
@@ -721,15 +1239,29 @@ class RaceWindow(QMainWindow):
             self.stop_event: Optional[threading.Event] = None
             self.driver_lap_times: Dict[int, float] = {}  # Track last lap time per driver
             self.race_start_time: float = 0.0
+            self.driver_colours: Dict[int, QColor] = {}  # Mapping of driver IDs to car colours
+            self._driver_push_intensity: Dict[int, float] = {}  # Mapping of driver IDs to push intensity
             
             # Player control
             self.player_driver_id: Optional[int] = None
             self.player_overrides: Dict[str, float] = {'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
+            
+            # Player telemetry tracking
+            self.player_telemetry = {
+                'speed_kph': 0.0,
+                'push_intensity': 0.7,
+                'push_fatigue': 0.0,
+                'tire_condition': 1.0
+            }
+            
+            # Camera mode
+            self.camera_mode = 'full'  # 'full' or 'follow'
+            
             # Event emitter
             self.emitter = EventEmitter()
             self.emitter.position_update.connect(self._on_position_update)
             self.emitter.race_finished.connect(self._on_race_finished)
-            self.emitter.event.connect(self._on_event)
+            self.emitter.event_signal.connect(self._on_event)
             self._setup_ui()
             self._load_data()
             # No auto-start: user must click Start Race manually
@@ -748,12 +1280,12 @@ class RaceWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
         
-        # Left: Track display
+        # Left: Track display (MUCH BIGGER)
         self.track_widget = None  # Will be created after track loads
         left_container = QWidget()
         self.left_layout = QVBoxLayout(left_container)
         self.left_layout.addWidget(QLabel("Loading track..."))
-        layout.addWidget(left_container, 3)
+        layout.addWidget(left_container, 5)  # Was 3, now 5 for bigger track
         
         # Right: Controls and standings
         right_panel = QVBoxLayout()
@@ -830,23 +1362,94 @@ class RaceWindow(QMainWindow):
         
         right_panel.addWidget(player_controls)
         
-        # Standings table (row order = position, no need for Pos column)
-        right_panel.addWidget(QLabel("<h3>Live Standings</h3>"))
+        # Player telemetry display
+        telemetry_group = QGroupBox("Your Telemetry")
+        telemetry_layout = QVBoxLayout(telemetry_group)
+        
+        # Speed display
+        self.speed_label = QLabel("Speed: --- km/h")
+        self.speed_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #B9F2FF;")
+        self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        telemetry_layout.addWidget(self.speed_label)
+        
+        # Push intensity gauge (horizontal bar)
+        push_label = QLabel("Push Intensity")
+        push_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        telemetry_layout.addWidget(push_label)
+        
+        from PyQt6.QtWidgets import QProgressBar
+        self.push_gauge = QProgressBar()
+        self.push_gauge.setMinimum(0)
+        self.push_gauge.setMaximum(100)
+        self.push_gauge.setValue(70)
+        self.push_gauge.setTextVisible(True)
+        self.push_gauge.setFormat("%p%")
+        self.push_gauge.setStyleSheet("""
+            QProgressBar {
+                border: 3px solid #B9F2FF;
+                border-radius: 8px;
+                text-align: center;
+                background-color: #353839;
+                height: 35px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #F5F5F5;
+            }
+            QProgressBar::chunk {
+                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #B9F2FF, stop:0.5 #B9F2FF, stop:0.7 #DD2D4A, stop:1.0 #DD2D4A);
+                border-radius: 5px;
+            }
+        """)
+        telemetry_layout.addWidget(self.push_gauge)
+        
+        # Fatigue warning
+        self.fatigue_label = QLabel("Fatigue: 0%")
+        self.fatigue_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fatigue_label.setStyleSheet("font-size: 12px; color: #FFD700;")
+        telemetry_layout.addWidget(self.fatigue_label)
+        
+        # Tire condition
+        self.tire_label = QLabel("Tire: 100%")
+        self.tire_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tire_label.setStyleSheet("font-size: 12px; color: #00BFFF;")
+        telemetry_layout.addWidget(self.tire_label)
+        
+        right_panel.addWidget(telemetry_group)
+        
+        # Camera controls
+        camera_group = QGroupBox("Camera")
+        camera_layout = QHBoxLayout(camera_group)
+        self.camera_full_btn = QPushButton("Full Track")
+        self.camera_full_btn.clicked.connect(lambda: self._set_camera_mode('full'))
+        self.camera_follow_btn = QPushButton("Follow Car")
+        self.camera_follow_btn.clicked.connect(lambda: self._set_camera_mode('follow'))
+        camera_layout.addWidget(self.camera_full_btn)
+        camera_layout.addWidget(self.camera_follow_btn)
+        right_panel.addWidget(camera_group)
+        
+        # Standings table (MUCH BIGGER)
+        right_panel.addWidget(QLabel("<h2>Live Standings</h2>"))
         self.standings_table = QTableWidget()
-        self.standings_table.setColumnCount(3)
-        self.standings_table.setHorizontalHeaderLabels(["Driver", "Lap", "Gap"])
-        self.standings_table.setMinimumWidth(400)
-        right_panel.addWidget(self.standings_table)
+        self.standings_table.setColumnCount(4)
+        self.standings_table.setHorizontalHeaderLabels(["🎨", "Driver", "Lap", "Gap"])
+        self.standings_table.setMinimumWidth(500)
+        self.standings_table.setMinimumHeight(400)
+        self.standings_table.setColumnWidth(0, 40)  # Color indicator
+        self.standings_table.setColumnWidth(1, 210)  # Driver name
+        self.standings_table.setColumnWidth(2, 60)   # Lap
+        self.standings_table.setColumnWidth(3, 100)  # Gap
+        right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1
         
         layout.addLayout(right_panel, 1)
         
-        # Styling
+        # Styling - MOMENTUM BRAND COLORS
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #1A1B1E;
+                background-color: #353839;
             }
             QWidget {
-                background-color: #1A1B1E;
+                background-color: #353839;
                 color: #B9F2FF;
                 font-family: 'Inter', sans-serif;
             }
@@ -993,8 +1596,11 @@ class RaceWindow(QMainWindow):
                 # Clear loading message and add track widget
                 while self.left_layout.count():
                     item = self.left_layout.takeAt(0)
-                    if item.widget():
-                        item.widget().deleteLater()
+                    if item is None:
+                        continue
+                    widget = item.widget()
+                    if widget is not None:
+                        widget.deleteLater()
                 self.left_layout.addWidget(self.track_widget)
                 print("Track widget created and added to layout")
             except Exception as e:
@@ -1007,7 +1613,7 @@ class RaceWindow(QMainWindow):
             
             # Create cars with grid alignment
             try:
-                colors = [
+                colours = [
                     QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
                     QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
                     QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
@@ -1015,6 +1621,9 @@ class RaceWindow(QMainWindow):
                 ]
                 
                 cars = []
+                # Create a mapping of driver IDs to colours for standings table
+                self.driver_colours = {}
+                
                 # Starting grid: Stagger cars along track direction (not side-to-side)
                 # Formation: 2 cars per row, 10m spacing between rows
                 # Row 1: positions 0, 0 (side by side via lateral offset)
@@ -1025,11 +1634,15 @@ class RaceWindow(QMainWindow):
                     grid_spacing = 15.0  # meters between rows
                     start_position = row * grid_spacing
                     
+                    # Assign colour to this driver
+                    car_colour = colours[i % len(colours)]
+                    self.driver_colours[driver.id] = car_colour
+                    
                     cars.append(Car(
                         driver_id=driver.id,
                         driver_name=driver.name,
                         s=start_position,  # Staggered start positions
-                        color=colors[i % len(colors)],
+                        color=car_colour,
                         total_time=0.0,
                         avg_lap_time=60.0,
                         last_lap=0
@@ -1134,10 +1747,25 @@ class RaceWindow(QMainWindow):
                             
                             # Update all car positions on track AND standings table
                             for pos_data in positions:
+                                driver_id = pos_data.get("driver_id") if isinstance(pos_data, dict) else None
                                 try:
-                                    driver_id = pos_data.get("driver_id")
                                     if driver_id is None:
                                         continue
+                                    
+                                    # Update player telemetry if this is the player's driver
+                                    if driver_id == self.player_driver_id:
+                                        velocity_mps = pos_data.get("velocity_mps", 0.0)
+                                        push_intensity = pos_data.get("push_intensity", 0.7)
+                                        push_fatigue = pos_data.get("push_fatigue", 0.0)
+                                        tire_condition = pos_data.get("tire_condition", 1.0)
+                                        
+                                        self.player_telemetry['speed_kph'] = velocity_mps * 3.6
+                                        self.player_telemetry['push_intensity'] = push_intensity
+                                        self.player_telemetry['push_fatigue'] = push_fatigue
+                                        self.player_telemetry['tire_condition'] = tire_condition
+                                        
+                                        # Update telemetry display (thread-safe via signal)
+                                        self.emitter.event_signal.emit(f"telemetry_update|{velocity_mps * 3.6:.1f}|{push_intensity:.2f}|{push_fatigue:.2f}|{tire_condition:.2f}")
                                     
                                     # Update track widget with position
                                     if self.track_widget and pos_data.get("running", True):
@@ -1167,8 +1795,14 @@ class RaceWindow(QMainWindow):
                                     # Update standings table via signal (thread-safe)
                                     position = pos_data.get("position", 0)
                                     lap = pos_data.get("lap", 0)
+                                    push_intensity = pos_data.get("push_intensity", 0.7)
+                                    gap_ahead = pos_data.get("gap_ahead", 0.0)
+                                    position_m = pos_data.get("position_m", 0.0)
                                     if frame % 30 == 0:  # Update table once per second
-                                        self.emitter.event.emit(f"standings_update|{driver_id}|{position}|{lap}")
+                                        # Include timing + position for live gaps and ordering
+                                        self.emitter.event_signal.emit(
+                                            f"standings_update|{driver_id}|{position}|{lap}|{push_intensity:.2f}|{gap_ahead:.2f}|{position_m:.2f}|{race_time:.2f}"
+                                        )
                                         
                                 except Exception as e:
                                     print(f"ERROR updating position for driver {driver_id}: {e}")
@@ -1183,6 +1817,23 @@ class RaceWindow(QMainWindow):
                             if self.track_widget and driver_id is not None:
                                 if hasattr(self.track_widget, 'mark_dnf'):
                                     self.track_widget.mark_dnf(driver_id)
+
+                            # Mark in standings and rebuild table so DNF appears immediately
+                            if driver_id is not None:
+                                if not hasattr(self, '_race_state'):
+                                    self._race_state = {}
+                                existing = self._race_state.get(driver_id, {
+                                    'name': driver_name,
+                                    'position': event.get('position', 0),
+                                    'lap': lap,
+                                    'time': event.get('race_time', 0.0),
+                                    'distance': 0.0,
+                                    'gap_ahead': 0.0
+                                })
+                                existing['dnf'] = True
+                                existing['lap'] = lap
+                                self._race_state[driver_id] = existing
+                                self._rebuild_standings_table()
                         
                         elif event_type == "race_finished":
                             total_laps = event.get("total_laps", 0)
@@ -1215,7 +1866,6 @@ class RaceWindow(QMainWindow):
                     
                     except Exception as e:
                         print(f"ERROR in event_callback: {e}")
-                        import traceback
                         traceback.print_exc()
                 
                 print("Starting simulate_race with comprehensive engine...")
@@ -1230,10 +1880,10 @@ class RaceWindow(QMainWindow):
                     event_callback=event_callback,
                     stop_event=self.stop_event,
                     lap_delay=0.5,
-                    db=self.db,  # Pass database for team data
+                    db=cast(Any, self.db),  # Pass database for team data
                     track_points=track_pts,  # Pass visual track for unified position mapping
                     player_driver_id=self.player_driver_id,  # Player-controlled driver
-                    player_overrides=self.player_overrides.copy()  # Player's pace and overtake settings
+                    player_overrides=self.player_overrides  # Live player's pace and overtake settings
                 )
                 
                 print(f"Race simulation complete, {len(results) if results else 0} results")
@@ -1246,7 +1896,7 @@ class RaceWindow(QMainWindow):
                 print(f"ERROR in race_runner: {e}")
                 import traceback
                 traceback.print_exc()
-                self.emitter.event.emit(error_msg)
+                self.emitter.event_signal.emit(error_msg)
         
         self.race_thread = threading.Thread(target=race_runner, daemon=True)
         self.race_thread.start()
@@ -1351,139 +2001,217 @@ class RaceWindow(QMainWindow):
         *** Handle general race events from simulation ***
         
         This receives string messages from the race engine containing:
+        - telemetry_update: Player driver telemetry (speed, push, fatigue, tires)
         - standings_update: Position changes during race
         - General info messages
         
-        STANDINGS UPDATE FORMAT:
-        "standings_update|driver_id|position|lap|time_seconds|position_m"
+        TELEMETRY UPDATE FORMAT:
+        "telemetry_update|speed_kph|push_intensity|push_fatigue|tire_condition"
         
-        Example: "standings_update|5|1|3|185.4|19234.5"
-        Means: Driver 5 is in P1, on lap 3, at 185.4 seconds, position 19234.5m
+        STANDINGS UPDATE FORMAT (live gaps):
+        "standings_update|driver_id|position|lap|push|gap_ahead|position_m|race_time"
+
+        Example: "standings_update|5|1|3|0.72|0.45|19234.5|185.4"
+        Means: Driver 5 is P1, lap 3, push 0.72, 0.45s gap to car ahead,
+        at position 19,234.5m and race time 185.4s.
         """
+        # Handle telemetry update
+        if message.startswith("telemetry_update|"):
+            try:
+                parts = message.split("|")
+                if len(parts) >= 5:
+                    speed_kph = float(parts[1])
+                    push_intensity = float(parts[2])
+                    push_fatigue = float(parts[3])
+                    tire_condition = float(parts[4])
+                    
+                    # Update speed label
+                    self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
+                    
+                    # Update push gauge
+                    push_percent = int(push_intensity * 100)
+                    self.push_gauge.setValue(push_percent)
+                    
+                    # Update fatigue label with color warning
+                    fatigue_percent = int(push_fatigue * 100)
+                    self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
+                    if push_fatigue > 0.7:
+                        self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+                    elif push_fatigue > 0.4:
+                        self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: normal;")
+                    else:
+                        self.fatigue_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+                    
+                    # Update tire label with color coding
+                    tire_percent = int(tire_condition * 100)
+                    self.tire_label.setText(f"Tire: {tire_percent}%")
+                    if tire_condition < 0.3:
+                        self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+                    elif tire_condition < 0.6:
+                        self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A;")
+                    else:
+                        self.tire_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+                        
+            except Exception as e:
+                print(f"Error updating telemetry display: {e}")
+                import traceback
+                traceback.print_exc()
+            return
+        
         # Check if this is a standings update
         if message.startswith("standings_update|"):
             try:
-                # Parse the message
                 parts = message.split("|")
                 driver_id = int(parts[1])
                 race_position = int(parts[2])
                 lap = int(parts[3])
-                time_seconds = float(parts[4]) if len(parts) > 4 else 0.0
-                position_m = float(parts[5]) if len(parts) > 5 else 0.0
-                
-                # === STORE RACE STATE FOR EACH DRIVER ===
-                # We need to track all drivers to calculate gaps properly
+                push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
+                gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
+                position_m = float(parts[6]) if len(parts) > 6 else 0.0
+                race_time = float(parts[7]) if len(parts) > 7 else 0.0
+
                 if not hasattr(self, '_race_state'):
-                    self._race_state = {}  # {driver_id: {position, lap, time, distance}}
-                
+                    self._race_state = {}
+                if not hasattr(self, '_driver_push_intensity'):
+                    self._driver_push_intensity = {}
+
                 driver = next((d for d in self.drivers if d.id == driver_id), None)
                 if driver:
                     self._race_state[driver_id] = {
                         'name': driver.name,
                         'position': race_position,
                         'lap': lap,
-                        'time': time_seconds,
-                        'distance': position_m
+                        'time': race_time,
+                        'distance': position_m,
+                        'gap_ahead': gap_ahead,
+                        'dnf': False
                     }
-                
-                # === REBUILD STANDINGS TABLE ===
-                # We need to sort by TOTAL PROGRESS (lap * track_length + position_m)
-                # This gives us the true racing order
-                standings_list = []
-                for did, data in self._race_state.items():
-                    # Calculate total progress
-                    total_progress = data['lap'] * 6350 + (data['distance'] % 6350)
-                    standings_list.append({
-                        'driver_id': did,
-                        'name': data['name'],
-                        'position': data['position'],
-                        'lap': data['lap'],
-                        'time': data['time'],
-                        'distance': data['distance'],
-                        'total_progress': total_progress
-                    })
-                
-                # === SORT BY TOTAL PROGRESS (DESCENDING) ===
-                # Car with most progress is leader
-                standings_list.sort(key=lambda x: -x['total_progress'])
-                
-                # === FIND LEADER FOR GAP CALCULATION ===
-                leader_time = standings_list[0]['time'] if standings_list else 0.0
-                leader_lap = standings_list[0]['lap'] if standings_list else 0
-                
-                # === UPDATE TABLE ROWS ===
-                for row, entry in enumerate(standings_list):
-                    # Column 0: Driver Name
-                    self.standings_table.setItem(row, 0, QTableWidgetItem(entry['name']))
-                    
-                    # Column 1: Current Lap
-                    self.standings_table.setItem(row, 1, QTableWidgetItem(str(entry['lap'])))
-                    
-                    # Column 2: Gap to Leader
-                    if row == 0:
-                        # Leader shows "-"
-                        gap_text = "-"
-                    else:
-                        # Calculate gap
-                        lap_diff = leader_lap - entry['lap']
-                        if lap_diff > 0:
-                            # Multiple laps behind
-                            gap_text = f"+{lap_diff}L"
-                        else:
-                            # Same lap - show time gap
-                            time_gap = entry['time'] - leader_time
-                            if time_gap > 0:
-                                gap_text = f"+{time_gap:.2f}s"
-                            else:
-                                gap_text = "-"
-                    
-                    self.standings_table.setItem(row, 2, QTableWidgetItem(gap_text))
-                
-                # === DEBUG: Log standings every 3 seconds ===
-                if not hasattr(self, '_last_standings_log'):
-                    self._last_standings_log = 0
-                import time
-                if time.time() - self._last_standings_log > 3.0:
-                    self._last_standings_log = time.time()
-                    print(f"\n  [STANDINGS] Current order:")
-                    for i, entry in enumerate(standings_list[:5]):
-                        print(f"    P{i+1}: {entry['name']} (L{entry['lap']}, {entry['time']:.1f}s)")
-                    
-            except Exception as e:
-                print(f"  [ERROR] Failed to update standings: {e}")
-                import traceback
-                traceback.print_exc()
+                    self._driver_push_intensity[driver_id] = push_intensity
+
+                self._rebuild_standings_table()
+
+            except Exception:
+                pass
         else:
             self.info_label.setText(message)
+
+    def _rebuild_standings_table(self):
+        """Rebuild the standings table with live gaps and aggression symbols."""
+        if not hasattr(self, '_race_state'):
+            return
+
+        track_obj = getattr(self, 'track', None)
+        track_length = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+        standings_list = []
+        for did, data in self._race_state.items():
+            total_progress = data['lap'] * track_length + (data.get('distance', 0.0) % track_length)
+            standings_list.append({
+                'driver_id': did,
+                'name': data['name'],
+                'position': data['position'],
+                'lap': data['lap'],
+                'time': data.get('time', 0.0),
+                'distance': data.get('distance', 0.0),
+                'gap_ahead': data.get('gap_ahead', 0.0),
+                'dnf': data.get('dnf', False),
+                'total_progress': total_progress
+            })
+
+        if not standings_list:
+            return
+
+        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
+
+        leader = standings_list[0]
+        leader_lap = leader['lap']
+        cumulative_gap = 0.0
+
+        for row, entry in enumerate(standings_list):
+            colour_item = QTableWidgetItem()
+            if entry['driver_id'] in self.driver_colours:
+                colour = self.driver_colours[entry['driver_id']]
+                colour_item.setBackground(colour)
+                colour_item.setText("  ")
+            self.standings_table.setItem(row, 0, colour_item)
+
+            driver_name = entry['name']
+            push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
+            if push_int < 0.4:
+                symbol = "🔵"
+            elif push_int < 0.65:
+                symbol = "⚪"
+            else:
+                symbol = "🔴"
+            self.standings_table.setItem(row, 1, QTableWidgetItem(f"{symbol} {driver_name}"))
+
+            self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry['lap'])))
+
+            if entry.get('dnf', False):
+                gap_text = "DNF"
+            elif row == 0:
+                gap_text = "-"
+            else:
+                lap_diff = leader_lap - entry['lap']
+                if lap_diff > 0:
+                    gap_text = f"+{lap_diff}L"
+                else:
+                    cumulative_gap += max(entry.get('gap_ahead', 0.0), 0.0)
+                    gap_text = f"+{cumulative_gap:.1f}s"
+
+            self.standings_table.setItem(row, 3, QTableWidgetItem(gap_text))
+
+        # Debug log every few seconds
+        if not hasattr(self, '_last_standings_log'):
+            self._last_standings_log = 0
+        import time
+        if time.time() - self._last_standings_log > 3.0:
+            self._last_standings_log = time.time()
+            print("\n  [STANDINGS] Current order:")
+            for i, entry in enumerate(standings_list[:5]):
+                print(f"    P{i+1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
     
     def _on_pace_changed(self, value):
-        """Handle pace slider change."""
+        """Handle pace slider change - ACTUALLY WORKS NOW."""
         if value < 33:
-            pace_text = "Conservative"
+            pace_text = "CONSERVATIVE"
         elif value < 67:
-            pace_text = "Balanced"
+            pace_text = "BALANCED"
         else:
-            pace_text = "Aggressive"
+            pace_text = "AGGRESSIVE"
         
-        # Map slider value (0-100) to push_intensity (0.5-1.0)
-        self.player_overrides['pace'] = 0.5 + (value / 100.0) * 0.5
+        # Store raw slider value (0-100)
+        self.player_overrides['pace'] = value / 100.0
+        # Recompute combined push from both sliders
+        self._update_combined_push()
         self.pace_value_label.setText(f"Race Pace: {pace_text} ({value}%)")
-        print(f"[PLAYER] Pace adjusted to {value}% ({pace_text}) -> push_intensity: {self.player_overrides['pace']:.2f}")
+        self.pace_value_label.setStyleSheet("color: #DD2D4A; font-size: 16px; font-weight: bold;")
     
     def _on_overtake_changed(self, value):
         """Handle overtake aggressiveness slider change."""
         if value < 33:
-            aggr_text = "Cautious"
+            aggr_text = "CAUTIOUS"
         elif value < 67:
-            aggr_text = "Moderate"
+            aggr_text = "MODERATE"
         else:
-            aggr_text = "Aggressive"
+            aggr_text = "AGGRESSIVE"
         
-        # Map slider value (0-100) to overtaking multiplier (0.0-1.0)
+        # Store raw slider value (0-100)
         self.player_overrides['overtake'] = value / 100.0
+        # Recompute combined push from both sliders
+        self._update_combined_push()
         self.overtake_value_label.setText(f"Overtaking: {aggr_text} ({value}%)")
-        print(f"[PLAYER] Overtake aggression adjusted to {value}% ({aggr_text}) -> multiplier: {self.player_overrides['overtake']:.2f}")
+        self.overtake_value_label.setStyleSheet("color: #DD2D4A; font-size: 16px; font-weight: bold;")
     
+    def _update_combined_push(self):
+        """Compute combined push intensity as average of pace and overtake sliders."""
+        pace_norm = self.player_overrides.get('pace', 0.5)
+        overtake_norm = self.player_overrides.get('overtake', 0.5)
+        # Average both sliders: 100% push only when both at 100%
+        avg = (pace_norm + overtake_norm) / 2.0
+        # Map to 0.3-1.0 range
+        self.player_overrides['push'] = 0.3 + avg * 0.7
+        print(f"[PLAYER PUSH] pace={pace_norm*100:.0f}%, overtake={overtake_norm*100:.0f}% → combined push={self.player_overrides['push']:.2f}")
+
     def set_player_driver(self, driver):
         """Set the player-controlled driver."""
         if driver:
@@ -1492,10 +2220,27 @@ class RaceWindow(QMainWindow):
         else:
             self.player_driver_id = None
     
+    def _set_camera_mode(self, mode: str):
+        """Set camera mode: 'full' or 'follow'."""
+        self.camera_mode = mode
+        if self.track_widget:
+            self.track_widget.set_camera_mode(mode, self.player_driver_id)
+        
+        # Update button styles
+        if mode == 'full':
+            self.camera_full_btn.setStyleSheet("background-color: #B9F2FF; color: #353839;")
+            self.camera_follow_btn.setStyleSheet("")
+        else:
+            self.camera_follow_btn.setStyleSheet("background-color: #B9F2FF; color: #353839;")
+            self.camera_full_btn.setStyleSheet("")
+        
+        print(f"[CAMERA] Switched to {mode} mode")
+    
     def set_display_mode(self, mode: str):
         """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
         self.display_mode = mode
-        screen = QApplication.primaryScreen().geometry()
+        screen_obj = QApplication.primaryScreen()
+        screen = screen_obj.geometry() if screen_obj else None
         
         if mode == "windowed":
             self.setWindowFlags(Qt.WindowType.Window)
@@ -1505,7 +2250,8 @@ class RaceWindow(QMainWindow):
         
         elif mode == "borderless":
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            self.setGeometry(screen)
+            if screen is not None:
+                self.setGeometry(screen)
             self.showMaximized()
             print("[INFO] Race window: borderless windowed fullscreen")
         
@@ -1516,16 +2262,18 @@ class RaceWindow(QMainWindow):
         
         self.show()
     
-    def keyPressEvent(self, event: QKeyEvent):
+    def keyPressEvent(self, a0: Optional[QKeyEvent]):
         """Handle keyboard events."""
-        if event.key() == Qt.Key.Key_Escape:
+        if a0 is None:
+            return
+        if a0.key() == Qt.Key.Key_Escape:
             # ESC key: Stop race and return to menu
             print("[INFO] ESC pressed - returning to main menu")
-            self.stop_race()
+            self._stop_race()
             self.return_to_menu.emit()
             self.close()
         else:
-            super().keyPressEvent(event)
+            super().keyPressEvent(a0)
 
 
 def main():
