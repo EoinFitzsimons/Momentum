@@ -1,13 +1,13 @@
 Screen ID,Screen Name,Primary Content,User Task(s),Priority (A/B/C),Notes
-DASH,Dashboard,Team summary cards (budget, next race, quick actions),Start race; Hire driver; Apply upgrade; View budget,P1,Primary landing page; keep CTAs above the fold
-DRI-LIST,Driver Browser,List of drivers with key stats/filters,Search/filter drivers; Hire/Offer,P1,Needs sortable columns; consider saved filters for advanced users
-DRI-DETAIL,Driver Detail,Driver attributes, contract info, history,Review stats; Make offer; Compare,P2,Comparison toggle desirable but optional at midpoint
-GARAGE,Garage,Car parts/upgrades status,Apply upgrade; View car health,P1,If upgrades are limited at midpoint, keep stub CTA with explanation
-RACE-SET,Race Setup,Track info, lineup, quick strategy toggles,Set lineup; Select quick strategy; Start race,P1,Keep default strategy pre-filled for fast start
-RACE-LIVE,Race Screen (Live),Telemetry/positions/timer,Monitor race; Adjust pit/strategy (if enabled),P2,If live controls are limited, focus on visibility of positions/results
-STANDINGS,Standings / Results,Recent race results and season table,View latest results; Open race details,P1,Ensure easy entry post-race
-CAL,Championship Calendar,Upcoming events, dates,View next race; Navigate to setup,P2,Link back to race setup
-STORE,Store / Upgrades,Available upgrades/items,Purchase/apply upgrade,P2,Can be stub if not fully implemented
-SET,Settings,Audio/graphics/controls/basic preferences,Adjust preferences,P3,Keep minimal
-HELP,Help / Docs,Short FAQs or glossary,Learn terminology; get support,P3,Link to docs; glossary for metrics
-REPORTS,Reports / Telemetry,Analytics/filters/exports,View performance trends; export data,P2,Expose if functional; otherwise hide from nav
+DASH,Dashboard,"Team summary cards (budget, next race, quick actions)","Start race; Hire driver; Apply upgrade; View budget",P1,"Primary landing page; keep CTAs above the fold"
+DRI-LIST,Driver Browser,"List of drivers with key stats/filters","Search/filter drivers; Hire/Offer",P1,"Needs sortable columns; consider saved filters for advanced users"
+DRI-DETAIL,Driver Detail,"Driver attributes, contract info, history","Review stats; Make offer; Compare",P2,"Comparison toggle desirable but optional at midpoint"
+GARAGE,Garage,"Car parts/upgrades status","Apply upgrade; View car health",P1,"If upgrades are limited at midpoint, keep stub CTA with explanation"
+RACE-SET,Race Setup,"Track info, lineup, quick strategy toggles","Set lineup; Select quick strategy; Start race",P1,"Keep default strategy pre-filled for fast start"
+RACE-LIVE,"Race Screen (Live)","Telemetry/positions/timer","Monitor race; Adjust pit/strategy (if enabled)",P2,"If live controls are limited, focus on visibility of positions/results"
+STANDINGS,"Standings / Results","Recent race results and season table","View latest results; Open race details",P1,"Ensure easy entry post-race"
+CAL,"Championship Calendar","Upcoming events, dates","View next race; Navigate to setup",P2,"Link back to race setup"
+STORE,"Store / Upgrades","Available upgrades/items","Purchase/apply upgrade",P2,"Can be stub if not fully implemented"
+SET,Settings,"Audio/graphics/controls/basic preferences","Adjust preferences",P3,"Keep minimal"
+HELP,"Help / Docs","Short FAQs or glossary","Learn terminology; get support",P3,"Link to docs; glossary for metrics"
+REPORTS,"Reports / Telemetry","Analytics/filters/exports","View performance trends; export data",P2,"Expose if functional; otherwise hide from nav"
