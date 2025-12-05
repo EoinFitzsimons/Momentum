@@ -1,122 +1,124 @@
 """
-Driver Attribute Mapping for Advanced Racing Physics
+Driver attribute utilities for the real-time racing prototype.
 
-Maps non-existent attributes to actual Driver model attributes.
-This ensures the overtaking system uses only real attributes.
+These helpers aggregate the rich 50+ driver attributes into a few
+high-level signals (bravery, patience, aggression, etc.) that the
+race/physics engines consume. Values are clamped to the canonical
+0-100 range defined in `config.py` and tolerate missing fields so the
+GUI demo can run on partial driver data.
 """
+from typing import Any
 
-from database.models import Driver
+from config import (
+    DRIVER_ATTRIBUTE_DEFAULT,
+    DRIVER_ATTRIBUTE_MAX,
+    DRIVER_ATTRIBUTE_MIN,
+)
 
 
-def get_driver_aggression(driver: Driver) -> float:
-    """Aggression = combination of bravery and overtaking tendency"""
-    return (driver.overtaking * 0.6 + driver.bravery * 0.4) if hasattr(driver, 'bravery') else driver.overtaking
+def _clamp(value: float, min_val: float = DRIVER_ATTRIBUTE_MIN, max_val: float = DRIVER_ATTRIBUTE_MAX) -> float:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return float(DRIVER_ATTRIBUTE_DEFAULT)
+    return max(min_val, min(max_val, v))
 
 
-def get_driver_wheel_to_wheel_ability(driver: Driver) -> float:
-    """Wheel-to-wheel = traffic management + spatial awareness + defensive driving"""
-    return (
-        driver.traffic_management * 0.4 +
-        driver.spatial_awareness * 0.3 +
-        driver.defensive_driving * 0.3
+def get_safe_attribute(driver: Any, attr: str, default: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
+    """Safely read a driver attribute and clamp to 0-100."""
+    if driver is None:
+        return float(default)
+    value = getattr(driver, attr, default)
+    if value is None:
+        value = default
+    return _clamp(value)
+
+
+def _avg(values: list[float], fallback: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
+    cleaned = [v for v in values if v is not None]
+    if not cleaned:
+        return float(fallback)
+    return sum(cleaned) / len(cleaned)
+
+
+def get_driver_bravery(driver: Any) -> float:
+    """Risk-taking courage in high-speed, high-G situations."""
+    return _clamp(
+        0.22 * get_safe_attribute(driver, "raw_speed")
+        + 0.18 * get_safe_attribute(driver, "g_force_tolerance")
+        + 0.18 * get_safe_attribute(driver, "adrenaline_management")
+        + 0.16 * get_safe_attribute(driver, "overtaking")
+        + 0.16 * get_safe_attribute(driver, "pressure_handling")
+        + 0.10 * get_safe_attribute(driver, "defensive_driving")
     )
 
 
-def get_driver_confidence(driver: Driver) -> float:
-    """Confidence = derived from form and professionalism"""
-    base = driver.professionalism
-    
-    # Boost if good form
-    if hasattr(driver, 'form_trend'):
-        if driver.form_trend == 'improving':
-            base *= 1.1
-        elif driver.form_trend == 'declining':
-            base *= 0.9
-    
-    # Experience matters
-    if hasattr(driver, 'seasons_active'):
-        experience_boost = min(driver.seasons_active / 10.0, 1.0) * 10
-        base = min(base + experience_boost, 100.0)
-    
-    return base
-
-
-def get_driver_patience(driver: Driver) -> float:
-    """Patience = inverse of aggression, plus professionalism"""
-    aggression = get_driver_aggression(driver)
-    return (100 - aggression) * 0.5 + driver.professionalism * 0.5
-
-
-def get_driver_bravery(driver: Driver) -> float:
-    """
-    Bravery estimation from existing attributes
-    
-    Note: Bravery might exist in DB but not in Python model.
-    Using racing attributes as proxy.
-    """
-    # Check if it actually exists first
-    if hasattr(driver, 'bravery'):
-        return driver.bravery
-    
-    # Estimate from overtaking + risk-taking behavior
-    return (
-        driver.overtaking * 0.5 +
-        driver.raw_speed * 0.3 +
-        (100 - driver.consistency) * 0.2  # Less consistency = more risk-taking
+def get_driver_patience(driver: Any) -> float:
+    """Willingness to wait for the right moment rather than force moves."""
+    return _clamp(
+        0.28 * get_safe_attribute(driver, "mental_resilience")
+        + 0.22 * get_safe_attribute(driver, "concentration")
+        + 0.18 * get_safe_attribute(driver, "professionalism")
+        + 0.16 * get_safe_attribute(driver, "pressure_handling")
+        + 0.16 * get_safe_attribute(driver, "racecraft")
     )
 
 
-# Attribute availability check
-AVAILABLE_ATTRIBUTES = [
-    'raw_speed', 'consistency', 'racecraft', 'overtaking', 'defensive_driving',
-    'cornering_skill', 'braking_technique', 'acceleration_control', 
-    'spatial_awareness', 'vehicle_control',
-    'physical_fitness', 'reaction_time', 'concentration', 'pressure_handling',
-    'pain_tolerance', 'g_force_tolerance', 'coordination', 'multitasking',
-    'mental_resilience', 'adrenaline_management',
-    'setup_knowledge', 'mechanical_sympathy', 'tire_management', 'fuel_management',
-    'aerodynamics_understanding', 'suspension_feel', 'engine_management', 'data_analysis',
-    'race_strategy', 'pit_entry_exit', 'traffic_management', 'qualifying_pace',
-    'race_pace', 'starting_skill', 'tyre_warming', 'energy_management',
-    'wet_weather_skill', 'night_driving', 'heat_tolerance', 'cold_tolerance',
-    'altitude_adaptation', 'visibility_adaptation', 'surface_adaptation',
-    'media_handling', 'sponsorship_appeal', 'fan_engagement', 'team_player',
-    'leadership', 'professionalism'
-]
+def get_driver_aggression(driver: Any) -> float:
+    """How forcefully a driver attacks and defends in close combat."""
+    return _clamp(
+        0.24 * get_safe_attribute(driver, "overtaking")
+        + 0.20 * get_safe_attribute(driver, "defensive_driving")
+        + 0.18 * get_safe_attribute(driver, "acceleration_control")
+        + 0.16 * get_safe_attribute(driver, "reaction_time")
+        + 0.12 * get_safe_attribute(driver, "adrenaline_management")
+        + 0.10 * get_safe_attribute(driver, "raw_speed")
+    )
 
 
-def validate_driver_attribute(attribute_name: str) -> bool:
-    """Check if attribute exists in Driver model"""
-    return attribute_name in AVAILABLE_ATTRIBUTES
+def get_driver_wheel_to_wheel_ability(driver: Any) -> float:
+    """Side-by-side craft: spatial judgment plus car control under pressure."""
+    return _clamp(
+        0.24 * get_safe_attribute(driver, "spatial_awareness")
+        + 0.22 * get_safe_attribute(driver, "vehicle_control")
+        + 0.18 * get_safe_attribute(driver, "reaction_time")
+        + 0.16 * get_safe_attribute(driver, "defensive_driving")
+        + 0.12 * get_safe_attribute(driver, "overtaking")
+        + 0.08 * get_safe_attribute(driver, "pressure_handling")
+    )
 
 
-def get_safe_attribute(driver: Driver, attribute_name: str, default: float = 50.0) -> float:
-    """
-    Safely get driver attribute with fallback
-    
-    Args:
-        driver: Driver instance
-        attribute_name: Name of attribute
-        default: Default value if not found
-    
-    Returns:
-        Attribute value or computed equivalent
-    """
-    # Direct mapping
-    if hasattr(driver, attribute_name):
-        return getattr(driver, attribute_name)
-    
-    # Computed mappings
-    computed_map = {
-        'aggression': lambda d: get_driver_aggression(d),
-        'wheel_to_wheel_ability': lambda d: get_driver_wheel_to_wheel_ability(d),
-        'confidence': lambda d: get_driver_confidence(d),
-        'patience': lambda d: get_driver_patience(d),
-        'bravery': lambda d: get_driver_bravery(d),
-    }
-    
-    if attribute_name in computed_map:
-        return computed_map[attribute_name](driver)
-    
-    # Fallback
-    return default
+def _form_trend_bonus(trend: str | None) -> float:
+    if not trend:
+        return 0.0
+    trend = trend.lower()
+    if trend in ("improving", "peak"):
+        return 8.0
+    if trend == "stable":
+        return 2.0
+    if trend == "declining":
+        return -6.0
+    return 0.0
+
+
+def get_driver_confidence(driver: Any) -> float:
+    """Confidence built from pace, composure, and career results."""
+    base = _avg(
+        [
+            get_safe_attribute(driver, "raw_speed"),
+            get_safe_attribute(driver, "racecraft"),
+            get_safe_attribute(driver, "consistency"),
+            get_safe_attribute(driver, "pressure_handling"),
+            get_safe_attribute(driver, "professionalism"),
+        ]
+    )
+
+    wins = get_safe_attribute(driver, "career_wins", 0.0)
+    podiums = get_safe_attribute(driver, "career_podiums", 0.0)
+    starts = max(get_safe_attribute(driver, "career_starts", 1.0), 1.0)
+    experience_boost = min((wins * 1.5 + podiums) / max(starts, 1.0) * 100.0, 12.0)
+
+    trend_boost = _form_trend_bonus(getattr(driver, "form_trend", None))
+
+    confidence = base + experience_boost + trend_boost
+    return _clamp(confidence)
