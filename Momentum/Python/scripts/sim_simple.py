@@ -20,7 +20,7 @@ from database.models import Driver as DBDriver, Track as DBTrack
 from database.models import RaceResult as DBRaceResult, Team as DBTeam
 
 # Import real-time racing engine
-from disciplines.realtime_race_engine import RealtimeRaceEngine
+from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 
 
 # ============================================================================

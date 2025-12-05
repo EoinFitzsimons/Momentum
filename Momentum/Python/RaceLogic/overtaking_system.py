@@ -17,7 +17,7 @@ from enum import Enum
 import numpy as np
 
 from database.models import Driver
-from disciplines.track_physics import TrackCorner, TrackSection, RacingLine, calculate_corner_performance
+from RaceLogic.track_physics import TrackCorner, TrackSection, RacingLine, calculate_corner_performance
 from services.driver_attributes import (
     get_safe_attribute, get_driver_bravery, get_driver_aggression,
     get_driver_wheel_to_wheel_ability, get_driver_confidence
