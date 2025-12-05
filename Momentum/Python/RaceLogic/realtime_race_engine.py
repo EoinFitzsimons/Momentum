@@ -31,8 +31,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from database.models import Driver, Team, Track
-from disciplines.track_physics import TrackMap, TrackSection, RacingLine
-from disciplines.overtaking_system import (
+from RaceLogic.track_physics import TrackMap, TrackSection, RacingLine
+from RaceLogic.overtaking_system import (
     OvertakeAttempt, OvertakeAttemptType, DefensiveAction,
     evaluate_overtaking_opportunity, calculate_defensive_action,
     resolve_overtake_outcome

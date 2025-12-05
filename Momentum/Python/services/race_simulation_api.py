@@ -11,7 +11,7 @@ Date: December 2025
 from typing import List, Callable, Optional, Dict
 from services.persistence_iface import PersistenceIface
 from database.models import Driver, Track, RaceResult, Team
-from disciplines.realtime_race_engine import RealtimeRaceEngine
+from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 
 
 def simulate_race(

@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
-from gui.gui_main_menu import MainMenuWindow
-from gui.gui_race_visual import RaceWindow
+from GUI.gui_main_menu import MainMenuWindow
+from GUI.gui_race_visual import RaceWindow
 
 
 class MomentumLauncher:
