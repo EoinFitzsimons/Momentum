@@ -1,0 +1,60 @@
+<mxfile host="app.diagrams.net" modified="2025-12-05T16:00:00.000Z" agent="5.0" etag="deployment" version="24.0.0" type="device">
+  <diagram id="deployment" name="Deployment Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Title -->
+        <mxCell id="title" value="Momentum Deployment Architecture (Multi-Platform)" style="text;fontSize=16;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="800" height="30" as="geometry"/>
+        </mxCell>
+        <!-- WINDOWS DEPLOYMENT -->
+        <mxCell id="windows_header" value="WINDOWS 10/11 DEPLOYMENT" style="text;fontSize=12;fontStyle=1;fillColor=#E3F2FD;strokeColor=#1976D2;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="80" width="250" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="windows" value="User System (Windows 10/11)&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n• Python 3.11+ installed (MSI installer)&#10;• PyInstaller built .exe bundle&#10;  - momentum.exe (launcher)&#10;  - SQLite momentum.db\\n• User Documents folder:\\n  C:\\Users\\&lt;user&gt;\\Documents\\\\n  └─ FinalProject\\Python\\\\n  ├─ GUI/ (launcher, telemetry UI)\\n  ├─ RaceLogic/ (engines)\\n  ├─ database/ (models, CRUD)\\n  ├─ momentum.db (SQLite)\\n  ├─ logs/ (crash reports)\\n  └─ saves/ (game state)\\n\\n• Port: 8000 (localhost, uvicorn)\\n• Process: python.exe → uvicorn.exe\\n• GUI: PyQt6 QApplication" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#0D47A1;strokeWidth=2;fontSize=9;align=left;spacing=1;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="125" width="250" height="230" as="geometry"/>
+        </mxCell>
+        <!-- MACOS DEPLOYMENT -->
+        <mxCell id="macos_header" value="macOS DEPLOYMENT" style="text;fontSize=12;fontStyle=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="350" y="80" width="250" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="macos" value="User System (macOS 11+)&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n• Python 3.11+ (Homebrew or PyEnv)\\n• PyInstaller built .app bundle\\n  - Universal binary (Intel + M1/M2)\\n  - Momentum.app (executable)\\n  - Framework bundles (PyQt6)\\n\\n• User Library folder:\\n  ~/Documents/FinalProject/Python/\\n  ├─ GUI/ (launcher, telemetry UI)\\n  ├─ RaceLogic/ (engines)\\n  ├─ database/ (models, CRUD)\\n  ├─ momentum.db (SQLite)\\n  ├─ logs/ (crash reports)\\n  └─ saves/ (game state)\\n\\n• Port: 8000 (localhost, uvicorn)\\n• Process: python → uvicorn (async)\\n• GUI: PyQt6 QApplication" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#4A148C;strokeWidth=2;fontSize=9;align=left;spacing=1;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="350" y="125" width="250" height="230" as="geometry"/>
+        </mxCell>
+        <!-- LINUX DEPLOYMENT -->
+        <mxCell id="linux_header" value="LINUX DEPLOYMENT" style="text;fontSize=12;fontStyle=1;fillColor=#E8F5E9;strokeColor=#00695C;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="650" y="80" width="250" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="linux" value="User System (Ubuntu 20.04 LTS+)&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n• Python 3.11+ (apt packages)\\n• PyInstaller AppImage or Snap\\n  - Momentum.AppImage (portable)\\n  - Or: snap install momentum\\n\\n• User Home folder:\\n  ~/Documents/FinalProject/Python/\\n  ├─ GUI/ (launcher, telemetry UI)\\n  ├─ RaceLogic/ (engines)\\n  ├─ database/ (models, CRUD)\\n  ├─ momentum.db (SQLite)\\n  ├─ logs/ (crash reports)\\n  └─ saves/ (game state)\\n\\n• Port: 8000 (localhost, uvicorn)\\n• Process: python → uvicorn (async)\\n• GUI: PyQt6 QApplication (GNOME/KDE)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#1B5E20;strokeWidth=2;fontSize=9;align=left;spacing=1;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="650" y="125" width="250" height="230" as="geometry"/>
+        </mxCell>
+        <!-- FUTURE: LAN MULTIPLAYER -->
+        <mxCell id="lan_header" value="FUTURE: LAN MULTIPLAYER (v2.0)" style="text;fontSize=12;fontStyle=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="950" y="80" width="250" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="lan" value="Network Setup (Future Release)&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n• Server (NAS/Windows Server):\\n  ├─ FastAPI backend (port 8000)\\n  ├─ SQLite or PostgreSQL\\n  ├─ Shared champion data\\n  └─ Multi-user locks\\n\\n• Clients (User PCs):\\n  ├─ PyQt6 GUI (read-only display)\\n  ├─ REST API calls to server\\n  └─ Local cache for UI responsiveness\\n\\n• Network Requirements:\\n  ├─ LAN TCP/IP (broadcast/multicast)\\n  ├─ Firewall port 8000 open\\n  ├─ Connection timeout: 5 sec\\n  └─ Reconnect logic: auto-retry\\n\\n• Not in MVP (December 2025)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#BF360C;strokeWidth=2;fontSize=9;align=left;spacing=1;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="950" y="125" width="250" height="230" as="geometry"/>
+        </mxCell>
+        <!-- DATABASE LOCATION TABLE -->
+        <mxCell id="db_title" value="Database & Configuration Locations" style="text;fontSize=12;fontStyle=1;fillColor=#FCE4EC;strokeColor=#C2185B;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="390" width="500" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="db_table" value="Platform | Database Path | Config (.env) | Logs | Saves&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nWindows | C:\\Users\\&lt;user&gt;\\Docs\\FinalProject\\...\\momentum.db | .env in app root | logs/ subfolder | saves/ subfolder\\nmacOS | ~/Documents/FinalProject/.../momentum.db | .env in app root | logs/ subfolder | saves/ subfolder\\nLinux | ~/Documents/FinalProject/.../momentum.db | .env in app root | logs/ subfolder | saves/ subfolder\\n\\nAll paths use environment variables from config.py to ensure portability.\\nDatabase is SQLite with WAL mode enabled for concurrent reads during background race." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8BBD0;strokeColor=#880E4F;strokeWidth=1;fontSize=8;align=left;fontFamily=monospace;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="420" width="1150" height="140" as="geometry"/>
+        </mxCell>
+        <!-- DEPENDENCIES TABLE -->
+        <mxCell id="deps_title" value="Dependency Matrix by Platform" style="text;fontSize=12;fontStyle=1;fillColor=#E0F2F1;strokeColor=#00695C;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="590" width="500" height="25" as="geometry"/>
+        </mxCell>
+        <mxCell id="deps_table" value="Component | Windows | macOS | Linux | Version Required\\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\nPython | MSI installer (3.11+) | Homebrew/PyEnv (3.11+) | apt install python3.11 | 3.11 minimum\\nPyQt6 | pip install PyQt6 | pip install PyQt6 | pip install PyQt6 | 6.4+\\nFastAPI | pip install fastapi | pip install fastapi | pip install fastapi | 0.104+\\nuvicorn | pip install uvicorn | pip install uvicorn | pip install uvicorn | 0.24+\\nNumPy | pip install numpy | pip install numpy | pip install numpy | 1.24+\\nPandas | pip install pandas | pip install pandas | pip install pandas | 2.0+\\nSQLite | Built-in (3.35+) | Built-in (3.35+) | apt install sqlite3 | 3.35+\\n\\nVirtual Environment: Highly recommended (venv or poetry) for each platform to avoid conflicts." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2DFDB;strokeColor=#004D40;strokeWidth=1;fontSize=8;align=left;fontFamily=monospace;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="620" width="1150" height="180" as="geometry"/>
+        </mxCell>
+        <!-- Performance Notes -->
+        <mxCell id="perf_notes" value="Performance Expectations:\\n✓ Windows: Excellent (DirectX rendering, fast disk I/O)\\n✓ macOS: Very Good (Metal framework for PyQt6, SSD standard)\\� Linux: Good (depends on GPU and disk; slower on VirtualBox/VM)\\n\\nMinimum RAM: 4 GB | Recommended: 8 GB | Target FPS: 30 FPS minimum on recommended hardware\\n\\nTesting conducted on: Windows 11 (i7-8th gen, 8 GB RAM, SSD) | Builds created with PyInstaller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#FBC02D;strokeWidth=1;fontSize=9;align=left;spacing=1;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="820" width="1150" height="100" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

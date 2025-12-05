@@ -1,0 +1,145 @@
+<mxfile host="Electron" agent="Mozilla/5.0" version="29.0.3" type="device">
+  <diagram id="crud" name="CRUD Matrix">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="CRUD Matrix - Momentum Entities" style="text;fontSize=16;fontStyle=1;fillColor=none;strokeColor=none;" parent="1" vertex="1">
+          <mxGeometry x="400" y="20" width="600" height="30" as="geometry" />
+        </mxCell>
+        <!-- Table Headers -->
+        <mxCell id="h_entity" value="Entity" style="text;fontSize=11;fontStyle=1;fillColor=#0050ef;strokeColor=#001DBC;strokeWidth=2;align=center;verticalAlign=middle;fontColor=#ffffff;" parent="1" vertex="1">
+          <mxGeometry x="50" y="80" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="h_create" value="Create" style="text;fontSize=11;fontStyle=1;fillColor=#60a917;strokeColor=#2D7600;strokeWidth=2;align=center;verticalAlign=middle;fontColor=#ffffff;" parent="1" vertex="1">
+          <mxGeometry x="170" y="80" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="h_read" value="Read" style="text;fontSize=11;fontStyle=1;fillColor:#008a00;strokeColor=#005700;strokeWidth=2;align=center;verticalAlign=middle;fontColor=#ffffff;" parent="1" vertex="1">
+          <mxGeometry x="270" y="80" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="h_update" value="Update" style="text;fontSize=11;fontStyle=1;fillColor=#FF6600;strokeColor=#CC5200;strokeWidth=2;align=center;verticalAlign=middle;fontColor=#ffffff;" parent="1" vertex="1">
+          <mxGeometry x="370" y="80" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="h_delete" value="Delete" style="text;fontSize=11;fontStyle=1;fillColor=#C41C3B;strokeColor=#8B0000;strokeWidth=2;align=center;verticalAlign=middle;fontColor=#ffffff;" parent="1" vertex="1">
+          <mxGeometry x="470" y="80" width="100" height="40" as="geometry" />
+        </mxCell>
+        <!-- Driver -->
+        <mxCell id="e_driver" value="Driver" style="text;fontSize=10;fontStyle=0;fillColor=#F0F0F0;strokeColor=#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="140" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="d_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor=#E8F5E9;strokeColor=#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="140" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="d_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor=#E8F5E9;strokeColor=#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="140" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="d_ur" value="✓" style="text;fontSize=14;fontStyle=1;fillColor=#FFE0B2;strokeColor=#CC5200;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="140" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="d_dr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor=#FFCDD2;strokeColor=#8B0000;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="140" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Team -->
+        <mxCell id="e_team" value="Team" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="175" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="tm_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor=#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="175" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="tm_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="175" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="tm_ur" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFE0B2;strokeColor:#CC5200;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="175" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="tm_dr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFCDD2;strokeColor:#8B0000;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="175" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Race -->
+        <mxCell id="e_race" value="Race" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="210" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="r_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="210" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="r_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="210" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="r_ur" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFE0B2;strokeColor:#CC5200;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="210" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="r_dr" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor=#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="210" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Championship -->
+        <mxCell id="e_champ" value="Championship" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="245" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ch_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="245" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ch_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="245" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ch_ur" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFE0B2;strokeColor:#CC5200;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="245" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="ch_dr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFCDD2;strokeColor=#8B0000;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="245" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Race Result -->
+        <mxCell id="e_result" value="RaceResult" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="280" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="res_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="280" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="res_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="280" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="res_ur" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="280" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="res_dr" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="280" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Circuit -->
+        <mxCell id="e_circuit" value="Circuit" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="315" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="circ_cr" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="315" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="circ_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="315" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="circ_ur" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="315" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="circ_dr" value="" style="text;fontSize=14;fontStyle=1;fillColor:#F0F0F0;strokeColor=#999;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="315" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Staff -->
+        <mxCell id="e_staff" value="Staff" style="text;fontSize=10;fontStyle=0;fillColor:#F0F0F0;strokeColor:#999;strokeWidth=1;align=left;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="50" y="350" width="120" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st_cr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#2D7600;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="170" y="350" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st_rr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#E8F5E9;strokeColor:#005700;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="270" y="350" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st_ur" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFE0B2;strokeColor:#CC5200;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="370" y="350" width="100" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="st_dr" value="✓" style="text;fontSize=14;fontStyle=1;fillColor:#FFCDD2;strokeColor:#8B0000;strokeWidth=1;align=center;verticalAlign=middle;" parent="1" vertex="1">
+          <mxGeometry x="470" y="350" width="100" height="35" as="geometry" />
+        </mxCell>
+        <!-- Legend -->
+        <mxCell id="legend" value="✓ = Operation Supported | Blank = Not Supported | MVP Scope: All ✓ operations implemented for primary entities (Driver, Team, Race, Championship, Staff)" style="text;fontSize=9;fontStyle=0;fillColor=#F5F5F5;strokeColor=#999;strokeWidth=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="420" width="600" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

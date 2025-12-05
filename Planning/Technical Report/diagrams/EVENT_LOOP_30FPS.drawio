@@ -1,0 +1,99 @@
+<mxfile host="app.diagrams.net" modified="2025-12-05T16:00:00.000Z" agent="5.0" etag="event_loop" version="24.0.0" type="device">
+  <diagram id="eventloop" name="30 FPS Event Loop">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <!-- Title -->
+        <mxCell id="title" value="30 FPS Real-Time Race Engine Event Loop (~33ms per frame)" style="text;fontSize=16;fontStyle=1;fillColor=none;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="300" y="20" width="800" height="30" as="geometry"/>
+        </mxCell>
+        <!-- Frame Start -->
+        <mxCell id="start" value="Frame Start&#10;t = 0ms" style="ellipse;fillColor=#90EE90;strokeColor=#2E7D32;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="80" width="100" height="60" as="geometry"/>
+        </mxCell>
+        <!-- Frame Time Check -->
+        <mxCell id="time_check" value="Get Frame Time (Δt)&#10;Target: 33.3ms (1/30 FPS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B3E5FC;strokeColor=#0277BD;strokeWidth=2;fontSize=10;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="500" y="180" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <!-- Input Handling -->
+        <mxCell id="input" value="1. Input Handling&#10;(~1ms)&#10;- Read UI events&#10;- Process player commands&#10;- Pause/Resume checks" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="300" width="150" height="90" as="geometry"/>
+        </mxCell>
+        <!-- Driver Decisions -->
+        <mxCell id="decisions" value="2. Driver Decisions&#10;(~5ms)&#10;- Each driver agent evaluates:&#10;  • Current position&#10;  • Track position&#10;  • Gap to front/behind&#10;  • Overtaking opportunity" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="250" y="300" width="160" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Physics Calculations -->
+        <mxCell id="physics" value="3. Physics Calc&#10;(~8ms)&#10;- Speed changes&#10;- Lap progress&#10;- Tire degradation&#10;- Fuel consumption&#10;- Racing line adherence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="470" y="300" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Collision Detection -->
+        <mxCell id="collisions" value="4. Collision Check&#10;(~3ms)&#10;- Inter-driver spacing&#10;- Track limits&#10;- Crash logic&#10;- Penalty calculation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="680" y="300" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Overtaking Logic -->
+        <mxCell id="overtake" value="5. Overtaking System&#10;(~5ms)&#10;- Gap evaluation&#10;- Risk assessment&#10;- Lane availability&#10;- Overtake execution" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#2E7D32;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="890" y="300" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Lap/Pit Logic -->
+        <mxCell id="lapping" value="6. Lap Completion&#10;(~3ms)&#10;- Detect finish line cross&#10;- Update lap counter&#10;- Trigger pit stops&#10;- Check DNF conditions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#D84315;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="1100" y="300" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Weather/Track Conditions -->
+        <mxCell id="weather_update" value="7. Env Updates&#10;(~2ms)&#10;- Weather changes&#10;- Track temp updates&#10;- Grip modifier calc&#10;- Fuel consumption rate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F4C3;strokeColor=#827717;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="450" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- State Aggregation -->
+        <mxCell id="state" value="8. Race State Update&#10;(~2ms)&#10;- Update driver positions&#10;- Aggregate lap times&#10;- Build standings&#10;- Track statistics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F4C3;strokeColor=#827717;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="250" y="450" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Data Serialization -->
+        <mxCell id="telemetry" value="9. Telemetry Export&#10;(~2ms)&#10;- Serialize race state to JSON&#10;- Queue for API response&#10;- Buffer for replay" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F4C3;strokeColor=#827717;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="470" y="450" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Rendering -->
+        <mxCell id="render" value="10. Render (UI)&#10;(~3ms in background)&#10;- PyQt6 display update&#10;- Driver positions on screen&#10;- Lap/time info update&#10;- Event notifications" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#D84315;strokeWidth=2;fontSize=9;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="680" y="450" width="150" height="100" as="geometry"/>
+        </mxCell>
+        <!-- Frame End Check -->
+        <mxCell id="frame_end" value="11. Frame Complete&#10;Sleep to 33.3ms?" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFB3BA;strokeColor=#C41C3B;strokeWidth=2;fontSize=10;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="890" y="450" width="140" height="80" as="geometry"/>
+        </mxCell>
+        <!-- Decision Diamond -->
+        <mxCell id="decision" value="Frame Time ≥ 33.3ms?" style="rhombus;fillColor=#FFE082;strokeColor=#F57F17;strokeWidth=2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="460" width="120" height="80" as="geometry"/>
+        </Cell>
+        <!-- Timing Info Box -->
+        <mxCell id="timing_box" value="Budget Allocation (33.3ms total):&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━&#10;Input (1ms) → Decisions (5ms) → Physics (8ms) → Collisions (3ms) → Overtaking (5ms) → Lapping (3ms)&#10;→ Environment (2ms) → State (2ms) → Telemetry (2ms) → Render (3ms) → Sleep margin (0.3ms)&#10;━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━&#10;CRITICAL: If any step exceeds its budget, frame rate drops. Physics (8ms) &amp; Decisions (5ms) are most critical." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;strokeWidth=2;fontSize=9;align=left;spacing=3;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="600" width="1150" height="140" as="geometry"/>
+        </mxCell>
+        <!-- Performance Targets Box -->
+        <mxCell id="perf_box" value="Performance Targets:&#10;• 30 FPS minimum on recommended hardware (8GB RAM, quad-core CPU)&#10;• 20+ drivers without frame drops&#10;• Up to 40 drivers acceptable with slight slowdown (25 FPS minimum)&#10;• Real-time visualization: UI responds to clicks within 500ms&#10;• Fast-forward option: 2x/5x/10x speed available (can exceed 30 FPS when skipping rendering)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#C2185B;strokeWidth=1;fontSize=9;align=left;spacing=2;;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="50" y="780" width="1150" height="80" as="geometry"/>
+        </mxCell>
+        <!-- Connections -->
+        <mxCell id="conn1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="start" target="time_check" edge="1" />
+        <mxCell id="conn2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="time_check" target="input" edge="1" />
+        <mxCell id="conn3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="input" target="decisions" edge="1" />
+        <mxCell id="conn4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="decisions" target="physics" edge="1" />
+        <mxCell id="conn5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="physics" target="collisions" edge="1" />
+        <mxCell id="conn6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="collisions" target="overtake" edge="1" />
+        <mxCell id="conn7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="overtake" target="lapping" edge="1" />
+        <mxCell id="conn8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="lapping" target="weather_update" edge="1" />
+        <mxCell id="conn9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="weather_update" target="state" edge="1" />
+        <mxCell id="conn10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="state" target="telemetry" edge="1" />
+        <mxCell id="conn11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="telemetry" target="render" edge="1" />
+        <mxCell id="conn12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="render" target="frame_end" edge="1" />
+        <mxCell id="conn13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="frame_end" target="decision" edge="1" />
+        <!-- Yes path (next frame) -->
+        <mxCell id="conn14" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="decision" target="start" edge="1" />
+        <mxCell id="label_yes" value="Next Frame" style="text;fontSize=9;fontStyle=1;fillColor=#90EE90;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="575" width="60" height="20" as="geometry"/>
+        </mxCell>
+        <!-- No path (slowdown warning) -->
+        <mxCell id="conn15" value="No: Lag!" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;dashed=1;" parent="1" source="decision" target="start" edge="1" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

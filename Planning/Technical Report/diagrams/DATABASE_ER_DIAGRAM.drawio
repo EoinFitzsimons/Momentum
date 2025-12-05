@@ -1,0 +1,93 @@
+<mxfile host="Electron" agent="Mozilla/5.0" version="29.0.3" type="device">
+  <diagram id="er" name="Database ER Diagram">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Database ER Diagram - Momentum" style="text;fontSize=18;fontStyle=1;fillColor=none;strokeColor=none;" parent="1" vertex="1">
+          <mxGeometry x="700" y="20" width="600" height="40" as="geometry" />
+        </mxCell>
+        <!-- ENTITIES -->
+        <mxCell id="driver" value="DRIVER&#xa;-----&#xa;driver_id (PK)&#xa;name, nationality, age&#xa;experience_years&#xa;--Attributes--&#xa;raw_speed (0-100)&#xa;cornering_skill (0-100)&#xa;qualifying_pace (0-100)&#xa;racecraft (0-100)&#xa;--Employment--&#xa;team_id (FK)&#xa;contract_start&#xa;contract_end&#xa;salary_amount&#xa;--Stats--&#xa;races_competed&#xa;wins, podiums" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6E6;strokeColor=#C41C3B;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="100" y="150" width="180" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="team" value="TEAM&#xa;-----&#xa;team_id (PK)&#xa;name&#xa;headquarters_location&#xa;--Financial--&#xa;budget_amount&#xa;budget_currency&#xa;--Specialization--&#xa;primary_discipline&#xa;tier (1-5)&#xa;--Infrastructure--&#xa;factory_quality (0-100)&#xa;wind_tunnel_cap (0-100)&#xa;sim_center_cap (0-100)&#xa;--Performance--&#xa;avg_position&#xa;standing_position" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F3FF;strokeColor=#0066CC;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="400" y="150" width="180" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="circuit" value="CIRCUIT&#xa;-----&#xa;circuit_id (PK)&#xa;name, country, city&#xa;--Physical--&#xa;layout_type&#xa;total_length_km&#xa;corners_count&#xa;overtaking_opportunities&#xa;elevation_change_m&#xa;surface_type&#xa;--IMA Grading--&#xa;safety_rating (0-100)&#xa;security_rating (0-100)&#xa;medical_rating (0-100)&#xa;--Capacity--&#xa;spectator_capacity&#xa;pit_lane_length_m&#xa;garage_spaces" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6FFE6;strokeColor=#009900;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="700" y="150" width="180" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="staff" value="STAFF&#xa;-----&#xa;staff_id (PK)&#xa;name, nationality, age&#xa;--Role--&#xa;role_type (25+ types)&#xa;specialization_disc&#xa;--Competence--&#xa;skill_rating (0-100)&#xa;reliability_score (0-100)&#xa;innovation_score (0-100)&#xa;--Employment--&#xa;team_id (FK)&#xa;contract_start&#xa;contract_end&#xa;salary_amount&#xa;--Bonuses--&#xa;driver_dev_bonus (0-1.0)&#xa;race_perf_bonus (0-1.0)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF0E6;strokeColor=#FF6600;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="1000" y="150" width="180" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="race" value="RACE&#xa;-----&#xa;race_id (PK)&#xa;championship_id (FK)&#xa;circuit_id (FK)&#xa;race_date&#xa;discipline_type&#xa;--Config--&#xa;race_distance_laps&#xa;weather_condition&#xa;track_temperature&#xa;--Status--&#xa;status (enum)&#xa;session_type" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0E6FF;strokeColor=#6600CC;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="1300" y="150" width="160" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="result" value="RACE_RESULT&#xa;-----&#xa;result_id (PK)&#xa;race_id (FK)&#xa;driver_id (FK)&#xa;team_id (FK)&#xa;--Position--&#xa;grid_position&#xa;final_position&#xa;laps_completed&#xa;--Times--&#xa;fastest_lap_time&#xa;average_lap_time&#xa;pit_stop_count&#xa;pit_stop_time_total&#xa;--Degradation--&#xa;tire_deg_observed&#xa;fuel_consumption&#xa;--Events--&#xa;collisions_count&#xa;penalties_count&#xa;overtakes_completed&#xa;--Points--&#xa;championship_points" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6F0;strokeColor=#C41E3A;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="100" y="550" width="160" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="championship" value="CHAMPIONSHIP&#xa;-----&#xa;championship_id (PK)&#xa;season_year&#xa;discipline_type&#xa;--Structure--&#xa;race_count&#xa;total_rounds&#xa;points_system&#xa;start_date&#xa;end_date&#xa;status&#xa;--Leaders--&#xa;leader_driver_id&#xa;leader_team_id&#xa;leader_points" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FFF0;strokeColor=#00AA00;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="400" y="550" width="160" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="contract" value="CONTRACT_HISTORY&#xa;-----&#xa;contract_id (PK)&#xa;driver_id (FK)&#xa;team_id (FK)&#xa;start_date&#xa;end_date&#xa;salary_amount&#xa;salary_currency&#xa;role_type&#xa;status" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFE6;strokeColor=#CCAA00;strokeWidth=2;fontSize=9;align=left;verticalAlign=top;" parent="1" vertex="1">
+          <mxGeometry x="700" y="550" width="160" height="180" as="geometry" />
+        </mxCell>
+        <!-- RELATIONSHIPS -->
+        <mxCell id="rel1" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="driver" target="team" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel1_label" value="(1:N)&#xa;employs" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel1" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel2" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="team" target="staff" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel2_label" value="(1:N)&#xa;employs" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel2" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel3" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="race" target="circuit" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel3_label" value="(N:1)&#xa;held at" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel3" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel4" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="race" target="championship" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel4_label" value="(N:1)&#xa;part of" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel4" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel5" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="result" target="race" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel5_label" value="(N:1)&#xa;produced by" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel5" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel6" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="result" target="driver" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel6_label" value="(N:1)&#xa;earned by" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel6" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel7" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="result" target="team" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel7_label" value="(N:1)&#xa;scored for" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel7" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel8" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="contract" target="driver" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel8_label" value="(N:1)&#xa;history of" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel8" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel9" value="" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;endArrow=open;endFill=0;endSize=10;startArrow=open;startFill=0;startSize=10;strokeColor=#000000;strokeWidth=2;rounded=0;dashed=0;" parent="1" source="contract" target="team" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="rel9_label" value="(N:1)&#xa;employed by" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=8;" parent="rel9" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
