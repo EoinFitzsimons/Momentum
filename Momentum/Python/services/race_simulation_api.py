@@ -22,7 +22,6 @@ def simulate_race(
     verbose: bool = False,
     event_callback: Optional[Callable[[dict], None]] = None,
     stop_event=None,
-    lap_delay: float = 0.0,
     db: Optional[PersistenceIface] = None,
     track_points: Optional[List] = None,
     player_driver_id: Optional[int] = None,
