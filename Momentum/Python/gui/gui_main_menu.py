@@ -36,75 +36,40 @@ class MainMenuWindow(QMainWindow):
         self.setWindowTitle("Momentum - Main Menu")
         self.setMinimumSize(1000, 700)
         
-        # Apply brand colors
+        # Apply a dark Momentum palette consistent with existing branding
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #353839;
-            }
-            QWidget {
-                background-color: #353839;
-                color: #B9F2FF;
-            }
-            QGroupBox {
-                border: 3px solid #B9F2FF;
-                border-radius: 12px;
-                margin-top: 15px;
-                padding: 20px;
-                font-weight: bold;
-                color: #B9F2FF;
-                background-color: #353839;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 15px;
-                padding: 0 8px;
-                color: #DD2D4A;
-                font-size: 16px;
-            }
-            QLabel {
-                color: #B9F2FF;
-            }
-            QPushButton {
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 3px solid #B9F2FF;
-                border-radius: 10px;
-                padding: 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-                border-color: #B9F2FF;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-                border-color: #DD2D4A;
-            }
-            QPushButton:disabled {
-                background-color: #353839;
-                color: #666;
-                border-color: #555;
-            }
-            QRadioButton {
-                color: #B9F2FF;
-                spacing: 8px;
-            }
-            QRadioButton::indicator {
-                width: 20px;
-                height: 20px;
-            }
-            QRadioButton::indicator:unchecked {
-                background-color: #353839;
-                border: 2px solid #B9F2FF;
-                border-radius: 10px;
-            }
-            QRadioButton::indicator:checked {
-                background-color: #DD2D4A;
-                border: 2px solid #DD2D4A;
-                border-radius: 10px;
-            }
+            /* Global dark theme */
+            QMainWindow { background-color: #353839; }
+            QWidget { background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }
+
+            /* Group boxes / panels */
+            QGroupBox { background-color: transparent; border: 1px solid rgba(185,242,255,0.08); border-radius: 8px; margin-top: 12px; padding: 12px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #DD2D4A; font-size: 14px; font-weight: 600; }
+
+            /* Labels and typography */
+            QLabel { color: #B9F2FF; }
+            QLabel.h1 { font-size: 36px; font-weight: 700; }
+            QLabel.h2 { font-size: 22px; font-weight: 600; }
+
+            /* Buttons */
+            QPushButton { border: none; border-radius: 8px; padding: 10px; font-weight: 700; }
+            QPushButton.primary { background-color: #B9F2FF; color: #353839; }
+            QPushButton.secondary { background-color: #DD2D4A; color: #FFFFFF; }
+            QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
+
+            /* ComboBox */
+            QComboBox { background-color: #2E2E2E; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.08); padding: 6px; }
+
+            /* Radio buttons */
+            QRadioButton { color: #B9F2FF; }
+            QRadioButton::indicator { width: 16px; height: 16px; }
+
+            /* List / Driver selector */
+            QListWidget { background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }
+            QListWidget::item:selected { background-color: #FFB000; color: #1A1A1A; font-weight: 700; }
+
+            /* Headers */
+            QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
         """)
         
         # Display settings
