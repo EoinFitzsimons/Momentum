@@ -10,6 +10,8 @@ Integrates:
 from services.race_simulation_api import simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
+from vehicles.appearance_integration import VehicleAppearanceManager
+from vehicles.vehicle_appearance import VehicleRenderer, VehicleType, create_team_livery
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QPaintEvent
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem
@@ -427,6 +429,9 @@ class TrackWidget(QWidget):
         self.setMinimumSize(1400, 900)
         self.race_active = False
         self.start_time = 0.0
+
+        # Vehicle appearance manager for rendering detailed cars (fresh instance per race)
+        self.appearance_manager = VehicleAppearanceManager()
 
         # Camera settings
         self.camera_mode = 'full'
@@ -1339,19 +1344,23 @@ class TrackWidget(QWidget):
                             # Car stationary - use track direction
                             movement_angle = track_angle
 
-                        car_length = 5.0  # 5 meters
-                        car_width = 2.0   # 2 meters
-
-                        painter.setBrush(QBrush(car.color))
-                        painter.setPen(QPen(Qt.GlobalColor.white, 1))
-
-                        # Draw rectangle oriented to movement direction
+                        # Draw detailed single seater car using appearance manager
                         painter.save()
                         painter.translate(offset_x, offset_y)
-                        # Rotate to MOVEMENT direction (reversed)
                         painter.rotate(math.degrees(movement_angle))
-                        painter.drawRect(int(-car_length / 2), int(-car_width / 2),
-                                         int(car_length), int(car_width))
+
+                        # Get livery for this driver
+                        livery = self.appearance_manager.get_livery(car.driver_id)
+                        if livery:
+                            # Render detailed Formula car
+                            print(f"[RENDER] Drawing detailed car for driver {car.driver_id} with livery {livery.team_name}")
+                            VehicleRenderer.render_single_seater_car(
+                                painter, livery, scale=3.0
+                            )
+                        else:
+                            # NO FALLBACK - livery should always exist
+                            print(f"[RENDER ERROR] No livery found for driver {car.driver_id}")
+
                         painter.restore()
                         cars_drawn += 1
                 except Exception as e:
@@ -1430,6 +1439,10 @@ class RaceWindow(QMainWindow):
             self.emitter.position_update.connect(self._on_position_update)
             self.emitter.race_finished.connect(self._on_race_finished)
             self.emitter.event_signal.connect(self._on_event)
+
+            # Vehicle appearance manager for rendering detailed cars
+            self.appearance_manager = VehicleAppearanceManager()
+
             self._setup_ui()
             self._load_data()
             # No auto-start: user must click Start Race manually
@@ -1645,6 +1658,31 @@ class RaceWindow(QMainWindow):
         camera_layout.addWidget(self.camera_follow_btn)
         right_panel.addWidget(camera_group)
 
+        # Menu/Exit controls
+        menu_layout = QHBoxLayout()
+        self.menu_btn = QPushButton("Return to Menu")
+        self.menu_btn.clicked.connect(self._return_to_menu)
+        self.menu_btn.setMinimumHeight(40)
+        self.menu_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1a1a1a;
+                color: #FFD700;
+                border: 2px solid #FFD700;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #2a2a2a;
+                border: 2px solid #FFED4E;
+            }
+            QPushButton:pressed {
+                background-color: #0a0a0a;
+            }
+        """)
+        menu_layout.addWidget(self.menu_btn)
+        right_panel.addLayout(menu_layout)
+
         # Standings table (MUCH BIGGER)
         right_panel.addWidget(QLabel("<h2>Live Standings</h2>"))
         self.standings_table = QTableWidget()
@@ -1723,6 +1761,37 @@ class RaceWindow(QMainWindow):
                         f"First driver: id={
                             self.drivers[0].id}, name={
                             self.drivers[0].name}")
+
+                # Initialize vehicle liveries immediately after loading drivers
+                # so they're ready for grid display
+                try:
+                    teams_dict = {}
+                    for driver in self.drivers:
+                        if driver.current_team_id and driver.current_team_id not in teams_dict:
+                            team = self.db.get_team(driver.current_team_id)
+                            if team:
+                                teams_dict[driver.current_team_id] = team
+
+                    for driver in self.drivers:
+                        team = teams_dict.get(driver.current_team_id) if driver.current_team_id else None
+                        if team:
+                            # Create vehicle configuration with livery for this driver
+                            self.appearance_manager.create_vehicle_for_driver(driver, team)
+                        else:
+                            # Fallback: create default livery if team not found
+                            team_name = f'Team {driver.current_team_id}' if driver.current_team_id else f'Team {driver.id}'
+                            livery = create_team_livery(
+                                driver.current_team_id or driver.id,
+                                team_name,
+                                driver.number
+                            )
+                            self.appearance_manager.driver_liveries[driver.id] = livery
+                    print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
+                except Exception as e:
+                    print(f"ERROR: Livery initialization failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+
             except Exception as e:
                 self.info_label.setText(f"Failed to load drivers: {e}")
                 self.start_btn.setEnabled(False)
@@ -2294,6 +2363,19 @@ class RaceWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.info_label.setText("Race stopped")
         print("[STOP RACE] Stop complete")
+
+    def _return_to_menu(self):
+        """Return to main menu."""
+        print("[MENU] User requested return to menu")
+        
+        # Stop race if running
+        if self.stop_event and not self.stop_event.is_set():
+            print("[MENU] Stopping active race...")
+            self._stop_race()
+        
+        # Emit signal to return to menu
+        self.return_to_menu.emit()
+        print("[MENU] Emitted return_to_menu signal")
 
     def _on_position_update(self, data: dict):
         """Handle position update from simulation."""
