@@ -114,6 +114,9 @@ class RaceState:
     
     # For lap detection
     lap_times: Dict[int, List[float]] = field(default_factory=dict)
+    
+    # Collision tracking
+    collision_log: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class RealtimeRaceEngine:
@@ -311,15 +314,20 @@ class RealtimeRaceEngine:
                 if sleep_time > 0:
                     time.sleep(sleep_time)
         
-        # Emit race finished
+        # Compile results FIRST
+        results = self._compile_results(race_state)
+        
+        # Emit race finished with results and collision log
         if event_callback:
             event_callback({
                 "type": "race_finished",
                 "total_laps": total_laps,
-                "race_time": race_state.current_time
+                "race_time": race_state.current_time,
+                "results": results,
+                "collision_log": race_state.collision_log
             })
         
-        return self._compile_results(race_state)
+        return results
     
     def _initialize_race(
         self,
@@ -676,30 +684,39 @@ class RealtimeRaceEngine:
             if i > 0:
                 ahead_state = active_drivers[i - 1][1]
                 
-                # Calculate actual position difference accounting for lap differences
+                # Calculate PHYSICAL distance gap first (for slipstream check)
                 if ahead_state.lap == state.lap:
+                    # Same lap - simple distance
                     distance_gap = ahead_state.position_m - state.position_m
                 elif ahead_state.lap > state.lap:
-                    # Car ahead is on later lap
+                    # Car ahead is on later lap - calculate wrap-around distance
                     distance_gap = (race_state.track_length_m - state.position_m) + ahead_state.position_m
                 else:
-                    # We're ahead (shouldn't happen with proper sorting)
+                    # We're ahead in lap count (shouldn't happen with proper sorting)
                     distance_gap = race_state.track_length_m
                 
-                # Convert distance to TIME GAP in seconds using current velocity
-                if state.velocity_mps > 0.1:
-                    state.gap_ahead = distance_gap / state.velocity_mps
+                # Convert distance to TIME GAP for display
+                if ahead_state.lap == state.lap:
+                    # Same lap - normal time gap
+                    if state.velocity_mps > 0.1:
+                        state.gap_ahead = distance_gap / state.velocity_mps
+                    else:
+                        # Car is stationary/very slow - use base speed for gap estimate
+                        state.gap_ahead = distance_gap / self.BASE_SPEED_MPS if distance_gap > 0 else 0.0
+                elif ahead_state.lap > state.lap:
+                    # Different lap - encode as 999+N for GUI display
+                    lap_diff = ahead_state.lap - state.lap
+                    state.gap_ahead = 999.0 + lap_diff  # e.g., 1000.0 means +1 lap
                 else:
-                    state.gap_ahead = 999.0  # Very large gap if stationary
+                    state.gap_ahead = 999.0
                 
-                # Check slipstream (within effective draft range)
+                # Check slipstream (within effective draft range, same lap only)
                 if distance_gap < self.SLIPSTREAM_DISTANCE and ahead_state.lap == state.lap:
                     state.in_slipstream = True
                 else:
                     state.in_slipstream = False
             else:
                 state.gap_ahead = 999.0
-                state.in_slipstream = False
                 state.in_slipstream = False
             
             # Gap behind
@@ -708,6 +725,10 @@ class RealtimeRaceEngine:
                 if behind_state.lap == state.lap:
                     distance_gap = state.position_m - behind_state.position_m
                     state.gap_behind = distance_gap / self.BASE_SPEED_MPS
+                elif state.lap > behind_state.lap:
+                    # Car behind is on earlier lap - show as +N laps
+                    lap_diff = state.lap - behind_state.lap
+                    state.gap_behind = 999.0 + lap_diff  # e.g., 1000.0 means +1 lap
                 else:
                     state.gap_behind = 999.0
             else:
@@ -861,6 +882,18 @@ class RealtimeRaceEngine:
                         other_state.dnf_reason = "contact_during_overtake"
                         print(f"  *** RACING INCIDENT! {state.driver_name} and {other_state.driver_name} "
                               f"made contact at position {state.position_m:.0f}m")
+                        # Log collision with both drivers
+                        race_state.collision_log.append({
+                            "lap": state.lap,
+                            "time": race_state.current_time,
+                            "position_m": state.position_m,
+                            "type": "contact_during_overtake",
+                            "driver1_id": state.driver_id,
+                            "driver1_name": state.driver_name,
+                            "driver2_id": other_state.driver_id,
+                            "driver2_name": other_state.driver_name,
+                            "description": f"{state.driver_name} and {other_state.driver_name} collided during overtake"
+                        })
                         return True
                 
                 elif not is_overtaking and longitudinal_gap < CAR_LENGTH:
@@ -874,6 +907,18 @@ class RealtimeRaceEngine:
                         if relative_velocity > 15.0:  # Closing at >15 m/s = real rear-end risk (increased from 5)
                             print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
                             state.dnf_reason = "rear_end_collision"
+                            # Log collision with both drivers
+                            race_state.collision_log.append({
+                                "lap": state.lap,
+                                "time": race_state.current_time,
+                                "position_m": state.position_m,
+                                "type": "rear_end_collision",
+                                "driver1_id": state.driver_id,
+                                "driver1_name": state.driver_name,
+                                "driver2_id": other_state.driver_id,
+                                "driver2_name": other_state.driver_name,
+                                "description": f"{state.driver_name} rear-ended {other_state.driver_name}"
+                            })
                             return True
                     else:
                         # State is ahead - other car is behind
