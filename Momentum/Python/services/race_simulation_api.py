@@ -9,7 +9,6 @@ Date: December 2025
 """
 
 from typing import List, Callable, Optional, Dict, Any
-from services.persistence_iface import PersistenceIface
 from database.models import Driver, Track, RaceResult, Team
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
@@ -56,7 +55,7 @@ def simulate_race(
     verbose: bool = False,
     event_callback: Optional[Callable[[dict], None]] = None,
     stop_event=None,
-    db: Optional[PersistenceIface] = None,
+    db: Optional[Any] = None,
     track_points: Optional[List] = None,
     player_driver_id: Optional[int] = None,
     player_overrides: Optional[Dict[str, float]] = None,
