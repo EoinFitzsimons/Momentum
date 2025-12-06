@@ -1324,7 +1324,9 @@ class RaceWindow(QMainWindow):
         player_layout = QVBoxLayout(player_controls)
         
         # Pace control
-        pace_label_top = QLabel("Race Pace: Balanced")
+        pace_label_top = QLabel("Race Pace: Balanced (50%)")
+        pace_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #B9F2FF;")
+        pace_label_top.setMinimumHeight(22)
         self.pace_value_label = pace_label_top
         player_layout.addWidget(pace_label_top)
         
@@ -1345,7 +1347,9 @@ class RaceWindow(QMainWindow):
         player_layout.addSpacing(10)
         
         # Overtake aggressiveness
-        overtake_label_top = QLabel("Overtaking: Moderate")
+        overtake_label_top = QLabel("Overtaking: Moderate (50%)")
+        overtake_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #B9F2FF;")
+        overtake_label_top.setMinimumHeight(22)
         self.overtake_value_label = overtake_label_top
         player_layout.addWidget(overtake_label_top)
         
@@ -1446,46 +1450,33 @@ class RaceWindow(QMainWindow):
         
         layout.addLayout(right_panel, 1)
         
-        # Styling - MOMENTUM BRAND COLORS
+        # Apply dark Momentum palette for race HUD and visuals (restoring darker theme)
         self.setStyleSheet("""
-            QMainWindow {
-                background-color: #353839;
-            }
-            QWidget {
-                background-color: #353839;
-                color: #B9F2FF;
-                font-family: 'Inter', sans-serif;
-            }
-            QPushButton {
-                background-color: #B9F2FF;
-                color: #1A1B1E;
-                border: none;
-                border-radius: 5px;
-                padding: 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #DD2D4A;
-                color: #FFFFFF;
-            }
-            QPushButton:disabled {
-                background-color: #353839;
-                color: #666666;
-            }
-            QLabel {
-                color: #B9F2FF;
-            }
-            QTableWidget {
-                background-color: #252627;
-                color: #B9F2FF;
-                gridline-color: #353839;
-            }
-            QHeaderView::section {
-                background-color: #353839;
-                color: #B9F2FF;
-                padding: 5px;
-                border: none;
-            }
+            /* Window and global */
+            QMainWindow { background-color: #353839; }
+            QWidget { background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }
+
+            /* HUD / monospace */
+            QLabel { color: #B9F2FF; }
+            QLabel.hud { font-family: 'Roboto Mono', 'Courier New', monospace; color: #F5F5F5; }
+
+            /* Buttons */
+            QPushButton { border: none; border-radius: 6px; padding: 8px; font-weight: 700; }
+            QPushButton.primary { background-color: #B9F2FF; color: #353839; }
+            QPushButton.secondary { background-color: #DD2D4A; color: #ffffff; }
+            QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
+
+            /* Progress bars */
+            QProgressBar { border: 2px solid rgba(185,242,255,0.06); border-radius: 6px; background-color: #2E2E2E; color: #FFFFFF; }
+            QProgressBar::chunk { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #B9F2FF, stop:0.6 #B9F2FF, stop:1.0 #DD2D4A); }
+
+            /* Standings table */
+            QTableWidget { background-color: #252627; color: #B9F2FF; gridline-color: #353839; }
+            QHeaderView::section { background-color: #353839; color: #B9F2FF; padding: 6px; border: none; }
+            QTableWidget::item:selected { background-color: #FFB000; color: #1A1A1A; font-weight: 700; }
+
+            /* Track widget */
+            QWidget#TrackWidget { background-color: #1A1A1A; border: 1px solid rgba(185,242,255,0.04); }
         """)
     
     def _load_data(self):
@@ -1668,9 +1659,14 @@ class RaceWindow(QMainWindow):
                 for i, driver in enumerate(self.drivers):
                     driver_name = driver.name
                     print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
-                    self.standings_table.setItem(i, 0, QTableWidgetItem(driver_name))
-                    self.standings_table.setItem(i, 1, QTableWidgetItem("0"))
-                    self.standings_table.setItem(i, 2, QTableWidgetItem("-"))
+                    # Column 0: color/position indicator (empty for now)
+                    self.standings_table.setItem(i, 0, QTableWidgetItem(""))
+                    # Column 1: Driver name
+                    self.standings_table.setItem(i, 1, QTableWidgetItem(driver_name))
+                    # Column 2: Lap
+                    self.standings_table.setItem(i, 2, QTableWidgetItem("0"))
+                    # Column 3: Gap
+                    self.standings_table.setItem(i, 3, QTableWidgetItem("-"))
                 print("Standings table initialized")
             except Exception as e:
                 print(f"WARNING: Standings table initialization failed: {e}")
@@ -1968,16 +1964,29 @@ class RaceWindow(QMainWindow):
                 data['total_time']
             )
             
-            # Update standings table
+            # Update standings table: find row by driver id
             for row in range(self.standings_table.rowCount()):
-                item = self.standings_table.item(row, 1)
-                if item:
-                    driver_name = item.text()
-                    driver = next((d for d in self.drivers if d.name == driver_name), None)
-                    if driver and driver.id == data['driver_id']:
-                        self.standings_table.setItem(row, 0, QTableWidgetItem(str(data['position'])))
-                        self.standings_table.setItem(row, 2, QTableWidgetItem(str(data['lap'])))
-                        break
+                name_item = self.standings_table.item(row, 1)
+                if not name_item:
+                    continue
+                driver_name = name_item.text()
+                driver = next((d for d in self.drivers if d.name == driver_name), None)
+                if driver and driver.id == data['driver_id']:
+                    # Column 0 = position
+                    self.standings_table.setItem(row, 0, QTableWidgetItem(str(data['position'])))
+                    # Column 2 = lap
+                    self.standings_table.setItem(row, 2, QTableWidgetItem(str(data['lap'])))
+
+                    # Highlight player-controlled driver cell background
+                    try:
+                        name_cell = self.standings_table.item(row, 1)
+                        if driver.id == self.player_driver_id:
+                            name_cell.setBackground(QColor(255, 215, 0))  # Gold
+                        else:
+                            name_cell.setBackground(QColor(37, 38, 39))  # normal background (dark)
+                    except Exception:
+                        pass
+                    break
         except Exception as e:
             print(f"ERROR in _on_position_update: {e}")
     
@@ -2012,6 +2021,16 @@ class RaceWindow(QMainWindow):
                         self.standings_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
                         self.standings_table.setItem(i, 1, QTableWidgetItem(driver.name))
                         self.standings_table.setItem(i, 3, QTableWidgetItem(f"+{gap:.2f}s" if gap > 0 else "-"))
+
+                        # Highlight player-controlled driver in leaderboard
+                        try:
+                            name_cell = self.standings_table.item(i, 1)
+                            if driver.id == self.player_driver_id:
+                                name_cell.setBackground(QColor(255, 215, 0))  # Gold
+                            else:
+                                name_cell.setBackground(QColor(37, 38, 39))
+                        except Exception:
+                            pass
                 except Exception as e:
                     print(f"ERROR updating standings row {i}: {e}")
         
@@ -2167,6 +2186,15 @@ class RaceWindow(QMainWindow):
             else:
                 symbol = "🔴"
             self.standings_table.setItem(row, 1, QTableWidgetItem(f"{symbol} {driver_name}"))
+            # Highlight the player-controlled driver row/cell
+            try:
+                name_item = self.standings_table.item(row, 1)
+                if entry['driver_id'] == getattr(self, 'player_driver_id', None):
+                    name_item.setBackground(QColor(255, 215, 0))  # Gold for player
+                else:
+                    name_item.setBackground(QColor(37, 38, 39))
+            except Exception:
+                pass
 
             self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry['lap'])))
 
@@ -2195,36 +2223,71 @@ class RaceWindow(QMainWindow):
                 print(f"    P{i+1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
     
     def _on_pace_changed(self, value):
-        """Handle pace slider change - ACTUALLY WORKS NOW."""
+        """Handle pace slider change - update label and color gradient."""
         if value < 33:
             pace_text = "CONSERVATIVE"
         elif value < 67:
             pace_text = "BALANCED"
         else:
             pace_text = "AGGRESSIVE"
-        
+
         # Store raw slider value (0-100)
         self.player_overrides['pace'] = value / 100.0
         # Recompute combined push from both sliders
         self._update_combined_push()
         self.pace_value_label.setText(f"Race Pace: {pace_text} ({value}%)")
-        self.pace_value_label.setStyleSheet("color: #DD2D4A; font-size: 16px; font-weight: bold;")
+
+        # Mix color from blue -> red based on value
+        try:
+            t = max(0.0, min(1.0, value / 100.0))
+            low = (0x00, 0xBF, 0xFF)  # blue
+            high = (0xDD, 0x2D, 0x4A)  # red
+            r = int(low[0] + (high[0] - low[0]) * t)
+            g = int(low[1] + (high[1] - low[1]) * t)
+            b = int(low[2] + (high[2] - low[2]) * t)
+            color = f"#{r:02X}{g:02X}{b:02X}"
+            self.pace_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+            # Update slider styling: sub-page shows selected color
+            self.pace_slider.setStyleSheet(
+                "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
+                f"QSlider::sub-page:horizontal {{ background: {color}; border-radius: 4px; }}"
+                "QSlider::handle:horizontal { background: #F5F5F5; width: 14px; margin: -4px 0; border-radius: 7px; }"
+            )
+        except Exception:
+            # Fallback: keep readable style
+            self.pace_value_label.setStyleSheet("font-size:16px; font-weight:bold; color: #DD2D4A;")
     
     def _on_overtake_changed(self, value):
-        """Handle overtake aggressiveness slider change."""
+        """Handle overtake aggressiveness slider change with dynamic color."""
         if value < 33:
             aggr_text = "CAUTIOUS"
         elif value < 67:
             aggr_text = "MODERATE"
         else:
             aggr_text = "AGGRESSIVE"
-        
+
         # Store raw slider value (0-100)
         self.player_overrides['overtake'] = value / 100.0
         # Recompute combined push from both sliders
         self._update_combined_push()
         self.overtake_value_label.setText(f"Overtaking: {aggr_text} ({value}%)")
-        self.overtake_value_label.setStyleSheet("color: #DD2D4A; font-size: 16px; font-weight: bold;")
+
+        try:
+            t = max(0.0, min(1.0, value / 100.0))
+            low = (0x00, 0xBF, 0xFF)
+            high = (0xDD, 0x2D, 0x4A)
+            r = int(low[0] + (high[0] - low[0]) * t)
+            g = int(low[1] + (high[1] - low[1]) * t)
+            b = int(low[2] + (high[2] - low[2]) * t)
+            color = f"#{r:02X}{g:02X}{b:02X}"
+            self.overtake_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+            self.overtake_slider.setStyleSheet(
+                "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
+                f"QSlider::sub-page:horizontal {{ background: {color}; border-radius: 4px; }}"
+                "QSlider::handle:horizontal { background: #F5F5F5; width: 14px; margin: -4px 0; border-radius: 7px; }"
+            )
+        except Exception:
+            self.overtake_value_label.setStyleSheet("font-size:16px; font-weight:bold; color: #DD2D4A;")
     
     def _update_combined_push(self):
         """Compute combined push intensity as average of pace and overtake sliders."""
