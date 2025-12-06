@@ -1419,6 +1419,9 @@ class RaceWindow(QMainWindow):
             # Collision tracking
             self._collision_log: List[Dict[str, Any]] = []
 
+            # Race state tracking for live standings
+            self._race_state: Dict[int, Dict[str, Any]] = {}
+
             # Camera mode
             self.camera_mode = 'full'  # 'full' or 'follow'
 
@@ -2130,9 +2133,6 @@ class RaceWindow(QMainWindow):
                             # Mark in standings and rebuild table so DNF
                             # appears immediately
                             if driver_id is not None:
-                                if not hasattr(self, '_race_state'):
-                                    self._race_state: Dict[int,
-                                                           Dict[str, Any]] = {}
                                 existing = self._race_state.get(driver_id, {
                                     'name': driver_name,
                                     'position': event.get('position', 0),

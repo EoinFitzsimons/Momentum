@@ -22,7 +22,7 @@ from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from Momentum.Python.database.models.staff_models import (
+from archive.staff_models import (
     StaffMember, StaffRole, StaffTier, TeamStaffing,
     generate_staff_requirements, calculate_role_importance
 )
