@@ -30,16 +30,17 @@ from dataclasses import dataclass
 from typing import Optional, List, Dict
 from datetime import datetime
 
+
 @dataclass
 class Driver:
     """
     Driver Entity Model - Comprehensive Multi-Discipline Driver System
-    
+
     Represents individual racing drivers with 50+ attributes covering all aspects
     of motorsport performance. Drivers can compete across all disciplines with
     varying levels of aptitude and preference, just like real-world drivers
     who may excel in one area but can compete in multiple categories.
-    
+
     Attribute Categories:
     1. Core Driving Skills (10 attributes) - fundamental driving abilities
     2. Physical & Mental Traits (10 attributes) - fitness, focus, pressure handling
@@ -48,17 +49,19 @@ class Driver:
     5. Race Craft & Strategy (8 attributes) - tactical racing intelligence
     6. Environmental Adaptation (7 attributes) - handling different conditions
     7. Personal & Social Traits (6 attributes) - personality and media presence
-    
+
     All attributes use 0.0-100.0 scale (0=Poor, 50=Average, 100=Exceptional)
     Drivers have preferences and aptitudes but aren't locked to single disciplines.
     """
     # ===== CORE IDENTIFICATION =====
     id: int                                    # Unique driver identifier
     name: str                                  # Full driver name
-    nationality: str                           # ISO country code (e.g., "GBR", "USA")
+    # ISO country code (e.g., "GBR", "USA")
+    nationality: str
     birth_date: str                           # Birth date in YYYY-MM-DD format
-    age: int = 25                             # Current age (affects performance curves)
-    
+    # Current age (affects performance curves)
+    age: int = 25
+
     # ===== CORE DRIVING SKILLS (10 attributes) =====
     # Fundamental driving abilities that apply to all disciplines
     raw_speed: float = 50.0                   # Pure pace and fast lap ability
@@ -66,12 +69,14 @@ class Driver:
     racecraft: float = 50.0                   # Strategic racing intelligence
     overtaking: float = 50.0                  # Ability to pass other drivers
     defensive_driving: float = 50.0           # Protecting position and blocking
-    cornering_skill: float = 50.0             # Apex speed and racing line optimization
+    # Apex speed and racing line optimization
+    cornering_skill: float = 50.0
     braking_technique: float = 50.0           # Late braking and brake management
-    acceleration_control: float = 50.0        # Launch technique and traction management
+    # Launch technique and traction management
+    acceleration_control: float = 50.0
     spatial_awareness: float = 50.0           # Track positioning and gap judgment
     vehicle_control: float = 50.0             # Car handling at the limit
-    
+
     # ===== PHYSICAL & MENTAL TRAITS (10 attributes) =====
     # Physical fitness and mental strength affecting performance
     physical_fitness: float = 50.0            # Endurance and physical conditioning
@@ -84,28 +89,31 @@ class Driver:
     multitasking: float = 50.0                # Managing multiple tasks simultaneously
     mental_resilience: float = 50.0           # Recovery from mistakes and setbacks
     adrenaline_management: float = 50.0       # Controlling excitement and nerves
-    
+
     # ===== TECHNICAL KNOWLEDGE (8 attributes) =====
     # Understanding of car mechanics and setup
     setup_knowledge: float = 50.0             # Car setup and tuning understanding
-    mechanical_sympathy: float = 50.0         # Preserving car components and reliability
+    # Preserving car components and reliability
+    mechanical_sympathy: float = 50.0
     tire_management: float = 50.0             # Managing tire wear and grip
-    fuel_management: float = 50.0             # Fuel saving and consumption optimization
+    # Fuel saving and consumption optimization
+    fuel_management: float = 50.0
     aerodynamics_understanding: float = 50.0  # Knowledge of aero effects and setup
     suspension_feel: float = 50.0             # Sensing car balance and handling
     engine_management: float = 50.0           # Power delivery and engine modes
     data_analysis: float = 50.0               # Interpreting telemetry and feedback
-    
+
     # ===== DISCIPLINE SPECIALIZATIONS (7 attributes) =====
     # Natural aptitude for different racing categories
-    single_seater_aptitude: float = 50.0      # Formula/open-wheel racing preference
+    # Formula/open-wheel racing preference
+    single_seater_aptitude: float = 50.0
     touring_car_aptitude: float = 50.0        # Close-contact production car racing
     rally_aptitude: float = 50.0              # Stage rally and off-road racing
     street_racing_aptitude: float = 50.0      # Urban/street racing and drifting
     drag_racing_aptitude: float = 50.0        # Straight-line acceleration racing
     rallycross_aptitude: float = 50.0         # Mixed-surface sprint racing
     endurance_aptitude: float = 50.0          # Long-distance racing specialization
-    
+
     # ===== RACE CRAFT & STRATEGY (8 attributes) =====
     # Tactical and strategic racing abilities
     race_strategy: float = 50.0               # Understanding race strategy and timing
@@ -113,83 +121,95 @@ class Driver:
     traffic_management: float = 50.0          # Navigating through slower cars
     qualifying_pace: float = 50.0             # Extracting maximum single-lap pace
     race_pace: float = 50.0                   # Sustained race pace over full distance
-    starting_skill: float = 50.0              # Launch technique and first lap performance
+    # Launch technique and first lap performance
+    starting_skill: float = 50.0
     tyre_warming: float = 50.0                # Bringing tires to optimal temperature
-    energy_management: float = 50.0           # Managing power/fuel/battery strategically
-    
+    # Managing power/fuel/battery strategically
+    energy_management: float = 50.0
+
     # ===== ENVIRONMENTAL ADAPTATION (7 attributes) =====
     # Adapting to different conditions and circumstances
-    wet_weather_skill: float = 50.0           # Performance in rain and wet conditions
+    # Performance in rain and wet conditions
+    wet_weather_skill: float = 50.0
     night_driving: float = 50.0               # Racing in low visibility/darkness
     heat_tolerance: float = 50.0              # Handling hot temperature extremes
     cold_tolerance: float = 50.0              # Handling cold temperature extremes
     altitude_adaptation: float = 50.0          # Performance at high altitude tracks
-    visibility_adaptation: float = 50.0       # Adjusting to fog/dust/low visibility
-    surface_adaptation: float = 50.0          # Adjusting to different track surfaces
-    
+    # Adjusting to fog/dust/low visibility
+    visibility_adaptation: float = 50.0
+    # Adjusting to different track surfaces
+    surface_adaptation: float = 50.0
+
     # ===== PERSONAL & SOCIAL TRAITS (6 attributes) =====
     # Personality and interpersonal characteristics
-    media_handling: float = 50.0              # Working with media and public relations
-    sponsorship_appeal: float = 50.0          # Attractiveness to sponsors and brands
+    # Working with media and public relations
+    media_handling: float = 50.0
+    # Attractiveness to sponsors and brands
+    sponsorship_appeal: float = 50.0
     fan_engagement: float = 50.0              # Fan interaction and popularity
     team_player: float = 50.0                 # Working effectively within team
     leadership: float = 50.0                  # Natural leadership and influence
     professionalism: float = 50.0             # Professional conduct and attitude
-    
+
     # ===== CAREER STATISTICS & PROGRESSION =====
-    career_wins: int = 0                      # Total race victories across all disciplines
+    # Total race victories across all disciplines
+    career_wins: int = 0
     career_podiums: int = 0                   # Total podium finishes (top 3)
     career_points: int = 0                    # Cumulative championship points
     career_starts: int = 0                    # Total race entries
     career_dnf: int = 0                       # Did not finish count
     seasons_active: int = 0                   # Number of seasons competed
-    
+
     # Discipline-specific career stats
-    single_seater_wins: int = 0               # Wins in formula/single seater categories
+    # Wins in formula/single seater categories
+    single_seater_wins: int = 0
     touring_wins: int = 0                     # Wins in touring/production car racing
     rally_wins: int = 0                       # Wins in rally/stage racing
     street_wins: int = 0                      # Wins in street/urban racing
     drag_wins: int = 0                        # Wins in drag/acceleration racing
     rallycross_wins: int = 0                  # Wins in rallycross/sprint racing
     endurance_wins: int = 0                   # Wins in endurance racing
-    
+
     # ===== ADDITIONAL METADATA =====
     biography: str = ""                       # Driver background and career history
-    career_highlights: str = ""               # Major achievements and memorable moments
-    preferred_discipline: str = "single_seater" # Primary discipline preference
-    career_phase: str = "active"              # rookie, rising, peak, veteran, declining, retired
-    
+    # Major achievements and memorable moments
+    career_highlights: str = ""
+    preferred_discipline: str = "single_seater"  # Primary discipline preference
+    # rookie, rising, peak, veteran, declining, retired
+    career_phase: str = "active"
+
     # Team and relationship data
-    current_team_id: Optional[int] = None     # Current team assignment (FK to teams.id)
+    # Current team assignment (FK to teams.id)
+    current_team_id: Optional[int] = None
     previous_teams: str = ""                  # JSON list of previous team associations
     contract_length: int = 1                  # Remaining contract years
     salary: float = 1.0                       # Annual salary in millions USD
-    
+
     # Performance trends and development
     form_trend: str = "stable"                # improving, stable, declining
     peak_performance_age: int = 28            # Age at which driver peaks
     retirement_age: int = 40                  # Expected retirement age
     learning_rate: float = 50.0               # Speed of attribute improvement
-    
+
     # Special traits and achievements
     championship_titles: int = 0              # Total championship victories
     rookie_of_year_awards: int = 0            # Rookie season recognition
     fastest_laps: int = 0                     # Career fastest lap awards
     pole_positions: int = 0                   # Career pole position count
-    
+
     def get_discipline_rating(self, discipline: str) -> float:
         """
         Calculate overall performance rating for a specific discipline
-        
+
         This method provides a comprehensive evaluation of how well this driver
         would perform in the given discipline, considering their aptitude for
         that discipline as well as their overall driving abilities.
-        
+
         Args:
             discipline: The racing discipline to evaluate
                       ("single_seater", "touring_car", "rally", "street_racing",
                        "drag_racing", "rallycross", "endurance")
-        
+
         Returns:
             Overall performance rating (0-100 scale)
         """
@@ -203,24 +223,24 @@ class Driver:
             "rallycross": self.rallycross_aptitude,
             "endurance": self.endurance_aptitude
         }
-        
+
         discipline_aptitude = aptitude_map.get(discipline, 50.0)
-        
+
         # Calculate average of key driving attributes
         core_skills = (
-            self.raw_speed + self.consistency + self.racecraft + 
+            self.raw_speed + self.consistency + self.racecraft +
             self.vehicle_control + self.spatial_awareness
         ) / 5.0
-        
+
         # Weight combination: 60% discipline aptitude, 40% core skills
         overall_rating = (discipline_aptitude * 0.6) + (core_skills * 0.4)
-        
+
         return round(min(100.0, max(0.0, overall_rating)), 1)
-    
+
     def get_overall_rating(self) -> float:
         """
         Calculate overall driver rating across all attributes
-        
+
         Returns:
             Overall rating (0-100) representing driver's general ability
         """
@@ -230,57 +250,59 @@ class Driver:
             self.vehicle_control, self.concentration, self.pressure_handling,
             self.setup_knowledge, self.tire_management, self.race_strategy
         ]
-        
+
         return sum(core_skills) / len(core_skills)
-    
+
     # Compatibility properties for race simulator
     @property
     def skill(self) -> float:
         """Alias for raw_speed for backward compatibility"""
         return self.raw_speed
-    
+
     @property
     def adaptability(self) -> float:
         """Combined adaptability rating"""
-        return (self.wet_weather_skill + self.surface_adaptation + self.visibility_adaptation) / 3.0
-    
+        return (self.wet_weather_skill + self.surface_adaptation +
+                self.visibility_adaptation) / 3.0
+
     @property
     def aggression(self) -> float:
         """Aggression rating based on overtaking and defensive driving"""
         return (self.overtaking + self.defensive_driving) / 2.0
-    
+
     @property
     def first_name(self) -> str:
         """Extract first name from full name for compatibility"""
         return self.name.split()[0] if self.name else ""
-    
+
     @property
     def last_name(self) -> str:
         """Extract last name from full name for compatibility"""
         parts = self.name.split()
         return parts[-1] if len(parts) > 1 else ""
 
+
 @dataclass
 class Team:
     """
     Team Entity Model
-    
+
     Represents racing organizations/constructors in the simulation. Teams employ
     drivers and compete in championships across different motorsport disciplines.
     Financial resources (budget) and organizational tier directly impact
     competitive performance through car development and operational excellence.
-    
+
     Discipline Categories:
         - "formula": Open-wheel racing (F1, F2, F3 style)
         - "rally": Off-road stage racing (WRC style)
         - "endurance": Long-distance circuit racing (Le Mans style)
         - "street": Production-based touring car racing
-    
+
     Performance Tiers:
         - "tier1": Elite teams with maximum budgets and resources
         - "tier2": Competitive midfield teams with moderate resources
         - "tier3": Smaller teams with limited budgets and resources
-    
+
     Financial Model:
         Budget directly influences car performance, development rate, and
         strategic options during races. Higher budgets enable better cars
@@ -291,42 +313,51 @@ class Team:
     name: str                                 # Team/constructor name
     nationality: str                          # Team's home country (ISO code)
     founded_year: int                         # Year team was established
-    
+
     # Competitive classification
-    discipline: str                           # Racing category (formula/rally/endurance/street)
-    tier: str                                 # Performance tier (tier1/tier2/tier3)
-    
+    # Racing category (formula/rally/endurance/street)
+    discipline: str
+    # Performance tier (tier1/tier2/tier3)
+    tier: str
+
     # Operational and financial data
     budget: float                             # Annual budget in millions USD
     headquarters: str                         # Team's base location/factory
     team_principal: str                       # Team leader/manager name
-    
+
     # Career achievements and metadata
     biography: str = ""                       # Team history and background
     founding_story: str = ""                  # Team origins and philosophy
     total_wins: int = 0                       # Total race victories
     total_podiums: int = 0                    # Total podium finishes
     championships: int = 0                    # Constructor/team championship titles
-    
+
     # Financial and operational characteristics
-    financial_stability: float = 0.7          # Economic health indicator (0.0-1.0)
-    management_quality: float = 0.6           # Operational excellence rating (0.0-1.0)
-    innovation_focus: float = 0.5             # R&D and technology emphasis (0.0-1.0)
-    
+    # Economic health indicator (0.0-1.0)
+    financial_stability: float = 0.7
+    # Operational excellence rating (0.0-1.0)
+    management_quality: float = 0.6
+    # R&D and technology emphasis (0.0-1.0)
+    innovation_focus: float = 0.5
+
     # AI personality and decision-making traits
-    risk_appetite: float = 0.5                # Strategic risk tolerance (0.0-1.0)
-    driver_development: float = 0.5           # Focus on nurturing talent vs hiring stars (0.0-1.0)
-    brand_focus: float = 0.5                  # Marketing vs performance priority (0.0-1.0)
+    # Strategic risk tolerance (0.0-1.0)
+    risk_appetite: float = 0.5
+    # Focus on nurturing talent vs hiring stars (0.0-1.0)
+    driver_development: float = 0.5
+    # Marketing vs performance priority (0.0-1.0)
+    brand_focus: float = 0.5
+
 
 @dataclass
 class Track:
     """
     Track/Circuit Entity Model
-    
+
     Represents racing venues with comprehensive characteristics including physical layout,
     facilities, environmental factors, and IMA grading. Supports all 7 racing disciplines
     with detailed specifications that influence race outcomes and driver performance.
-    
+
     IMA Grades (International Motorsport Authority):
         - Diamond: Elite premier circuits (highest safety/facility standards)
         - Platinum: Top-tier professional circuits
@@ -334,7 +365,7 @@ class Track:
         - Silver: Professional circuits
         - Bronze: Professional entry-level circuits
         - Approved: Approved for competition (basic standards)
-    
+
     Circuit Types:
         - permanent: Fixed racing facilities
         - street: Temporary street circuits
@@ -342,16 +373,18 @@ class Track:
         - rally_stage: Point-to-point rally routes
     """
     # Core identification
-    id: int                                   # Unique track identifier (maps to circuit_id in JSON)
+    # Unique track identifier (maps to circuit_id in JSON)
+    id: int
     name: str                                 # Circuit/venue name
     country: str                              # Track location country
     region: str                               # Specific region/state/province
-    
+
     # Classification
-    circuit_type: str                         # permanent/street/semi_permanent/rally_stage
+    # permanent/street/semi_permanent/rally_stage
+    circuit_type: str
     ima_grade: str                            # IMA safety/facility grade
     primary_discipline: str                   # Primary racing discipline
-    
+
     # Track layout and geometry
     length_km: float                          # Track length in kilometers
     turns: int                                # Total number of turns
@@ -359,70 +392,80 @@ class Track:
     right_turns: int                          # Number of right turns
     elevation_change_m: float                 # Total elevation change in meters
     max_gradient_percent: float               # Maximum uphill gradient
-    min_gradient_percent: float               # Maximum downhill gradient (negative)
-    
+    # Maximum downhill gradient (negative)
+    min_gradient_percent: float
+
     # Surface and dimensions
-    surface: str                              # Surface material (asphalt/concrete/gravel)
+    # Surface material (asphalt/concrete/gravel)
+    surface: str
     track_width_avg_m: float                  # Average track width in meters
     track_width_min_m: float                  # Minimum track width in meters
     track_width_max_m: float                  # Maximum track width in meters
-    
+
     # Speed and corners
     avg_speed_kmh: float                      # Average lap speed in km/h
     top_speed_kmh: float                      # Top speed reached on circuit
     longest_straight_m: int                   # Longest straight section in meters
     shortest_straight_m: int                  # Shortest straight section in meters
     tightest_corner_radius_m: float           # Tightest corner radius in meters
-    
+
     # Environmental factors
-    climate: str                              # Climate type (temperate/mediterranean/tropical/desert/etc)
+    # Climate type (temperate/mediterranean/tropical/desert/etc)
+    climate: str
     avg_temp_summer_c: float                  # Average summer temperature in Celsius
     avg_temp_winter_c: float                  # Average winter temperature in Celsius
     rainfall_mm_annual: int                   # Annual rainfall in millimeters
     altitude_m: int                           # Altitude above sea level in meters
-    
+
     # Facilities
     pit_boxes: int                            # Number of pit box garages
     pit_lane_length_m: float                  # Pit lane length in meters
     pit_speed_limit_kmh: int                  # Pit lane speed limit
     paddock_capacity_teams: int               # Maximum teams in paddock
     grandstand_capacity: int                  # Total grandstand spectator capacity
-    
+
     # Racing features
-    drs_zones: int                            # Number of DRS zones (0 if not applicable)
-    safety_car_probability: float             # Base probability of safety car (0.0-1.0)
+    # Number of DRS zones (0 if not applicable)
+    drs_zones: int
+    # Base probability of safety car (0.0-1.0)
+    safety_car_probability: float
     night_racing_capable: bool                # Circuit has lighting for night racing
     wet_weather_racing: bool                  # Circuit suitable for wet racing
-    
+
     # Status and history
     is_active: bool                           # Currently active on calendar
     debut_year: int                           # Year circuit first used
-    last_used_year: Optional[int] = None      # Last year used (None if still active)
+    # Last year used (None if still active)
+    last_used_year: Optional[int] = None
     created_at: Optional[str] = None          # Database timestamp
-    
+
     # Legacy fields (for backward compatibility)
-    surface_type: str = "tarmac"              # Simplified surface (tarmac/gravel/mixed)
-    difficulty: float = 0.5                   # Overall challenge level (0.0-1.0)
-    weather_impact: float = 0.5               # Weather sensitivity factor (0.0-1.0)
+    # Simplified surface (tarmac/gravel/mixed)
+    surface_type: str = "tarmac"
+    # Overall challenge level (0.0-1.0)
+    difficulty: float = 0.5
+    # Weather sensitivity factor (0.0-1.0)
+    weather_impact: float = 0.5
     overtaking_difficulty: float = 0.5        # Passing difficulty (0.0-1.0)
     discipline: str = ""                      # Maps to primary_discipline
     lap_record_time: Optional[str] = None     # Fastest recorded lap time
     description: str = ""                     # Track description
 
+
 @dataclass
 class Championship:
     """
     Championship/Series Entity Model
-    
+
     Represents organized racing competitions with specific rules, point systems,
     and seasonal structures. Championships define the competitive framework
     within which races occur and standings are calculated.
-    
+
     Points System:
         Stored as JSON string defining point awards by finishing position.
         Example: '{"1": 25, "2": 18, "3": 15, "4": 12, "5": 10}'
         Allows flexible point structures for different series.
-    
+
     Season Structure:
         Each championship runs annual seasons with fixed number of races.
         Season length determines championship duration and competitive balance.
@@ -430,32 +473,36 @@ class Championship:
     # Core identification and classification
     id: int                                   # Unique championship identifier
     name: str                                 # Championship/series name
-    discipline: str                           # Racing discipline (formula/rally/endurance/street)
-    tier: str                                 # Competition level (tier1/tier2/tier3)
-    
+    # Racing discipline (formula/rally/endurance/street)
+    discipline: str
+    # Competition level (tier1/tier2/tier3)
+    tier: str
+
     # Competition structure and rules
     season_length: int                        # Number of races per season
-    points_system: str                        # JSON string defining point awards by position
-    
+    # JSON string defining point awards by position
+    points_system: str
+
     # Temporal information
     current_season: int                       # Active season year
     founded_year: int                         # Championship establishment year
     description: str = ""                     # Championship history and characteristics
 
+
 @dataclass
 class Race:
     """
     Race Event Entity Model
-    
+
     Represents individual race events within championships. Each race links
     a championship, track, and specific conditions to create unique competitive
     scenarios for simulation.
-    
+
     Weather Conditions:
         - "dry": Clear conditions with optimal grip
         - "wet": Rain conditions affecting lap times and strategy
         - "mixed": Changing conditions during race
-    
+
     Race Status:
         - "scheduled": Future race not yet run
         - "completed": Race finished with results recorded
@@ -465,23 +512,25 @@ class Race:
     id: int                                   # Unique race identifier
     championship_id: int                      # Parent championship (FK)
     track_id: int                             # Venue for race (FK)
-    
+
     # Scheduling and organization
     season: int                               # Season year
     round_number: int                         # Race number within season
     race_date: str                            # Race date (YYYY-MM-DD format)
-    
+
     # Race conditions and specifications
-    weather_conditions: str                   # Weather during race (dry/wet/mixed)
+    # Weather during race (dry/wet/mixed)
+    weather_conditions: str
     race_duration_minutes: int                # Planned race duration
-    status: str                               # Race status (scheduled/completed/cancelled)
-    
+    # Race status (scheduled/completed/cancelled)
+    status: str
+
     # Compatibility properties
     @property
     def circuit_id(self) -> int:
         """Alias for track_id for backward compatibility"""
         return self.track_id
-    
+
     @property
     def discipline(self) -> str:
         """Note: Race discipline comes from championship, not stored directly"""
@@ -489,20 +538,21 @@ class Race:
         # Added for backward compatibility with code expecting race.discipline
         return getattr(self, '_discipline', 'SINGLE_SEATER')
 
+
 @dataclass
 class RaceResult:
     """
     Race Result Entity Model
-    
+
     Records individual driver performance in specific races. Links drivers,
     teams, and races to capture complete competitive outcomes including
     positions, points awarded, and special achievements.
-    
+
     Points Calculation:
         Points are awarded based on finishing position according to the
         championship's point system. Additional points may be awarded for
         achievements like fastest lap.
-    
+
     Grid vs Final Position:
         - grid_position: Starting position after qualifying
         - position: Final race finishing position
@@ -513,15 +563,18 @@ class RaceResult:
     race_id: int                              # Race event (FK)
     driver_id: int                            # Driver participant (FK)
     team_id: int                              # Team affiliation (FK)
-    
+
     # Performance and outcomes
-    position: int                             # Final finishing position (1st, 2nd, etc.)
+    # Final finishing position (1st, 2nd, etc.)
+    position: int
     points: int                               # Championship points awarded
-    
+
     # Special achievements and additional data
     fastest_lap: bool = False                 # Whether driver achieved fastest lap
-    dnf_reason: Optional[str] = None          # Reason for non-finish (if applicable)
+    # Reason for non-finish (if applicable)
+    dnf_reason: Optional[str] = None
     grid_position: int = 1                    # Starting grid position after qualifying
+
 
 # Database Schema Creation SQL
 SCHEMA_SQL = """
@@ -532,7 +585,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     nationality TEXT NOT NULL,
     birth_date TEXT NOT NULL,
     age INTEGER NOT NULL DEFAULT 25,
-    
+
     -- Core Driving Skills (10 attributes)
     raw_speed REAL NOT NULL DEFAULT 50.0 CHECK(raw_speed >= 0.0 AND raw_speed <= 100.0),
     consistency REAL NOT NULL DEFAULT 50.0 CHECK(consistency >= 0.0 AND consistency <= 100.0),
@@ -544,7 +597,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     acceleration_control REAL NOT NULL DEFAULT 50.0 CHECK(acceleration_control >= 0.0 AND acceleration_control <= 100.0),
     spatial_awareness REAL NOT NULL DEFAULT 50.0 CHECK(spatial_awareness >= 0.0 AND spatial_awareness <= 100.0),
     vehicle_control REAL NOT NULL DEFAULT 50.0 CHECK(vehicle_control >= 0.0 AND vehicle_control <= 100.0),
-    
+
     -- Physical & Mental Traits (10 attributes)
     physical_fitness REAL NOT NULL DEFAULT 50.0 CHECK(physical_fitness >= 0.0 AND physical_fitness <= 100.0),
     reaction_time REAL NOT NULL DEFAULT 50.0 CHECK(reaction_time >= 0.0 AND reaction_time <= 100.0),
@@ -556,7 +609,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     multitasking REAL NOT NULL DEFAULT 50.0 CHECK(multitasking >= 0.0 AND multitasking <= 100.0),
     mental_resilience REAL NOT NULL DEFAULT 50.0 CHECK(mental_resilience >= 0.0 AND mental_resilience <= 100.0),
     adrenaline_management REAL NOT NULL DEFAULT 50.0 CHECK(adrenaline_management >= 0.0 AND adrenaline_management <= 100.0),
-    
+
     -- Technical Knowledge (8 attributes)
     setup_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(setup_knowledge >= 0.0 AND setup_knowledge <= 100.0),
     mechanical_sympathy REAL NOT NULL DEFAULT 50.0 CHECK(mechanical_sympathy >= 0.0 AND mechanical_sympathy <= 100.0),
@@ -566,7 +619,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     suspension_feel REAL NOT NULL DEFAULT 50.0 CHECK(suspension_feel >= 0.0 AND suspension_feel <= 100.0),
     engine_management REAL NOT NULL DEFAULT 50.0 CHECK(engine_management >= 0.0 AND engine_management <= 100.0),
     data_analysis REAL NOT NULL DEFAULT 50.0 CHECK(data_analysis >= 0.0 AND data_analysis <= 100.0),
-    
+
     -- Discipline Specializations (7 attributes)
     single_seater_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(single_seater_aptitude >= 0.0 AND single_seater_aptitude <= 100.0),
     touring_car_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(touring_car_aptitude >= 0.0 AND touring_car_aptitude <= 100.0),
@@ -575,7 +628,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     drag_racing_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(drag_racing_aptitude >= 0.0 AND drag_racing_aptitude <= 100.0),
     rallycross_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(rallycross_aptitude >= 0.0 AND rallycross_aptitude <= 100.0),
     endurance_aptitude REAL NOT NULL DEFAULT 50.0 CHECK(endurance_aptitude >= 0.0 AND endurance_aptitude <= 100.0),
-    
+
     -- Race Craft & Strategy (8 attributes)
     race_strategy REAL NOT NULL DEFAULT 50.0 CHECK(race_strategy >= 0.0 AND race_strategy <= 100.0),
     pit_entry_exit REAL NOT NULL DEFAULT 50.0 CHECK(pit_entry_exit >= 0.0 AND pit_entry_exit <= 100.0),
@@ -585,7 +638,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     starting_skill REAL NOT NULL DEFAULT 50.0 CHECK(starting_skill >= 0.0 AND starting_skill <= 100.0),
     tyre_warming REAL NOT NULL DEFAULT 50.0 CHECK(tyre_warming >= 0.0 AND tyre_warming <= 100.0),
     energy_management REAL NOT NULL DEFAULT 50.0 CHECK(energy_management >= 0.0 AND energy_management <= 100.0),
-    
+
     -- Environmental Adaptation (7 attributes)
     wet_weather_skill REAL NOT NULL DEFAULT 50.0 CHECK(wet_weather_skill >= 0.0 AND wet_weather_skill <= 100.0),
     night_driving REAL NOT NULL DEFAULT 50.0 CHECK(night_driving >= 0.0 AND night_driving <= 100.0),
@@ -594,7 +647,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     altitude_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(altitude_adaptation >= 0.0 AND altitude_adaptation <= 100.0),
     visibility_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(visibility_adaptation >= 0.0 AND visibility_adaptation <= 100.0),
     surface_adaptation REAL NOT NULL DEFAULT 50.0 CHECK(surface_adaptation >= 0.0 AND surface_adaptation <= 100.0),
-    
+
     -- Personal & Social Traits (6 attributes)
     media_handling REAL NOT NULL DEFAULT 50.0 CHECK(media_handling >= 0.0 AND media_handling <= 100.0),
     sponsorship_appeal REAL NOT NULL DEFAULT 50.0 CHECK(sponsorship_appeal >= 0.0 AND sponsorship_appeal <= 100.0),
@@ -602,7 +655,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     team_player REAL NOT NULL DEFAULT 50.0 CHECK(team_player >= 0.0 AND team_player <= 100.0),
     leadership REAL NOT NULL DEFAULT 50.0 CHECK(leadership >= 0.0 AND leadership <= 100.0),
     professionalism REAL NOT NULL DEFAULT 50.0 CHECK(professionalism >= 0.0 AND professionalism <= 100.0),
-    
+
     -- Career Stats
     career_wins INTEGER DEFAULT 0,
     career_podiums INTEGER DEFAULT 0,
@@ -637,12 +690,12 @@ CREATE TABLE IF NOT EXISTS tracks (
     name TEXT NOT NULL,
     country TEXT NOT NULL,
     region TEXT NOT NULL,
-    
+
     -- Classification
     circuit_type TEXT NOT NULL CHECK(circuit_type IN ('permanent', 'street', 'semi_permanent', 'rally_stage')),
     ima_grade TEXT NOT NULL CHECK(ima_grade IN ('Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze', 'Approved')),
     primary_discipline TEXT NOT NULL CHECK(primary_discipline IN ('SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE', 'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE')),
-    
+
     -- Track layout and geometry
     length_km REAL NOT NULL,
     turns INTEGER NOT NULL,
@@ -651,45 +704,45 @@ CREATE TABLE IF NOT EXISTS tracks (
     elevation_change_m REAL NOT NULL,
     max_gradient_percent REAL NOT NULL,
     min_gradient_percent REAL NOT NULL,
-    
+
     -- Surface and dimensions
     surface TEXT NOT NULL,
     track_width_avg_m REAL NOT NULL,
     track_width_min_m REAL NOT NULL,
     track_width_max_m REAL NOT NULL,
-    
+
     -- Speed and corners
     avg_speed_kmh REAL NOT NULL,
     top_speed_kmh REAL NOT NULL,
     longest_straight_m INTEGER NOT NULL,
     shortest_straight_m INTEGER NOT NULL,
     tightest_corner_radius_m REAL NOT NULL,
-    
+
     -- Environmental factors
     climate TEXT NOT NULL,
     avg_temp_summer_c REAL NOT NULL,
     avg_temp_winter_c REAL NOT NULL,
     rainfall_mm_annual INTEGER NOT NULL,
     altitude_m INTEGER NOT NULL,
-    
+
     -- Facilities
     pit_boxes INTEGER NOT NULL,
     pit_lane_length_m REAL NOT NULL,
     pit_speed_limit_kmh INTEGER NOT NULL,
     paddock_capacity_teams INTEGER NOT NULL,
     grandstand_capacity INTEGER NOT NULL,
-    
+
     -- Racing features
     drs_zones INTEGER NOT NULL DEFAULT 0,
     safety_car_probability REAL NOT NULL CHECK(safety_car_probability >= 0.0 AND safety_car_probability <= 1.0),
     night_racing_capable INTEGER NOT NULL DEFAULT 0,
     wet_weather_racing INTEGER NOT NULL DEFAULT 1,
-    
+
     -- Status and history
     is_active INTEGER NOT NULL DEFAULT 1,
     debut_year INTEGER NOT NULL,
     last_used_year INTEGER,
-    
+
     -- Legacy fields (backward compatibility)
     surface_type TEXT NOT NULL DEFAULT 'tarmac' CHECK(surface_type IN ('tarmac', 'gravel', 'mixed')),
     difficulty REAL NOT NULL DEFAULT 0.5 CHECK(difficulty >= 0.0 AND difficulty <= 1.0),
@@ -758,7 +811,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     birth_date TEXT NOT NULL,
     age INTEGER NOT NULL DEFAULT 30,
     current_team_id INTEGER,
-    role TEXT NOT NULL CHECK(role IN ('aerodynamics_engineer', 'cad_designer', 'chief_engineer', 'co-driver', 
+    role TEXT NOT NULL CHECK(role IN ('aerodynamics_engineer', 'cad_designer', 'chief_engineer', 'co-driver',
                                       'commercial_manager', 'communications_manager', 'data_analyst', 'data_engineer',
                                       'design_engineer', 'development_driver', 'driver_coach', 'driving_consultant',
                                       'electronics_engineer', 'electronics_technician', 'engine_engineer', 'equipment_manager',
@@ -772,7 +825,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
                                       'telemetry_engineer', 'test_driver', 'tire_technician', 'transport_manager',
                                       'vehicle_dynamics_engineer', 'videographer')),
     tier TEXT NOT NULL CHECK(tier IN ('tier1', 'tier2', 'tier3', 'tier4', 'tier5', 'tier6')),
-    
+
     -- Core Competencies (10 attributes)
     technical_expertise REAL NOT NULL DEFAULT 50.0 CHECK(technical_expertise >= 0.0 AND technical_expertise <= 100.0),
     experience_years INTEGER NOT NULL DEFAULT 5,
@@ -784,7 +837,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     adaptability REAL NOT NULL DEFAULT 50.0 CHECK(adaptability >= 0.0 AND adaptability <= 100.0),
     learning_speed REAL NOT NULL DEFAULT 50.0 CHECK(learning_speed >= 0.0 AND learning_speed <= 100.0),
     decision_making REAL NOT NULL DEFAULT 50.0 CHECK(decision_making >= 0.0 AND decision_making <= 100.0),
-    
+
     -- Technical Specializations (8 attributes)
     aerodynamics_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(aerodynamics_knowledge >= 0.0 AND aerodynamics_knowledge <= 100.0),
     engine_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(engine_knowledge >= 0.0 AND engine_knowledge <= 100.0),
@@ -794,7 +847,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     data_analysis_skill REAL NOT NULL DEFAULT 50.0 CHECK(data_analysis_skill >= 0.0 AND data_analysis_skill <= 100.0),
     cfd_expertise REAL NOT NULL DEFAULT 50.0 CHECK(cfd_expertise >= 0.0 AND cfd_expertise <= 100.0),
     simulation_expertise REAL NOT NULL DEFAULT 50.0 CHECK(simulation_expertise >= 0.0 AND simulation_expertise <= 100.0),
-    
+
     -- Strategic & Leadership (7 attributes)
     race_strategy_skill REAL NOT NULL DEFAULT 50.0 CHECK(race_strategy_skill >= 0.0 AND race_strategy_skill <= 100.0),
     team_leadership REAL NOT NULL DEFAULT 50.0 CHECK(team_leadership >= 0.0 AND team_leadership <= 100.0),
@@ -803,7 +856,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     resource_allocation REAL NOT NULL DEFAULT 50.0 CHECK(resource_allocation >= 0.0 AND resource_allocation <= 100.0),
     long_term_planning REAL NOT NULL DEFAULT 50.0 CHECK(long_term_planning >= 0.0 AND long_term_planning <= 100.0),
     risk_assessment REAL NOT NULL DEFAULT 50.0 CHECK(risk_assessment >= 0.0 AND risk_assessment <= 100.0),
-    
+
     -- Communication & People Skills (6 attributes)
     communication REAL NOT NULL DEFAULT 50.0 CHECK(communication >= 0.0 AND communication <= 100.0),
     driver_relationship REAL NOT NULL DEFAULT 50.0 CHECK(driver_relationship >= 0.0 AND driver_relationship <= 100.0),
@@ -811,7 +864,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     conflict_resolution REAL NOT NULL DEFAULT 50.0 CHECK(conflict_resolution >= 0.0 AND conflict_resolution <= 100.0),
     media_handling REAL NOT NULL DEFAULT 50.0 CHECK(media_handling >= 0.0 AND media_handling <= 100.0),
     stakeholder_management REAL NOT NULL DEFAULT 50.0 CHECK(stakeholder_management >= 0.0 AND stakeholder_management <= 100.0),
-    
+
     -- Discipline Specializations (7 attributes)
     single_seater_expertise REAL NOT NULL DEFAULT 50.0 CHECK(single_seater_expertise >= 0.0 AND single_seater_expertise <= 100.0),
     touring_car_expertise REAL NOT NULL DEFAULT 50.0 CHECK(touring_car_expertise >= 0.0 AND touring_car_expertise <= 100.0),
@@ -820,20 +873,20 @@ CREATE TABLE IF NOT EXISTS staff_members (
     drag_racing_expertise REAL NOT NULL DEFAULT 50.0 CHECK(drag_racing_expertise >= 0.0 AND drag_racing_expertise <= 100.0),
     rallycross_expertise REAL NOT NULL DEFAULT 50.0 CHECK(rallycross_expertise >= 0.0 AND rallycross_expertise <= 100.0),
     endurance_expertise REAL NOT NULL DEFAULT 50.0 CHECK(endurance_expertise >= 0.0 AND endurance_expertise <= 100.0),
-    
+
     -- Personal Traits (5 attributes)
     reliability REAL NOT NULL DEFAULT 50.0 CHECK(reliability >= 0.0 AND reliability <= 100.0),
     loyalty REAL NOT NULL DEFAULT 50.0 CHECK(loyalty >= 0.0 AND loyalty <= 100.0),
     ambition REAL NOT NULL DEFAULT 50.0 CHECK(ambition >= 0.0 AND ambition <= 100.0),
     professionalism REAL NOT NULL DEFAULT 50.0 CHECK(professionalism >= 0.0 AND professionalism <= 100.0),
     work_ethic REAL NOT NULL DEFAULT 50.0 CHECK(work_ethic >= 0.0 AND work_ethic <= 100.0),
-    
+
     -- Additional Technical Skills (4 attributes)
     materials_science REAL NOT NULL DEFAULT 50.0 CHECK(materials_science >= 0.0 AND materials_science <= 100.0),
     cad_design REAL NOT NULL DEFAULT 50.0 CHECK(cad_design >= 0.0 AND cad_design <= 100.0),
     manufacturing_knowledge REAL NOT NULL DEFAULT 50.0 CHECK(manufacturing_knowledge >= 0.0 AND manufacturing_knowledge <= 100.0),
     quality_control REAL NOT NULL DEFAULT 50.0 CHECK(quality_control >= 0.0 AND quality_control <= 100.0),
-    
+
     -- Advanced Analytical Skills (7 attributes)
     telemetry_analysis REAL NOT NULL DEFAULT 50.0 CHECK(telemetry_analysis >= 0.0 AND telemetry_analysis <= 100.0),
     performance_modeling REAL NOT NULL DEFAULT 50.0 CHECK(performance_modeling >= 0.0 AND performance_modeling <= 100.0),
@@ -842,32 +895,32 @@ CREATE TABLE IF NOT EXISTS staff_members (
     predictive_analytics REAL NOT NULL DEFAULT 50.0 CHECK(predictive_analytics >= 0.0 AND predictive_analytics <= 100.0),
     software_proficiency REAL NOT NULL DEFAULT 50.0 CHECK(software_proficiency >= 0.0 AND software_proficiency <= 100.0),
     database_management REAL NOT NULL DEFAULT 50.0 CHECK(database_management >= 0.0 AND database_management <= 100.0),
-    
+
     -- Operational Skills (5 attributes)
     pit_stop_efficiency REAL NOT NULL DEFAULT 50.0 CHECK(pit_stop_efficiency >= 0.0 AND pit_stop_efficiency <= 100.0),
     crisis_management REAL NOT NULL DEFAULT 50.0 CHECK(crisis_management >= 0.0 AND crisis_management <= 100.0),
     equipment_maintenance REAL NOT NULL DEFAULT 50.0 CHECK(equipment_maintenance >= 0.0 AND equipment_maintenance <= 100.0),
     logistics_coordination REAL NOT NULL DEFAULT 50.0 CHECK(logistics_coordination >= 0.0 AND logistics_coordination <= 100.0),
     safety_protocols REAL NOT NULL DEFAULT 50.0 CHECK(safety_protocols >= 0.0 AND safety_protocols <= 100.0),
-    
+
     -- Financial & Commercial Skills (3 attributes)
     commercial_acumen REAL NOT NULL DEFAULT 50.0 CHECK(commercial_acumen >= 0.0 AND commercial_acumen <= 100.0),
     sponsorship_development REAL NOT NULL DEFAULT 50.0 CHECK(sponsorship_development >= 0.0 AND sponsorship_development <= 100.0),
     cost_optimisation REAL NOT NULL DEFAULT 50.0 CHECK(cost_optimisation >= 0.0 AND cost_optimisation <= 100.0),
-    
+
     -- Career & Development (4 attributes)
     previous_teams TEXT DEFAULT '',
     education_level TEXT DEFAULT 'bachelor',
     certifications TEXT DEFAULT '',
     languages_spoken INTEGER DEFAULT 1,
     contract_type TEXT DEFAULT 'full_time',
-    
+
     -- Performance & Satisfaction (4 attributes)
     job_satisfaction REAL NOT NULL DEFAULT 75.0 CHECK(job_satisfaction >= 0.0 AND job_satisfaction <= 100.0),
     workload_capacity REAL NOT NULL DEFAULT 100.0 CHECK(workload_capacity >= 0.0 AND workload_capacity <= 200.0),
     current_workload REAL NOT NULL DEFAULT 50.0 CHECK(current_workload >= 0.0 AND current_workload <= 200.0),
     performance_rating REAL NOT NULL DEFAULT 75.0 CHECK(performance_rating >= 0.0 AND performance_rating <= 100.0),
-    
+
     -- Career & Contract
     salary_demand REAL NOT NULL DEFAULT 50000.0,
     contract_years_remaining INTEGER DEFAULT 1,

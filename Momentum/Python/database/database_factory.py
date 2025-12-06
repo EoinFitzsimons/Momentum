@@ -10,27 +10,31 @@ from database.database_manager import DatabaseManager
 # from sqlalchemy import create_engine
 # from sqlalchemy.orm import sessionmaker
 
+
 class DatabaseFactory:
     """Factory pattern for database connections - future MySQL migration"""
-    
+
     @staticmethod
     def create_database_manager(db_type="sqlite", **kwargs):
         """Create database manager based on type"""
         if db_type == "sqlite":
             # Your current implementation
             return DatabaseManager()  # Uses SQLite by default
-        
+
         elif db_type == "mysql":
             # Future MySQL implementation
             # return MySQLDatabaseManager(**kwargs)
-            raise NotImplementedError("MySQL support planned for multiplayer phase")
-        
+            raise NotImplementedError(
+                "MySQL support planned for multiplayer phase")
+
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
 
 # Usage in your simulation.py:
 # db_manager = DatabaseFactory.create_database_manager("sqlite")  # Current
-# db_manager = DatabaseFactory.create_database_manager("mysql", host="localhost", ...)  # Future
+# db_manager = DatabaseFactory.create_database_manager("mysql",
+# host="localhost", ...)  # Future
+
 
 """
 Migration Strategy (when needed):

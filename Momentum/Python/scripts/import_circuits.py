@@ -8,6 +8,8 @@ Usage:
     python scripts/import_circuits.py
 """
 
+from config import DATABASE_PATH
+from database.database_manager import DatabaseManager
 import json
 import sys
 from pathlib import Path
@@ -15,13 +17,12 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database.database_manager import DatabaseManager
-from config import DATABASE_PATH
 
 def load_circuit_json(json_path: str) -> list[dict]:
     """Load circuit data from JSON file."""
     with open(json_path, 'r', encoding='utf-8') as f:
         return json.load(f)
+
 
 def create_tracks_table_if_missing(db: DatabaseManager):
     """Create tracks table if it doesn't exist."""
@@ -69,13 +70,14 @@ def create_tracks_table_if_missing(db: DatabaseManager):
         last_used_year INTEGER
     );
     """
-    
+
     conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute(create_table_sql)
     conn.commit()
     conn.close()
     print("✓ Tracks table created/verified")
+
 
 def import_circuit(conn, circuit: dict) -> bool:
     """Import a single circuit into the database using shared connection."""
@@ -89,9 +91,10 @@ def import_circuit(conn, circuit: dict) -> bool:
             'road_course': 'permanent',  # Map road_course to permanent
             'temporary': 'semi_permanent'  # Map temporary to semi_permanent
         }
-        
-        mapped_type = circuit_type_map.get(circuit['circuit_type'], 'permanent')
-        
+
+        mapped_type = circuit_type_map.get(
+            circuit['circuit_type'], 'permanent')
+
         insert_sql = """
         INSERT OR REPLACE INTO tracks (
             id, name, country, region, circuit_type, ima_grade, primary_discipline,
@@ -107,7 +110,7 @@ def import_circuit(conn, circuit: dict) -> bool:
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                   ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
-        
+
         cursor = conn.cursor()
         cursor.execute(insert_sql, (
             circuit['circuit_id'],
@@ -157,38 +160,40 @@ def import_circuit(conn, circuit: dict) -> bool:
         print(f"✗ Failed to import {circuit['name']}: {e}")
         return False
 
+
 def main():
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("CIRCUIT IMPORT SCRIPT")
-    print("="*70)
+    print("=" * 70)
     print(f"Database: {DATABASE_PATH}")
-    
+
     # Load circuit JSON
-    json_path = Path(__file__).parent.parent / "data" / "circuits_database.json"
+    json_path = Path(__file__).parent.parent / \
+        "data" / "circuits_database.json"
     print(f"Source: {json_path}")
-    
+
     if not json_path.exists():
         print(f"✗ Circuit JSON not found at {json_path}")
         return 1
-    
+
     circuits = load_circuit_json(str(json_path))
     print(f"✓ Loaded {len(circuits)} circuits from JSON\n")
-    
+
     # Connect to database
     db = DatabaseManager()
     print("✓ Connected to database")
-    
+
     # Create table if missing
     create_tracks_table_if_missing(db)
-    
+
     # Import circuits using single shared connection
     print("\nImporting circuits...")
     success_count = 0
     fail_count = 0
-    
+
     # Track discipline distribution
     discipline_counts = {}
-    
+
     conn = db.get_connection()
     for circuit in circuits:
         if import_circuit(conn, circuit):
@@ -198,45 +203,53 @@ def main():
         else:
             fail_count += 1
     conn.close()
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("IMPORT SUMMARY")
-    print("="*70)
+    print("=" * 70)
     print(f"✓ Successfully imported: {success_count}")
     print(f"✗ Failed: {fail_count}")
     print(f"Total circuits in database: {success_count}")
-    
+
     # Discipline breakdown
     print("\nDiscipline Distribution:")
     for disc, count in sorted(discipline_counts.items()):
         print(f"  {disc}: {count} circuits")
-    
+
     # Verify Single Seater circuits for MVP
     single_seater_count = discipline_counts.get('SINGLE_SEATER', 0)
-    print(f"\n✓ Single Seater circuits available for MVP: {single_seater_count}")
-    
+    print(
+        f"\n✓ Single Seater circuits available for MVP: {single_seater_count}")
+
     # Sample query to verify data
     conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT name, country, length_km, turns, ima_grade 
-        FROM tracks 
-        WHERE primary_discipline = 'SINGLE_SEATER' 
-        ORDER BY ima_grade DESC, length_km DESC 
+        SELECT name, country, length_km, turns, ima_grade
+        FROM tracks
+        WHERE primary_discipline = 'SINGLE_SEATER'
+        ORDER BY ima_grade DESC, length_km DESC
         LIMIT 5
     """)
-    
+
     print("\nTop 5 Single Seater circuits (by grade & length):")
     for row in cursor.fetchall():
-        print(f"  • {row[0]} ({row[1]}) - {row[2]}km, {row[3]} turns, Grade {row[4]}")
-    
+        print(
+            f"  • {
+                row[0]} ({
+                row[1]}) - {
+                row[2]}km, {
+                    row[3]} turns, Grade {
+                        row[4]}")
+
     conn.close()
-    
-    print("\n" + "="*70)
+
+    print("\n" + "=" * 70)
     print("Import complete!")
-    print("="*70 + "\n")
-    
+    print("=" * 70 + "\n")
+
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

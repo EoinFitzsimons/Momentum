@@ -20,7 +20,6 @@ Supplier Categories:
 Authors: Final Year Project - Computer Science
 """
 
-import sqlite3
 from dataclasses import dataclass
 from typing import Optional, List, Dict
 from enum import Enum
@@ -30,84 +29,101 @@ class SupplierCategory(Enum):
     """Categories of component suppliers matching the vehicle components system"""
     # Engine & Powertrain (engine.py)
     ENGINE = "ENGINE"                                 # Internal combustion engines
-    HYBRID_SYSTEM = "HYBRID_SYSTEM"                   # Hybrid power units (KERS, ERS-H, ERS-K)
-    
+    # Hybrid power units (KERS, ERS-H, ERS-K)
+    HYBRID_SYSTEM = "HYBRID_SYSTEM"
+
     # Drivetrain (drivetrain.py)
     GEARBOX = "GEARBOX"                               # Transmissions and gearboxes
-    DIFFERENTIAL = "DIFFERENTIAL"                     # Differentials (LSD, torque vectoring, etc.)
-    DRIVETRAIN = "DRIVETRAIN"                         # Complete drivetrain assemblies
-    
+    # Differentials (LSD, torque vectoring, etc.)
+    DIFFERENTIAL = "DIFFERENTIAL"
+    # Complete drivetrain assemblies
+    DRIVETRAIN = "DRIVETRAIN"
+
     # Chassis (chassis.py)
-    CHASSIS = "CHASSIS"                               # Chassis structures (monocoque, tubular)
-    SUSPENSION = "SUSPENSION"                         # Suspension systems (dampers, springs, ARB)
-    BRAKES = "BRAKES"                                 # Brake systems (discs, calipers, cooling)
-    
+    # Chassis structures (monocoque, tubular)
+    CHASSIS = "CHASSIS"
+    # Suspension systems (dampers, springs, ARB)
+    SUSPENSION = "SUSPENSION"
+    # Brake systems (discs, calipers, cooling)
+    BRAKES = "BRAKES"
+
     # Aerodynamics (aerodynamics.py)
-    AERODYNAMICS = "AERODYNAMICS"                     # Aerodynamic packages (wings, diffusers, DRS)
-    
+    # Aerodynamic packages (wings, diffusers, DRS)
+    AERODYNAMICS = "AERODYNAMICS"
+
     # Tires (part of chassis/vehicle system)
-    TIRES = "TIRES"                                   # Tire manufacturers and compounds
-    
+    # Tire manufacturers and compounds
+    TIRES = "TIRES"
+
     # Electronics (electronics.py)
     ECU = "ECU"                                       # Electronic control units
     TELEMETRY = "TELEMETRY"                           # Telemetry and data systems
     STEERING = "STEERING"                             # Steering systems
-    
+
     # Safety & Energy
-    SAFETY = "SAFETY"                                 # Safety equipment (roll cage, fire suppression)
-    FUEL_ENERGY = "FUEL_ENERGY"                      # Fuel, batteries, energy storage
+    # Safety equipment (roll cage, fire suppression)
+    SAFETY = "SAFETY"
+    # Fuel, batteries, energy storage
+    FUEL_ENERGY = "FUEL_ENERGY"
 
 
 class SupplierTier(Enum):
     """Quality and prestige tiers for suppliers"""
     PREMIUM = "PREMIUM"         # Top-tier suppliers (Ferrari, Mercedes, Brembo)
     PROFESSIONAL = "PROFESSIONAL"  # High-quality suppliers (Cosworth, Xtrac)
-    COMPETITIVE = "COMPETITIVE"    # Mid-tier suppliers (good quality, reasonable price)
-    BUDGET = "BUDGET"             # Cost-effective suppliers (lower performance)
+    # Mid-tier suppliers (good quality, reasonable price)
+    COMPETITIVE = "COMPETITIVE"
+    # Cost-effective suppliers (lower performance)
+    BUDGET = "BUDGET"
 
 
 @dataclass
 class Supplier:
     """
     Component Supplier/Manufacturer Entity
-    
+
     Represents companies that provide racing components to teams. Teams can
     choose to develop components in-house or purchase from these suppliers,
     creating realistic technical partnerships and business relationships.
     """
     # ===== CORE IDENTIFICATION =====
     id: int                                   # Unique supplier identifier
-    name: str                                 # Company name (e.g., "Brembo", "Pirelli")
-    nationality: str                          # Company's home country (ISO code)
+    # Company name (e.g., "Brembo", "Pirelli")
+    name: str
+    # Company's home country (ISO code)
+    nationality: str
     founded_year: int                         # Year company was established
-    
+
     # ===== BUSINESS CLASSIFICATION =====
     category: str                             # SupplierCategory enum value
     tier: str                                 # SupplierTier enum value
-    specializations: List[str]                # Specific component types they excel at
-    
+    # Specific component types they excel at
+    specializations: List[str]
+
     # ===== COMPANY INFORMATION =====
     headquarters: str                         # Company's main location
     biography: str = ""                       # Company history and background
     racing_heritage: str = ""                 # Motorsport involvement history
-    
+
     # ===== TECHNICAL CAPABILITIES =====
     # Overall quality ratings (0.0-1.0 scale)
     engineering_quality: float = 0.7         # Technical excellence of products
     manufacturing_precision: float = 0.7     # Build quality and consistency
     innovation_level: float = 0.6            # R&D and cutting-edge technology
     reliability_rating: float = 0.8          # Component durability and failure rates
-    
+
     # ===== BUSINESS CHARACTERISTICS =====
-    pricing_tier: float = 0.7                # Cost level (0.1=cheap, 1.0=premium)
+    # Cost level (0.1=cheap, 1.0=premium)
+    pricing_tier: float = 0.7
     production_capacity: int = 100           # Max teams they can supply per season
     exclusivity_deals: bool = False          # Whether they do exclusive partnerships
-    
+
     # Customer service and support
-    technical_support_quality: float = 0.7   # Engineer support and development help
+    # Engineer support and development help
+    technical_support_quality: float = 0.7
     delivery_reliability: float = 0.8        # On-time delivery and logistics
     customization_capability: float = 0.6    # Ability to create bespoke solutions
-    
+
     # ===== DISCIPLINE FOCUS =====
     # Which racing disciplines this supplier serves (0.0-1.0 specialization)
     single_seater_focus: float = 0.5         # Formula racing specialization
@@ -117,29 +133,33 @@ class Supplier:
     drag_acceleration_focus: float = 0.5     # Drag racing specialization
     sprint_rallycross_focus: float = 0.5     # Rallycross specialization
     endurance_focus: float = 0.5             # Long-distance racing specialization
-    
+
     # ===== FINANCIAL DATA =====
     annual_revenue_millions: float = 50.0    # Company size indicator
     rd_investment_percentage: float = 0.15   # % of revenue spent on R&D
     market_share_percentage: float = 0.1     # Share of their component market
-    
+
     # ===== PARTNERSHIP PREFERENCES =====
-    preferred_team_tiers: Optional[List[str]] = None   # Which team tiers they prefer to work with
-    minimum_contract_length: int = 1         # Minimum partnership duration (seasons)
+    # Which team tiers they prefer to work with
+    preferred_team_tiers: Optional[List[str]] = None
+    # Minimum partnership duration (seasons)
+    minimum_contract_length: int = 1
     maximum_customers: int = 10              # Max teams they'll supply simultaneously
-    
+
     # ===== COMPONENT-SPECIFIC ATTRIBUTES =====
     # These are populated based on the supplier's category
-    component_specifications: Optional[Dict[str, float]] = None  # Technical specs
-    performance_characteristics: Optional[Dict[str, float]] = None  # Performance data
-    
+    # Technical specs
+    component_specifications: Optional[Dict[str, float]] = None
+    # Performance data
+    performance_characteristics: Optional[Dict[str, float]] = None
+
     def get_discipline_compatibility(self, discipline: str) -> float:
         """
         Calculate how well this supplier serves a specific racing discipline
-        
+
         Args:
             discipline: Racing discipline to evaluate
-        
+
         Returns:
             Compatibility rating (0.0-1.0)
         """
@@ -152,13 +172,13 @@ class Supplier:
             "SPRINT_RALLYCROSS": self.sprint_rallycross_focus,
             "ENDURANCE": self.endurance_focus
         }
-        
+
         return discipline_map.get(discipline, 0.5)
-    
+
     def get_overall_quality_rating(self) -> float:
         """
         Calculate overall supplier quality across all factors
-        
+
         Returns:
             Overall quality rating (0.0-1.0)
         """
@@ -170,7 +190,7 @@ class Supplier:
             self.technical_support_quality,
             self.delivery_reliability
         ]
-        
+
         return sum(quality_factors) / len(quality_factors)
 
 
@@ -178,7 +198,7 @@ class Supplier:
 class ComponentContract:
     """
     Contract between a team and supplier for component provision
-    
+
     Represents business agreements for component supply, including
     pricing, exclusivity, technical support, and performance targets.
     """
@@ -187,40 +207,45 @@ class ComponentContract:
     team_id: int                             # Customer team (FK to teams.id)
     supplier_id: int                         # Supplier (FK to suppliers.id)
     component_type: str                      # Which component type being supplied
-    
+
     # ===== CONTRACT TERMS =====
     contract_start_season: int               # When contract begins
     contract_duration_seasons: int          # Length of agreement
     annual_cost_millions: float             # Cost per season
-    
+
     # ===== CONTRACT TYPE =====
     is_exclusive: bool = False               # Exclusive supplier for this component
-    is_works_deal: bool = False              # Factory/works partnership (premium support)
+    # Factory/works partnership (premium support)
+    is_works_deal: bool = False
     is_customer_deal: bool = True            # Standard customer relationship
-    
+
     # ===== PERFORMANCE TERMS =====
-    performance_targets: Optional[Dict[str, float]] = None  # Expected performance levels
+    # Expected performance levels
+    performance_targets: Optional[Dict[str, float]] = None
     development_collaboration: bool = False  # Joint development projects
-    data_sharing_agreement: bool = False     # Telemetry and performance data sharing
-    
+    # Telemetry and performance data sharing
+    data_sharing_agreement: bool = False
+
     # ===== SUPPORT SERVICES =====
     includes_technical_support: bool = True  # Engineer support at races
     includes_development_support: bool = False  # Custom development work
     includes_testing_allocation: bool = False   # Test sessions and development time
-    
+
     # ===== FINANCIAL STRUCTURE =====
     base_cost: float = 0.0                   # Fixed annual fee
     performance_bonuses: float = 0.0         # Success-based payments
     volume_discounts: float = 0.0            # Discounts for multiple components
-    
+
     # ===== CONTRACT STATUS =====
-    contract_status: str = "active"          # active, expired, terminated, negotiating
+    # active, expired, terminated, negotiating
+    contract_status: str = "active"
     renewal_option: bool = True              # Can be renewed
     termination_penalty: float = 0.0         # Cost to break contract early
 
 
 # Base supplier templates for each component category
-# Aligned with the vehicle components system (engine.py, drivetrain.py, chassis.py, aerodynamics.py, electronics.py)
+# Aligned with the vehicle components system (engine.py, drivetrain.py,
+# chassis.py, aerodynamics.py, electronics.py)
 SUPPLIER_BASE_MODELS = {
     # ===== ENGINE MANUFACTURERS (engine.py - EngineComponent) =====
     "ENGINE": {
@@ -238,7 +263,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 3.0
     },
-    
+
     # ===== HYBRID SYSTEM MANUFACTURERS (engine.py - HybridSystem) =====
     "HYBRID_SYSTEM": {
         "category_description": "Hybrid power unit and energy recovery system manufacturers",
@@ -255,7 +280,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 2.5
     },
-    
+
     # ===== GEARBOX MANUFACTURERS (drivetrain.py - Gearbox) =====
     "GEARBOX": {
         "category_description": "Gearbox and transmission manufacturers",
@@ -272,7 +297,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 2.2
     },
-    
+
     # ===== DIFFERENTIAL MANUFACTURERS (drivetrain.py - Differential) =====
     "DIFFERENTIAL": {
         "category_description": "Differential and traction control system manufacturers",
@@ -288,8 +313,8 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.8
     },
-    
-    # ===== DRIVETRAIN MANUFACTURERS (drivetrain.py - complete assemblies) =====
+
+    # ===== DRIVETRAIN MANUFACTURERS (drivetrain.py - complete assemblies) ===
     "DRIVETRAIN": {
         "category_description": "Complete drivetrain assembly manufacturers",
         "specialization_types": [
@@ -304,7 +329,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 2.0
     },
-    
+
     # ===== CHASSIS MANUFACTURERS (chassis.py - Chassis) =====
     "CHASSIS": {
         "category_description": "Chassis structure manufacturers",
@@ -321,7 +346,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 2.5
     },
-    
+
     # ===== SUSPENSION MANUFACTURERS (chassis.py - Suspension) =====
     "SUSPENSION": {
         "category_description": "Suspension system manufacturers",
@@ -338,7 +363,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.6
     },
-    
+
     # ===== BRAKE MANUFACTURERS (chassis.py - BrakeSystem) =====
     "BRAKES": {
         "category_description": "Brake system manufacturers",
@@ -355,7 +380,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.8
     },
-    
+
     # ===== AERODYNAMICS MANUFACTURERS (aerodynamics.py - AeroPackage) =====
     "AERODYNAMICS": {
         "category_description": "Aerodynamic package manufacturers",
@@ -372,7 +397,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 2.0
     },
-    
+
     # ===== TIRE MANUFACTURERS (vehicle tires) =====
     "TIRES": {
         "category_description": "Tire and rubber compound manufacturers",
@@ -389,7 +414,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.2
     },
-    
+
     # ===== ECU MANUFACTURERS (electronics.py - ControlUnit) =====
     "ECU": {
         "category_description": "Electronic control unit manufacturers",
@@ -406,7 +431,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.5
     },
-    
+
     # ===== TELEMETRY MANUFACTURERS (electronics.py - telemetry systems) =====
     "TELEMETRY": {
         "category_description": "Telemetry and data acquisition system manufacturers",
@@ -423,7 +448,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.2
     },
-    
+
     # ===== STEERING MANUFACTURERS (electronics.py - SteeringSystem) =====
     "STEERING": {
         "category_description": "Steering system manufacturers",
@@ -439,7 +464,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 0.8
     },
-    
+
     # ===== SAFETY EQUIPMENT MANUFACTURERS =====
     "SAFETY": {
         "category_description": "Safety equipment manufacturers",
@@ -456,7 +481,7 @@ SUPPLIER_BASE_MODELS = {
         },
         "base_annual_cost_millions": 1.0
     },
-    
+
     # ===== FUEL & ENERGY SUPPLIERS =====
     "FUEL_ENERGY": {
         "category_description": "Fuel, battery, and energy storage system providers",
@@ -557,6 +582,6 @@ PLACEHOLDER_SUPPLIERS = {
 }
 
 __all__ = [
-    'SupplierCategory', 'SupplierTier', 'Supplier', 'ComponentContract', 
+    'SupplierCategory', 'SupplierTier', 'Supplier', 'ComponentContract',
     'SUPPLIER_BASE_MODELS', 'PLACEHOLDER_SUPPLIERS'
 ]
