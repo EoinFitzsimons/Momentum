@@ -1354,11 +1354,11 @@ class RaceWindow(QMainWindow):
         self.pace_slider = QSlider(Qt.Orientation.Horizontal)
         self.pace_slider.setMinimum(0)
         self.pace_slider.setMaximum(100)
-        self.pace_slider.setValue(50)
         self.pace_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.pace_slider.setTickInterval(10)
         self.pace_slider.valueChanged.connect(self._on_pace_changed)
         player_layout.addWidget(self.pace_slider)
+        self.pace_slider.setValue(50)  # Set value AFTER connecting signal to trigger initial styling
         
         pace_hint = QLabel("Conservative ← → Aggressive")
         pace_hint.setStyleSheet("font-size: 10px;")
@@ -1377,11 +1377,11 @@ class RaceWindow(QMainWindow):
         self.overtake_slider = QSlider(Qt.Orientation.Horizontal)
         self.overtake_slider.setMinimum(0)
         self.overtake_slider.setMaximum(100)
-        self.overtake_slider.setValue(50)
         self.overtake_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.overtake_slider.setTickInterval(10)
         self.overtake_slider.valueChanged.connect(self._on_overtake_changed)
         player_layout.addWidget(self.overtake_slider)
+        self.overtake_slider.setValue(50)  # Set value AFTER connecting signal to trigger initial styling
         
         overtake_hint = QLabel("Cautious ← → Aggressive")
         overtake_hint.setStyleSheet("font-size: 10px;")
@@ -2349,12 +2349,12 @@ class RaceWindow(QMainWindow):
 
             driver_name = entry['name']
             push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
-            if push_int < 0.4:
-                symbol = "[CONSERVE]"
-            elif push_int < 0.65:
-                symbol = "[MANAGE]"
+            if push_int < 0.25:
+                symbol = "(-)"
+            elif push_int < 0.75:
+                symbol = "(=)"
             else:
-                symbol = "[ATTACK]"
+                symbol = "(+)"
             self.standings_table.setItem(row, 1, QTableWidgetItem(f"{symbol} {driver_name}"))
             # Highlight the player-controlled driver row/cell
             try:
@@ -2372,7 +2372,7 @@ class RaceWindow(QMainWindow):
             if entry.get('dnf', False):
                 gap_text = "DNF"
             elif row == 0:
-                gap_text = "-"
+                gap_text = "LEADER"
             else:
                 lap_diff = leader_lap - entry['lap']
                 raw_gap = entry.get('gap_ahead', 0.0)
