@@ -22,11 +22,17 @@ if __name__ == '__main__':
     print('track id:', track.id if track else None)
 
     events = []
+
     def cb(e):
         events.append(e)
         print('ev cb:', e)
 
-    results = simulate_race(drivers, track, seed=1, verbose=False, event_callback=cb)
+    results = simulate_race(
+        drivers,
+        track,
+        seed=1,
+        verbose=False,
+        event_callback=cb)
     print('results count', len(results))
     print('events captured', len(events))
     for r in results:

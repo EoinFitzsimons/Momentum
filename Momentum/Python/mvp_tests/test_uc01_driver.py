@@ -5,11 +5,15 @@ import importlib.util
 # load modules directly by path to avoid package-relative import issues
 PKG_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 PKG_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-# Ensure package-style imports (like `database`) resolve when loading modules by path
+# Ensure package-style imports (like `database`) resolve when loading
+# modules by path
 if PKG_ROOT not in sys.path:
     sys.path.insert(0, PKG_ROOT)
 
-spec = importlib.util.spec_from_file_location('services.persistence_sqlite', os.path.join(PKG_ROOT, 'services', 'persistence_sqlite.py'))
+spec = importlib.util.spec_from_file_location(
+    'services.persistence_sqlite', os.path.join(
+        PKG_ROOT, 'services', 'persistence_sqlite.py'))
+assert spec is not None and spec.loader is not None, 'Failed to load services.persistence_sqlite spec'
 persistence_sqlite = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(persistence_sqlite)
 PersistenceSQLite = persistence_sqlite.PersistenceSQLite

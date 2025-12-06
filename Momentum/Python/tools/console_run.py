@@ -8,7 +8,6 @@ Console runner for the Basic Race MVP.
 """
 from __future__ import annotations
 
-import time
 from services.persistence_sqlite import PersistenceSQLite
 from sim_simple import simulate_race
 
@@ -25,12 +24,14 @@ def _load_drivers(db):
         print("No drivers found in DB, seeding demo drivers...")
         db.seed_sample_data(count=20)
         drivers = db.list_drivers()
-    
+
     return drivers
+
 
 def _print_lap_start(lap_num):
     """Print lap start header."""
     print(f"\n=== Lap {lap_num} start ===")
+
 
 def _print_standings(lap_num, standings):
     """Print top 10 standings."""
@@ -41,19 +42,27 @@ def _print_standings(lap_num, standings):
         pos = r.get('position')
         print(f" {pos:2d}. {name:20s} {time_s:8.2f}s")
 
+
 def _print_pit(driver_id, lap_num, pit_time):
     """Print pit stop event."""
     print(f"PIT: driver {driver_id} lap {lap_num} (pit_time={pit_time})")
+
 
 def _print_incident(subtype, driver_id, lap_num):
     """Print incident event."""
     print(f"INCIDENT: {subtype} driver {driver_id} lap {lap_num}")
 
+
 def _print_race_results(results):
     """Print final race results."""
     print("\nRace finished. Final results:")
     for r in results:
-        print(f" {r.get('position'):2d}. {r.get('driver_id'):3d} {r.get('time_seconds'):8.2f}s")
+        print(
+            f" {
+                r.get('position'):2d}. {
+                r.get('driver_id'):3d} {
+                r.get('time_seconds'):8.2f}s")
+
 
 def _create_event_callback():
     """Create event callback for race simulation."""
@@ -71,23 +80,30 @@ def _create_event_callback():
             _print_race_results(e.get('results', []))
     return evcb
 
+
 def main():
     db = PersistenceSQLite()
     db.ensure_schema()
 
     drivers = _load_drivers(db)
     track = db.get_track(1)
-    
+
     print("Loaded drivers:")
     for d in drivers:
         print(f" - {d.id}: {d.name}")
     print("Track:", track.name if track else "(none)")
 
     evcb = _create_event_callback()
-    
+
     print("Starting simulation (console)...\n")
-    results = simulate_race(drivers, track, seed=None, verbose=False, event_callback=evcb, lap_delay=0.1)
-    
+    results = simulate_race(
+        drivers,
+        track,
+        seed=None,
+        verbose=False,
+        event_callback=evcb,
+        lap_delay=0.1)
+
     try:
         db.save_race_results(race_id=1, results=results)
     except Exception as exc:

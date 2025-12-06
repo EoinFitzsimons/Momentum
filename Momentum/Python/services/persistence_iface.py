@@ -23,5 +23,6 @@ class PersistenceIface(Protocol):
     def get_track(self, track_id: int) -> Optional[DBTrack]:
         raise NotImplementedError
 
-    def save_race_results(self, race_id: int, results: List[DBRaceResult]) -> None:
+    def save_race_results(self, race_id: int,
+                          results: List[DBRaceResult]) -> None:
         raise NotImplementedError

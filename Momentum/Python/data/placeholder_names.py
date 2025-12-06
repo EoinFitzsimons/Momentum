@@ -7,7 +7,7 @@ All names are fictional and any resemblance to real entities is coincidental.
 
 Now enhanced with hybrid name generation using:
 - NameAPI for realistic, locale-specific names
-- ParaNames dataset for massive bulk capacity  
+- ParaNames dataset for massive bulk capacity
 - Statistical frequency weighting for authenticity
 - Graceful fallbacks for reliability
 
@@ -28,7 +28,8 @@ try:
     HYBRID_NAMES_AVAILABLE = True
 except ImportError:
     HYBRID_NAMES_AVAILABLE = False
-    logging.warning("Hybrid name generator not available. Using fallback names.")
+    logging.warning(
+        "Hybrid name generator not available. Using fallback names.")
 
 # ============================================================================
 # RACING CATEGORIES AND LEAGUES STRUCTURE
@@ -37,14 +38,16 @@ except ImportError:
 from enum import Enum
 from typing import Dict, List, NamedTuple
 
+
 class RaceFormat(Enum):
     SINGLE_SEATER = "single_seater"          # 20+ cars, 2 per team
-    PRODUCTION_CIRCUIT = "production_circuit"  # 30+ cars, 2 per team  
+    PRODUCTION_CIRCUIT = "production_circuit"  # 30+ cars, 2 per team
     TRAVERSE_STAGE = "traverse_stage"        # 50+ cars, 1 per team
     URBAN_SHOWCASE = "urban_showcase"        # 8 cars/teams per event
-    LINEAR_ACCELERATION = "linear_acceleration" # 64 cars, knockout format
+    LINEAR_ACCELERATION = "linear_acceleration"  # 64 cars, knockout format
     SPRINT_CIRCUIT = "sprint_circuit"        # 24 cars, heats format
     ENDURANCE = "endurance"                  # Variable grid sizes
+
 
 class LeagueInfo(NamedTuple):
     code: str
@@ -55,6 +58,7 @@ class LeagueInfo(NamedTuple):
     max_teams: int
     cars_per_team: int
     typical_grid_size: int
+
 
 # 7 MAIN CATEGORIES WITH 5+ LEAGUES EACH
 RACING_CATEGORIES = {
@@ -70,7 +74,7 @@ RACING_CATEGORIES = {
         }
     },
     "PRODUCTION_TOURING": {
-        "name": "Production & Touring Cars", 
+        "name": "Production & Touring Cars",
         "leagues": {
             "WTC1": LeagueInfo("WTC1", "World Touring Championship Premier", RaceFormat.PRODUCTION_CIRCUIT, 1, 15, 18, 2, 36),
             "WTC2": LeagueInfo("WTC2", "World Touring Championship Division 2", RaceFormat.PRODUCTION_CIRCUIT, 2, 16, 20, 2, 40),
@@ -92,7 +96,7 @@ RACING_CATEGORIES = {
         }
     },
     "URBAN_STREET": {
-        "name": "Urban & Street Racing", 
+        "name": "Urban & Street Racing",
         "leagues": {
             "USC1": LeagueInfo("USC1", "Urban Street Championship Elite", RaceFormat.URBAN_SHOWCASE, 1, 8, 8, 1, 8),
             "USC2": LeagueInfo("USC2", "Urban Street Championship Pro", RaceFormat.URBAN_SHOWCASE, 2, 8, 8, 1, 8),
@@ -116,7 +120,7 @@ RACING_CATEGORIES = {
         "leagues": {
             "WSRC1": LeagueInfo("WSRC1", "World Sprint Rallycross Elite", RaceFormat.SPRINT_CIRCUIT, 1, 12, 12, 2, 24),
             "WSRC2": LeagueInfo("WSRC2", "World Sprint Rallycross Pro", RaceFormat.SPRINT_CIRCUIT, 2, 12, 12, 2, 24),
-            "WSRC3": LeagueInfo("WSRC3", "World Sprint Rallycross Sport", RaceFormat.SPRINT_CIRCUIT, 3, 12, 12, 2, 24), 
+            "WSRC3": LeagueInfo("WSRC3", "World Sprint Rallycross Sport", RaceFormat.SPRINT_CIRCUIT, 3, 12, 12, 2, 24),
             "CSRC": LeagueInfo("CSRC", "Continental Sprint Championship", RaceFormat.SPRINT_CIRCUIT, 4, 10, 10, 2, 20),
             "NSRC": LeagueInfo("NSRC", "National Sprint Championship", RaceFormat.SPRINT_CIRCUIT, 5, 8, 8, 2, 16)
         }
@@ -139,7 +143,7 @@ RACING_CATEGORIES = {
 
 # Base components for generating thousands of unique team names
 TEAM_NAME_PREFIXES = [
-    "Apex", "Velocity", "Phoenix", "Thunder", "Crimson", "Azure", "Sterling", "Nexus", 
+    "Apex", "Velocity", "Phoenix", "Thunder", "Crimson", "Azure", "Sterling", "Nexus",
     "Titan", "Eclipse", "Lightning", "Falcon", "Storm", "Vanguard", "Pinnacle", "Zenith",
     "Horizon", "Meridian", "Catalyst", "Summit", "Quantum", "Matrix", "Vector", "Fusion",
     "Prism", "Vertex", "Pulse", "Surge", "Blaze", "Vortex", "Nova", "Stellar",
@@ -176,7 +180,7 @@ TEAM_NAME_SUFFIXES = [
 
 # Sample generated teams (will be expanded programmatically)
 SAMPLE_TEAM_NAMES = {
-    
+
     "GPC1": ["Premier Racing", "Global Velocity", "Apex Motorsport", "Sterling GP", "Phoenix Racing", "Titan Racing", "Vanguard GP", "Quantum Racing", "Summit Motorsport", "Zenith Racing", "Nexus GP", "Elite Racing"],
     "GPC2": ["NextGen Racing", "Future Stars GP", "Pinnacle Motorsport", "Matrix Racing", "Vertex GP", "Pulse Racing", "Surge Motorsport", "Blaze GP", "Vortex Racing", "Nova Motorsport", "Stellar GP", "Cosmic Racing"],
     "GPC3": ["Rising Talent GP", "Prospect Racing", "Cadet Motorsport", "Junior Velocity", "Academy GP", "Star Racing", "Victory Cadets", "Premier Academy", "Racing Pathways", "Championship Futures", "Elite Juniors", "Victory Academy"],
@@ -192,6 +196,7 @@ SAMPLE_TEAM_NAMES = {
 # DRIVER NAME GENERATION SYSTEM
 # ============================================================================
 
+
 @dataclass
 class DriverProfile:
     first_name: str
@@ -199,7 +204,9 @@ class DriverProfile:
     nationality: str
     age: int
     discipline_specialization: str
-    role: str = "driver"  # "driver", "co_driver", "team_principal", "engineer", etc.
+    # "driver", "co_driver", "team_principal", "engineer", etc.
+    role: str = "driver"
+
 
 # Massive name pools for generating thousands of unique drivers
 FIRST_NAMES = {
@@ -224,7 +231,7 @@ FIRST_NAMES = {
         "Laura", "Sarah", "Kimberly", "Deborah", "Dorothy", "Lisa", "Nancy", "Karen", "Betty", "Helen",
         "Sandra", "Donna", "Carol", "Ruth", "Sharon", "Michelle", "Laura", "Sarah", "Kimberly", "Deborah",
         "Amy", "Angela", "Ashley", "Brenda", "Emma", "Olivia", "Cynthia", "Marie", "Janet", "Catherine",
-        # International names  
+        # International names
         "Giulia", "Francesca", "Chiara", "Valentina", "Alessandra", "Federica", "Silvia", "Paola", "Ilaria", "Serena",
         "Marie", "Nathalie", "Isabelle", "Sylvie", "Catherine", "Francoise", "Monique", "Nicole", "Brigitte", "Martine",
         "Carmen", "Maria", "Pilar", "Mercedes", "Rosa", "Ana", "Isabel", "Cristina", "Marta", "Patricia",
@@ -249,7 +256,7 @@ LAST_NAMES = [
     "Koch", "Richter", "Klein", "Wolf", "Schroder", "Neumann", "Schwarz", "Zimmermann", "Braun", "Kruger",
     "Gonzalez", "Rodriguez", "Fernandez", "Lopez", "Martinez", "Sanchez", "Perez", "Gomez", "Martin", "Jimenez",
     "Ruiz", "Hernandez", "Diaz", "Moreno", "Munoz", "Alvarez", "Romero", "Alonso", "Gutierrez", "Navarro",
-    # Asian surnames  
+    # Asian surnames
     "Tanaka", "Suzuki", "Takahashi", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kobayashi", "Kato", "Yoshida",
     "Yamada", "Sasaki", "Yamaguchi", "Matsumoto", "Inoue", "Kimura", "Hayashi", "Shimizu", "Yamazaki", "Mori",
     "Li", "Wang", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou",
@@ -260,7 +267,7 @@ LAST_NAMES = [
 SAMPLE_DRIVER_POOL = [
     # Elite tier examples
     DriverProfile("Alexander", "Sterling", "GBR", 27, "GPC1"),
-    DriverProfile("Marco", "Veloce", "ITA", 24, "GPC1"), 
+    DriverProfile("Marco", "Veloce", "ITA", 24, "GPC1"),
     DriverProfile("Lucas", "Phoenix", "FRA", 29, "GPC1"),
     DriverProfile("Kai", "Thunder", "JPN", 25, "GPC1"),
 ]
@@ -278,7 +285,7 @@ COUNTRIES = {
     "NLD": "Netherlands", "BRA": "Brazil", "CAN": "Canada", "MEX": "Mexico",
     "SWE": "Sweden", "FIN": "Finland", "NOR": "Norway", "DEN": "Denmark",
     "BEL": "Belgium", "SUI": "Switzerland", "AUT": "Austria", "MON": "Monaco",
-    
+
     # All UN Member States
     "AFG": "Afghanistan", "ALB": "Albania", "DZA": "Algeria", "AND": "Andorra",
     "AGO": "Angola", "ATG": "Antigua and Barbuda", "ARG": "Argentina", "ARM": "Armenia",
@@ -324,8 +331,8 @@ COUNTRIES = {
     "ARE": "United Arab Emirates", "URY": "Uruguay", "UZB": "Uzbekistan", "VUT": "Vanuatu",
     "VAT": "Vatican City", "VEN": "Venezuela", "VNM": "Vietnam", "YEM": "Yemen",
     "ZMB": "Zambia", "ZWE": "Zimbabwe",
-    
-    # Recognised Territories and Entities 
+
+    # Recognised Territories and Entities
     "GIB": "Gibraltar",
     "JEY": "Jersey",
     "GGY": "Guernsey",
@@ -364,12 +371,12 @@ COUNTRIES = {
 # MANUFACTURER/ENGINE SUPPLIER NAMES
 # ============================================================================
 
-ENGINE_SUPPLIERS = {
+ENGINE_SUPPLIERS: dict[str, str] = {
 
 }
 
 TIRE_SUPPLIERS = [
-    "GripMax", "TractionTech", "SpeedGrip", "RacingRubber", 
+    "GripMax", "TractionTech", "SpeedGrip", "RacingRubber",
     "PerformanceTire", "UltraGrip", "RaceTech", "SpeedCompound"
 ]
 
@@ -429,53 +436,70 @@ STAFF_ROLES = {
 
 # Estimated staff sizes per team tier and league
 STAFF_SIZE_ESTIMATES = {
-    1: {"management": (8, 15), "technical": (25, 50), "race_operations": (20, 40), "drivers": (4, 8), "support": (15, 30)},  # Tier 1
-    2: {"management": (6, 12), "technical": (15, 35), "race_operations": (15, 30), "drivers": (3, 6), "support": (10, 20)},  # Tier 2
-    3: {"management": (4, 8), "technical": (10, 25), "race_operations": (10, 20), "drivers": (2, 4), "support": (5, 15)},   # Tier 3
-    4: {"management": (3, 6), "technical": (5, 15), "race_operations": (8, 15), "drivers": (2, 3), "support": (3, 10)},    # Tier 4
-    5: {"management": (2, 4), "technical": (3, 8), "race_operations": (5, 10), "drivers": (1, 2), "support": (2, 5)},      # Tier 5
-    6: {"management": (1, 3), "technical": (2, 5), "race_operations": (3, 6), "drivers": (1, 2), "support": (1, 3)}       # Tier 6
+    # Tier 1
+    1: {"management": (8, 15), "technical": (25, 50), "race_operations": (20, 40), "drivers": (4, 8), "support": (15, 30)},
+    # Tier 2
+    2: {"management": (6, 12), "technical": (15, 35), "race_operations": (15, 30), "drivers": (3, 6), "support": (10, 20)},
+    # Tier 3
+    3: {"management": (4, 8), "technical": (10, 25), "race_operations": (10, 20), "drivers": (2, 4), "support": (5, 15)},
+    # Tier 4
+    4: {"management": (3, 6), "technical": (5, 15), "race_operations": (8, 15), "drivers": (2, 3), "support": (3, 10)},
+    # Tier 5
+    5: {"management": (2, 4), "technical": (3, 8), "race_operations": (5, 10), "drivers": (1, 2), "support": (2, 5)},
+    # Tier 6
+    6: {"management": (1, 3), "technical": (2, 5), "race_operations": (3, 6), "drivers": (1, 2), "support": (1, 3)}
 }
 
 # ============================================================================
 # DATABASE GENERATION FUNCTIONS
 # ============================================================================
 
-def generate_team_name(category: str = None, tier: int = None) -> str:
+
+def generate_team_name(
+        category: Optional[str] = None, tier: Optional[int] = None) -> str:
     """Generate a unique team name using prefix + suffix combination"""
     import random
     prefix = random.choice(TEAM_NAME_PREFIXES)
     suffix = random.choice(TEAM_NAME_SUFFIXES)
     return f"{prefix} {suffix}"
 
-def generate_driver_name(nationality: str = None, gender: str = "ANY") -> Dict[str, str]:
+
+def generate_driver_name(
+        nationality: Optional[str] = None, gender: str = "ANY") -> Dict[str, str]:
     """Generate realistic driver name using hybrid system with fallback"""
-    
+
     # Use hybrid name generator if available
     if HYBRID_NAMES_AVAILABLE and nationality:
         try:
             return generate_racing_driver_name(nationality, gender)
         except Exception as e:
-            logging.warning(f"Hybrid name generation failed: {e}. Using fallback.")
-    
+            logging.warning(
+                f"Hybrid name generation failed: {e}. Using fallback.")
+
     # Fallback to original system
     first_names = FIRST_NAMES.get('male', []) + FIRST_NAMES.get('female', [])
     last_names = LAST_NAMES
-    
+
     # Select names based on nationality preference
     if nationality and nationality in COUNTRIES:
         # Weight towards more common names for major motorsport countries
-        weight_factor = COUNTRIES[nationality].get('motorsport_heritage', 0.5)
+        country_data: dict = COUNTRIES.get(nationality, {})  # type: ignore
+        if isinstance(country_data, dict):
+            weight_factor = country_data.get('motorsport_heritage', 0.5)
+        else:
+            weight_factor = 0.5
         if weight_factor > 0.7:
             # Use more traditional/common names for established racing nations
-            first_name = random.choices(first_names, weights=[1.2 if len(name) <= 6 else 0.8 for name in first_names], k=1)[0]
+            first_name = random.choices(
+                first_names, weights=[
+                    1.2 if len(name) <= 6 else 0.8 for name in first_names], k=1)[0]
         else:
             first_name = random.choice(first_names)
     else:
         first_name = random.choice(first_names)
-    
+
     last_name = random.choice(last_names)
-    
+
     return {
         "first_name": first_name,
         "last_name": last_name,
@@ -483,73 +507,79 @@ def generate_driver_name(nationality: str = None, gender: str = "ANY") -> Dict[s
         "nationality": nationality or random.choice(list(COUNTRIES.keys())),
         "gender": gender,
         "source": "fallback",
-        "confidence": 0.6
+        "confidence": "0.6"
     }
+
 
 def calculate_total_entities():
     """Calculate total entities needed for full database"""
     totals = {
         "teams": 0,
-        "drivers": 0, 
+        "drivers": 0,
         "staff": 0,
         "total_personnel": 0
     }
-    
+
     for category_data in RACING_CATEGORIES.values():
         for league_info in category_data["leagues"].values():
             avg_teams = (league_info.min_teams + league_info.max_teams) // 2
             totals["teams"] += avg_teams
             totals["drivers"] += avg_teams * league_info.cars_per_team
-            
+
             # Calculate staff per team based on tier
-            tier_staff = STAFF_SIZE_ESTIMATES.get(league_info.tier, STAFF_SIZE_ESTIMATES[6])
-            avg_staff_per_team = sum((min_staff + max_staff) // 2 
-                                   for min_staff, max_staff in tier_staff.values())
+            tier_staff = STAFF_SIZE_ESTIMATES.get(
+                league_info.tier, STAFF_SIZE_ESTIMATES.get(6, {}))
+            if isinstance(tier_staff, dict):
+                avg_staff_per_team = sum((min_staff + max_staff) // 2
+                                         for min_staff, max_staff in tier_staff.values())
+            else:
+                avg_staff_per_team = 0
             totals["staff"] += avg_teams * avg_staff_per_team
-    
+
     totals["total_personnel"] = totals["drivers"] + totals["staff"]
     return totals
+
 
 def generate_league_structure(league_code: str) -> dict:
     """Generate complete team and driver structure for a specific league"""
     import random
-    
-    if league_code not in [code for cat in RACING_CATEGORIES.values() 
-                          for code in cat["leagues"].keys()]:
+
+    if league_code not in [code for cat in RACING_CATEGORIES.values()
+                           for code in cat["leagues"].keys()]:  # type: ignore
         raise ValueError(f"Unknown league code: {league_code}")
-    
+
     # Find league info
     league_info = None
     for category_data in RACING_CATEGORIES.values():
-        if league_code in category_data["leagues"]:
-            league_info = category_data["leagues"][league_code]
+        if league_code in category_data["leagues"]:  # type: ignore
+            league_info = category_data["leagues"][league_code]  # type: ignore
             break
-    
+
     if not league_info:
         return {}
-    
+
     # Generate teams for this league
     num_teams = random.randint(league_info.min_teams, league_info.max_teams)
     teams = []
-    
+
     for i in range(num_teams):
         team = {
-            "id": f"{league_code}_{i+1:03d}",
+            "id": f"{league_code}_{i + 1:03d}",
             "name": generate_team_name(),
             "league": league_code,
             "tier": league_info.tier,
             "drivers": [],
             "staff": {}
         }
-        
+
         # Generate drivers for this team
         for j in range(league_info.cars_per_team):
             nationality = random.choice(list(COUNTRIES.keys()))
             first_name, last_name = generate_driver_name(nationality)
             age = random.randint(18, 45)
-            
+
             driver = {
-                "id": f"{team['id']}_D{j+1}",
+                "id": f"{team['id']}_D{j + 1}",
                 "first_name": first_name,
                 "last_name": last_name,
                 "nationality": nationality,
@@ -557,25 +587,27 @@ def generate_league_structure(league_code: str) -> dict:
                 "role": "driver"
             }
             team["drivers"].append(driver)
-        
+
         # Generate staff for this team based on tier
-        tier_staff_ranges = STAFF_SIZE_ESTIMATES.get(league_info.tier, STAFF_SIZE_ESTIMATES[6])
+        tier_staff_ranges = STAFF_SIZE_ESTIMATES.get(
+            league_info.tier, STAFF_SIZE_ESTIMATES[6])
         for role_category, (min_staff, max_staff) in tier_staff_ranges.items():
             if role_category == "drivers":
                 continue  # Already handled
-                
+
             num_staff = random.randint(min_staff, max_staff)
             team["staff"][role_category] = []
-            
+
             for k in range(num_staff):
                 nationality = random.choice(list(COUNTRIES.keys()))
                 gender = random.choice(["male", "female"])
-                first_name, last_name = generate_driver_name(nationality, gender)
+                first_name, last_name = generate_driver_name(
+                    nationality, gender)
                 age = random.randint(25, 65)
                 role = random.choice(STAFF_ROLES[role_category])
-                
+
                 staff_member = {
-                    "id": f"{team['id']}_S{role_category[0].upper()}{k+1}",
+                    "id": f"{team['id']}_S{role_category[0].upper()}{k + 1}",
                     "first_name": first_name,
                     "last_name": last_name,
                     "nationality": nationality,
@@ -584,16 +616,16 @@ def generate_league_structure(league_code: str) -> dict:
                     "category": role_category
                 }
                 team["staff"][role_category].append(staff_member)
-        
+
         teams.append(team)
-    
+
     return {
         "league_code": league_code,
         "league_info": league_info,
         "teams": teams,
         "total_teams": len(teams),
         "total_drivers": sum(len(team["drivers"]) for team in teams),
-        "total_staff": sum(sum(len(staff_list) for staff_list in team["staff"].values()) 
+        "total_staff": sum(sum(len(staff_list) for staff_list in team["staff"].values())
                            for team in teams)
     }
 
@@ -601,51 +633,62 @@ def generate_league_structure(league_code: str) -> dict:
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_random_driver_name(discipline: str = None) -> DriverProfile:
+
+def get_random_driver_name(discipline: Optional[str] = None) -> DriverProfile:
     """Get a random driver name, optionally filtered by discipline"""
     import random
-    
+
     if discipline:
-        discipline_drivers = [d for d in SAMPLE_DRIVER_POOL if d.discipline_specialization == discipline]
+        discipline_drivers = [
+            d for d in SAMPLE_DRIVER_POOL if d.discipline_specialization == discipline]
         if discipline_drivers:
             return random.choice(discipline_drivers)
-    
+
     return random.choice(SAMPLE_DRIVER_POOL)
 
-def get_random_team_name(category: str = None) -> str:
+
+def get_random_team_name(category: Optional[str] = None) -> str:
     """Generate a random team name"""
     return generate_team_name(category)
+
 
 def get_random_track(discipline: str) -> Dict:
     """Get a random track for specified discipline"""
     import random
-    return random.choice(TRACK_NAMES.get(discipline, TRACK_NAMES.get("GPC1", [])))
+    # TODO: Implement TRACK_NAMES data structure
+    return {}
+
 
 def get_country_name(country_code: str) -> str:
     """Get country name from code"""
     return COUNTRIES.get(country_code, country_code)
 
+
 def get_all_league_codes() -> List[str]:
     """Get all available league codes"""
     codes = []
     for category_data in RACING_CATEGORIES.values():
-        codes.extend(category_data["leagues"].keys())
+        codes.extend(category_data["leagues"].keys())  # type: ignore
     return codes
+
 
 def get_leagues_by_category(category: str) -> Dict:
     """Get all leagues for a specific category"""
-    return RACING_CATEGORIES.get(category, {}).get("leagues", {})
+    return RACING_CATEGORIES.get(category, {}).get("leagues", {})  # type: ignore
 
 # ============================================================================
 # ENHANCED NAME GENERATION FUNCTIONS
 # ============================================================================
 
-def generate_bulk_drivers(count: int, country_distribution: Dict[str, float] = None) -> List[Dict[str, str]]:
+
+def generate_bulk_drivers(
+        count: int, country_distribution: Optional[Dict[str, float]] = None) -> List[Dict[str, str]]:
     """Generate bulk drivers using hybrid system for database seeding"""
     if HYBRID_NAMES_AVAILABLE:
         try:
             generator = get_global_generator()
-            results = generator.generate_bulk_names(count, country_distribution)
+            results = generator.generate_bulk_names(
+                count, country_distribution)
             return [{
                 "first_name": result.first_name,
                 "last_name": result.last_name,
@@ -657,7 +700,7 @@ def generate_bulk_drivers(count: int, country_distribution: Dict[str, float] = N
             } for result in results]
         except Exception as e:
             logging.warning(f"Bulk generation failed: {e}. Using fallback.")
-    
+
     # Fallback to simple generation
     results = []
     countries = list(COUNTRIES.keys())
@@ -667,6 +710,7 @@ def generate_bulk_drivers(count: int, country_distribution: Dict[str, float] = N
         name = generate_driver_name(nationality, gender)
         results.append(name)
     return results
+
 
 def get_name_generation_stats() -> Dict:
     """Get statistics about name generation performance"""
@@ -678,9 +722,10 @@ def get_name_generation_stats() -> Dict:
             pass
     return {"hybrid_system": "unavailable", "fallback_only": True}
 
+
 # Export main data structures
 __all__ = [
-    'RACING_CATEGORIES', 'COUNTRIES', 'SAMPLE_DRIVER_POOL', 'TRACK_NAMES', 
+    'RACING_CATEGORIES', 'COUNTRIES', 'SAMPLE_DRIVER_POOL', 'TRACK_NAMES',
     'CHAMPIONSHIP_NAMES', 'ENGINE_SUPPLIERS', 'TIRE_SUPPLIERS', 'FUEL_SUPPLIERS',
     'MEDIA_OUTLETS', 'SPONSOR_CATEGORIES', 'STAFF_ROLES', 'STAFF_SIZE_ESTIMATES',
     'RaceFormat', 'LeagueInfo', 'DriverProfile', 'FIRST_NAMES', 'LAST_NAMES',
@@ -698,32 +743,47 @@ __all__ = [
 if __name__ == "__main__":
     # Demonstrate the scale of the system
     print("=== MOMENTUM MOTORSPORT SIMULATION - SCALE ANALYSIS ===\\n")
-    
+
     totals = calculate_total_entities()
     print(f"ESTIMATED TOTAL DATABASE SIZE:")
     print(f"- Teams: {totals['teams']:,}")
-    print(f"- Drivers: {totals['drivers']:,}")  
+    print(f"- Drivers: {totals['drivers']:,}")
     print(f"- Staff: {totals['staff']:,}")
     print(f"- Total Personnel: {totals['total_personnel']:,}")
-    
+
     print(f"\\nRACING CATEGORIES: {len(RACING_CATEGORIES)}")
     for category, data in RACING_CATEGORIES.items():
         print(f"\\n{category}: {data['name']}")
         print(f"  Leagues: {len(data['leagues'])}")
-        for code, league in data['leagues'].items():
+        for code, league in data['leagues'].items():  # type: ignore
             print(f"    {code}: {league.full_name} (Tier {league.tier})")
-            print(f"      Grid: {league.typical_grid_size} cars, {league.min_teams}-{league.max_teams} teams")
-    
+            print(
+                f"      Grid: {
+                    league.typical_grid_size} cars, {
+                    league.min_teams}-{
+                    league.max_teams} teams")
+
     print(f"\\nCOUNTRIES SUPPORTED: {len(COUNTRIES)}")
-    print(f"NAME COMBINATIONS: {len(FIRST_NAMES['male']) + len(FIRST_NAMES['female'])} × {len(LAST_NAMES)} = {(len(FIRST_NAMES['male']) + len(FIRST_NAMES['female'])) * len(LAST_NAMES):,} possible names")
-    print(f"TEAM NAME COMBINATIONS: {len(TEAM_NAME_PREFIXES)} × {len(TEAM_NAME_SUFFIXES)} = {len(TEAM_NAME_PREFIXES) * len(TEAM_NAME_SUFFIXES):,} possible team names")
-    
+    print(f"NAME COMBINATIONS: {len(FIRST_NAMES['male']) +
+                                len(FIRST_NAMES['female'])} × {len(LAST_NAMES)} = {(len(FIRST_NAMES['male']) +
+                                                                                    len(FIRST_NAMES['female'])) *
+                                                                                   len(LAST_NAMES):,} possible names")
+    print(
+        f"TEAM NAME COMBINATIONS: {
+            len(TEAM_NAME_PREFIXES)} × {
+            len(TEAM_NAME_SUFFIXES)} = {
+                len(TEAM_NAME_PREFIXES) * len(TEAM_NAME_SUFFIXES):,} possible team names")
+
     print(f"\\n=== SAMPLE LEAGUE GENERATION ===")
     sample_league = generate_league_structure("GPC1")
-    print(f"\\nGenerated {sample_league['league_code']} ({sample_league['league_info'].full_name}):")
+    print(
+        f"\\nGenerated {
+            sample_league['league_code']} ({
+            sample_league['league_info'].full_name}):")
     print(f"- Teams: {sample_league['total_teams']}")
     print(f"- Drivers: {sample_league['total_drivers']}")
     print(f"- Staff: {sample_league['total_staff']}")
-    print(f"- Total Personnel: {sample_league['total_drivers'] + sample_league['total_staff']}")
-    
+    print(
+        f"- Total Personnel: {sample_league['total_drivers'] + sample_league['total_staff']}")
+
     print("\\nThis system can generate THOUSANDS of unique entities while maintaining diversity and realism!")

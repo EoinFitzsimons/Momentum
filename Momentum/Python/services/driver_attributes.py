@@ -16,7 +16,8 @@ from config import (
 )
 
 
-def _clamp(value: float, min_val: float = DRIVER_ATTRIBUTE_MIN, max_val: float = DRIVER_ATTRIBUTE_MAX) -> float:
+def _clamp(value: float, min_val: float = DRIVER_ATTRIBUTE_MIN,
+           max_val: float = DRIVER_ATTRIBUTE_MAX) -> float:
     try:
         v = float(value)
     except (TypeError, ValueError):
@@ -24,7 +25,8 @@ def _clamp(value: float, min_val: float = DRIVER_ATTRIBUTE_MIN, max_val: float =
     return max(min_val, min(max_val, v))
 
 
-def get_safe_attribute(driver: Any, attr: str, default: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
+def get_safe_attribute(driver: Any, attr: str,
+                       default: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
     """Safely read a driver attribute and clamp to 0-100."""
     if driver is None:
         return float(default)
@@ -34,7 +36,8 @@ def get_safe_attribute(driver: Any, attr: str, default: float = DRIVER_ATTRIBUTE
     return _clamp(value)
 
 
-def _avg(values: list[float], fallback: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
+def _avg(values: list[float],
+         fallback: float = DRIVER_ATTRIBUTE_DEFAULT) -> float:
     cleaned = [v for v in values if v is not None]
     if not cleaned:
         return float(fallback)
@@ -116,7 +119,8 @@ def get_driver_confidence(driver: Any) -> float:
     wins = get_safe_attribute(driver, "career_wins", 0.0)
     podiums = get_safe_attribute(driver, "career_podiums", 0.0)
     starts = max(get_safe_attribute(driver, "career_starts", 1.0), 1.0)
-    experience_boost = min((wins * 1.5 + podiums) / max(starts, 1.0) * 100.0, 12.0)
+    experience_boost = min((wins * 1.5 + podiums) /
+                           max(starts, 1.0) * 100.0, 12.0)
 
     trend_boost = _form_trend_bonus(getattr(driver, "form_trend", None))
 
