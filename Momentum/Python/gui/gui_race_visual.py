@@ -23,10 +23,10 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHB
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QPaintEvent
 
-from database.database_manager import DatabaseManager
-from services.race_simulation_api import simulate_race
-from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
-from database.models import Team
+from database.database_manager import DatabaseManager  # type: ignore[import-not-found]
+from services.race_simulation_api import simulate_race  # type: ignore[import-not-found]
+from RaceLogic.base_race_engine import RaceContext, RacingDiscipline  # type: ignore[import-not-found]
+from database.models import Team  # type: ignore[import-not-found]
 
 
 @dataclass
@@ -69,7 +69,7 @@ class CircuitGenerator:
     @staticmethod
     def generate(track_length_km: float = 5.0):
         """Generate circuit based on track length."""
-        segments = []
+        segments: List[TrackPoint] = []
         state = {
             'segments': segments,
             'current_s': 0,
@@ -374,7 +374,7 @@ class TrackWidget(QWidget):
         
         # Camera settings
         self.camera_mode = 'full'
-        self.follow_car_id = None
+        self.follow_car_id: Optional[int] = None
         self.camera_zoom = 1.0
         self.camera_x = 0
         self.camera_y = 0
@@ -523,7 +523,7 @@ class TrackWidget(QWidget):
                 
                 # === DEBUG TRACKING: Monitor which cars are updating ===
                 if not hasattr(self, '_update_count'):
-                    self._update_count = {}
+                    self._update_count: Dict[int, int] = {}
                 self._update_count[driver_id] = self._update_count.get(driver_id, 0) + 1
                 
                 # Log every 60 frames (2 seconds at 30 FPS)
@@ -626,7 +626,6 @@ class TrackWidget(QWidget):
             painter.end()
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
-            import traceback
             traceback.print_exc()
     
     def _draw_runoff_areas(self, painter):
@@ -1262,6 +1261,9 @@ class RaceWindow(QMainWindow):
                 'tire_condition': 1.0
             }
             
+            # Collision tracking
+            self._collision_log: List[Dict[str, Any]] = []
+            
             # Camera mode
             self.camera_mode = 'full'  # 'full' or 'follow'
             
@@ -1275,7 +1277,6 @@ class RaceWindow(QMainWindow):
             # No auto-start: user must click Start Race manually
             print("[INFO] GUI ready - click Start Race when ready")
         except Exception as e:
-            import traceback
             print("[ERROR] Exception in RaceWindow.__init__:", e)
             traceback.print_exc()
             raise
@@ -1533,7 +1534,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Database connection failed: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Database initialization failed: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1555,7 +1555,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to load drivers: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Failed to load drivers: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1597,7 +1596,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create track: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Failed to create track: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1622,7 +1620,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Circuit generation failed: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Circuit generation failed: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1644,7 +1641,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create track display: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Track widget creation failed: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1692,7 +1688,6 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create cars: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Car creation failed: {e}")
-                import traceback
                 traceback.print_exc()
                 return
             
@@ -1722,7 +1717,6 @@ class RaceWindow(QMainWindow):
             self.info_label.setText(f"Unexpected error: {e}")
             self.start_btn.setEnabled(False)
             print(f"ERROR: Unexpected error in _load_data: {e}")
-            import traceback
             traceback.print_exc()
     
     # _auto_start_race method removed: user must click Start Race manually
@@ -1893,7 +1887,7 @@ class RaceWindow(QMainWindow):
                             # Mark in standings and rebuild table so DNF appears immediately
                             if driver_id is not None:
                                 if not hasattr(self, '_race_state'):
-                                    self._race_state = {}
+                                    self._race_state: Dict[int, Dict[str, Any]] = {}
                                 existing = self._race_state.get(driver_id, {
                                     'name': driver_name,
                                     'position': event.get('position', 0),
@@ -1995,7 +1989,6 @@ class RaceWindow(QMainWindow):
             except Exception as e:
                 error_msg = f"Race error: {e}"
                 print(f"ERROR in race_runner: {e}")
-                import traceback
                 traceback.print_exc()
                 self.emitter.event_signal.emit(error_msg)
         
@@ -2058,16 +2051,14 @@ class RaceWindow(QMainWindow):
                     # Column 2 = lap
                     self.standings_table.setItem(row, 2, QTableWidgetItem(str(data['lap'])))
 
-                    # Highlight player-controlled driver cell background
-                    try:
-                        name_cell = self.standings_table.item(row, 1)
+                    # Highlight player-controlled driver cell background (guard against missing item)
+                    name_cell = self.standings_table.item(row, 1)
+                    if name_cell is not None:
                         if driver.id == self.player_driver_id:
                             name_cell.setBackground(QColor(255, 215, 0))  # Gold
                             name_cell.setForeground(QColor(0, 0, 0))  # Dark text on gold
                         else:
                             name_cell.setBackground(QColor(37, 38, 39))  # normal background (dark)
-                    except Exception:
-                        pass
                     break
         except Exception as e:
             print(f"ERROR in _on_position_update: {e}")
@@ -2131,22 +2122,19 @@ class RaceWindow(QMainWindow):
                         self.standings_table.setItem(i, 1, QTableWidgetItem(driver.name))
                         self.standings_table.setItem(i, 3, QTableWidgetItem(f"+{gap:.2f}s" if gap > 0 else "-"))
 
-                        # Highlight player-controlled driver in leaderboard
-                        try:
-                            name_cell = self.standings_table.item(i, 1)
+                        # Highlight player-controlled driver in leaderboard (guard against missing item)
+                        name_cell = self.standings_table.item(i, 1)
+                        if name_cell is not None:
                             if driver.id == self.player_driver_id:
                                 name_cell.setBackground(QColor(255, 215, 0))  # Gold
                                 name_cell.setForeground(QColor(0, 0, 0))  # Dark text on gold
                             else:
                                 name_cell.setBackground(QColor(37, 38, 39))
-                        except Exception:
-                            pass
                 except Exception as e:
                     print(f"ERROR updating standings row {i}: {e}")
         
         except Exception as e:
             print(f"ERROR in _on_race_finished: {e}")
-            import traceback
             traceback.print_exc()
     
     def _on_event(self, message: str):
@@ -2217,7 +2205,6 @@ class RaceWindow(QMainWindow):
                         
             except Exception as e:
                 print(f"Error updating telemetry display: {e}")
-                import traceback
                 traceback.print_exc()
             return
 
@@ -2227,9 +2214,10 @@ class RaceWindow(QMainWindow):
                 parts = message.split("|")
                 if len(parts) >= 2:
                     did = int(parts[1])
-                    if hasattr(self, 'track_widget') and hasattr(self.track_widget, 'mark_dnf'):
+                    tw = getattr(self, 'track_widget', None)
+                    if tw is not None and hasattr(tw, 'mark_dnf'):
                         try:
-                            self.track_widget.mark_dnf(did)
+                            tw.mark_dnf(did)
                         except Exception:
                             pass
             except Exception:
@@ -2282,7 +2270,7 @@ class RaceWindow(QMainWindow):
                 race_time = float(parts[7]) if len(parts) > 7 else 0.0
 
                 if not hasattr(self, '_race_state'):
-                    self._race_state = {}
+                    self._race_state: Dict[int, Dict[str, Any]] = {}
                 if not hasattr(self, '_driver_push_intensity'):
                     self._driver_push_intensity = {}
 
@@ -2357,15 +2345,13 @@ class RaceWindow(QMainWindow):
                 symbol = "(+)"
             self.standings_table.setItem(row, 1, QTableWidgetItem(f"{symbol} {driver_name}"))
             # Highlight the player-controlled driver row/cell
-            try:
-                name_item = self.standings_table.item(row, 1)
+            name_item = self.standings_table.item(row, 1)
+            if name_item is not None:
                 if entry['driver_id'] == getattr(self, 'player_driver_id', None):
                     name_item.setBackground(QColor(255, 215, 0))  # Gold for player
                     name_item.setForeground(QColor(0, 0, 0))  # Dark text on gold
                 else:
                     name_item.setBackground(QColor(37, 38, 39))
-            except Exception:
-                pass
 
             self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry['lap'])))
 
@@ -2431,7 +2417,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             color = f"#{r:02X}{g:02X}{b:02X}"
-            self.pace_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #FFFFFF;")
+            self.pace_value_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
             # Update slider styling: sub-page shows selected color
             self.pace_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
@@ -2554,8 +2540,7 @@ class RaceWindow(QMainWindow):
 
 
 def main():
-    import traceback
-    from PyQt6.QtWidgets import QMessageBox
+    # Use top-level imports; no local imports needed here
     app = QApplication(sys.argv)
     try:
         window = RaceWindow()
