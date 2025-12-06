@@ -46,7 +46,8 @@ class Car:
     s: float  # Current arc-length position (meters)
     color: QColor
     dnf: bool = False
-    lap: int = 0
+    # Use 1-based lap counting for UI (show lap 1 as first racing lap)
+    lap: int = 1
     total_time: float = 0.0  # Total race time from simulation
     avg_lap_time: float = 60.0  # Average lap time in seconds
     last_lap: int = 0  # Last completed lap number
@@ -370,6 +371,7 @@ class TrackWidget(QWidget):
         self.race_active = False
         self.start_time = 0.0
         
+        
         # Camera settings
         self.camera_mode = 'full'
         self.follow_car_id = None
@@ -405,7 +407,8 @@ class TrackWidget(QWidget):
         self.race_start_time = time.time()
         for car in self.cars:
             car.total_time = 0.0
-            car.lap = 0
+            # Start lap counting at 1 (first racing lap)
+            car.lap = 1
             car.s = 0.0
         self.animation_timer.start()
     
@@ -418,7 +421,8 @@ class TrackWidget(QWidget):
         """Update specific car position based on simulation data (legacy method)."""
         for car in self.cars:
             if car.driver_id == driver_id:
-                car.lap = lap
+                # Ensure lap is 1-based for UI consistency
+                car.lap = max(1, int(lap))
                 car.total_time = total_time
                 
                 # Calculate average lap time
@@ -513,7 +517,8 @@ class TrackWidget(QWidget):
                     car.s = position_m
                 
                 # Update car state
-                car.lap = lap
+                # Ensure lap is 1-based for UI consistency
+                car.lap = max(1, int(lap))
                 car.velocity_mps = velocity_mps
                 
                 # === DEBUG TRACKING: Monitor which cars are updating ===
@@ -1321,11 +1326,27 @@ class RaceWindow(QMainWindow):
         # Player controls section
         from PyQt6.QtWidgets import QSlider, QGroupBox
         player_controls = QGroupBox("Your Controls")
+        player_controls.setStyleSheet("""
+            QGroupBox {
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #B9F2FF;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
         player_layout = QVBoxLayout(player_controls)
         
         # Pace control
         pace_label_top = QLabel("Race Pace: Balanced (50%)")
-        pace_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #B9F2FF;")
+        pace_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
         pace_label_top.setMinimumHeight(22)
         self.pace_value_label = pace_label_top
         player_layout.addWidget(pace_label_top)
@@ -1348,7 +1369,7 @@ class RaceWindow(QMainWindow):
         
         # Overtake aggressiveness
         overtake_label_top = QLabel("Overtaking: Moderate (50%)")
-        overtake_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #B9F2FF;")
+        overtake_label_top.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
         overtake_label_top.setMinimumHeight(22)
         self.overtake_value_label = overtake_label_top
         player_layout.addWidget(overtake_label_top)
@@ -1371,11 +1392,27 @@ class RaceWindow(QMainWindow):
         
         # Player telemetry display
         telemetry_group = QGroupBox("Your Telemetry")
+        telemetry_group.setStyleSheet("""
+            QGroupBox {
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #B9F2FF;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+        """)
         telemetry_layout = QVBoxLayout(telemetry_group)
         
         # Speed display
         self.speed_label = QLabel("Speed: --- km/h")
-        self.speed_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #B9F2FF;")
+        self.speed_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF;")
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         telemetry_layout.addWidget(self.speed_label)
         
@@ -1404,7 +1441,7 @@ class RaceWindow(QMainWindow):
             }
             QProgressBar::chunk {
                 background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #B9F2FF, stop:0.5 #B9F2FF, stop:0.7 #DD2D4A, stop:1.0 #DD2D4A);
+                    stop:0 #4FC3F7, stop:0.3 #26C6DA, stop:0.6 #FFB74D, stop:0.8 #FF7043, stop:1.0 #E53935);
                 border-radius: 5px;
             }
         """)
@@ -1421,6 +1458,12 @@ class RaceWindow(QMainWindow):
         self.tire_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.tire_label.setStyleSheet("font-size: 12px; color: #00BFFF;")
         telemetry_layout.addWidget(self.tire_label)
+        # Player status (e.g., RETIRED) — visible but does not disable controls
+        self.player_status_label = QLabel("")
+        self.player_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.player_status_label.setStyleSheet("font-size: 18px; color: #FF4444; font-weight: 900;")
+        self.player_status_label.hide()
+        telemetry_layout.addWidget(self.player_status_label)
         
         right_panel.addWidget(telemetry_group)
         
@@ -1439,7 +1482,7 @@ class RaceWindow(QMainWindow):
         right_panel.addWidget(QLabel("<h2>Live Standings</h2>"))
         self.standings_table = QTableWidget()
         self.standings_table.setColumnCount(4)
-        self.standings_table.setHorizontalHeaderLabels(["🎨", "Driver", "Lap", "Gap"])
+        self.standings_table.setHorizontalHeaderLabels(["", "Driver", "Lap", "Gap"])
         self.standings_table.setMinimumWidth(500)
         self.standings_table.setMinimumHeight(400)
         self.standings_table.setColumnWidth(0, 40)  # Color indicator
@@ -1473,7 +1516,7 @@ class RaceWindow(QMainWindow):
             /* Standings table */
             QTableWidget { background-color: #252627; color: #B9F2FF; gridline-color: #353839; }
             QHeaderView::section { background-color: #353839; color: #B9F2FF; padding: 6px; border: none; }
-            QTableWidget::item:selected { background-color: #FFB000; color: #1A1A1A; font-weight: 700; }
+            QTableWidget::item:selected { background-color: #FFB000; color: #000000; font-weight: 700; }
 
             /* Track widget */
             QWidget#TrackWidget { background-color: #1A1A1A; border: 1px solid rgba(185,242,255,0.04); }
@@ -1663,8 +1706,8 @@ class RaceWindow(QMainWindow):
                     self.standings_table.setItem(i, 0, QTableWidgetItem(""))
                     # Column 1: Driver name
                     self.standings_table.setItem(i, 1, QTableWidgetItem(driver_name))
-                    # Column 2: Lap
-                    self.standings_table.setItem(i, 2, QTableWidgetItem("0"))
+                    # Column 2: Lap (1-based)
+                    self.standings_table.setItem(i, 2, QTableWidgetItem("1"))
                     # Column 3: Gap
                     self.standings_table.setItem(i, 3, QTableWidgetItem("-"))
                 print("Standings table initialized")
@@ -1701,6 +1744,27 @@ class RaceWindow(QMainWindow):
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.info_label.setText("Race starting... waiting for data")
+        # Clear any player RETIRED status from a previous run
+        try:
+            if hasattr(self, 'player_status_label'):
+                self.player_status_label.hide()
+        except Exception:
+            pass
+
+        # Ensure player controls are enabled at race start (in case they were disabled by a prior DNF)
+        try:
+            if hasattr(self, 'pace_slider'):
+                self.pace_slider.setEnabled(True)
+            if hasattr(self, 'overtake_slider'):
+                self.overtake_slider.setEnabled(True)
+            if hasattr(self, 'camera_full_btn'):
+                self.camera_full_btn.setEnabled(True)
+            if hasattr(self, 'camera_follow_btn'):
+                self.camera_follow_btn.setEnabled(True)
+            if hasattr(self, 'push_gauge'):
+                self.push_gauge.setEnabled(True)
+        except Exception:
+            pass
         
         # === CRITICAL FIX: Don't start animation yet! ===
         # Starting animation before first data arrives causes freeze
@@ -1722,13 +1786,13 @@ class RaceWindow(QMainWindow):
                             # === AUTO-START ANIMATION ON FIRST DATA ===
                             # Prevents freeze where animation waits for data
                             if not self._animation_started:
-                                print("[ANIMATION] First position data received - starting animation NOW")
-                                if self.track_widget:
-                                    try:
-                                        self.track_widget.start_animation()
-                                        print("[ANIMATION] Animation timer started")
-                                    except Exception as e:
-                                        print(f"[ERROR] Failed to start animation: {e}")
+                                # Request animation start on the GUI thread via event_signal
+                                print("[ANIMATION] First position data received - requesting animation start on main thread")
+                                try:
+                                    # Emit a simple string command handled by _on_event
+                                    self.emitter.event_signal.emit("start_animation")
+                                except Exception as e:
+                                    print(f"[ERROR] Failed to request animation start: {e}")
                                 self._animation_started = True
                                 self.info_label.setText("Race in progress...")
                             
@@ -1813,10 +1877,19 @@ class RaceWindow(QMainWindow):
                             lap = event.get("lap", 0)
                             print(f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
                             
-                            if self.track_widget and driver_id is not None:
-                                if hasattr(self.track_widget, 'mark_dnf'):
-                                    self.track_widget.mark_dnf(driver_id)
+                            # Ask GUI thread to mark DNF (avoid touching widgets from race thread)
+                            try:
+                                if driver_id is not None:
+                                    self.emitter.event_signal.emit(f"mark_dnf|{driver_id}")
+                            except Exception:
+                                pass
 
+                            # Request GUI thread to show player RETIRED and disable controls
+                            try:
+                                if driver_id == getattr(self, 'player_driver_id', None):
+                                    self.emitter.event_signal.emit(f"player_dnf|{driver_id}|{lap}|{reason}")
+                            except Exception:
+                                pass
                             # Mark in standings and rebuild table so DNF appears immediately
                             if driver_id is not None:
                                 if not hasattr(self, '_race_state'):
@@ -1837,7 +1910,15 @@ class RaceWindow(QMainWindow):
                         elif event_type == "race_finished":
                             total_laps = event.get("total_laps", 0)
                             race_time = event.get("race_time", 0.0)
-                            print(f"\n🏁 Race finished! {total_laps} laps in {race_time:.1f}s")
+                            print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
+                            
+                            # Store collision log for display
+                            collision_log = event.get('collision_log', [])
+                            self._collision_log = collision_log
+                            if collision_log:
+                                print(f"Race simulation complete, {len(event.get('results', []))} results, {len(collision_log)} collisions")
+                            else:
+                                print(f"Race simulation complete, {len(event.get('results', []))} results")
 
                             # Emit actual results to the GUI if provided by the engine.
                             # Previously this emitted an empty list which left the
@@ -1982,6 +2063,7 @@ class RaceWindow(QMainWindow):
                         name_cell = self.standings_table.item(row, 1)
                         if driver.id == self.player_driver_id:
                             name_cell.setBackground(QColor(255, 215, 0))  # Gold
+                            name_cell.setForeground(QColor(0, 0, 0))  # Dark text on gold
                         else:
                             name_cell.setBackground(QColor(37, 38, 39))  # normal background (dark)
                     except Exception:
@@ -1994,9 +2076,36 @@ class RaceWindow(QMainWindow):
         """Handle race finish."""
         try:
             print(f"Race finished event received with {len(results)} results")
+            
+            # Display collision summary if available
+            if hasattr(self, '_collision_log') and self._collision_log:
+                print(f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
+                for i, collision in enumerate(self._collision_log, 1):
+                    print(f"  {i}. Lap {collision.get('lap', '?')}: {collision.get('description', 'Unknown incident')}")
+                print("")
+            
             self.info_label.setText("Race finished!")
             self.start_btn.setEnabled(True)
             self.stop_btn.setEnabled(False)
+            try:
+                if hasattr(self, 'player_status_label'):
+                    self.player_status_label.hide()
+                    # Re-enable player controls on race finish
+                    try:
+                        if hasattr(self, 'pace_slider'):
+                            self.pace_slider.setEnabled(True)
+                        if hasattr(self, 'overtake_slider'):
+                            self.overtake_slider.setEnabled(True)
+                        if hasattr(self, 'camera_full_btn'):
+                            self.camera_full_btn.setEnabled(True)
+                        if hasattr(self, 'camera_follow_btn'):
+                            self.camera_follow_btn.setEnabled(True)
+                        if hasattr(self, 'push_gauge'):
+                            self.push_gauge.setEnabled(True)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             
             # Stop animation
             if self.track_widget:
@@ -2027,6 +2136,7 @@ class RaceWindow(QMainWindow):
                             name_cell = self.standings_table.item(i, 1)
                             if driver.id == self.player_driver_id:
                                 name_cell.setBackground(QColor(255, 215, 0))  # Gold
+                                name_cell.setForeground(QColor(0, 0, 0))  # Dark text on gold
                             else:
                                 name_cell.setBackground(QColor(37, 38, 39))
                         except Exception:
@@ -2058,6 +2168,16 @@ class RaceWindow(QMainWindow):
         Means: Driver 5 is P1, lap 3, push 0.72, 0.45s gap to car ahead,
         at position 19,234.5m and race time 185.4s.
         """
+        # Handle explicit GUI commands first
+        if message == "start_animation":
+            try:
+                if self.track_widget:
+                    self.track_widget.start_animation()
+                    print("[ANIMATION] Animation timer started (main thread)")
+            except Exception as e:
+                print(f"ERROR starting animation in GUI thread: {e}")
+            return
+
         # Handle telemetry update
         if message.startswith("telemetry_update|"):
             try:
@@ -2100,6 +2220,53 @@ class RaceWindow(QMainWindow):
                 import traceback
                 traceback.print_exc()
             return
+
+        # Handle mark_dnf command emitted from simulation thread (run on GUI thread)
+        if message.startswith("mark_dnf|"):
+            try:
+                parts = message.split("|")
+                if len(parts) >= 2:
+                    did = int(parts[1])
+                    if hasattr(self, 'track_widget') and hasattr(self.track_widget, 'mark_dnf'):
+                        try:
+                            self.track_widget.mark_dnf(did)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            return
+
+        # Handle player DNF UI request (show RETIRED and disable controls)
+        if message.startswith("player_dnf|"):
+            try:
+                parts = message.split("|")
+                if len(parts) >= 2:
+                    did = int(parts[1])
+                    # Only act if it's the player's driver
+                    if did == getattr(self, 'player_driver_id', None):
+                        try:
+                            if hasattr(self, 'player_status_label'):
+                                self.player_status_label.setText("RETIRED")
+                                self.player_status_label.show()
+                        except Exception:
+                            pass
+                        # Disable a set of interactive widgets so the player cannot change strategy
+                        try:
+                            if hasattr(self, 'pace_slider'):
+                                self.pace_slider.setEnabled(False)
+                            if hasattr(self, 'overtake_slider'):
+                                self.overtake_slider.setEnabled(False)
+                            if hasattr(self, 'camera_full_btn'):
+                                self.camera_full_btn.setEnabled(False)
+                            if hasattr(self, 'camera_follow_btn'):
+                                self.camera_follow_btn.setEnabled(False)
+                            if hasattr(self, 'push_gauge'):
+                                self.push_gauge.setEnabled(False)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+            return
         
         # Check if this is a standings update
         if message.startswith("standings_update|"):
@@ -2107,7 +2274,8 @@ class RaceWindow(QMainWindow):
                 parts = message.split("|")
                 driver_id = int(parts[1])
                 race_position = int(parts[2])
-                lap = int(parts[3])
+                # Normalize to 1-based lap counting for display
+                lap = max(1, int(parts[3]))
                 push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
                 gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
                 position_m = float(parts[6]) if len(parts) > 6 else 0.0
@@ -2147,7 +2315,9 @@ class RaceWindow(QMainWindow):
         track_length = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
         standings_list = []
         for did, data in self._race_state.items():
-            total_progress = data['lap'] * track_length + (data.get('distance', 0.0) % track_length)
+            # Use (lap - 1) so that lap=1 (first racing lap) corresponds to progress starting at 0
+            lap_for_progress = max(0, int(data.get('lap', 1)) - 1)
+            total_progress = lap_for_progress * track_length + (data.get('distance', 0.0) % track_length)
             standings_list.append({
                 'driver_id': did,
                 'name': data['name'],
@@ -2180,17 +2350,18 @@ class RaceWindow(QMainWindow):
             driver_name = entry['name']
             push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
             if push_int < 0.4:
-                symbol = "🔵"
+                symbol = "[CONSERVE]"
             elif push_int < 0.65:
-                symbol = "⚪"
+                symbol = "[MANAGE]"
             else:
-                symbol = "🔴"
+                symbol = "[ATTACK]"
             self.standings_table.setItem(row, 1, QTableWidgetItem(f"{symbol} {driver_name}"))
             # Highlight the player-controlled driver row/cell
             try:
                 name_item = self.standings_table.item(row, 1)
                 if entry['driver_id'] == getattr(self, 'player_driver_id', None):
                     name_item.setBackground(QColor(255, 215, 0))  # Gold for player
+                    name_item.setForeground(QColor(0, 0, 0))  # Dark text on gold
                 else:
                     name_item.setBackground(QColor(37, 38, 39))
             except Exception:
@@ -2204,11 +2375,25 @@ class RaceWindow(QMainWindow):
                 gap_text = "-"
             else:
                 lap_diff = leader_lap - entry['lap']
+                raw_gap = entry.get('gap_ahead', 0.0)
+                
                 if lap_diff > 0:
+                    # Car is behind on laps
                     gap_text = f"+{lap_diff}L"
+                elif raw_gap >= 1000.0:
+                    # Gap encoded as 999+N means N laps (from engine)
+                    laps_behind = int(raw_gap - 999.0)
+                    if laps_behind > 0:
+                        gap_text = f"+{laps_behind}L"
+                    else:
+                        gap_text = f"+{raw_gap:.1f}s"  # Fallback if just large gap
                 else:
-                    cumulative_gap += max(entry.get('gap_ahead', 0.0), 0.0)
-                    gap_text = f"+{cumulative_gap:.1f}s"
+                    # Normal time gap accumulation
+                    cumulative_gap += max(raw_gap, 0.0)
+                    if cumulative_gap < 0.1:
+                        gap_text = "-"
+                    else:
+                        gap_text = f"+{cumulative_gap:.1f}s"
 
             self.standings_table.setItem(row, 3, QTableWidgetItem(gap_text))
 
@@ -2246,7 +2431,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             color = f"#{r:02X}{g:02X}{b:02X}"
-            self.pace_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+            self.pace_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #FFFFFF;")
             # Update slider styling: sub-page shows selected color
             self.pace_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
@@ -2280,14 +2465,14 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             color = f"#{r:02X}{g:02X}{b:02X}"
-            self.overtake_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {color};")
+            self.overtake_value_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: #FFFFFF;")
             self.overtake_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
                 f"QSlider::sub-page:horizontal {{ background: {color}; border-radius: 4px; }}"
                 "QSlider::handle:horizontal { background: #F5F5F5; width: 14px; margin: -4px 0; border-radius: 7px; }"
             )
         except Exception:
-            self.overtake_value_label.setStyleSheet("font-size:16px; font-weight:bold; color: #DD2D4A;")
+            self.overtake_value_label.setStyleSheet("font-size:16px; font-weight:bold; color: #FFFFFF;")
     
     def _update_combined_push(self):
         """Compute combined push intensity as average of pace and overtake sliders."""
