@@ -53,7 +53,7 @@ class LeagueInfo(NamedTuple):
     code: str
     full_name: str
     race_format: RaceFormat
-    tier: int  # 1=Premier, 2=Development, 3=Academy, 4=Regional, 5=National
+    tier: int  
     min_teams: int
     max_teams: int
     cars_per_team: int

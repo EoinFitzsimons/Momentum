@@ -242,7 +242,7 @@ class DatabaseManager:
                 row_dict.pop('updated_at', None)
                 try:
                     drivers.append(Driver(**row_dict))
-                except TypeError as e:
+                except TypeError:
                     # Skip drivers that fail to load (log in production)
                     continue
             return drivers
@@ -538,6 +538,10 @@ class DatabaseManager:
 
             # Return as simple objects with necessary attributes
             class SimpleCircuit:
+                country: str
+                region: str
+                location: str
+
                 def __init__(self, row_dict):
                     for key, value in row_dict.items():
                         setattr(self, key, value)
