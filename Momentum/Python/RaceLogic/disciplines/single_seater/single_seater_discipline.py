@@ -49,9 +49,9 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     Total: 20+ attributes weighted for single seater performance
     """
     
-    def __init__(self, seed: int = None):
+    def __init__(self, seed: Optional[int] = None):
         """Initialize single seater engine"""
-        super().__init__(seed)
+        super().__init__(seed if seed is not None else 0)
         self.discipline = RacingDiscipline.SINGLE_SEATER
     
     def get_attribute_weights(self) -> Dict[str, float]:
@@ -186,7 +186,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         player_overrides: Optional[Dict[str, float]] = po if isinstance(po, dict) else None
 
         # Realtime speed multiplier for demo; default to 5.0 (watchable)
-        realtime_speed = float(tc.get('realtime_speed')) if tc.get('realtime_speed') is not None else 5.0
+        rs_val = tc.get('realtime_speed')
+        realtime_speed: float = float(rs_val) if rs_val is not None and (isinstance(rs_val, (int, float, str))) else 5.0
 
         # Delegate to realtime engine
         results = engine.simulate_race(
