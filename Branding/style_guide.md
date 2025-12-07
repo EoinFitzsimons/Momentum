@@ -5,19 +5,17 @@
 
 ### 1.1 Core Palette
 
-* Light Grey: #C8C8C8
-* Mid Grey: #A0A0A0
-* Dark Grey: #707070
-* Ocean Blue: #2C82C9
-* Emerald Green: #2E8B57
-* Amber: #FFB000
-* Soft Red: #D65C5C
+* Background Dark: #353839
+* Foreground Dark: #b9f2ff
 
-### 1.2 Pattern Overlay
+* Background Light: #F5F5F5
+* Foreground Light: #353839
+### 1.2 Accents
 
-* Faint embroidered texture
-* Pattern colour: #5A5A5A at 8–12 percent opacity
-* Applied on large grey backgrounds only
+* Warning: #DD2D4A
+* Blue: #00bfff
+* Grass: #228b22
+* Winner: #daa520  
 
 ### 1.3 Contrast Rules
 
