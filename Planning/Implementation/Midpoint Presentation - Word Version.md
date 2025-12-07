@@ -9,6 +9,36 @@ This chapter describes the current playable implementation used for the midpoint
 - Visualiser: `RaceWindow` with `TrackWidget` renders the generated circuit and animates cars using per-tick position events emitted by the engine.
 - Persistence & telemetry: driver data, career statistics and basic persistent state use SQLite via `DatabaseManager`; telemetry traces are stored (batched) for later inspection.
 
+#### How to run the demo
+
+**Prerequisites**: Python 3.10+ (tested on 3.11 and 3.13), PyQt6, NumPy, and other dependencies listed in `requirements.txt`.
+
+**Setup and launch**:
+
+```powershell
+# Navigate to Python backend directory
+cd Momentum/Python
+
+# Create and activate virtual environment (recommended)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Launch the PyQt6 GUI demo (primary method)
+python GUI/gui_game.py
+
+# Alternative: run Quick Race visual demo
+python GUI/gui_race_visual.py
+
+# Run tests (optional)
+python tests/test_playability.py
+python tests/test_race_simulation.py
+```
+
+**Troubleshooting**: if the database is missing or corrupt, regenerate it with `python scripts/regenerate_database.py`. If circuits are missing, import them with `python scripts/import_circuits.py`.
+
 ### Architecture & core files
 
 - Launcher / UI: `Momentum/Python/GUI/launcher.py` starts the application and wires `MainMenuWindow` to `RaceWindow`.
@@ -34,11 +64,11 @@ This dependency chain explains the runtime path: `launcher.py` → `gui_main_men
 ### Engine internals (summary, non-developer language)
 
 - Tick loop: each tick updates driver states, computes speed/position, checks for collisions and mechanical failures, and emits compact updates consumed by the GUI.
-- AI decisions: agents evaluate local context (gap ahead/behind, tyre and fuel conditions, relative performance) and choose modes such as ATTACK/DEFEND/MANAGE.
+- AI decisions: agents evaluate local context (gap ahead/behind, tyre and fuel conditions, relative performance) and choose modes: **Attack** (overtaking), **Defend** (protecting position), or **Manage** (conserving resources).
 - Performance model: driver attributes and a team factor combine to produce lap- and tick-level performance; safety systems clamp behaviour when required.
 - Incidents and reliability: the engine uses probabilistic checks combining driver/team attributes and environmental stress to determine mechanical DNFs and collisions.
 
-Note: while the model references team properties (tier, budget) for performance and reliability, the MVP UI does not expose team selection. To keep the playable demo simple, `services.race_simulation_api` will create placeholder `Team` objects for drivers if no team data is provided.
+The model references team properties (tier, budget) for performance and reliability, but the MVP UI does not expose team selection. To keep the playable demo simple, `services.race_simulation_api` creates placeholder `Team` objects for drivers when no team data is provided.
 
 ### Track generation (parameterisation and reuse)
 
@@ -62,6 +92,16 @@ Design guidance:
 - Telemetry: write race traces in batched CSV/JSON files (or separate telemetry DB table) to allow replay, debugging and performance analysis.
 - Migration: each save/checkpoint includes a format version to enable safe migrations as features evolve.
 
+#### Telemetry batching policy
+
+**Batch size and flush conditions**:
+- Batch size: 100 position events per driver (configurable via `TELEMETRY_BATCH_SIZE` in `config.py`).
+- Flush triggers: (1) batch full, (2) lap completion, (3) race end, (4) 5-second idle timeout.
+- Format: JSON Lines (`.jsonl`) for per-event storage; one event per line for streaming replay.
+- File path: `logs/telemetry/race_{timestamp}_{track_id}.jsonl`.
+
+**Failure handling**: if a batch write fails (disk full, permission error), the engine logs the error and continues. Partial batches are written to a `.partial` suffix file and can be recovered manually. Telemetry failures do not abort the race.
+
 For the midpoint demo the persistence surface can be the minimal set: driver updates, session metadata and telemetry - sufficient to show progression without a full career UI.
 
 ### Teams and current exposure
@@ -78,6 +118,35 @@ Recommendation: document this explicitly in the Implementation chapter (done her
   - Seeded track generation for repeatable circuit layouts.
   - Deterministic RNG mode (controlled seed) and an execution mode to run the engine in a single-threaded, deterministic manner for automated testing.
   - Telemetry-first reproducibility: store full telemetry traces of positions and events so individual sessions can be inspected or replayed in a deterministic player.
+
+#### Seed/Determinism Scope
+
+| Subsystem | Accepts `seed`? | Purpose | Default Behaviour |
+|-----------|----------------|---------|------------------|
+| `CircuitGenerator` | Yes (future) | Repeatable track layouts for QA | Random layout |
+| `RealtimeRaceEngine` | Yes | Deterministic RNG for tests | Non-deterministic (`seed=None`) |
+| `Name generators` | No (not exposed) | Driver/team name generation | Random |
+| `Telemetry replay` | N/A | Replay recorded session | Uses stored events |
+
+To enable deterministic mode: pass `seed=42` (or any integer) to `simulate_race(...)`. The engine will use `np.random.default_rng(seed)` for all probabilistic events (mistakes, incidents, performance variance). Track generation currently does not expose a seed parameter but should be extended to accept one for QA.
+
+### Threading and concurrency
+
+The race simulation uses a multi-threaded architecture to avoid blocking the GUI:
+
+- **Main thread (Qt)**: runs the GUI event loop, handles user input, and renders the visualiser.
+- **Background thread (`T_engine`)**: runs `engine.simulate_race(...)` and emits position events at ~30 FPS.
+
+Event flow:
+1. GUI calls `simulate_race(...)` in a background thread (via `threading.Thread`).
+2. Engine executes the tick loop and calls `event_callback(position_event)` from `T_engine`.
+3. Callback posts events to the Qt main thread using `EventEmitter.position_update.emit(...)` (a Qt signal).
+4. Qt main thread receives the signal and calls `TrackWidget.update_car_realtime(...)` to update visuals.
+
+Shutdown:
+- The GUI sets a `stop_event` (threading.Event) when the user closes the race window.
+- The engine checks `stop_event.is_set()` each tick and exits the loop if set.
+- The background thread is joined with a 2-second timeout to ensure clean shutdown.
 
 ### Unattached systems - concise roadmap
 
@@ -101,8 +170,6 @@ Recommendation: document this explicitly in the Implementation chapter (done her
 ## Functions, Code & Explanations (integrated)
 
 Below is a single, integrated section that presents each key runtime function by name, then the code excerpt, and finally a concise explanation of how it works and why it matters. This mirrors the Quick Race runtime path: GUI launcher → Quick Race setup → services adapter → realtime engine → visualiser + persistence.
-
-Note: you mentioned an "attack / maintain / defend" diagram - keep using that diagram as the canonical visual. I have not altered it; please confirm the filename or I can place a copy under `Planning/Implementation/attack-maintain-defend.mmd` if you want.
 
 ### Function: `MomentumLauncher.start_race`
 
@@ -173,31 +240,73 @@ Why it matters: this function is the bridge between player selection and the run
 ### Function: `services.race_simulation_api.simulate_race` (adapter selection + placeholders)
 
 ```python
-adapter = _load_discipline_engine(context, seed=seed)
-if adapter is not None:
-  return adapter.simulate_race(context)
-
-# Fallback to realtime engine
-engine = RealtimeRaceEngine(seed=seed)
-
-# Fetch team data if available, otherwise create placeholders
-teams_dict = {}
-if db and drivers is not None:
-  # attempt to fetch via db.get_team
-  ...
-if not teams_dict and drivers is not None:
-  for driver in drivers:
-    teams_dict[driver.current_team_id] = Team(
-      id=driver.current_team_id,
-      name=f"Team {driver.current_team_id}",
-      discipline="formula",
-      tier="tier2",
-      budget=100.0,
-      headquarters="Unknown",
-      team_principal="Unknown"
+def simulate_race(
+    drivers: Optional[List[Driver]] = None,
+    track: Optional[Track] = None,
+    seed: Optional[int] = None,
+    laps: Optional[int] = None,
+    verbose: bool = False,
+    event_callback: Optional[Callable[[dict], None]] = None,
+    stop_event=None,
+    db: Optional[Any] = None,
+    track_points: Optional[List] = None,
+    player_driver_id: Optional[int] = None,
+    player_overrides: Optional[Dict[str, float]] = None,
+    context: Optional[RaceContext] = None,
+) -> List[RaceResult]:
+    """Run real-time agent-based race simulation at 30 FPS"""
+    
+    # Try to load discipline-specific adapter
+    if context is not None:
+        adapter = _load_discipline_engine(context, seed=seed)
+        if adapter is not None:
+            return adapter.simulate_race(context)
+        engine = RealtimeRaceEngine(seed=seed)
+        drivers = context.drivers
+        track = context.track
+        laps = context.total_laps
+    else:
+        engine = RealtimeRaceEngine(seed=seed)
+    
+    # Fetch team data from DB or create placeholders
+    teams_dict = {}
+    if db and drivers is not None:
+        try:
+            team_ids = {d.current_team_id for d in drivers if d.current_team_id}
+            get_team_fn = getattr(db, "get_team", None)
+            for team_id in team_ids:
+                if callable(get_team_fn):
+                    team = get_team_fn(team_id)
+                    if team:
+                        teams_dict[team_id] = team
+        except Exception as e:
+            if verbose:
+                print(f"Warning: Could not fetch team data: {e}")
+    
+    # Create placeholder teams for any missing
+    if not teams_dict and drivers is not None:
+        for driver in drivers:
+            if driver.current_team_id not in teams_dict:
+                teams_dict[driver.current_team_id] = Team(
+                    id=driver.current_team_id,
+                    name=f"Team {driver.current_team_id}",
+                    nationality="USA",
+                    founded_year=2020,
+                    discipline="formula",
+                    tier="tier2",
+                    budget=100.0,
+                    headquarters="Unknown",
+                    team_principal="Unknown"
+                )
+    
+    return engine.simulate_race(
+        drivers=drivers,
+        teams=teams_dict,
+        track=track,
+        total_laps=laps,
+        event_callback=event_callback,
+        stop_event=stop_event
     )
-
-results = engine.simulate_race(drivers=drivers, teams=teams_dict, track=track, total_laps=laps, event_callback=event_callback, ...)
 ```
 
 Explanation:
@@ -230,7 +339,7 @@ Explanation (algorithms & structure):
 - Core idea: this is a real-time, tick-based loop (target ~30Hz). At each tick the engine updates every driver's state (mode, speed), applies randomised events (mistakes, incidents), advances positions, and emits position/telemetry events to listeners (the GUI visualiser, telemetry persister or tests).
 - RNG: the engine constructs a NumPy Generator (`np.random.default_rng(seed)`) in its constructor. Passing a `seed` gives repeatable runs (useful for tests); gameplay should not rely on fixed seeds.
 - Subsystems:
-  - `_update_racing_mode`: decides whether the driver is pushing, defending, or conserving (based on tyre/fuel/strategy).
+  - `_update_racing_mode`: decides the driver's mode (**Attack**, **Defend**, or **Manage**) based on tyre/fuel state, gaps to rivals, and overtaking opportunities. Code enum: `RacingMode.ATTACK`, `RacingMode.DEFEND`, `RacingMode.MANAGE`.
   - `_calculate_speed`: computes a target speed from driver skill, car performance, track segment, and weather. The returned speed is modified by stochastic noise for realism.
   - Incident handling: probabilistic checks for spins/collisions/mechanical failures; when triggered they change `state.running` and produce event records.
 - Output: generates `RaceResult` records and emits per-frame `position` events for the GUI.
@@ -243,6 +352,39 @@ mistake_chance = base_mistake_rate * (1.0 - state.driver.error_resilience)
 if self.rng.random() < mistake_chance:
   self._apply_mistake(state)
 ```
+
+#### PositionEvent Schema
+
+The engine emits position events at ~30 Hz via `event_callback`. Each event is a Python `dict` with the following structure:
+
+```python
+{
+  "type": "position_update",
+  "frame": int,              # Frame number (0, 1, 2, ...)
+  "time": float,             # Race elapsed time (seconds)
+  "positions": [             # List of driver states
+    {
+      "driver_id": int,
+      "driver_name": str,
+      "position": int,       # Race position (1st, 2nd, ...)
+      "lap": int,            # Current lap number
+      "position_m": float,   # Absolute position (metres from start)
+      "velocity_mps": float, # Current velocity (m/s)
+      "racing_mode": str,    # "attack", "defend", or "manage"
+      "push_intensity": float,  # 0.0-1.0
+      "push_fatigue": float,    # 0.0-1.0
+      "tire_condition": float,  # 1.0=new, 0.0=worn
+      "fuel_load": float,       # 1.0=full, 0.0=empty
+      "gap_ahead": float,       # Seconds to car ahead
+      "gap_behind": float,      # Seconds to car behind
+      "running": bool           # False if DNF
+    },
+    ...
+  ]
+}
+```
+
+**Threading & consumption**: the engine runs on a background thread (`T_engine`) and calls `event_callback(position_event)` directly from that thread. The GUI must marshal the event to the Qt main thread using `QMetaObject.invokeMethod` or a Qt signal (`EventEmitter.position_update.emit(position_event)`). See `gui_race_visual.py` for the `EventEmitter` pattern.
 
 ### Function: `CircuitGenerator.generate` (signature + behaviour)
 
@@ -297,6 +439,14 @@ Explanation:
 - Purpose: return a list of `Driver` dataclass instances for UI population and simulation input.
 - Behaviour: reads the `drivers` table, converts rows to dicts, strips unneeded fields and constructs `Driver` objects. Robust to schema mismatches by catching `TypeError` and skipping malformed rows.
 
+#### Database schema and error handling
+
+**Expected schema version**: the database schema is defined in `database/models.py` and initialized by `DatabaseManager.__init__()`. Current schema includes `drivers`, `teams`, `tracks`, and `race_results` tables. No formal migration system exists yet; schema changes require manual DB regeneration or ALTER TABLE commands.
+
+**Malformed row handling**: `get_all_drivers()` silently skips rows that fail to construct a `Driver` object (caught `TypeError`). This is intentional to allow the UI to load even if the DB contains legacy or corrupt rows. For stricter validation, add a `--strict` mode that logs the row ID and re-raises the exception.
+
+**Migration/validation step**: before loading drivers, call `DatabaseManager.verify_schema()` (future) to check table structure and warn if columns are missing or types mismatch. For midpoint demo, manual verification via `scripts/verify_database.py` is sufficient.
+
 ---
 
 **Main classes & algorithms (summary)**
@@ -307,12 +457,6 @@ Explanation:
 - `Race Simulation API` (services): adapter pattern that loads a discipline-specific engine when available, otherwise falls back to the realtime engine; responsible for context assembly (drivers, teams, track, seed) and converting engine outputs to API-friendly `RaceResult` objects.
 - GUI flow: `QuickRaceSetup` → `MomentumLauncher.start_race` → `RaceWindow` initialisation → `services.simulate_race` invocation (via button or event) → engine runs in background thread and emits events → `TrackWidget.update_car_realtime` receives events and updates visuals.
 
-Mapping to your Attack / Maintain / Defend diagram
+Mapping to the state diagram
 
-- The engine's `_update_racing_mode` maps directly to the Attack / Maintain / Defend states in your diagram: code decides mode transitions (attack → defend → conserve) based on tyre/fuel/position inputs. Keep the diagram as the authoritative flow; this document references it. If you confirm the filename, I will link it into this chapter.
-
-Next steps I can take (pick one):
-
-- Expand any of the above excerpts with full verbatim function bodies (I have them available), or
-- Move the full function extracts into a separate `appendix/code-excerpts.md` and keep the main chapter concise (recommended), or
-- Link the exact diagram file into this document and add a small cross-reference block.
+- The engine's `_update_racing_mode` implements the **Attack / Maintain / Defend** transitions shown in the state diagram (see `Planning/Implementation/stateDiagram-v2.mmd` for the canonical visual): decisions are based on tyre and fuel state, relative gaps to rivals, and overtaking opportunities. These mode decisions feed into `_calculate_speed` and incident probability calculations.
