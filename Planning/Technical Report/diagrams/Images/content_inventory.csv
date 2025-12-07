@@ -11,3 +11,5 @@ STORE,"Store / Upgrades","Available upgrades/items","Purchase/apply upgrade",P2,
 SET,Settings,"Audio/graphics/controls/basic preferences","Adjust preferences",P3,"Keep minimal"
 HELP,"Help / Docs","Short FAQs or glossary","Learn terminology; get support",P3,"Link to docs; glossary for metrics"
 REPORTS,"Reports / Telemetry","Analytics/filters/exports","View performance trends; export data",P2,"Expose if functional; otherwise hide from nav"
+UI-MAIN,UI Main,"Main dashboard mockup","Demonstration; Navigation",P1,"File: Proposal/Wireframes/fig_03_ui_main.png"
+UI-HOME,UI Home,"Home screen mockup","Demo; Entry",P1,"File: Proposal/Wireframes/fig_04_ui_home.png"
