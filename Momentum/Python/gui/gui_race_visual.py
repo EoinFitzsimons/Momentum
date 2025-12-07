@@ -11,7 +11,7 @@ from services.race_simulation_api import simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
 from vehicles.appearance_integration import VehicleAppearanceManager
-from vehicles.vehicle_appearance import VehicleRenderer, VehicleType, create_team_livery
+from vehicles.vehicle_appearance import Livery, VehicleRenderer, VehicleType, create_team_livery
 from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QPaintEvent
 from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem
@@ -421,7 +421,8 @@ class CircuitGenerator:
 class TrackWidget(QWidget):
     """Widget displaying the racing circuit and cars."""
 
-    def __init__(self, track_points: List[TrackPoint], track_length: float):
+    def __init__(self, track_points: List[TrackPoint], track_length: float,
+                 appearance_manager: VehicleAppearanceManager):
         super().__init__()
         self.track_points = track_points
         self.track_length = track_length
@@ -430,8 +431,8 @@ class TrackWidget(QWidget):
         self.race_active = False
         self.start_time = 0.0
 
-        # Vehicle appearance manager for rendering detailed cars (fresh instance per race)
-        self.appearance_manager = VehicleAppearanceManager()
+        # Use shared appearance manager so liveries created in RaceWindow are visible here
+        self.appearance_manager = appearance_manager
 
         # Camera settings
         self.camera_mode = 'full'
@@ -483,8 +484,9 @@ class TrackWidget(QWidget):
         """Update specific car position based on simulation data (legacy method)."""
         for car in self.cars:
             if car.driver_id == driver_id:
-                # Ensure lap is 1-based for UI consistency
-                car.lap = max(1, int(lap))
+                # Engine reports laps completed (0 = none). Convert to
+                # 1-based current lap for UI (current lap = laps_completed + 1)
+                car.lap = max(1, int(lap) + 1)
                 car.total_time = total_time
 
                 # Calculate average lap time
@@ -586,8 +588,9 @@ class TrackWidget(QWidget):
                     car.s = position_m
 
                 # Update car state
-                # Ensure lap is 1-based for UI consistency
-                car.lap = max(1, int(lap))
+                # Engine reports laps completed (0 = none). Convert to
+                # 1-based current lap for UI (current lap = laps_completed + 1)
+                car.lap = max(1, int(lap) + 1)
                 car.velocity_mps = velocity_mps
 
                 # === DEBUG TRACKING: Monitor which cars are updating ===
@@ -1347,19 +1350,27 @@ class TrackWidget(QWidget):
                         # Draw detailed single seater car using appearance manager
                         painter.save()
                         painter.translate(offset_x, offset_y)
-                        painter.rotate(math.degrees(movement_angle))
+                        # Rotate car to face track direction; base sprite points along +X
+                        painter.rotate(math.degrees(movement_angle) + 90)
 
-                        # Get livery for this driver
+                        # Get livery for this driver (fallback: build from driver color)
                         livery = self.appearance_manager.get_livery(car.driver_id)
-                        if livery:
-                            # Render detailed Formula car
-                            print(f"[RENDER] Drawing detailed car for driver {car.driver_id} with livery {livery.team_name}")
-                            VehicleRenderer.render_single_seater_car(
-                                painter, livery, scale=3.0
-                            )
-                        else:
-                            # NO FALLBACK - livery should always exist
-                            print(f"[RENDER ERROR] No livery found for driver {car.driver_id}")
+                        if not livery:
+                            primary = car.color
+                            secondary = QColor(min(255, primary.red() + 30),
+                                               min(255, primary.green() + 30),
+                                               min(255, primary.blue() + 30))
+                            trim = QColor(255, 255, 255)
+                            livery = Livery(primary, secondary, trim, f"Driver {car.driver_id}", car.driver_id)
+
+                        # Calculate steering angle based on lateral offset change (simulates cornering)
+                        # Scale the dynamic offset to a reasonable steering angle (-15 to +15 degrees)
+                        steering_angle = dynamic_offset * 2.5  # amplify the sine wave motion
+
+                        # Render detailed Formula car with slimmer scale and steering
+                        VehicleRenderer.render_single_seater_car(
+                            painter, livery, scale=1.5, steering_angle=steering_angle
+                        )
 
                         painter.restore()
                         cars_drawn += 1
@@ -1762,6 +1773,17 @@ class RaceWindow(QMainWindow):
                             self.drivers[0].id}, name={
                             self.drivers[0].name}")
 
+                # Prepare deterministic driver colours (shared between cars, standings, livery)
+                palette = [
+                    QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
+                    QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
+                    QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
+                    QColor(200, 200, 255)
+                ]
+                self.driver_colours = {}
+                for i, driver in enumerate(self.drivers):
+                    self.driver_colours[driver.id] = palette[i % len(palette)]
+
                 # Initialize vehicle liveries immediately after loading drivers
                 # so they're ready for grid display
                 try:
@@ -1774,18 +1796,18 @@ class RaceWindow(QMainWindow):
 
                     for driver in self.drivers:
                         team = teams_dict.get(driver.current_team_id) if driver.current_team_id else None
-                        if team:
-                            # Create vehicle configuration with livery for this driver
-                            self.appearance_manager.create_vehicle_for_driver(driver, team)
-                        else:
-                            # Fallback: create default livery if team not found
-                            team_name = f'Team {driver.current_team_id}' if driver.current_team_id else f'Team {driver.id}'
-                            livery = create_team_livery(
-                                driver.current_team_id or driver.id,
-                                team_name,
-                                driver.number
-                            )
-                            self.appearance_manager.driver_liveries[driver.id] = livery
+                        # Build livery directly from driver colour palette (no teams phase)
+                        primary = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+                        secondary = QColor(min(255, primary.red() + 30),
+                                           min(255, primary.green() + 30),
+                                           min(255, primary.blue() + 30))
+                        trim = QColor(255, 255, 255)
+                        livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
+                        # Override palette to match driver colour
+                        livery.primary_color = primary
+                        livery.secondary_color = secondary
+                        livery.trim_color = trim
+                        self.appearance_manager.driver_liveries[driver.id] = livery
                     print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
                 except Exception as e:
                     print(f"ERROR: Livery initialization failed: {e}")
@@ -1878,7 +1900,11 @@ class RaceWindow(QMainWindow):
 
             # Create track widget
             try:
-                self.track_widget = TrackWidget(track_points, track_length)
+                self.track_widget = TrackWidget(
+                    track_points,
+                    track_length,
+                    self.appearance_manager
+                )
 
                 # Clear loading message and add track widget
                 while self.left_layout.count():
@@ -1899,25 +1925,7 @@ class RaceWindow(QMainWindow):
 
             # Create cars with grid alignment
             try:
-                colours = [
-                    QColor(
-                        255, 50, 50), QColor(
-                        50, 150, 255), QColor(
-                        50, 255, 50),
-                    QColor(
-                        255, 255, 50), QColor(
-                        255, 150, 50), QColor(
-                        200, 50, 255),
-                    QColor(
-                        50, 255, 255), QColor(
-                        255, 150, 150), QColor(
-                        150, 255, 150),
-                    QColor(200, 200, 255)
-                ]
-
                 cars = []
-                # Create a mapping of driver IDs to colours for standings table
-                self.driver_colours = {}
 
                 # Starting grid: Stagger cars along track direction (not side-to-side)
                 # Formation: 2 cars per row, 10m spacing between rows
@@ -1929,9 +1937,8 @@ class RaceWindow(QMainWindow):
                     grid_spacing = 15.0  # meters between rows
                     start_position = row * grid_spacing
 
-                    # Assign colour to this driver
-                    car_colour = colours[i % len(colours)]
-                    self.driver_colours[driver.id] = car_colour
+                    # Assign colour to this driver from precomputed palette
+                    car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
 
                     cars.append(Car(
                         driver_id=driver.id,
@@ -2177,7 +2184,9 @@ class RaceWindow(QMainWindow):
                             driver_name = event.get(
                                 "driver_name", f"Driver {driver_id}")
                             reason = event.get("reason", "unknown")
-                            lap = event.get("lap", 0)
+                            laps_completed = int(event.get("lap", 0))
+                            # Convert to 1-based display lap
+                            lap = max(1, laps_completed + 1)
                             print(
                                 f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
 
@@ -2656,8 +2665,9 @@ class RaceWindow(QMainWindow):
                 parts = message.split("|")
                 driver_id = int(parts[1])
                 race_position = int(parts[2])
-                # Normalize to 1-based lap counting for display
-                lap = max(1, int(parts[3]))
+                # Normalize engine-reported laps-completed to 1-based
+                # current lap for display (current lap = laps_completed + 1)
+                lap = max(1, int(parts[3]) + 1)
                 push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
                 gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
                 position_m = float(parts[6]) if len(parts) > 6 else 0.0

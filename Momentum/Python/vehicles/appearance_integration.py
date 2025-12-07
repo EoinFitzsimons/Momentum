@@ -38,13 +38,14 @@ class VehicleAppearanceManager:
             VehicleConfiguration with livery and specifications
         """
         # Use driver.id as the racing number (unique identifier)
-        livery = create_team_livery(team.id, team.name, driver.id)
+        # Phase 1: simple driver-based liveries (teams not yet used)
+        livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
         self.driver_liveries[driver.id] = livery
 
         config = VehicleConfiguration(
             livery=livery,
             driver_number=driver.id,
-            team_id=team.id,
+            team_id=team.id if team is not None else 0,
             fuel_load_kg=105.0,  # Single seater spec fuel
             tire_compound="medium",
             aerodynamic_setup="balanced"
