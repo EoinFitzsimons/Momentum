@@ -1,6 +1,8 @@
-Design and Architecture
+# Design and Architecture
 
-Momentum is built on Python 3.13 and uses PyQt6 for the GUI. The architecture consists of specialized classes that manage different aspects of the simulation, similar to how Unreal Engine uses GameMode, GameState, and PlayerController patterns. The core simulation uses a realtime agent-based approach where drivers are autonomous AI entities making decisions at 30 FPS based on race conditions and their attributes.
+## Current
+
+Momentum is built on Python 3.13 and uses PyQt6 for the GUI. The architecture consists of specialized classes that manage different aspects of the simulation. The core simulation uses a realtime agent-based approach where drivers are autonomous AI entities making decisions at 30 FPS based on race conditions and their attributes.
 
 Core Architecture Classes
 
@@ -149,3 +151,5 @@ Parallel execution: run iterations in parallel or use background workers.
 Where diagrams are located
 
 Editable draw.io files and exported PNG images are in Planning/Design and Implementation/Diagrams. Use these for slides and walkthroughs.
+
+## Future
