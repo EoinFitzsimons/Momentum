@@ -378,10 +378,13 @@ class RealtimeRaceEngine:
             if not team:
                 continue
 
-            # Stagger starting positions: each car gets unique position
-            # Spacing must exceed SAFE_FOLLOWING_DISTANCE (8.0m) to avoid false
-            # collision
-            starting_position = i * 10.0  # 10m spacing between all cars
+            # Stagger starting positions: each car gets a unique longitudinal
+            # position on the circuit. The previous spacing (10.0m) was below
+            # the engine's safe following distance and caused many collisions
+            # on the opening laps. Increase spacing to reduce first-lap contacts.
+            # NOTE: SAFE_FOLLOWING_DISTANCE used in collision detection is
+            # approximately 15.0m, so pick a spacing comfortably above that.
+            starting_position = i * 20.0  # 20m spacing between all cars
 
             # Calculate initial push intensity based on driver personality
             raw_speed = driver.raw_speed / 100.0

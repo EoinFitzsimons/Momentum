@@ -1,277 +1,224 @@
 """
-Vehicle Appearance System - Single Seater Focus
+Vehicle Appearance System - Single Seater (cleaned)
 
-Defines visual characteristics for open-wheel racing cars including:
-- Livery colors and patterns (team colors)
-- Open-wheel Formula car rendering
-- Aerodynamic elements (front/rear wings, DRS flap)
-- Racing number display
-- Detailed cockpit and mechanical elements
-
-MVP focuses on Single Seater (Formula-style) racing only.
+Polygonal, top-down renderer for single-seater cars used by the GUI
+and headless PNG preview tests. This implementation is concise and
+avoids stray top-level statements so it imports cleanly for pytest.
 """
 
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush
+from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
 from PyQt6.QtCore import Qt, QPointF
-import math
 
 
 class VehicleType(Enum):
-    """Racing vehicle type (MVP: Single Seater only)"""
-    SINGLE_SEATER = "single_seater"  # Open-wheel Formula racing
+    SINGLE_SEATER = "single_seater"
 
 
 @dataclass
 class Livery:
-    """Car paint scheme and design"""
-    primary_color: QColor         # Main body color
-    secondary_color: QColor       # Stripe/accent color
-    trim_color: QColor            # Details color
-    team_name: str                # Displayed on side
-    driver_number: int            # Racing number
+    primary_color: QColor
+    secondary_color: QColor
+    trim_color: QColor
+    team_name: str
+    driver_number: int
 
 
 class VehicleRenderer:
-    """Renders open-wheel single seater race cars"""
+    """Renders a simplified polygonal top-down single-seater."""
 
     @staticmethod
-    def render_single_seater_car(painter: QPainter, livery: 'Livery',
-                                 scale: float = 1.0) -> None:
+    def render_single_seater_car(painter: QPainter, livery: Livery, scale: float = 1.0, steering_angle: float = 0.0) -> None:
         """
-        Render single-seater race car (Formula style).
-
-        Features:
-        - Open cockpit with visible driver
-        - Front wing
-        - Rear wing
-        - Visible suspension elements
-        - Slender profile with 2-3 meter width, 5+ meter length
-        - Exposed wheels (characteristic of open-wheel racing)
-        - Sidepod air intakes
-        - Modern styling
+        Render single-seater car with optional steering angle for front wheels.
+        
+        Args:
+            painter: QPainter instance
+            livery: Car livery/colors
+            scale: Rendering scale
+            steering_angle: Front wheel steering angle in degrees (typically -15 to +15)
         """
         painter.save()
 
-        # Main chassis body (single tube monocoque)
-        painter.setBrush(QBrush(livery.primary_color))
-        painter.setPen(QPen(livery.trim_color, 1.5))
+        # Dimensions (local coordinates: X across track, Y along car length)
+        body_length = 9.4 * scale
+        body_width = 1.85 * scale  # wider for better proportions
+        half_l = body_length / 2.0
+        half_w = body_width / 2.0
 
-        # Car body - elongated for open-wheel single seater
-        body_length = 9.0 * scale
-        body_width = 1.6 * scale
-        painter.drawRect(int(-body_length / 2), int(-body_width / 2),
-                         int(body_length), int(body_width))
-
-        # === FRONT WING ===
-        # Main plane
-        wing_y_offset = -body_width / 2 - 2.0 * scale
-        front_wing_base = [
-            QPointF(-3.5 * scale, wing_y_offset),
-            QPointF(3.5 * scale, wing_y_offset),
-            QPointF(3.0 * scale, wing_y_offset - 1.0 * scale),
-            QPointF(-3.0 * scale, wing_y_offset - 1.0 * scale),
+        # Body polygon (tapered nose and rear) - centered at (0,0), Y along length
+        # Ensure perfect symmetry by mirroring X coordinates
+        # Points ordered counter-clockwise from nose tip
+        nose_taper_fraction = 0.48  # controls nose taper width
+        nose_taper_length = 0.09    # controls nose taper depth
+        mid_start = -0.04           # where max width begins
+        mid_end = 0.38              # where rear taper begins
+        
+        body_poly = [
+            QPointF(0.0, -half_l),                                        # nose tip (top center)
+            QPointF(-nose_taper_fraction * half_w, -half_l + nose_taper_length * body_length),  # left nose taper
+            QPointF(-half_w, mid_start * body_length),                   # left mid-front
+            QPointF(-half_w, half_l),                                    # left rear (flat edge)
+            QPointF(half_w, half_l),                                     # right rear (flat edge)
+            QPointF(half_w, mid_start * body_length),                    # right mid-front (mirror)
+            QPointF(nose_taper_fraction * half_w, -half_l + nose_taper_length * body_length),  # right nose taper (mirror)
         ]
 
-        painter.setBrush(QBrush(livery.secondary_color))
-        painter.drawPolygon([p for p in front_wing_base])
-
-        # Endplates (vertical extensions for downforce)
-        painter.setPen(QPen(livery.trim_color, 1))
-        painter.drawLine(int(-3.5 * scale), int(wing_y_offset),
-                         int(-3.5 * scale), int(wing_y_offset - 1.5 * scale))
-        painter.drawLine(int(3.5 * scale), int(wing_y_offset),
-                         int(3.5 * scale), int(wing_y_offset - 1.5 * scale))
-
-        # === SIDEPODS & AIR INTAKES ===
-        # Left sidepod
-        painter.setBrush(QBrush(QColor(livery.primary_color.red() - 30,
-                                       livery.primary_color.green() - 30,
-                                       livery.primary_color.blue() - 30)))
-        painter.drawRect(int(-4.0 * scale), int(-body_width / 2 - 0.5 * scale),
-                         int(1.5 * scale), int(1.2 * scale))
-        # Right sidepod
-        painter.drawRect(int(2.5 * scale), int(-body_width / 2 - 0.5 * scale),
-                         int(1.5 * scale), int(1.2 * scale))
-
-        # === COCKPIT & DRIVER ===
-        # Halo safety device (modern regulation)
-        halo_color = QColor(200, 200, 200)
-        painter.setPen(QPen(halo_color, 2))
-        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        # Halo is a loop around cockpit
-        painter.drawEllipse(int(-1.2 * scale), int(-body_width / 2 - 1.2 * scale),
-                           int(2.4 * scale), int(1.8 * scale))
-
-        # Cockpit opening
+        # Body base
         painter.setBrush(QBrush(QColor(30, 30, 30)))
-        painter.setPen(QPen(livery.trim_color, 0.5))
-        painter.drawRect(int(-0.8 * scale), int(-body_width / 4),
-                         int(1.6 * scale), int(1.0 * scale))
+        painter.setPen(QPen(livery.trim_color, 1.0))
+        painter.drawPolygon(QPolygonF(body_poly))
 
-        # Visible driver (small rectangle inside cockpit)
-        painter.setBrush(QBrush(QColor(200, 150, 100)))  # Skin tone
-        painter.drawRect(int(-0.5 * scale), int(-body_width / 8),
-                         int(1.0 * scale), int(0.6 * scale))
-
-        # === REAR WING ===
-        # Main plane
-        rear_wing_y = body_width / 2 + 1.5 * scale
-        rear_wing_base = [
-            QPointF(-2.5 * scale, rear_wing_y),
-            QPointF(2.5 * scale, rear_wing_y),
-            QPointF(2.2 * scale, rear_wing_y + 1.2 * scale),
-            QPointF(-2.2 * scale, rear_wing_y + 1.2 * scale),
+        # Central narrow stripe (primary color) - perfectly centered
+        stripe_w = max(1.0, 0.24 * scale)
+        stripe_poly = [
+            QPointF(-stripe_w / 2, -half_l + 0.08 * body_length),
+            QPointF(-stripe_w / 2, half_l - 0.08 * body_length),
+            QPointF(stripe_w / 2, half_l - 0.08 * body_length),
+            QPointF(stripe_w / 2, -half_l + 0.08 * body_length),
         ]
+        painter.setBrush(QBrush(livery.primary_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(QPolygonF(stripe_poly))
 
+        # Compact front wing (trapezoid wider at front, narrower at back toward body)
+        fw_span = body_width * 2.6
+        fw_depth = max(0.42 * scale, 0.32 * scale)
+        fw_y = -half_l - fw_depth * 0.45
+        front_wing = [
+            QPointF(-fw_span * 0.86 / 2, fw_y),
+            QPointF(fw_span * 0.86 / 2, fw_y),
+            QPointF(fw_span / 2, fw_y + fw_depth),
+            QPointF(-fw_span / 2, fw_y + fw_depth),
+        ]
         painter.setBrush(QBrush(livery.secondary_color))
-        painter.drawPolygon([p for p in rear_wing_base])
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(QPolygonF(front_wing))
 
-        # DRS flap (adjustable rear wing element)
-        drs_y = rear_wing_y + 1.4 * scale
-        painter.setBrush(QBrush(QColor(livery.secondary_color.red() + 40,
-                                       livery.secondary_color.green() + 40,
-                                       livery.secondary_color.blue() + 40)))
-        painter.drawRect(int(-1.8 * scale), int(drs_y),
-                         int(3.6 * scale), int(0.5 * scale))
-
-        # Rear wing endplates
-        painter.setPen(QPen(livery.trim_color, 1))
-        painter.drawLine(int(-2.5 * scale), int(rear_wing_y),
-                         int(-2.5 * scale), int(rear_wing_y + 1.5 * scale))
-        painter.drawLine(int(2.5 * scale), int(rear_wing_y),
-                         int(2.5 * scale), int(rear_wing_y + 1.5 * scale))
-
-        # === SUSPENSION & WHEELS ===
-        # Visible suspension geometry (push-rods, springs)
-        # Front left suspension
-        painter.setPen(QPen(QColor(100, 100, 100), 1))
-        painter.drawLine(int(-2.5 * scale), int(-body_width / 2),
-                         int(-2.8 * scale), int(-body_width / 2 - 1.2 * scale))
-        # Front right suspension
-        painter.drawLine(int(2.5 * scale), int(-body_width / 2),
-                         int(2.8 * scale), int(-body_width / 2 - 1.2 * scale))
-        # Rear left suspension
-        painter.drawLine(int(-2.5 * scale), int(body_width / 2),
-                         int(-2.8 * scale), int(body_width / 2 + 1.0 * scale))
-        # Rear right suspension
-        painter.drawLine(int(2.5 * scale), int(body_width / 2),
-                         int(2.8 * scale), int(body_width / 2 + 1.0 * scale))
-
-        # Visible wheels (large, slick tires)
-        # Front wheels (smaller than rear)
-        wheel_positions = [
-            # Front left
-            (int(-2.8 * scale), int(-body_width / 2 - 1.2 * scale), 0.7),
-            # Front right
-            (int(2.8 * scale), int(-body_width / 2 - 1.2 * scale), 0.7),
-            # Rear left
-            (int(-2.8 * scale), int(body_width / 2 + 1.0 * scale), 0.95),
-            # Rear right
-            (int(2.8 * scale), int(body_width / 2 + 1.0 * scale), 0.95),
+        # Compact rear wing (trapezoid wider at back, narrower toward body)
+        rw_span = body_width * 2.6
+        rw_depth = fw_depth
+        rw_y = half_l
+        rear_wing = [
+            QPointF(-rw_span / 2, rw_y),
+            QPointF(rw_span / 2, rw_y),
+            QPointF(rw_span * 0.86 / 2, rw_y + rw_depth),
+            QPointF(-rw_span * 0.86 / 2, rw_y + rw_depth),
         ]
+        painter.drawPolygon(QPolygonF(rear_wing))
 
-        painter.setBrush(QBrush(QColor(20, 20, 20)))  # Black tire
-        painter.setPen(QPen(QColor(80, 80, 80), 0.5))
-        for wheel_x, wheel_y, tire_size in wheel_positions:
-            tire_radius = tire_size * scale
-            painter.drawEllipse(int(wheel_x - tire_radius),
-                              int(wheel_y - tire_radius),
-                              int(2 * tire_radius), int(2 * tire_radius))
+        # Halo (simplified rectangular frame) - thin, non-filled, centered
+        halo_w = 2.4 * scale
+        halo_h = 1.6 * scale
+        painter.setPen(QPen(QColor(200, 200, 200), max(1.0, 1.0 * scale)))
+        painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        painter.drawRect(int(-halo_w / 2), int(-0.5 * scale - halo_h / 2), int(halo_w), int(halo_h))
 
-            # Wheel rim (inner circle)
-            painter.setBrush(QBrush(QColor(120, 120, 120)))
-            painter.drawEllipse(int(wheel_x - tire_radius * 0.4),
-                              int(wheel_y - tire_radius * 0.4),
-                              int(2 * tire_radius * 0.4),
-                              int(2 * tire_radius * 0.4))
+        # Cockpit + driver (simple rectangles, centered)
+        cockpit_w = 1.7 * scale
+        cockpit_h = 1.0 * scale
+        painter.setBrush(QBrush(QColor(20, 20, 20)))
+        painter.setPen(QPen(livery.trim_color, 0.6))
+        painter.drawRect(int(-cockpit_w / 2), int(-0.3 * scale), int(cockpit_w), int(cockpit_h))
+
+        driver_w = 1.0 * scale
+        driver_h = 0.58 * scale
+        painter.setBrush(QBrush(QColor(200, 150, 100)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(int(-driver_w / 2), int(-0.12 * scale), int(driver_w), int(driver_h))
+
+        # Suspension hints (thin lines) - symmetrical
+        susp_color = QColor(100, 100, 100)
+        susp_x_inner = 2.0 * scale
+        susp_x_outer = 2.5 * scale
+        painter.setPen(QPen(susp_color, 1))
+        # Front suspension (symmetrical)
+        painter.drawLine(int(-susp_x_inner), int(-0.5 * scale), int(-susp_x_outer), int(-2.2 * scale))
+        painter.drawLine(int(susp_x_inner), int(-0.5 * scale), int(susp_x_outer), int(-2.2 * scale))
+        # Rear suspension (symmetrical)
+        painter.drawLine(int(-susp_x_inner), int(0.5 * scale), int(-susp_x_outer), int(2.0 * scale))
+        painter.drawLine(int(susp_x_inner), int(0.5 * scale), int(susp_x_outer), int(2.0 * scale))
+
+        # Wheels - front wheels can rotate with steering_angle
+        wheel_x_offset = 2.0 * scale  # track width
+        front_wheel_y = -2.3 * scale  # moved further forward (halfway to front wing)
+        rear_wheel_y = 2.1 * scale    # moved further back (halfway to rear wing)
+        
+        tire_color = QColor(20, 20, 20)
+        tire_outline = QColor(80, 80, 80)
+        
+        # All wheels same size
+        tire_radius = 0.64 * scale
+        wheel_w = int(max(1, 2 * tire_radius * 0.62))  # short dimension across track
+        wheel_h = int(max(1, 2 * tire_radius * 1.12))  # long dimension along car length
+        
+        painter.setBrush(QBrush(tire_color))
+        painter.setPen(QPen(tire_outline, 1))
+        
+        # Front wheels with steering rotation
+        if abs(steering_angle) > 0.1:
+            # Draw rotated front wheels
+            for side_multiplier, wheel_x in [(-1, -wheel_x_offset), (1, wheel_x_offset)]:
+                painter.save()
+                painter.translate(wheel_x, front_wheel_y)
+                painter.rotate(steering_angle)
+                painter.drawRect(int(-wheel_w / 2), int(-wheel_h / 2), wheel_w, wheel_h)
+                painter.restore()
+        else:
+            # Straight wheels
+            painter.drawRect(int(-wheel_x_offset - wheel_w / 2), int(front_wheel_y - wheel_h / 2), wheel_w, wheel_h)
+            painter.drawRect(int(wheel_x_offset - wheel_w / 2), int(front_wheel_y - wheel_h / 2), wheel_w, wheel_h)
+        
+        # Rear wheels (always straight)
+        painter.drawRect(int(-wheel_x_offset - wheel_w / 2), int(rear_wheel_y - wheel_h / 2), wheel_w, wheel_h)
+        painter.drawRect(int(wheel_x_offset - wheel_w / 2), int(rear_wheel_y - wheel_h / 2), wheel_w, wheel_h)
 
         painter.restore()
 
     @staticmethod
-    def render_car(painter: QPainter, vehicle_type: VehicleType,
-                   livery: 'Livery', scale: float = 1.0) -> None:
-        """
-        Render car based on vehicle type.
-
-        Args:
-            painter: QPainter instance for drawing
-            vehicle_type: Type of racing vehicle (currently only SINGLE_SEATER for MVP)
-            livery: Paint scheme and design
-            scale: Zoom/scale factor for rendering
-        """
+    def render_car(painter: QPainter, vehicle_type: VehicleType, livery: Livery, scale: float = 1.0) -> None:
         if vehicle_type == VehicleType.SINGLE_SEATER:
             VehicleRenderer.render_single_seater_car(painter, livery, scale)
         else:
-            # Fallback: simple rectangle for safety
             painter.setBrush(QBrush(livery.primary_color))
             painter.setPen(QPen(livery.trim_color, 1))
             painter.drawRect(-5, -2, 10, 4)
 
     @staticmethod
-    def render_racing_number(painter: QPainter, number: int,
-                            number_color: QColor = QColor(255, 255, 255),
-                            bg_color: Optional[QColor] = None) -> None:
-        """
-        Render driver's racing number on car.
-        
-        Args:
-            painter: QPainter instance
-            number: Driver number (1-999)
-            number_color: Color of number text
-            bg_color: Optional background color for number box
-        """
+    def render_racing_number(painter: QPainter, number: int, number_color: QColor = QColor(255, 255, 255), bg_color: Optional[QColor] = None) -> None:
         painter.save()
-        
-        # Draw background if specified
         if bg_color:
             painter.setBrush(QBrush(bg_color))
             painter.setPen(QPen(number_color, 1))
-            painter.drawRect(-2, -1.5, 4, 3)
-        
-        # Draw number text
+            painter.drawRect(int(-2), int(-1.5), int(4), int(3))
         painter.setFont(painter.font())
         painter.setPen(QPen(number_color, 1))
-        text = str(number).zfill(2)  # Pad with leading zero
-        # Note: Simple text rendering; PyQt6 would use drawText with QFont
-        
         painter.restore()
 
 
 @dataclass
 class VehicleConfiguration:
-    """Complete vehicle setup for a single seater race entry"""
     livery: Livery
     driver_number: int
     team_id: int
-    fuel_load_kg: float = 105.0  # Single seater fuel load ~105kg
-    tire_compound: str = "medium"  # soft, medium, hard (Pirelli spec)
-    aerodynamic_setup: str = "balanced"  # low_downforce, balanced, high_downforce
-    brake_balance: float = 0.5  # 0.0-1.0 front/rear balance
+    fuel_load_kg: float = 105.0
+    tire_compound: str = "medium"
+    aerodynamic_setup: str = "balanced"
+    brake_balance: float = 0.5
 
     def to_display_string(self) -> str:
-        """Format as human-readable car description"""
-        return (f"#{self.driver_number} - {self.livery.team_name} "
-                f"(Formula Single Seater)")
+        return f"#{self.driver_number} - {self.livery.team_name} (Formula Single Seater)"
 
 
-# Factory function for creating typical liveries
-def create_team_livery(team_id: int, team_name: str, 
-                       driver_number: int) -> Livery:
-    """
-    Create livery based on team ID.
-    
-    Uses a rotation of classic team colors for visual distinction.
-    """
+def create_team_livery(team_id: int, team_name: str, driver_number: int) -> Livery:
     team_colors = [
-        (QColor(220, 20, 20), QColor(255, 255, 0), QColor(0, 0, 0)),    # Red/Yellow
-        (QColor(0, 80, 180), QColor(255, 255, 255), QColor(255, 165, 0)),  # Blue/White
-        (QColor(0, 140, 80), QColor(255, 255, 255), QColor(200, 200, 200)), # Green/White
-        (QColor(100, 100, 100), QColor(255, 255, 255), QColor(255, 0, 0)), # Silver/White
-        (QColor(200, 0, 120), QColor(255, 215, 0), QColor(255, 255, 255)), # Pink/Gold
+        (QColor(220, 20, 20), QColor(255, 255, 0), QColor(0, 0, 0)),
+        (QColor(0, 80, 180), QColor(255, 255, 255), QColor(255, 165, 0)),
+        (QColor(0, 140, 80), QColor(255, 255, 255), QColor(200, 200, 200)),
+        (QColor(100, 100, 100), QColor(255, 255, 255), QColor(255, 0, 0)),
+        (QColor(200, 0, 120), QColor(255, 215, 0), QColor(255, 255, 255)),
     ]
-    
     primary, secondary, trim = team_colors[team_id % len(team_colors)]
     return Livery(primary, secondary, trim, team_name, driver_number)
