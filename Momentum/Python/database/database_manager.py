@@ -147,6 +147,64 @@ class DatabaseManager:
 
         return conn
 
+    def _hydrate_driver(self, row: sqlite3.Row) -> Optional[Driver]:
+        """Internal: convert a DB row into a `Driver` instance and attach
+        legacy attributes from `attributes_extra` (JSON) and sensible defaults.
+
+        This keeps the DB schema slim while providing backward compatibility
+        to code that expects legacy attributes like `raw_speed`,
+        `cornering_skill`, etc. No schema changes are made.
+        """
+        if not row:
+            return None
+        row_dict = dict(row)
+        # Remove DB-only columns
+        row_dict.pop('created_at', None)
+        row_dict.pop('updated_at', None)
+
+        # Build kwargs only for fields present in the compact Driver dataclass
+        driver_fields = {f: None for f in Driver.__dataclass_fields__.keys()}
+        driver_kwargs = {k: v for k, v in row_dict.items() if k in driver_fields}
+
+        try:
+            driver = Driver(**driver_kwargs)
+        except TypeError:
+            return None
+
+        # Attach extra attributes provided in attributes_extra JSON (if any)
+        extras_raw = row_dict.get('attributes_extra') or '{}'
+        try:
+            extras = json.loads(extras_raw) if isinstance(extras_raw, str) else extras_raw
+        except Exception:
+            extras = {}
+
+        if isinstance(extras, dict):
+            for k, v in extras.items():
+                # Don't overwrite compact persisted fields
+                if not hasattr(driver, k):
+                    try:
+                        setattr(driver, k, v)
+                    except Exception:
+                        # ignore non-serializable or problematic values
+                        continue
+
+        # Provide sensible defaults/aliases for commonly-used legacy attributes
+        # so callers in the engine/GUI that expect them won't break.
+        if not hasattr(driver, 'raw_speed'):
+            setattr(driver, 'raw_speed', float(getattr(driver, 'overall_rating', 50.0)))
+        if not hasattr(driver, 'racecraft'):
+            setattr(driver, 'racecraft', float(getattr(driver, 'racecraft_rating', 50.0)))
+        if not hasattr(driver, 'vehicle_control'):
+            setattr(driver, 'vehicle_control', float(getattr(driver, 'vehicle_handling', 50.0)))
+        if not hasattr(driver, 'cornering_skill'):
+            # approximate cornering from vehicle_handling
+            vh = float(getattr(driver, 'vehicle_handling', 50.0))
+            setattr(driver, 'cornering_skill', round(vh * 0.95, 2))
+        if not hasattr(driver, 'defensive_driving'):
+            setattr(driver, 'defensive_driving', float(getattr(driver, 'defensive_rating', 50.0)))
+
+        return driver
+
     # Driver operations
     def create_driver(self, driver: Driver) -> Optional[int]:
         """Create a new driver with all 50+ attributes and return ID"""
@@ -214,56 +272,34 @@ class DatabaseManager:
             return cursor.lastrowid
 
     def get_driver(self, driver_id: int) -> Optional[Driver]:
-        """Get driver by ID"""
+        """Get driver by ID (returns compact Driver with legacy attrs attached)."""
         with self.get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM drivers WHERE id = ?", (driver_id,)).fetchone()
-            if row:
-                row_dict = dict(row)
-                row_dict.pop('created_at', None)
-                row_dict.pop('updated_at', None)
-                try:
-                    return Driver(**row_dict)
-                except TypeError:
-                    return None
-            return None
+            row = conn.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,)).fetchone()
+            return self._hydrate_driver(row)
 
     def get_all_drivers(self) -> List[Driver]:
-        """Get all drivers"""
+        """Get all drivers and hydrate them for compatibility."""
         with self.get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM drivers ORDER BY name").fetchall()
-            # Filter out extra database columns (created_at, updated_at, etc.)
+            rows = conn.execute("SELECT * FROM drivers ORDER BY name").fetchall()
             drivers = []
             for row in rows:
-                row_dict = dict(row)
-                # Remove non-model fields
-                row_dict.pop('created_at', None)
-                row_dict.pop('updated_at', None)
-                try:
-                    drivers.append(Driver(**row_dict))
-                except TypeError:
-                    # Skip drivers that fail to load (log in production)
-                    continue
+                d = self._hydrate_driver(row)
+                if d:
+                    drivers.append(d)
             return drivers
 
     def get_drivers_by_team(self, team_id: int) -> List[Driver]:
         """Get all drivers for a specific team"""
         with self.get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM drivers WHERE current_team_id = ? ORDER BY raw_speed DESC",
+                "SELECT * FROM drivers WHERE current_team_id = ? ORDER BY overall_rating DESC",
                 (team_id,)
             ).fetchall()
             drivers = []
             for row in rows:
-                try:
-                    row_dict = dict(row)
-                    # Remove non-model fields
-                    row_dict.pop('created_at', None)
-                    row_dict.pop('updated_at', None)
-                    drivers.append(Driver(**row_dict))
-                except TypeError:
-                    continue
+                d = self._hydrate_driver(row)
+                if d:
+                    drivers.append(d)
             return drivers
 
     def update_driver_stats(self, driver_id: int,
@@ -361,6 +397,70 @@ class DatabaseManager:
             # Filter out created_at field which isn't in the Track model
             return [Track(**{k: v for k, v in dict(row).items()
                           if k != 'created_at'}) for row in rows]
+
+    def get_track(self, track_id: int) -> Optional[Track]:
+        """Get a single track by ID"""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM tracks WHERE id = ?", (track_id,)).fetchone()
+            if not row:
+                return None
+            return Track(**{k: v for k, v in dict(row).items() if k != 'created_at'})
+
+    def get_track_instructions(self, track_id: int) -> Optional[Dict]:
+        """Return parsed instructions JSON for a track, or None."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT instructions_json, geometry_json, is_point_to_point, joker_enabled FROM tracks WHERE id = ?",
+                               (track_id,)).fetchone()
+            if not row:
+                return None
+            rowd = dict(row)
+            instr = rowd.get('instructions_json')
+            geom = rowd.get('geometry_json')
+            is_ptp = bool(rowd.get('is_point_to_point'))
+            joker = bool(rowd.get('joker_enabled'))
+            parsed = None
+            if instr:
+                try:
+                    parsed = json.loads(instr)
+                except Exception:
+                    parsed = None
+            return {
+                'instructions': parsed,
+                'geometry_json': geom,
+                'is_point_to_point': is_ptp,
+                'joker_enabled': joker
+            }
+
+    def save_track_geometry(self, track_id: int, geometry_json: str):
+        """Persist generated geometry JSON for a track (cache)."""
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tracks SET geometry_json = ? WHERE id = ?", (geometry_json, track_id))
+
+    def save_track_instructions(self, track_id: int, instructions_json: str):
+        """Persist canonical instructions JSON for a track."""
+        with self.get_connection() as conn:
+            conn.execute("UPDATE tracks SET instructions_json = ? WHERE id = ?", (instructions_json, track_id))
+
+    def synthesize_instructions_from_fields(self, track: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Create a simple instruction list from compact track fields as fallback.
+
+        Produces a reasonable mix of straights and corners based on `length_km` and `turns`.
+        This is approximate and intended as a fallback when `instructions_json` is absent.
+        """
+        length_m = int(float(track.get('length_km', 3.0)) * 1000)
+        turns = int(track.get('turns', max(3, length_m // 800)))
+        straight_len = max(50, length_m // (turns + 1))
+        instr = []
+        for i in range(turns):
+            instr.append({'type': 'S', 'length_m': straight_len})
+            # alternate left/right corners with moderate radius and angle
+            angle = 40 if i % 2 == 0 else -45
+            instr.append({'type': 'C', 'radius_m': 80, 'angle_deg': angle})
+        # final straight to complete distance
+        remainder = length_m - straight_len * turns
+        if remainder > 0:
+            instr.append({'type': 'S', 'length_m': remainder})
+        return instr
 
     def get_track(self, track_id: int) -> Optional[Track]:
         """Get track by ID"""

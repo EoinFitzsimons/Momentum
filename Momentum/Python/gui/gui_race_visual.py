@@ -69,16 +69,74 @@ class CircuitGenerator:
     @staticmethod
     def generate(track_length_km: float = 5.0):
         """Generate circuit based on track length."""
-        segments: List[TrackPoint] = []
+        # Backwards-compatible generator: create main route from built-in instructions
+        circuit_instructions = [
+            ('S', int(600 * (track_length_km / 6.0))),
+            ('C', 45, 170, 60, 0.00008),
+            ('S', int(400 * (track_length_km / 6.0))),
+            ('C', 65, 95, 50, 0.0001),
+            ('S', int(220 * (track_length_km / 6.0))),
+            ('C', -55, 100, 52, 0.0001),
+            ('S', int(350 * (track_length_km / 6.0))),
+            ('C', 155, 48, 42, 0.00014),
+            ('S', int(550 * (track_length_km / 6.0))),
+            ('C', -65, 145, 58, 0.00009),
+            ('S', int(380 * (track_length_km / 6.0))),
+            ('C', 55, 115, 54, 0.00009),
+            ('S', int(180 * (track_length_km / 6.0))),
+            ('C', 60, 90, 50, 0.0001),
+            ('S', int(300 * (track_length_km / 6.0))),
+            ('C', -50, 135, 56, 0.00009),
+            ('S', int(160 * (track_length_km / 6.0))),
+            ('C', 50, 135, 56, 0.00009),
+            ('S', int(320 * (track_length_km / 6.0))),
+        ]
+
+        routes = CircuitGenerator.generate_with_routes(circuit_instructions, {'is_point_to_point': False})
+        # preserve backward compatibility: return main route list
+        return routes['main']
+
+    @staticmethod
+    def generate_with_routes(instructions, options: Optional[Dict] = None):
+        """Generate route(s) from an instruction list.
+
+        Returns a dict: {'main': [TrackPoint], 'joker': [TrackPoint] or None, 'pit': [TrackPoint] or None}
+        Supported instruction formats: tuple-format (legacy) or dict-format:
+          {'type':'S', 'length_m':...}, {'type':'C','radius_m':...,'angle_deg':...},
+          {'type':'JOKER', 'instructions':[...]} , {'type':'PIT','instructions':[...]}.
+        Options: {'is_point_to_point': bool}
+        """
+        if options is None:
+            options = {}
+        is_point_to_point = bool(options.get('is_point_to_point', False))
+
+        # main segments state
+        main_segments: List[TrackPoint] = []
         state = {
-            'segments': segments,
+            'segments': main_segments,
             'current_s': 0,
             'current_x': 0,
             'current_y': 0,
             'current_theta': 0,
             'total_angle': 0,
-            'target_length_m': track_length_km * 1000  # Store target for post-scaling
+            'target_length_m': None
         }
+
+        # storage for alternate routes
+        routes = {'main': main_segments, 'joker': None, 'pit': None}
+
+        # Internal: process instructions and collect alternate routes when present
+        CircuitGenerator._process_instructions(instructions, state, routes)
+
+        # Rescale / finalize only for main route unless point-to-point
+        if state.get('target_length_m') is None:
+            # no explicit target length: leave as-is
+            pass
+        if not is_point_to_point:
+            CircuitGenerator._rescale_to_target_length(main_segments, state)
+            CircuitGenerator._finalize_circuit(main_segments)
+
+        return routes
 
         # Scale circuit instructions based on track length
         # Note: This is approximate - final track will be rescaled to exact
@@ -117,17 +175,81 @@ class CircuitGenerator:
         return segments
 
     @staticmethod
-    def _process_instructions(instructions, state):
+    def _process_instructions(instructions, state, routes: Dict[str, Any]):
         start_x, start_y = 0, 0  # Track starts at origin
+
+        # helper to process a sub-instruction list into a fresh segments list
+        def process_subinstructions(sub_instructions):
+            sub_segments: List[TrackPoint] = []
+            sub_state = {
+                'segments': sub_segments,
+                'current_s': 0,
+                'current_x': 0,
+                'current_y': 0,
+                'current_theta': 0,
+                'total_angle': 0,
+                'target_length_m': None
+            }
+            for instr in sub_instructions:
+                CircuitGenerator._process_instructions([instr], sub_state, {'main': sub_segments, 'joker': None, 'pit': None})
+            # finalize subroute
+            CircuitGenerator._rescale_to_target_length(sub_segments, sub_state)
+            CircuitGenerator._finalize_circuit(sub_segments)
+            return sub_segments
 
         # Process all instructions
         for instruction in instructions:
-            if instruction[0] == 'S':
-                CircuitGenerator._add_straight(instruction[1], state)
-            elif instruction[0] == 'C':
-                angle_deg, radius, clothoid_len, k = instruction[1:5]
-                CircuitGenerator._add_corner(
-                    angle_deg * math.pi / 180, radius, clothoid_len, k, state)
+            # Normalize instruction forms: allow tuple legacy or dict
+            if isinstance(instruction, tuple) or isinstance(instruction, list):
+                # legacy tuple form: ('S', length) or ('C', angle_deg, radius, clothoid_len, k)
+                if instruction[0] == 'S':
+                    CircuitGenerator._add_straight(instruction[1], state)
+                elif instruction[0] == 'C':
+                    angle_deg, radius, clothoid_len, k = instruction[1:5]
+                    CircuitGenerator._add_corner(
+                        angle_deg * math.pi / 180, radius, clothoid_len, k, state)
+                else:
+                    # unknown tuple type - ignore
+                    continue
+            elif isinstance(instruction, dict):
+                typ = instruction.get('type')
+                if not typ:
+                    continue
+                typ = typ.upper()
+                if typ == 'S':
+                    CircuitGenerator._add_straight(int(instruction.get('length_m', 50)), state)
+                elif typ == 'C':
+                    angle = float(instruction.get('angle_deg', 45))
+                    radius = float(instruction.get('radius_m', 80))
+                    clothoid = int(instruction.get('clothoid_len', 50))
+                    k = float(instruction.get('k', 0.00009))
+                    CircuitGenerator._add_corner(angle * math.pi / 180, radius, clothoid, k, state)
+                elif typ in ('PIT', 'PIT_ENTRY', 'PIT_EXIT'):
+                    # PIT block: may contain nested instructions for pit lane geometry
+                    pit_instr = instruction.get('instructions')
+                    if pit_instr:
+                        pit_segments = process_subinstructions(pit_instr)
+                        routes['pit'] = pit_segments
+                    else:
+                        # fallback: simple straight pit lane
+                        pit_len = int(instruction.get('length_m', 60))
+                        pit_state = {'segments': [], 'current_s': 0, 'current_x': 0, 'current_y': 0, 'current_theta': state['current_theta'], 'total_angle': 0, 'target_length_m': None}
+                        CircuitGenerator._add_straight(pit_len, pit_state)
+                        routes['pit'] = pit_state['segments']
+                elif typ == 'JOKER':
+                    joker_instr = instruction.get('instructions')
+                    if joker_instr:
+                        joker_segments = process_subinstructions(joker_instr)
+                        routes['joker'] = joker_segments
+                    else:
+                        # nothing to do
+                        pass
+                else:
+                    # unknown dict type - ignore
+                    continue
+            else:
+                # unsupported instruction format - ignore
+                continue
 
         # NOW: Calculate what we need to close the loop
         dx = start_x - state['current_x']

@@ -1,3 +1,17 @@
+Non functional testing
+
+TESTING AND ACCEPTANCE CRITERIA
+
+Accessibility testing:
+Run colour-contrast checks (automated) and manual tests with common colour-blindness simulators.
+Verify keyboard-only navigation flows for all main screens.
+Run screen reader checks for web/API pages where relevant.
+Performance testing:
+Measure FPS and interaction latency on recommended hardware and report results.
+Verify background job queue keeps UI responsive during heavy tasks.
+Usability testing:
+Run short, moderated tests with representatives from each persona (casual fan, career manager, modder) and collect task-completion rates and time-to-complete metrics.
+
 # Testing Plan
 
 ## Overview
@@ -47,26 +61,27 @@ python GUI/gui_race_visual.py
 
 ### Test Spec Template
 
-- Test ID: `FT-<Area>-<NN>`  
-- Title: short description  
-- Precondition: environment/setup (DB present, virtualenv active)  
-- Steps: numbered actions  
-- Expected result: pass criteria  
+- Test ID: `FT-<Area>-<NN>`
+- Title: short description
+- Precondition: environment/setup (DB present, virtualenv active)
+- Steps: numbered actions
+- Expected result: pass criteria
 - Evidence: log files, screenshots, DB query, test output
 
 ### Examples
 
 - FT-DB-01: Load drivers from DB
-	- Precondition: `momentum.db` exists with drivers table populated
-	- Steps: `python -c "from database.database_manager import DatabaseManager; print(len(DatabaseManager().get_all_drivers()))"`
-	- Expected: prints integer >= 1
-	- Evidence: stdout captured as `Planning/Testing/evidence/FT-DB-01_output.txt`
 
+  - Precondition: `momentum.db` exists with drivers table populated
+  - Steps: `python -c "from database.database_manager import DatabaseManager; print(len(DatabaseManager().get_all_drivers()))"`
+  - Expected: prints integer >= 1
+  - Evidence: stdout captured as `Planning/Testing/evidence/FT-DB-01_output.txt`
 - IT-RACE-01: Start Quick Race and confirm engine thread runs
-	- Precondition: GUI will be used; DB has drivers
-	- Steps: Launch `python GUI/gui_game.py`, select driver, start race, watch console for "Race thread started"
-	- Expected: background thread started and HUD updates within a few seconds
-	- Evidence: console log, HUD screenshot, telemetry file in `logs/telemetry/`
+
+  - Precondition: GUI will be used; DB has drivers
+  - Steps: Launch `python GUI/gui_game.py`, select driver, start race, watch console for "Race thread started"
+  - Expected: background thread started and HUD updates within a few seconds
+  - Evidence: console log, HUD screenshot, telemetry file in `logs/telemetry/`
 
 ## Non‑Functional Tests
 
@@ -92,10 +107,10 @@ python GUI/gui_race_visual.py
 ## Test reporting and storage
 
 - Files & locations:
-	- `Planning/Testing/Plan.md` (this document)
-	- `Planning/Testing/test_specs/` (individual test spec files)
-	- `Planning/Testing/evidence/` (all captured logs, screenshots, telemetry)
 
+  - `Planning/Testing/Plan.md` (this document)
+  - `Planning/Testing/test_specs/` (individual test spec files)
+  - `Planning/Testing/evidence/` (all captured logs, screenshots, telemetry)
 - Continuous evidence: consider adding a CI job to run unit tests and publish `test_results_unit.xml` for inclusion in reports.
 
 ## Sample test spec (markdown)
@@ -119,7 +134,7 @@ Filename: `Planning/Testing/test_specs/FT-DB-01.md`
 
 ## Metrics & Acceptance
 
-- Unit tests: target 100% for small modules; Integration: document known issues.  
+- Unit tests: target 100% for small modules; Integration: document known issues.
 - Coverage: optional target >70% for core modules (database, engine, services). Use `coverage.py`.
 
 ## Next steps
