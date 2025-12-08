@@ -1,13 +1,11 @@
-## Implementation - Integrated Walkthrough (MVP + Roadmap)
-
-This chapter describes the current playable implementation used for the midpoint demo (MVP single-seater quick race), the runtime architecture and data flows, and the set of unattached/future systems planned for later development. The text is aimed at non-developer readers and product reviewers; file and symbol names are included to help locate code in the repository.
-
 ### At-a-glance: what the MVP delivers
 
-- Single-discipline quick race: single-seater race simulation with player-selectable driver and tuning preset via the Quick Race UI (`MainMenuWindow` → `QuickRaceSetupWindow`).
+- Single-discipline quick race: single-seater race simulation with player-selectable driver and tuning preset via the Quick Race UI (`MainMenuWindow` > `QuickRaceSetupWindow`).
 - Realtime agent-based simulation: the race engine advances in discrete ticks (~30 ticks/s) and drives AI decision-making, lap progression and incidents.
 - Visualiser: `RaceWindow` with `TrackWidget` renders the generated circuit and animates cars using per-tick position events emitted by the engine.
-- Persistence & telemetry: driver data, career statistics and basic persistent state use SQLite via `DatabaseManager`; telemetry traces are stored (batched) for later inspection.
+- Player controls: the player can actively manage race pace and overtaking aggressiveness using UI sliders. These controls map to a combined "push intensity" value that affects speed, tyre wear and fatigue.
+- Stress / fatigue mechanic: sustained high push increases player fatigue/stress, which degrades performance (reaction time, consistency) and raises incident probability; fatigue recovers over time when pace is reduced or during pit stops. Telemetry exposes `push_intensity`, `push_fatigue`, and `tire_condition` for live HUD display and post-race analysis.
+- Telemetry & persistence: driver and race telemetry are saved to allow replay and analysis (batched writes to minimize IO).
 
 #### How to run the demo
 
@@ -48,7 +46,9 @@ python tests/test_race_simulation.py
 - Engines: `Momentum/Python/RaceLogic/realtime_race_engine.py` (real-time loop) and `Momentum/Python/RaceLogic/base_race_engine.py` (abstract discipline API and shared utilities).
 - Data layer: `Momentum/Python/database/models.py` (data models: `Driver`, `Team`, `Track`, `RaceResult`) and `Momentum/Python/database/database_manager.py` (DB access).
 
-This dependency chain explains the runtime path: `launcher.py` → `gui_main_menu` → `simulate_race` (services) → engine (realtime or discipline adapter) → engine emits events → `gui_race_visual` consumes events and updates the UI.
+This dependency chain explains the runtime path: `launcher.py` > `gui_main_menu` > `RaceWindow` → `services.simulate_race(...)` (services) > engine (realtime or discipline adapter) > engine emits events > `gui_race_visual` consumes events and updates the UI.
+
+Note: runtime orchestration is split — the `MomentumLauncher` creates the `RaceWindow`, but `RaceWindow` is responsible for calling `services.simulate_race(...)` and managing the background simulation thread. The launcher does not directly invoke the simulation service; it only instantiates and configures the visual window.
 
 ### Detailed runtime flow (MVP race)
 
@@ -95,6 +95,7 @@ Design guidance:
 #### Telemetry batching policy
 
 **Batch size and flush conditions**:
+
 - Batch size: 100 position events per driver (configurable via `TELEMETRY_BATCH_SIZE` in `config.py`).
 - Flush triggers: (1) batch full, (2) lap completion, (3) race end, (4) 5-second idle timeout.
 - Format: JSON Lines (`.jsonl`) for per-event storage; one event per line for streaming replay.
@@ -104,10 +105,14 @@ Design guidance:
 
 For the midpoint demo the persistence surface can be the minimal set: driver updates, session metadata and telemetry - sufficient to show progression without a full career UI.
 
+Implementation notes: telemetry batching and event emission are implemented in the realtime engine (`Momentum/Python/RaceLogic/realtime_race_engine.py`). The engine performs batched telemetry writes and exposes telemetry and position events to the services layer. The GUI (`Momentum/Python/GUI/gui_race_visual.py`) receives telemetry updates via Qt signals for HUD display, while `Momentum/Python/services/race_simulation_api.py` acts as the adaptor connecting higher-level callers to the engine.
+
 ### Teams and current exposure
 
 - Codebase: `Team` exists as a full model in `database/models.py` and is supported in `database_manager.py`.
 - UI: the Quick Race UI does not present team selection; drivers are shown independently. The simulation code tolerates this by creating placeholder `Team` instances where necessary.
+
+Implementation notes: placeholder `Team` objects are created in `Momentum/Python/services/race_simulation_api.py` when drivers lack team records in the database. This allows the engine to receive a complete `teams` context while keeping the Quick Race UI minimal.
 
 Recommendation: document this explicitly in the Implementation chapter (done here) and add a future UX task to surface team selection when ready.
 
@@ -121,14 +126,14 @@ Recommendation: document this explicitly in the Implementation chapter (done her
 
 #### Seed/Determinism Scope
 
-| Subsystem | Accepts `seed`? | Purpose | Default Behaviour |
-|-----------|----------------|---------|------------------|
-| `CircuitGenerator` | Yes (future) | Repeatable track layouts for QA | Random layout |
-| `RealtimeRaceEngine` | Yes | Deterministic RNG for tests | Non-deterministic (`seed=None`) |
-| `Name generators` | No (not exposed) | Driver/team name generation | Random |
-| `Telemetry replay` | N/A | Replay recorded session | Uses stored events |
+| Subsystem              | Accepts `seed`? | Purpose                         | Default Behaviour                 |
+| ---------------------- | ----------------- | ------------------------------- | --------------------------------- |
+| `CircuitGenerator`   | Yes (future)      | Repeatable track layouts for QA | Random layout                     |
+| `RealtimeRaceEngine` | Yes               | Deterministic RNG for tests     | Non-deterministic (`seed=None`) |
+| `Name generators`    | No (not exposed)  | Driver/team name generation     | Random                            |
+| `Telemetry replay`   | N/A               | Replay recorded session         | Uses stored events                |
 
-To enable deterministic mode: pass `seed=42` (or any integer) to `simulate_race(...)`. The engine will use `np.random.default_rng(seed)` for all probabilistic events (mistakes, incidents, performance variance). Track generation currently does not expose a seed parameter but should be extended to accept one for QA.
+To enable deterministic mode: pass `seed=42` (or any integer) to the services entrypoint (see `Momentum/Python/services/race_simulation_api.py`) — the services layer forwards the seed to the engine. The realtime engine (`Momentum/Python/RaceLogic/realtime_race_engine.py`) constructs a NumPy RNG (`np.random.default_rng(seed)`) to control probabilistic events (mistakes, incidents, performance variance). Track generation currently does not consistently expose a seed parameter; exposing a seed in `CircuitGenerator.generate(...)` is a recommended QA improvement to achieve fully repeatable sessions.
 
 ### Threading and concurrency
 
@@ -138,12 +143,14 @@ The race simulation uses a multi-threaded architecture to avoid blocking the GUI
 - **Background thread (`T_engine`)**: runs `engine.simulate_race(...)` and emits position events at ~30 FPS.
 
 Event flow:
+
 1. GUI calls `simulate_race(...)` in a background thread (via `threading.Thread`).
 2. Engine executes the tick loop and calls `event_callback(position_event)` from `T_engine`.
 3. Callback posts events to the Qt main thread using `EventEmitter.position_update.emit(...)` (a Qt signal).
 4. Qt main thread receives the signal and calls `TrackWidget.update_car_realtime(...)` to update visuals.
 
 Shutdown:
+
 - The GUI sets a `stop_event` (threading.Event) when the user closes the race window.
 - The engine checks `stop_event.is_set()` each tick and exits the loop if set.
 - The background thread is joined with a 2-second timeout to ensure clean shutdown.
@@ -169,7 +176,7 @@ Shutdown:
 
 ## Functions, Code & Explanations (integrated)
 
-Below is a single, integrated section that presents each key runtime function by name, then the code excerpt, and finally a concise explanation of how it works and why it matters. This mirrors the Quick Race runtime path: GUI launcher → Quick Race setup → services adapter → realtime engine → visualiser + persistence.
+Below is a single, integrated section that presents each key runtime function by name, then the code excerpt, and finally a concise explanation of how it works and why it matters. This mirrors the Quick Race runtime path: GUI launcher > Quick Race setup > services adapter > realtime engine > visualiser + persistence.
 
 ### Function: `MomentumLauncher.start_race`
 
@@ -255,7 +262,7 @@ def simulate_race(
     context: Optional[RaceContext] = None,
 ) -> List[RaceResult]:
     """Run real-time agent-based race simulation at 30 FPS"""
-    
+  
     # Try to load discipline-specific adapter
     if context is not None:
         adapter = _load_discipline_engine(context, seed=seed)
@@ -267,7 +274,7 @@ def simulate_race(
         laps = context.total_laps
     else:
         engine = RealtimeRaceEngine(seed=seed)
-    
+  
     # Fetch team data from DB or create placeholders
     teams_dict = {}
     if db and drivers is not None:
@@ -282,7 +289,7 @@ def simulate_race(
         except Exception as e:
             if verbose:
                 print(f"Warning: Could not fetch team data: {e}")
-    
+  
     # Create placeholder teams for any missing
     if not teams_dict and drivers is not None:
         for driver in drivers:
@@ -298,7 +305,7 @@ def simulate_race(
                     headquarters="Unknown",
                     team_principal="Unknown"
                 )
-    
+  
     return engine.simulate_race(
         drivers=drivers,
         teams=teams_dict,
@@ -455,7 +462,7 @@ Explanation:
 - `CircuitGenerator`: procedural track building and rescaling; returns an ordered list of `TrackPoint` for visualisation and physics mapping.
 - `DatabaseManager`: thin SQLite wrapper for CRUD on drivers, teams, tracks; used by UI and services to load/save state.
 - `Race Simulation API` (services): adapter pattern that loads a discipline-specific engine when available, otherwise falls back to the realtime engine; responsible for context assembly (drivers, teams, track, seed) and converting engine outputs to API-friendly `RaceResult` objects.
-- GUI flow: `QuickRaceSetup` → `MomentumLauncher.start_race` → `RaceWindow` initialisation → `services.simulate_race` invocation (via button or event) → engine runs in background thread and emits events → `TrackWidget.update_car_realtime` receives events and updates visuals.
+- GUI flow: `QuickRaceSetup` > `MomentumLauncher.start_race` > `RaceWindow` initialisation > `services.simulate_race` invocation (via button or event) > engine runs in background thread and emits events > `TrackWidget.update_car_realtime` receives events and updates visuals.
 
 Mapping to the state diagram
 
