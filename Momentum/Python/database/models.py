@@ -983,6 +983,14 @@ CREATE TABLE IF NOT EXISTS tracks (
     debut_year INTEGER NOT NULL,
     last_used_year INTEGER,
 
+    -- Special segments & behavior flags
+    is_point_to_point INTEGER NOT NULL DEFAULT 0,
+    joker_enabled INTEGER NOT NULL DEFAULT 0,
+    instructions_json TEXT DEFAULT NULL,
+    geometry_json TEXT DEFAULT NULL,
+    pit_entry_index INTEGER DEFAULT NULL,
+    pit_exit_index INTEGER DEFAULT NULL,
+
     -- Legacy fields (backward compatibility)
     surface_type TEXT NOT NULL DEFAULT 'tarmac' CHECK(surface_type IN ('tarmac', 'gravel', 'mixed')),
     difficulty REAL NOT NULL DEFAULT 0.5 CHECK(difficulty >= 0.0 AND difficulty <= 1.0),

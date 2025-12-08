@@ -69,6 +69,30 @@ def simulate_race(
     """
     # If a full RaceContext is provided prefer discipline-specific engines
     if context is not None:
+        # Best-effort: ensure a minimal teams mapping exists on the context so
+        # discipline adapters or fallback engines that require a team object
+        # per-driver don't skip drivers when callers omit `context.teams`.
+        try:
+            if not getattr(context, 'teams', None):
+                ctx_teams = {}
+                for d in getattr(context, 'drivers', []) or []:
+                    ctx_teams[d.current_team_id] = Team(
+                        id=d.current_team_id,
+                        name=f"Team {d.current_team_id}",
+                        nationality="USA",
+                        founded_year=2020,
+                        discipline="formula",
+                        tier="tier2",
+                        budget=100.0,
+                        headquarters="Unknown",
+                        team_principal="Unknown"
+                    )
+                context.teams = ctx_teams
+        except Exception:
+            # Best-effort population; if anything goes wrong, continue and let
+            # the downstream engine handle missing teams gracefully.
+            pass
+
         # Try to dynamically load a discipline adapter
         adapter = _load_discipline_engine(context, seed=seed)
         if adapter is not None:

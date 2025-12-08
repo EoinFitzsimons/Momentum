@@ -192,9 +192,9 @@ class CircuitGenerator:
             }
             for instr in sub_instructions:
                 CircuitGenerator._process_instructions([instr], sub_state, {'main': sub_segments, 'joker': None, 'pit': None})
-            # finalize subroute
-            CircuitGenerator._rescale_to_target_length(sub_segments, sub_state)
-            CircuitGenerator._finalize_circuit(sub_segments)
+            # finalize subroute (do not rescale - keep generated geometry as-is)
+            if sub_segments:
+                CircuitGenerator._finalize_circuit(sub_segments)
             return sub_segments
 
         # Process all instructions
@@ -483,7 +483,7 @@ class CircuitGenerator:
     @staticmethod
     def _rescale_to_target_length(segments, state):
         """Rescale all arc-length values to match target track length exactly."""
-        if not segments or 'target_length_m' not in state:
+        if not segments or 'target_length_m' not in state or state.get('target_length_m') is None:
             return
 
         target_length = state['target_length_m']
