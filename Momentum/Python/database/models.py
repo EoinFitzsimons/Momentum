@@ -1,28 +1,205 @@
+"""Compact 7-table models: drivers + teams + tracks + championships + races + race_results + staff_members.
+
+This file keeps the schema minimal: only the fields required by the
+simulation's core tables. Legacy component fields are intentionally
+omitted. For backward compatibility, `attributes_extra` is available
+per-driver as a JSON string the application may parse at load-time.
 """
-Momentum Motorsport Simulation - Database Models
 
-This module defines the complete data model for the Momentum multi-discipline
-motorsport simulation system. It provides SQLite-based persistent storage
-for all simulation entities including drivers, teams, tracks, championships,
-and race results.
+from dataclasses import dataclass
+from typing import Optional
+from datetime import datetime
+import json
 
-Data Model Overview:
-- Driver: Individual racers with skill attributes and career statistics
-- Team: Racing organizations with budgets, tiers, and operational data
-- Track: Racing circuits with physical and gameplay characteristics
-- Championship: Competition series with rules and point systems
-- Race: Individual race events with conditions and metadata
-- RaceResult: Race outcomes linking drivers, teams, and performance data
 
-Key Features:
-- Normalized relational schema with foreign key constraints
-- Data validation through CHECK constraints
-- Performance optimization via strategic indexing
-- Flexible multi-discipline support (Formula, Rally, Endurance, Street)
-- Career progression tracking with historical statistics
+@dataclass
+class Driver:
+    id: Optional[int]
+    name: str
+    nationality: str
+    birth_date: str
 
-Compatibility: SQLite 3.7+, Python 3.8+
-Authors: Final Year Project - Computer Science
+    # Persisted aggregates (0-100 scale)
+    racecraft_rating: float = 50.0
+    vehicle_handling: float = 50.0
+    defensive_rating: float = 50.0
+    adaptability: float = 50.0
+    overall_rating: float = 50.0
+
+    current_team_id: Optional[int] = None
+    preferred_discipline: str = "SINGLE_SEATER"
+    attributes_extra: str = "{}"
+
+    @property
+    def computed_age(self) -> int:
+        if not self.birth_date:
+            return 0
+        try:
+            bd = datetime.strptime(self.birth_date, "%Y-%m-%d").date()
+            today = datetime.utcnow().date()
+            years = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            return int(years)
+        except Exception:
+            return 0
+
+
+@dataclass
+class Team:
+    id: Optional[int]
+    name: str
+    nationality: str
+    discipline: str
+    tier: str
+    budget: float
+
+
+@dataclass
+class Track:
+    id: Optional[int]
+    name: str
+    country: str
+    primary_discipline: str
+
+    # Special segments & behaviors
+    is_point_to_point: bool = False           # True for rally/point-to-point stages
+    joker_enabled: bool = False               # True if track supports a joker lap/alternate route
+    instructions_json: Optional[str] = None   # Optional canonical instruction list (JSON)
+    geometry_json: Optional[str] = None      # Optional cached geometry (JSON of TrackPoints)
+    pit_entry_index: Optional[int] = None    # Instruction index for pit entry connection
+    pit_exit_index: Optional[int] = None     # Instruction index for pit exit connection
+
+
+@dataclass
+class Championship:
+    id: Optional[int]
+    name: str
+    discipline: str
+    season_length: int
+    points_system: str
+    current_season: int
+
+
+@dataclass
+class Race:
+    id: Optional[int]
+    championship_id: int
+    track_id: int
+    season: int
+    round_number: int
+    race_date: str
+    status: str = "scheduled"
+
+
+@dataclass
+class RaceResult:
+    id: Optional[int]
+    race_id: int
+    driver_id: int
+    team_id: int
+    position: int
+    points: int = 0
+
+
+@dataclass
+class StaffMember:
+    id: Optional[int]
+    name: str
+    role: str
+    current_team_id: Optional[int] = None
+
+
+# Compact SCHEMA_SQL for the 7 core tables
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS drivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    nationality TEXT NOT NULL,
+    birth_date TEXT NOT NULL,
+    racecraft_rating REAL NOT NULL DEFAULT 50.0 CHECK(racecraft_rating BETWEEN 0.0 AND 100.0),
+    vehicle_handling REAL NOT NULL DEFAULT 50.0 CHECK(vehicle_handling BETWEEN 0.0 AND 100.0),
+    defensive_rating REAL NOT NULL DEFAULT 50.0 CHECK(defensive_rating BETWEEN 0.0 AND 100.0),
+    adaptability REAL NOT NULL DEFAULT 50.0 CHECK(adaptability BETWEEN 0.0 AND 100.0),
+    overall_rating REAL NOT NULL DEFAULT 50.0 CHECK(overall_rating BETWEEN 0.0 AND 100.0),
+    current_team_id INTEGER,
+    preferred_discipline TEXT DEFAULT 'SINGLE_SEATER',
+    attributes_extra TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (current_team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    nationality TEXT NOT NULL,
+    discipline TEXT NOT NULL,
+    tier TEXT NOT NULL,
+    budget REAL NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tracks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    country TEXT NOT NULL,
+    primary_discipline TEXT NOT NULL,
+    -- Special segments & behavior flags
+    is_point_to_point INTEGER NOT NULL DEFAULT 0,
+    joker_enabled INTEGER NOT NULL DEFAULT 0,
+    instructions_json TEXT DEFAULT NULL,
+    geometry_json TEXT DEFAULT NULL,
+    pit_entry_index INTEGER DEFAULT NULL,
+    pit_exit_index INTEGER DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS championships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    discipline TEXT NOT NULL,
+    season_length INTEGER NOT NULL,
+    points_system TEXT NOT NULL,
+    current_season INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS races (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    championship_id INTEGER NOT NULL,
+    track_id INTEGER NOT NULL,
+    season INTEGER NOT NULL,
+    round_number INTEGER NOT NULL,
+    race_date TEXT NOT NULL,
+    status TEXT DEFAULT 'scheduled',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (championship_id) REFERENCES championships(id),
+    FOREIGN KEY (track_id) REFERENCES tracks(id)
+);
+
+CREATE TABLE IF NOT EXISTS race_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    race_id INTEGER NOT NULL,
+    driver_id INTEGER NOT NULL,
+    team_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    points INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (race_id) REFERENCES races(id),
+    FOREIGN KEY (driver_id) REFERENCES drivers(id),
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS staff_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    current_team_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (current_team_id) REFERENCES teams(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);
+CREATE INDEX IF NOT EXISTS idx_teams_discipline ON teams(discipline);
+CREATE INDEX IF NOT EXISTS idx_race_results_driver ON race_results(driver_id);
 """
 
 import sqlite3
@@ -280,6 +457,69 @@ class Driver:
         """Extract last name from full name for compatibility"""
         parts = self.name.split()
         return parts[-1] if len(parts) > 1 else ""
+
+    @property
+    def computed_age(self) -> int:
+        """Compute age from `birth_date` (non-destructive helper).
+
+        Returns the integer age in years based on today's date. Falls back to
+        the persisted `age` field if `birth_date` is missing or unparsable.
+        """
+        if not self.birth_date:
+            return int(self.age)
+        try:
+            bd = datetime.strptime(self.birth_date, "%Y-%m-%d").date()
+            today = datetime.utcnow().date()
+            years = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            return int(years)
+        except Exception:
+            return int(self.age)
+
+    @property
+    def racecraft_rating(self) -> float:
+        """Weighted aggregate for racecraft-oriented skills.
+
+        Combines `racecraft`, `overtaking`, `defensive_driving` and
+        `spatial_awareness` into a single 0-100 rating useful for UIs
+        and aggregated comparisons. Non-destructive: derived at runtime.
+        """
+        vals = [
+            (self.racecraft, 0.40),
+            (self.overtaking, 0.25),
+            (self.defensive_driving, 0.20),
+            (self.spatial_awareness, 0.15),
+        ]
+        total = sum(v * w for v, w in vals)
+        # clamp to 0-100
+        return round(max(0.0, min(100.0, total)), 2)
+
+    @property
+    def vehicle_handling(self) -> float:
+        """Aggregate of handling-related attributes.
+
+        Combines `vehicle_control`, `cornering_skill`, `braking_technique`
+        and `suspension_feel` into a single 0-100 metric.
+        """
+        vals = [
+            (self.vehicle_control, 0.35),
+            (self.cornering_skill, 0.30),
+            (self.braking_technique, 0.20),
+            (self.suspension_feel, 0.15),
+        ]
+        total = sum(v * w for v, w in vals)
+        return round(max(0.0, min(100.0, total)), 2)
+
+    @property
+    def defensive_rating(self) -> float:
+        """Aggregate defensive rating for collision avoidance and consistency."""
+        vals = [
+            (self.defensive_driving, 0.45),
+            (self.spatial_awareness, 0.25),
+            (self.concentration, 0.15),
+            (self.pressure_handling, 0.15),
+        ]
+        total = sum(v * w for v, w in vals)
+        return round(max(0.0, min(100.0, total)), 2)
 
 
 @dataclass

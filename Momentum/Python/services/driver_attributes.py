@@ -52,7 +52,9 @@ def get_driver_bravery(driver: Any) -> float:
         + 0.18 * get_safe_attribute(driver, "adrenaline_management")
         + 0.16 * get_safe_attribute(driver, "overtaking")
         + 0.16 * get_safe_attribute(driver, "pressure_handling")
-        + 0.10 * get_safe_attribute(driver, "defensive_driving")
+        + 0.10 * (getattr(driver, "defensive_rating", None)
+                  if getattr(driver, "defensive_rating", None) is not None
+                  else get_safe_attribute(driver, "defensive_driving"))
     )
 
 
@@ -63,7 +65,9 @@ def get_driver_patience(driver: Any) -> float:
         + 0.22 * get_safe_attribute(driver, "concentration")
         + 0.18 * get_safe_attribute(driver, "professionalism")
         + 0.16 * get_safe_attribute(driver, "pressure_handling")
-        + 0.16 * get_safe_attribute(driver, "racecraft")
+        + 0.16 * (getattr(driver, "racecraft_rating", None)
+                  if getattr(driver, "racecraft_rating", None) is not None
+                  else get_safe_attribute(driver, "racecraft"))
     )
 
 
@@ -83,9 +87,13 @@ def get_driver_wheel_to_wheel_ability(driver: Any) -> float:
     """Side-by-side craft: spatial judgment plus car control under pressure."""
     return _clamp(
         0.24 * get_safe_attribute(driver, "spatial_awareness")
-        + 0.22 * get_safe_attribute(driver, "vehicle_control")
+        + 0.22 * (getattr(driver, "vehicle_handling", None)
+                  if getattr(driver, "vehicle_handling", None) is not None
+                  else get_safe_attribute(driver, "vehicle_control"))
         + 0.18 * get_safe_attribute(driver, "reaction_time")
-        + 0.16 * get_safe_attribute(driver, "defensive_driving")
+        + 0.16 * (getattr(driver, "defensive_rating", None)
+                  if getattr(driver, "defensive_rating", None) is not None
+                  else get_safe_attribute(driver, "defensive_driving"))
         + 0.12 * get_safe_attribute(driver, "overtaking")
         + 0.08 * get_safe_attribute(driver, "pressure_handling")
     )
@@ -109,7 +117,9 @@ def get_driver_confidence(driver: Any) -> float:
     base = _avg(
         [
             get_safe_attribute(driver, "raw_speed"),
-            get_safe_attribute(driver, "racecraft"),
+            (getattr(driver, "racecraft_rating", None)
+             if getattr(driver, "racecraft_rating", None) is not None
+             else get_safe_attribute(driver, "racecraft")),
             get_safe_attribute(driver, "consistency"),
             get_safe_attribute(driver, "pressure_handling"),
             get_safe_attribute(driver, "professionalism"),
