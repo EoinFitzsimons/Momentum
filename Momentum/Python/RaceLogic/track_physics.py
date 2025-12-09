@@ -18,7 +18,7 @@ from enum import Enum
 import numpy as np
 
 from database.models import Driver, Track, Team
-from services.driver_attributes import get_driver_bravery
+from services.driver_attributes import get_safe_attribute
 
 
 class TrackSection(Enum):
@@ -73,21 +73,27 @@ class TrackCorner:
         # Base corner speed
         base_speed = self.apex_speed_kmh
 
-        # Driver skill influence
+        # Driver skill influence (use canonical attributes only)
+        # Prefer `racecraft` as the primary skill, with consistency,
+        # setup knowledge and reactions contributing to cornering.
+        racecraft = get_safe_attribute(driver, "racecraft") / 100.0
+        consistency = get_safe_attribute(driver, "consistency") / 100.0
+        setup = get_safe_attribute(driver, "setup_knowledge") / 100.0
+        reactions = get_safe_attribute(driver, "reactions") / 100.0
+
         skill_factor = (
-            0.30 * (driver.cornering_skill / 100.0) +
-            0.25 * (driver.vehicle_control / 100.0) +
-            0.20 * (driver.spatial_awareness / 100.0) +
-            0.15 * (driver.braking_technique / 100.0) +
-            0.10 * (driver.coordination / 100.0)
+            0.50 * racecraft +
+            0.25 * consistency +
+            0.15 * setup +
+            0.10 * reactions
         )
 
-        # Corner-specific skills
-        from services.driver_attributes import get_driver_patience
+        # Corner-specific adjustments using canonical attributes
+        # Hairpins reward racecraft/precision; fast corners reward consistency
         if self.angle_deg > 120:  # Hairpin
-            skill_factor *= (1.0 + (get_driver_patience(driver) / 200.0))
+            skill_factor *= (1.0 + (racecraft / 2.0))
         elif self.radius_m > 100:  # Fast corner
-            skill_factor *= (1.0 + (get_driver_bravery(driver) / 200.0))
+            skill_factor *= (1.0 + (consistency / 2.0))
 
         # Tire degradation impact
         tire_factor = 0.7 + (0.3 * tire_condition)

@@ -7,7 +7,7 @@ Racing vehicle systems including:
 - Visible mechanical components (suspension, wheels, cockpit)
 - Livery management (team colors, driver numbers)
 - Vehicle configuration (fuel, tires, brake balance)
-- GUI integration for race visualization
+- GUI integration for race visualisation
 
 MVP focuses exclusively on Formula-style open-wheel single seater racing.
 """

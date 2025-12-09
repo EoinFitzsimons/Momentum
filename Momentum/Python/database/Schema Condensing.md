@@ -118,7 +118,7 @@ Recommended immediate steps (low-risk, high-value)
    - `Driver.racecraft_rating` -> weighted aggregate of `racecraft`, `overtaking`, `defensive_driving`, `spatial_awareness`.
    - `Driver.vehicle_handling` -> aggregate of `vehicle_control`, `cornering_skill`, `braking_technique`, `suspension_feel`.
 2. Update `services/driver_attributes.py` to use these helpers (centralise weighting there).
-3. Run the DB init and test race engine to ensure no behavior changes. Fix the `db.init_database()` error before attempting any schema migration.
+3. Run the DB init and test race engine to ensure no behaviour changes. Fix the `db.init_database()` error before attempting any schema migration.
 
 If you want persisted consolidation (next-phase)
 

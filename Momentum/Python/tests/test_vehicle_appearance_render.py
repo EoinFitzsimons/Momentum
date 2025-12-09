@@ -28,7 +28,7 @@ from vehicles.vehicle_appearance import VehicleRenderer, Livery
 
 
 def render_and_save(path: str, *, size=(240, 120), scale=6.0):
-    """Render a single seater at center of a QPixmap and save to `path`.
+    """Render a single seater at centre of a QPixmap and save to `path`.
 
     Returns the path saved.
     """

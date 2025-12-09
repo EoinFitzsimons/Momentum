@@ -12,7 +12,7 @@ Key Features:
 - Real-time overtaking with skill-based outcomes
 - Tire degradation and fuel effects over time
 - Slipstream/drafting physics
-- Live position updates for GUI visualization
+- Live position updates for GUI visualisation
 
 Architecture:
 - Each driver is an autonomous agent with state and decision logic
@@ -37,7 +37,13 @@ from RaceLogic.overtaking_system import (
     evaluate_overtaking_opportunity, calculate_defensive_action,
     resolve_overtake_outcome
 )
-from services.driver_attributes import get_safe_attribute
+from services.driver_attributes import (
+    get_safe_attribute,
+    get_driver_aggression,
+    get_driver_professionalism,
+    get_vehicle_control,
+    get_cornering_skill,
+)
 
 
 class RacingMode(Enum):
@@ -131,7 +137,7 @@ class RealtimeRaceEngine:
     """
 
     def __init__(self, seed: Optional[int] = None):
-        """Initialize engine with random generator"""
+        """Initialise engine with random generator"""
         self.rng = np.random.default_rng(seed)
 
         # Track-aware racing physics
@@ -202,7 +208,7 @@ class RealtimeRaceEngine:
         Returns:
             Final race results
         """
-        # Initialize track map for racing physics
+        # Initialise track map for racing physics
         print(f"→ Generating track map for {track.name}...")
         self.track_map = TrackMap(track=track)
         print(
@@ -223,7 +229,7 @@ class RealtimeRaceEngine:
                 f"  ✓ Player driver ID {player_driver_id} with overrides: {
                     self.player_overrides}")
 
-        # Initialize race state
+        # Initialise race state
         track_length_m = track.length_km * 1000.0
         race_state = self._initialize_race(
             drivers, teams, track_length_m, total_laps)
@@ -366,7 +372,7 @@ class RealtimeRaceEngine:
         track_length_m: float,
         total_laps: int
     ) -> RaceState:
-        """Initialize race with starting grid"""
+        """Initialise race with starting grid"""
         race_state = RaceState(
             total_laps=total_laps,
             track_length_m=track_length_m
@@ -387,13 +393,11 @@ class RealtimeRaceEngine:
             starting_position = i * 20.0  # 20m spacing between all cars
 
             # Calculate initial push intensity based on driver personality
-            raw_speed = driver.raw_speed / 100.0
-            aggression = driver.aggression / \
-                100.0 if hasattr(driver, 'aggression') else 0.5
-            risk = driver.risk_taking / \
-                100.0 if hasattr(
-                    driver, 'risk_taking') else (
-                    (100.0 - driver.professionalism) / 100.0)
+            raw_speed = get_safe_attribute(driver, 'speed') / 100.0
+            aggression = get_driver_aggression(driver) / 100.0
+            # Risk is derived from professionalism: less professional -> more risk
+            professionalism = get_driver_professionalism(driver)
+            risk = (100.0 - professionalism) / 100.0
             # Range: 0.3 to 1.0
             initial_push = 0.3 + (raw_speed * 0.2) + \
                 (aggression * 0.3) + (risk * 0.2)
@@ -411,11 +415,7 @@ class RealtimeRaceEngine:
                 push_intensity=initial_push
             )
 
-            print(
-                f"  [INIT] {
-                    driver.name}: raw_speed={
-                    driver.raw_speed:.1f} -> initial_push={
-                    initial_push:.2f}")
+            print(f"  [INIT] {driver.name}: speed={get_safe_attribute(driver,'speed'):.1f} -> initial_push={initial_push:.2f}")
 
             race_state.driver_states[driver.id] = state
             race_state.lap_times[driver.id] = []
@@ -481,14 +481,13 @@ class RealtimeRaceEngine:
                 return
 
         # *** AI DRIVERS: USE ATTRIBUTES TO CREATE DRAMATIC VARIATION ***
-        # Use driver's actual attributes to determine their natural pace
-        raw_speed = driver.raw_speed / 100.0  # 0.0 to 1.0
-        aggression = driver.aggression / 100.0
-        consistency = driver.consistency / 100.0
-        risk_tolerance = driver.risk_taking / \
-            100.0 if hasattr(
-                driver, 'risk_taking') else (
-                (100.0 - driver.professionalism) / 100.0)
+        # Use driver's actual canonical attributes to determine natural pace
+        raw_speed = get_safe_attribute(driver, 'speed') / 100.0  # 0.0 to 1.0
+        aggression = get_driver_aggression(driver) / 100.0
+        consistency = get_safe_attribute(driver, 'consistency') / 100.0
+        # Risk tolerance derived from professionalism
+        professionalism = get_driver_professionalism(driver)
+        risk_tolerance = (100.0 - professionalism) / 100.0
 
         # Base push intensity from driver personality (0.4 to 1.0)
         # Aggressive, high-risk drivers naturally push harder
@@ -630,9 +629,9 @@ class RealtimeRaceEngine:
         driver = state.driver
         team = state.team
 
-        # Base speed from driver skill and team capability
-        raw_speed = driver.raw_speed / 100.0
-        cornering_skill = driver.cornering_skill / 100.0
+        # Base speed from driver canonical skill and team capability
+        raw_speed = get_safe_attribute(driver, 'speed') / 100.0
+        cornering_skill = get_cornering_skill(driver) / 100.0
         team_performance = self._get_team_multiplier(team)
 
         # *** PUSH INTENSITY IS THE DOMINANT FACTOR ***
@@ -724,7 +723,7 @@ class RealtimeRaceEngine:
         # Slow down when too close to car ahead to prevent driving into them
         # Less than 0.8 seconds gap (was 1.5 - VERY AGGRESSIVE)
         if state.gap_ahead < 0.8:
-            CAR_LENGTH = 5.0  # meters
+            CAR_LENGTH = 4.0  # meters (20% smaller cars)
             # Need at least 1.2 car lengths (6m, was 2 = 10m)
             MINIMUM_GAP = CAR_LENGTH * 1.2
 
@@ -746,7 +745,7 @@ class RealtimeRaceEngine:
                         speed *= 0.75
 
         # Consistency variance
-        consistency = driver.consistency / 100.0
+        consistency = get_safe_attribute(driver, 'consistency') / 100.0
         speed_variance = (1.0 - consistency) * 0.05
         speed *= (1.0 + self.rng.normal(0, speed_variance))
 
@@ -892,8 +891,8 @@ class RealtimeRaceEngine:
             push_risk = state.push_intensity / 0.7  # Linear below aggressive threshold
 
         # Driver skill reduces mistakes
-        consistency = state.driver.consistency / 100.0
-        vehicle_control = state.driver.vehicle_control / 100.0
+        consistency = get_safe_attribute(state.driver, 'consistency') / 100.0
+        vehicle_control = get_vehicle_control(state.driver) / 100.0
         # Range: 0.0 to 2.0
         skill_factor = 2.0 - (consistency + vehicle_control)
 
@@ -944,8 +943,8 @@ class RealtimeRaceEngine:
 
         # === POSITION-BASED COLLISION DETECTION ===
         # Collisions occur when two cars occupy the same physical space
-        CAR_LENGTH = 5.0  # meters
-        SAFE_FOLLOWING_DISTANCE = 15.0  # minimum safe gap (increased from 8m)
+        CAR_LENGTH = 4.0  # meters (20% smaller cars)
+        SAFE_FOLLOWING_DISTANCE = 15.0  # minimum safe gap (unchanged)
 
         # Check all other cars
         for other_id, other_state in race_state.driver_states.items():
@@ -964,7 +963,7 @@ class RealtimeRaceEngine:
 
             # If cars are very close longitudinally
             if longitudinal_gap < SAFE_FOLLOWING_DISTANCE:
-                # Assume lateral separation based on racing behavior
+                # Assume lateral separation based on racing behaviour
                 # Cars in ATTACK/DEFEND mode are trying to overtake (side-by-side)
                 # Cars in MANAGE/CRUISE maintain racing line (not side-by-side)
 
@@ -976,10 +975,14 @@ class RealtimeRaceEngine:
                 if is_overtaking and longitudinal_gap < CAR_LENGTH * 1.5:
                     # Side-by-side racing - small chance of contact
                     # Skill determines if they can race wheel-to-wheel safely
-                    my_racecraft = (state.driver.vehicle_control + state.driver.spatial_awareness +
-                                    state.driver.racecraft) / 300.0
-                    other_racecraft = (other_state.driver.vehicle_control + other_state.driver.spatial_awareness +
-                                       other_state.driver.racecraft) / 300.0
+                    # Use canonical-derived helpers instead of legacy fields
+                    my_vehicle_control = get_vehicle_control(state.driver)
+                    my_reactions = get_safe_attribute(state.driver, 'reactions')
+                    my_racecraft = (my_vehicle_control + my_reactions + get_safe_attribute(state.driver, 'racecraft')) / 300.0
+
+                    other_vehicle_control = get_vehicle_control(other_state.driver)
+                    other_reactions = get_safe_attribute(other_state.driver, 'reactions')
+                    other_racecraft = (other_vehicle_control + other_reactions + get_safe_attribute(other_state.driver, 'racecraft')) / 300.0
 
                     combined_skill = (my_racecraft + other_racecraft) / 2.0
 
@@ -988,8 +991,8 @@ class RealtimeRaceEngine:
                         state.tire_condition, other_state.tire_condition)
 
                     # Very small chance of contact even with good skills
-                    # (reduced 50x)
-                    contact_probability = 0.000002 * \
+                    # Reduce baseline contact probability to make DNFs rarer
+                    contact_probability = 0.0000002 * \
                         (1.0 - combined_skill * control_factor)
 
                     if self.rng.random() < contact_probability:
@@ -1024,22 +1027,55 @@ class RealtimeRaceEngine:
                         # Closing at >15 m/s = real rear-end risk (increased
                         # from 5)
                         if relative_velocity > 15.0:
-                            print(
-                                f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
-                            state.dnf_reason = "rear_end_collision"
-                            # Log collision with both drivers
-                            race_state.collision_log.append({
-                                "lap": state.lap,
-                                "time": race_state.current_time,
-                                "position_m": state.position_m,
-                                "type": "rear_end_collision",
-                                "driver1_id": state.driver_id,
-                                "driver1_name": state.driver_name,
-                                "driver2_id": other_state.driver_id,
-                                "driver2_name": other_state.driver_name,
-                                "description": f"{state.driver_name} rear-ended {other_state.driver_name}"
-                            })
-                            return True
+                                # Instead of immediate DNF, make rear-end collisions
+                                # probabilistic and much less likely to retire a car.
+                                # Skillful drivers are less likely to cause a DNF.
+                                my_vehicle_control = get_vehicle_control(state.driver)
+                                other_vehicle_control = get_vehicle_control(other_state.driver)
+                                combined_control = (my_vehicle_control + other_vehicle_control) / 200.0  # 0..1
+
+                                # Severity scales with closing speed beyond threshold
+                                severity = min(1.0, (relative_velocity - 15.0) / 15.0)
+
+                                # Base DNF probability at threshold (12%), scales with severity
+                                base_rear_end_dnf = 0.12
+                                dnf_probability = base_rear_end_dnf * severity * (1.0 - combined_control)
+
+                                if self.rng.random() < dnf_probability:
+                                    print(
+                                        f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
+                                    state.dnf_reason = "rear_end_collision"
+                                    # Log collision with both drivers
+                                    race_state.collision_log.append({
+                                        "lap": state.lap,
+                                        "time": race_state.current_time,
+                                        "position_m": state.position_m,
+                                        "type": "rear_end_collision",
+                                        "driver1_id": state.driver_id,
+                                        "driver1_name": state.driver_name,
+                                        "driver2_id": other_state.driver_id,
+                                        "driver2_name": other_state.driver_name,
+                                        "description": f"{state.driver_name} rear-ended {other_state.driver_name}"
+                                    })
+                                    return True
+                                else:
+                                    # Minor contact / fender-bender: reduce grip and log
+                                    print(
+                                        f"  !!! NEAR MISS/CONTACT (no DNF): {state.driver_name} & {other_state.driver_name} - closing {relative_velocity:.1f}m/s")
+                                    # Apply small damage/penalty so incident is meaningful
+                                    state.tire_condition = max(0.2, state.tire_condition - 0.12)
+                                    other_state.tire_condition = max(0.2, other_state.tire_condition - 0.08)
+                                    race_state.collision_log.append({
+                                        "lap": state.lap,
+                                        "time": race_state.current_time,
+                                        "position_m": state.position_m,
+                                        "type": "rear_end_contact_minor",
+                                        "driver1_id": state.driver_id,
+                                        "driver1_name": state.driver_name,
+                                        "driver2_id": other_state.driver_id,
+                                        "driver2_name": other_state.driver_name,
+                                        "description": f"Minor rear contact between {state.driver_name} and {other_state.driver_name} (no DNF)"
+                                    })
                     else:
                         # State is ahead - other car is behind
                         if relative_velocity < -5.0:  # Other car closing fast

@@ -7,7 +7,7 @@ all persistent storage operations for drivers, teams, tracks, championships, and
 race results using SQLite as the backend database.
 
 Key Features:
-- Automatic schema initialization and validation
+- Automatic schema initialisation and validation
 - Transaction management with rollback support
 - Optimized queries with proper indexing
 - Data integrity through foreign key constraints
@@ -55,7 +55,7 @@ class DatabaseManager:
         - Comprehensive error handling
 
     Key Responsibilities:
-        - Database schema initialization and updates
+        - Database schema initialisation and updates
         - CRUD operations for all entity types
         - Complex queries for standings and statistics
         - Data validation and constraint enforcement
@@ -68,9 +68,9 @@ class DatabaseManager:
 
     def __init__(self, db_path: str = DATABASE_PATH):
         """
-        Initialize Database Manager
+        Initialise Database Manager
 
-        Sets up the database connection and ensures proper schema initialization.
+        Sets up the database connection and ensures proper schema initialisation.
         Creates the database file and directory structure if they don't exist.
 
         Args:
@@ -78,7 +78,7 @@ class DatabaseManager:
                           from config.DATABASE_PATH
 
         Raises:
-            sqlite3.Error: If database initialization fails
+            sqlite3.Error: If database initialisation fails
             OSError: If database directory cannot be created
         """
         self.db_path = db_path
@@ -86,7 +86,7 @@ class DatabaseManager:
 
     def init_database(self):
         """
-        Initialize Database Schema
+        Initialise Database Schema
 
         Creates the complete database schema including all tables, indexes,
         constraints, and triggers. Safe to call multiple times - only creates
@@ -171,21 +171,30 @@ class DatabaseManager:
         except TypeError:
             return None
 
-        # Provide sensible defaults/aliases for commonly-used legacy attributes
-        # so callers in the engine/GUI that expect them won't break.
-        if not hasattr(driver, 'raw_speed'):
-            setattr(driver, 'raw_speed', float(getattr(driver, 'speed', 50.0)))
-        if not hasattr(driver, 'vehicle_control'):
-            # approximate vehicle control from setup_knowledge and tyre_management
-            sk = float(getattr(driver, 'setup_knowledge', 50.0))
-            tm = float(getattr(driver, 'tyre_management', 50.0))
-            setattr(driver, 'vehicle_control', round((sk + tm) / 2.0, 2))
-        if not hasattr(driver, 'cornering_skill'):
-            # approximate cornering from consistency
-            cs = float(getattr(driver, 'consistency', 50.0))
-            setattr(driver, 'cornering_skill', round(cs * 0.95, 2))
-        if not hasattr(driver, 'defensive_driving'):
-            setattr(driver, 'defensive_driving', float(getattr(driver, 'racecraft', 50.0)))
+        # NOTE: legacy alias/fallback attributes (e.g. `raw_speed`,
+        # `vehicle_control`, `cornering_skill`, `defensive_driving`,
+        # `professionalism`) were previously synthesized here for
+        # backwards-compatibility. The project now favors the canonical
+        # persisted attributes (e.g. `speed`, `racecraft`, `consistency`,
+        # `setup_knowledge`, `tyre_management`, `feedback`, `adaptability`).
+        # Engines and services should compute any derived signals from these
+        # official attributes. Avoid creating legacy aliases here to prevent
+        # accidental reliance on synthesized values.
+
+        # Ensure driver.name is usable in the UI (strip whitespace and provide
+        # a fallback if name is empty). This is a UI hygiene step only.
+        try:
+            nm = getattr(driver, 'name', '') or ''
+            nm = str(nm).strip()
+            if not nm:
+                nat = getattr(driver, 'nationality', None)
+                if nat:
+                    nm = f"{nat} #{getattr(driver, 'id', '')}"
+                else:
+                    nm = f"Driver #{getattr(driver, 'id', '')}"
+            setattr(driver, 'name', nm)
+        except Exception:
+            setattr(driver, 'name', f"Driver #{getattr(driver, 'id', '')}")
 
         return driver
 
@@ -261,10 +270,27 @@ class DatabaseManager:
             row = conn.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,)).fetchone()
             return self._hydrate_driver(row)
 
-    def get_all_drivers(self) -> List[Driver]:
-        """Get all drivers and hydrate them for compatibility."""
+    def get_all_drivers(self, order_by: str = 'id') -> List[Driver]:
+        """Get all drivers and hydrate them for compatibility.
+
+        Args:
+            order_by: Column name to order results by. For safety this value is
+                validated against the `Driver` dataclass fields and a small
+                trusted set (e.g. 'id', 'name'). If an unknown column is
+                provided the method falls back to ordering by 'id'.
+        """
+        # Build a small whitelist of allowed ordering columns to avoid SQL
+        # injection via the `order_by` parameter. Prefer fields defined on
+        # the compact `Driver` dataclass plus a couple of well-known DB
+        # columns.
+        allowed = set(Driver.__dataclass_fields__.keys()) if hasattr(Driver, '__dataclass_fields__') else set()
+        allowed.update({'id', 'name'})
+        if not isinstance(order_by, str) or order_by not in allowed:
+            order_by = 'id'
+
         with self.get_connection() as conn:
-            rows = conn.execute("SELECT * FROM drivers ORDER BY name").fetchall()
+            sql = f"SELECT * FROM drivers ORDER BY {order_by}"
+            rows = conn.execute(sql).fetchall()
             drivers = []
             for row in rows:
                 d = self._hydrate_driver(row)

@@ -36,7 +36,7 @@ class MomentumLogger:
         return cls._instance
 
     def __init__(self):
-        """Initialize logging system"""
+        """Initialise logging system"""
         if self._initialized:
             return
 
@@ -93,7 +93,7 @@ class MomentumLogger:
 
         self._initialized = True
 
-        # Log initialization
+        # Log initialisation
         self.info("=" * 80)
         self.info("MOMENTUM Logging System Initialized")
         self.info(f"Log file: {self.log_file}")

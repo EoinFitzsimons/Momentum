@@ -23,6 +23,7 @@ import threading
 import traceback
 from typing import Any, List, Dict, Optional, cast
 from dataclasses import dataclass
+from config import RACE_GRID_SIZE, RENDER_FPS
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -43,7 +44,7 @@ class Car:
     driver_id: int
     driver_name: str
     s: float  # Current arc-length position (meters)
-    color: QColor
+    colour: QColor
     dnf: bool = False
     # Use 1-based lap counting for UI (show lap 1 as first racing lap)
     lap: int = 1
@@ -53,6 +54,11 @@ class Car:
     velocity_mps: float = 0.0
     movement_direction: float = 0.0
     prev_s: Optional[float] = None
+    # Display/interpolation helpers (GUI-only)
+    display_s: float = 0.0
+    target_s: Optional[float] = None
+    prev_update_time: float = 0.0
+    target_update_time: float = 0.0
 
 
 class EventEmitter(QObject):
@@ -508,7 +514,7 @@ class CircuitGenerator:
 
     @staticmethod
     def _finalize_circuit(segments):
-        """Scale and center the circuit."""
+        """Scale and centre the circuit."""
         if not segments:
             return
 
@@ -518,7 +524,7 @@ class CircuitGenerator:
         gap = math.hypot(end_x - start_x, end_y - start_y)
         print(f"  [FINALIZE] Track closure gap: {gap:.1f}m (should be near 0)")
 
-        # Scale and center for display
+        # Scale and centre for display
         min_x = min(seg.x for seg in segments)
         max_x = max(seg.x for seg in segments)
         min_y = min(seg.y for seg in segments)
@@ -536,7 +542,7 @@ class CircuitGenerator:
             seg.y = (seg.y - center_y) * scale
 
         print(
-            f"  [FINALIZE] Track scaled and centered: {
+            f"  [FINALIZE] Track scaled and centred: {
                 len(segments)} points")
 
 
@@ -564,10 +570,14 @@ class TrackWidget(QWidget):
         self.camera_y = 0
         self.camera_rotation = 0
 
-        # Animation timer for smooth movement
+        # Animation timer for smooth movement (interval derived from config)
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
-        self.animation_timer.setInterval(16)  # ~60 FPS
+        try:
+            interval_ms = max(1, int(1000 / max(1, RENDER_FPS)))
+        except Exception:
+            interval_ms = 16
+        self.animation_timer.setInterval(interval_ms)
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
         """Set camera mode and target car."""
@@ -594,6 +604,12 @@ class TrackWidget(QWidget):
             # Start lap counting at 1 (first racing lap)
             car.lap = 1
             car.s = 0.0
+            # initialise interpolation state
+            car.display_s = car.s
+            car.target_s = car.s
+            now = time.time()
+            car.prev_update_time = now
+            car.target_update_time = now
         self.animation_timer.start()
 
     def stop_animation(self):
@@ -616,10 +632,21 @@ class TrackWidget(QWidget):
                     car.avg_lap_time = total_time / lap
 
                 # Calculate position based on total time and track length
-                if car.avg_lap_time > 0:
+                if car.avg_lap_time > 0 and self.track_length > 0:
                     laps_completed = total_time / car.avg_lap_time
-                    car.s = (
-                        laps_completed * self.track_length) % self.track_length
+                    sim_pos = (laps_completed * self.track_length) % self.track_length
+                else:
+                    sim_pos = 0.0
+
+                # Update authoritative simulation position and set interpolation
+                # targets so the GUI animates smoothly between legacy position updates.
+                prev_display = getattr(car, 'display_s', None)
+                now = time.time()
+                car.prev_s = prev_display if prev_display is not None else getattr(car, 's', sim_pos)
+                car.prev_update_time = getattr(car, 'target_update_time', now) or now
+                car.target_s = sim_pos
+                car.target_update_time = now
+                car.s = sim_pos
 
                 car.last_lap = lap
                 break
@@ -687,15 +714,22 @@ class TrackWidget(QWidget):
                     idx = int(normalized_pos)
                     idx = max(0, min(idx, len(self.track_points) - 1))
 
-                    # Store previous position to calculate actual movement
-                    # direction
+                    # Store previous position if missing
                     if not hasattr(car, 'prev_s') or car.prev_s is None:
                         car.prev_s = normalized_pos
 
-                    # Update position
+                    # Update position (store authoritative simulation position)
+                    # and set interpolation targets for smooth rendering on every update.
+                    prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
+                    # Shift previous -> target timestamps
+                    car.prev_s = prev_display
+                    car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
+                    car.target_s = normalized_pos
+                    car.target_update_time = time.time()
+                    # Keep authoritative last-known position
                     car.s = normalized_pos
 
-                    # Track movement direction for rotation
+                    # Track movement direction for rotation (based on latest sim pos and previous display)
                     prev_s = car.prev_s if car.prev_s is not None else normalized_pos
                     car.movement_direction = normalized_pos - prev_s
                     # Handle wrap-around
@@ -739,6 +773,36 @@ class TrackWidget(QWidget):
         """Smoothly update car positions based on simulation time - just trigger repaint."""
         if not self.race_active:
             return
+        now = time.time()
+        # Interpolate display_s for each car between prev and target positions
+        for car in self.cars:
+            try:
+                if car.target_update_time and car.prev_update_time and car.target_update_time > car.prev_update_time:
+                    span = car.target_update_time - car.prev_update_time
+                    if span <= 0:
+                        t = 1.0
+                    else:
+                        t = min(1.0, max(0.0, (now - car.prev_update_time) / span))
+
+                    prev = car.prev_s if car.prev_s is not None else car.s
+                    target = car.target_s if car.target_s is not None else car.s
+                    # Shortest circular interpolation around track length
+                    if self.track_length and self.track_length > 0:
+                        delta = target - prev
+                        if delta > self.track_length / 2:
+                            delta -= self.track_length
+                        elif delta < -self.track_length / 2:
+                            delta += self.track_length
+                        disp = prev + delta * t
+                        # Normalize
+                        car.display_s = disp % self.track_length
+                    else:
+                        car.display_s = prev + (target - prev) * t
+                else:
+                    # No interpolation data; snap to authoritative position
+                    car.display_s = car.s
+            except Exception:
+                car.display_s = car.s
 
         self.update()
 
@@ -763,7 +827,7 @@ class TrackWidget(QWidget):
             # GRASS BACKGROUND
             painter.fillRect(self.rect(), QColor(34, 139, 34))  # Forest green
 
-            # Center point for transformations
+            # Centre point for transformations
             center_x = self.width() // 2
             center_y = self.height() // 2
 
@@ -793,7 +857,7 @@ class TrackWidget(QWidget):
                     pt = self.track_points[idx]
 
                     # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
-                    # 1. Translate viewport center to canvas origin
+                    # 1. Translate viewport centre to canvas origin
                     # 2. Rotate based on car heading direction (track angle)
                     # 3. Scale (flip Y for screen coords)
                     # 4. Translate world so car is at origin
@@ -802,7 +866,7 @@ class TrackWidget(QWidget):
                     painter.rotate(math.degrees(pt.theta))
                     painter.scale(
                         self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
-                    painter.translate(-pt.x, -pt.y)  # Center on car position
+                    painter.translate(-pt.x, -pt.y)  # Centre on car position
                 else:
                     # Fallback to full view
                     painter.translate(center_x, center_y)
@@ -1128,7 +1192,7 @@ class TrackWidget(QWidget):
                         for door in range(3):
                             painter.drawRect(-11 + door * 7, 5, 6, 18)
 
-                        # Team color panel above doors
+                        # Team colour panel above doors
                         painter.setBrush(QBrush(team_colors[bay_idx]))
                         painter.drawRect(-12, 1, 24, 3)
 
@@ -1202,7 +1266,7 @@ class TrackWidget(QWidget):
                         ry = cy + (dx * sin_t + dy * cos_t)
                         pool_poly.append(QPointF(rx, ry))
 
-                    # Use requested water color #006994 (deeper, realistic) and
+                    # Use requested water colour #006994 (deeper, realistic) and
                     # darker edge
                     water_color = QColor("#006994")
                     water_edge = QColor("#004A66")
@@ -1321,10 +1385,10 @@ class TrackWidget(QWidget):
                             stripe_toggle = not stripe_toggle
                             segment_length = 0
 
-                        color = QColor(
+                        colour = QColor(
                             221, 45, 74) if stripe_toggle else QColor(
                             255, 255, 255)
-                        painter.setPen(QPen(color, 4))
+                        painter.setPen(QPen(colour, 4))
 
                         if first_curv > 0:  # Left turn - kerb on LEFT
                             painter.drawLine(
@@ -1408,7 +1472,9 @@ class TrackWidget(QWidget):
                         # When car.s exceeds track_length, it wraps back to 0
                         # Example: If track is 6000m and car.s = 6100m,
                         # normalized_s = 100m
-                        normalized_s = car.s % self.track_length
+                        # Use interpolated display position if present
+                        display_pos = getattr(car, 'display_s', None)
+                        normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
 
                         # === STEP 2: FIND MATCHING TRACK POINT ===
                         # CRITICAL FIX: Track points were rescaled, so their .s values
@@ -1475,10 +1541,10 @@ class TrackWidget(QWidget):
                         # Rotate car to face track direction; base sprite points along +X
                         painter.rotate(math.degrees(movement_angle) + 90)
 
-                        # Get livery for this driver (fallback: build from driver color)
+                        # Get livery for this driver (fallback: build from driver colour)
                         livery = self.appearance_manager.get_livery(car.driver_id)
                         if not livery:
-                            primary = car.color
+                            primary = car.colour
                             secondary = QColor(min(255, primary.red() + 30),
                                                min(255, primary.green() + 30),
                                                min(255, primary.blue() + 30))
@@ -1495,6 +1561,20 @@ class TrackWidget(QWidget):
                         )
 
                         painter.restore()
+                        # Highlight player's car with a subtle halo
+                        try:
+                            if getattr(self, 'player_driver_id', None) is not None and car.driver_id == self.player_driver_id:
+                                painter.save()
+                                halo_pen = QPen(QColor(255, 215, 0, 200))
+                                halo_pen.setWidth(4)
+                                painter.setPen(halo_pen)
+                                painter.setBrush(Qt.BrushStyle.NoBrush)
+                                # Draw a circular halo around the car position
+                                painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
+                                painter.restore()
+                        except Exception:
+                            # Non-fatal: highlighting should not break rendering
+                            pass
                         cars_drawn += 1
                 except Exception as e:
                     print(
@@ -1520,11 +1600,11 @@ class RaceWindow(QMainWindow):
     def __init__(self):
         try:
             super().__init__()
-            self.setWindowTitle("Momentum - Race Visualization")
+            self.setWindowTitle("Momentum - Race Visualisation")
             # Display mode (default: borderless)
             self.display_mode = "borderless"
-            # Borderless windowed fullscreen
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            # Borderless windowed fullscreen (use setWindowFlag to toggle)
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
             screen_obj = QApplication.primaryScreen()
             screen = screen_obj.geometry() if screen_obj else None
             if screen is not None:
@@ -1824,7 +1904,7 @@ class RaceWindow(QMainWindow):
             ["", "Driver", "Lap", "Gap"])
         self.standings_table.setMinimumWidth(500)
         self.standings_table.setMinimumHeight(400)
-        self.standings_table.setColumnWidth(0, 40)  # Color indicator
+        self.standings_table.setColumnWidth(0, 40)  # Colour indicator
         self.standings_table.setColumnWidth(1, 210)  # Driver name
         self.standings_table.setColumnWidth(2, 60)   # Lap
         self.standings_table.setColumnWidth(3, 100)  # Gap
@@ -1865,14 +1945,14 @@ class RaceWindow(QMainWindow):
     def _load_data(self):
         """Load drivers and track from database."""
         try:
-            # Initialize database
+            # Initialise database
             try:
                 from database.database_manager import DatabaseManager
                 self.db = DatabaseManager()
             except Exception as e:
                 self.info_label.setText(f"Database connection failed: {e}")
                 self.start_btn.setEnabled(False)
-                print(f"ERROR: Database initialization failed: {e}")
+                print(f"ERROR: Database initialisation failed: {e}")
                 traceback.print_exc()
                 return
 
@@ -1885,8 +1965,9 @@ class RaceWindow(QMainWindow):
                     print("ERROR: No drivers found in database")
                     return
 
-                self.drivers = all_drivers[:10] if len(
-                    all_drivers) >= 10 else all_drivers
+                # Use configured number of drivers (ordered by id from DB)
+                self.drivers = all_drivers[:RACE_GRID_SIZE] if len(
+                    all_drivers) >= RACE_GRID_SIZE else all_drivers
 
                 print(f"Loaded {len(self.drivers)} drivers")
                 if self.drivers:
@@ -1896,17 +1977,24 @@ class RaceWindow(QMainWindow):
                             self.drivers[0].name}")
 
                 # Prepare deterministic driver colours (shared between cars, standings, livery)
+                # Extended palette for up to 16 drivers
                 palette = [
                     QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
                     QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
                     QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
-                    QColor(200, 200, 255)
+                    QColor(200, 200, 255), QColor(180, 120, 60), QColor(120, 60, 180),
+                    QColor(60, 180, 120), QColor(255, 200, 100), QColor(100, 200, 255),
+                    QColor(200, 100, 255)
                 ]
+                # Ensure palette covers the configured grid size; repeat if needed
+                if RACE_GRID_SIZE > len(palette):
+                    repeat = (RACE_GRID_SIZE // len(palette)) + 1
+                    palette = (palette * repeat)[:RACE_GRID_SIZE]
                 self.driver_colours = {}
                 for i, driver in enumerate(self.drivers):
                     self.driver_colours[driver.id] = palette[i % len(palette)]
 
-                # Initialize vehicle liveries immediately after loading drivers
+                # Initialise vehicle liveries immediately after loading drivers
                 # so they're ready for grid display
                 try:
                     teams_dict = {}
@@ -1932,7 +2020,7 @@ class RaceWindow(QMainWindow):
                         self.appearance_manager.driver_liveries[driver.id] = livery
                     print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
                 except Exception as e:
-                    print(f"ERROR: Livery initialization failed: {e}")
+                    print(f"ERROR: Livery initialisation failed: {e}")
                     import traceback
                     traceback.print_exc()
 
@@ -2066,7 +2154,7 @@ class RaceWindow(QMainWindow):
                         driver_id=driver.id,
                         driver_name=driver.name,
                         s=start_position,  # Staggered start positions
-                        color=car_colour,
+                        colour=car_colour,
                         total_time=0.0,
                         avg_lap_time=60.0,
                         last_lap=0
@@ -2083,25 +2171,24 @@ class RaceWindow(QMainWindow):
                 traceback.print_exc()
                 return
 
-            # Initialize standings table (row order = position)
+            # Initialise standings table (row order = position)
             try:
                 self.standings_table.setRowCount(len(self.drivers))
                 for i, driver in enumerate(self.drivers):
                     driver_name = driver.name
                     print(
                         f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
-                    # Column 0: color/position indicator (empty for now)
-                    self.standings_table.setItem(i, 0, QTableWidgetItem(""))
+                    # Column 0: colour/position indicator (empty for now)
+                    self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None))
                     # Column 1: Driver name
-                    self.standings_table.setItem(
-                        i, 1, QTableWidgetItem(driver_name))
+                    self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None))
                     # Column 2: Lap (1-based)
-                    self.standings_table.setItem(i, 2, QTableWidgetItem("1"))
+                    self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None))
                     # Column 3: Gap
-                    self.standings_table.setItem(i, 3, QTableWidgetItem("-"))
+                    self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
                 print("Standings table initialized")
             except Exception as e:
-                print(f"WARNING: Standings table initialization failed: {e}")
+                print(f"WARNING: Standings table initialisation failed: {e}")
                 # Non-critical, continue
 
             self.info_label.setText(
@@ -2510,6 +2597,8 @@ class RaceWindow(QMainWindow):
 
     def _on_position_update(self, data: dict):
         """Handle position update from simulation."""
+        
+
         try:
             if not self.track_widget:
                 return
@@ -2530,12 +2619,25 @@ class RaceWindow(QMainWindow):
                 driver = next(
                     (d for d in self.drivers if d.name == driver_name), None)
                 if driver and driver.id == data['driver_id']:
+                    # If this driver was marked DNF, avoid overwriting the
+                    # standings row and explicitly show 'DNF' as the gap.
+                    race_entry = self._race_state.get(driver.id, {})
+                    if race_entry.get('dnf', False):
+                        try:
+                            # Position / lap become dashes; gap shows DNF
+                            self._set_standings_item(row, 0, QTableWidgetItem("-"), driver.id)
+                            self._set_standings_item(row, 2, QTableWidgetItem("-"), driver.id)
+                            self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver.id)
+                        except Exception:
+                            pass
+                        break
+
                     # Column 0 = position
-                    self.standings_table.setItem(
-                        row, 0, QTableWidgetItem(str(data['position'])))
+                    self._set_standings_item(
+                        row, 0, QTableWidgetItem(str(data['position'])), driver.id)
                     # Column 2 = lap
-                    self.standings_table.setItem(
-                        row, 2, QTableWidgetItem(str(data['lap'])))
+                    self._set_standings_item(
+                        row, 2, QTableWidgetItem(str(data['lap'])), driver.id)
 
                     # Highlight player-controlled driver cell background (guard
                     # against missing item)
@@ -2620,10 +2722,10 @@ class RaceWindow(QMainWindow):
                         time_seconds = result.get('time_seconds', 0)
                         gap = time_seconds - leader_time if i > 0 else 0
 
-                        self.standings_table.setItem(
-                            i, 0, QTableWidgetItem(str(i + 1)))
-                        self.standings_table.setItem(
-                            i, 1, QTableWidgetItem(driver.name))
+                        self._set_standings_item(
+                            i, 0, QTableWidgetItem(str(i + 1)), driver.id)
+                        self._set_standings_item(
+                            i, 1, QTableWidgetItem(driver.name), driver.id)
 
                         # Show leader's total time, gaps for everyone else
                         if i == 0:
@@ -2631,10 +2733,10 @@ class RaceWindow(QMainWindow):
                             minutes = int(leader_time // 60)
                             seconds = leader_time % 60
                             time_display = f"{minutes}:{seconds:06.3f}"
-                            self.standings_table.setItem(i, 3, QTableWidgetItem(time_display))
+                            self._set_standings_item(i, 3, QTableWidgetItem(time_display), driver.id)
                         else:
-                            self.standings_table.setItem(i, 3, QTableWidgetItem(
-                                f"+{gap:.2f}s" if gap > 0 else "-"))
+                            self._set_standings_item(i, 3, QTableWidgetItem(
+                                f"+{gap:.2f}s" if gap > 0 else "-"), driver.id)
 
                         # Highlight player-controlled driver in leaderboard
                         # (guard against missing item)
@@ -2700,7 +2802,7 @@ class RaceWindow(QMainWindow):
                     push_percent = int(push_intensity * 100)
                     self.push_gauge.setValue(push_percent)
 
-                    # Update fatigue label with color warning
+                    # Update fatigue label with colour warning
                     fatigue_percent = int(push_fatigue * 100)
                     self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
                     if push_fatigue > 0.7:
@@ -2713,7 +2815,7 @@ class RaceWindow(QMainWindow):
                         self.fatigue_label.setStyleSheet(
                             "font-size: 14px; color: #B9F2FF;")
 
-                    # Update tire label with color coding
+                    # Update tire label with colour coding
                     tire_percent = int(tire_condition * 100)
                     self.tire_label.setText(f"Tire: {tire_percent}%")
                     if tire_condition < 0.3:
@@ -2741,7 +2843,45 @@ class RaceWindow(QMainWindow):
                     tw = getattr(self, 'track_widget', None)
                     if tw is not None and hasattr(tw, 'mark_dnf'):
                         try:
+                            print(f"[GUI EVENT] Received mark_dnf for driver {did}")
                             tw.mark_dnf(did)
+                            # If the followed car crashed while in follow mode,
+                            # switch to full track view so user can watch the rest
+                            # of the race instead of a broken follow camera.
+                            try:
+                                if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
+                                    tw.set_camera_mode('full')
+                                    print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
+                            except Exception:
+                                pass
+
+                            # Update internal race state so the standings show DNF
+                            try:
+                                if not hasattr(self, '_race_state'):
+                                    self._race_state = {}
+                                entry = self._race_state.get(did)
+                                if entry is not None:
+                                    entry['dnf'] = True
+                                else:
+                                    # Create minimal entry so standings can display DNF
+                                    name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
+                                    self._race_state[did] = {
+                                        'name': name,
+                                        'position': None,
+                                        'lap': None,
+                                        'time': 0.0,
+                                        'distance': 0.0,
+                                        'gap_ahead': 0.0,
+                                        'dnf': True,
+                                        'total_progress': 0.0
+                                    }
+                                # Rebuild the standings table immediately
+                                try:
+                                    self._rebuild_standings_table()
+                                except Exception:
+                                    pass
+                            except Exception:
+                                pass
                         except Exception:
                             pass
             except Exception:
@@ -2756,6 +2896,7 @@ class RaceWindow(QMainWindow):
                     did = int(parts[1])
                     # Only act if it's the player's driver
                     if did == getattr(self, 'player_driver_id', None):
+                        print(f"[GUI EVENT] Received player_dnf for player driver {did}")
                         try:
                             if hasattr(self, 'player_status_label'):
                                 self.player_status_label.setText("RETIRED")
@@ -2775,6 +2916,31 @@ class RaceWindow(QMainWindow):
                                 self.camera_follow_btn.setEnabled(False)
                             if hasattr(self, 'push_gauge'):
                                 self.push_gauge.setEnabled(False)
+                        except Exception:
+                            pass
+                        # Also ensure internal race state marks this driver as DNF
+                        try:
+                            if not hasattr(self, '_race_state'):
+                                self._race_state = {}
+                            entry = self._race_state.get(did)
+                            if entry is not None:
+                                entry['dnf'] = True
+                            else:
+                                name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
+                                self._race_state[did] = {
+                                    'name': name,
+                                    'position': None,
+                                    'lap': None,
+                                    'time': 0.0,
+                                    'distance': 0.0,
+                                    'gap_ahead': 0.0,
+                                    'dnf': True,
+                                    'total_progress': 0.0
+                                }
+                            try:
+                                self._rebuild_standings_table()
+                            except Exception:
+                                pass
                         except Exception:
                             pass
             except Exception:
@@ -2801,6 +2967,9 @@ class RaceWindow(QMainWindow):
                 driver = next(
                     (d for d in self.drivers if d.id == driver_id), None)
                 if driver:
+                    # Preserve any existing DNF flag - do not clear it here
+                    existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
+                    dnf_flag = existing.get('dnf', False)
                     self._race_state[driver_id] = {
                         'name': driver.name,
                         'position': race_position,
@@ -2808,7 +2977,7 @@ class RaceWindow(QMainWindow):
                         'time': race_time,
                         'distance': position_m,
                         'gap_ahead': gap_ahead,
-                        'dnf': False
+                        'dnf': dnf_flag
                     }
                     self._driver_push_intensity[driver_id] = push_intensity
 
@@ -2861,7 +3030,7 @@ class RaceWindow(QMainWindow):
                 colour = self.driver_colours[entry['driver_id']]
                 colour_item.setBackground(colour)
                 colour_item.setText("  ")
-            self.standings_table.setItem(row, 0, colour_item)
+            self._set_standings_item(row, 0, colour_item, entry['driver_id'])
 
             driver_name = entry['name']
             push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
@@ -2871,9 +3040,8 @@ class RaceWindow(QMainWindow):
                 symbol = "(=)"
             else:
                 symbol = "(+)"
-            self.standings_table.setItem(
-                row, 1, QTableWidgetItem(
-                    f"{symbol} {driver_name}"))
+            self._set_standings_item(
+                row, 1, QTableWidgetItem(f"{symbol} {driver_name}"), entry['driver_id'])
             # Highlight the player-controlled driver row/cell
             name_item = self.standings_table.item(row, 1)
             if name_item is not None:
@@ -2886,8 +3054,7 @@ class RaceWindow(QMainWindow):
                 else:
                     name_item.setBackground(QColor(37, 38, 39))
 
-            self.standings_table.setItem(
-                row, 2, QTableWidgetItem(str(entry['lap'])))
+            self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), entry['driver_id'])
 
             if entry.get('dnf', False):
                 gap_text = "DNF"
@@ -2916,7 +3083,7 @@ class RaceWindow(QMainWindow):
                     else:
                         gap_text = f"+{cumulative_gap:.1f}s"
 
-            self.standings_table.setItem(row, 3, QTableWidgetItem(gap_text))
+            self._set_standings_item(row, 3, QTableWidgetItem(gap_text), entry['driver_id'])
 
         # Debug log every few seconds
         if not hasattr(self, '_last_standings_log'):
@@ -2936,8 +3103,47 @@ class RaceWindow(QMainWindow):
                             'gap_ahead',
                             0.0):.1f}s)")
 
+    def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: int = None):
+        """Set an item in the standings table but respect DNF state.
+
+        If `driver_id` is provided and that driver is marked DNF in
+        `self._race_state`, this will write a stable DNF/placeholder
+        instead of allowing other code to overwrite the cell.
+        """
+        try:
+            if driver_id is not None and hasattr(self, '_race_state'):
+                entry = self._race_state.get(driver_id, {})
+                if entry.get('dnf', False):
+                    # Gap column (3) should explicitly show 'DNF', pos/lap -> '-'
+                    if col == 3:
+                        self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
+                    elif col in (0, 2):
+                        self.standings_table.setItem(row, col, QTableWidgetItem("-"))
+                    else:
+                        # For other columns (e.g. name) just set the item but grey it
+                        self.standings_table.setItem(row, col, item)
+
+                    # Grey out name cell for clarity
+                    try:
+                        name_cell = self.standings_table.item(row, 1)
+                        if name_cell is not None:
+                            name_cell.setBackground(QColor(80, 80, 80))
+                            name_cell.setForeground(QColor(200, 200, 200))
+                    except Exception:
+                        pass
+                    return
+
+            # Default behaviour: set the supplied item
+            self.standings_table.setItem(row, col, item)
+        except Exception:
+            try:
+                # Best-effort fallback
+                self.standings_table.setItem(row, col, item)
+            except Exception:
+                pass
+
     def _on_pace_changed(self, value):
-        """Handle pace slider change - update label and color gradient."""
+        """Handle pace slider change - update label and colour gradient."""
         if value < 33:
             pace_text = "CONSERVATIVE"
         elif value < 67:
@@ -2951,7 +3157,7 @@ class RaceWindow(QMainWindow):
         self._update_combined_push()
         self.pace_value_label.setText(f"Race Pace: {pace_text} ({value}%)")
 
-        # Mix color from blue -> red based on value
+        # Mix colour from blue -> red based on value
         try:
             t = max(0.0, min(1.0, value / 100.0))
             low = (0x00, 0xBF, 0xFF)  # blue
@@ -2959,13 +3165,13 @@ class RaceWindow(QMainWindow):
             r = int(low[0] + (high[0] - low[0]) * t)
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
-            color = f"#{r:02X}{g:02X}{b:02X}"
+            colour = f"#{r:02X}{g:02X}{b:02X}"
             self.pace_value_label.setStyleSheet(
                 "font-size: 16px; font-weight: bold; color: #FFFFFF;")
-            # Update slider styling: sub-page shows selected color
+            # Update slider styling: sub-page shows selected colour
             self.pace_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
-                f"QSlider::sub-page:horizontal {{ background: {color}; border-radius: 4px; }}"
+                f"QSlider::sub-page:horizontal {{ background: {colour}; border-radius: 4px; }}"
                 "QSlider::handle:horizontal { background: #F5F5F5; width: 14px; margin: -4px 0; border-radius: 7px; }"
             )
         except Exception:
@@ -2974,7 +3180,7 @@ class RaceWindow(QMainWindow):
                 "font-size:16px; font-weight:bold; color: #DD2D4A;")
 
     def _on_overtake_changed(self, value):
-        """Handle overtake aggressiveness slider change with dynamic color."""
+        """Handle overtake aggressiveness slider change with dynamic colour."""
         if value < 33:
             aggr_text = "CAUTIOUS"
         elif value < 67:
@@ -2996,7 +3202,7 @@ class RaceWindow(QMainWindow):
             r = int(low[0] + (high[0] - low[0]) * t)
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
-            color = f"#{r:02X}{g:02X}{b:02X}"
+            colour = f"#{r:02X}{g:02X}{b:02X}"
             self.overtake_value_label.setStyleSheet(
                 "font-size: 16px; font-weight: bold; color: #FFFFFF;")
             style = (
@@ -3004,7 +3210,7 @@ class RaceWindow(QMainWindow):
                 "height: 8px; background: #2E2E2E; "
                 "border-radius: 4px; }"
                 f"QSlider::sub-page:horizontal {{ "
-                f"background: {color}; border-radius: 4px; }}"
+                f"background: {colour}; border-radius: 4px; }}"
             )
             self.overtake_slider.setStyleSheet(
                 style +
@@ -3042,6 +3248,61 @@ class RaceWindow(QMainWindow):
         else:
             self.player_driver_id = None
 
+        # Ensure the player driver is present in the drivers list used for
+        # creating cars and the standings. `set_player_driver` may be called
+        # after the race window has already loaded its data, so we need to
+        # reconcile the lists and rebuild the visible cars/standings when
+        # necessary.
+        try:
+            existing = getattr(self, 'drivers', None)
+            if driver and existing is not None:
+                present = any(getattr(d, 'id', None) == driver.id for d in existing)
+                if not present:
+                    # Keep total count constant: if we've already selected the
+                    # maximum (e.g. 16), replace the last entry; otherwise append.
+                    if len(existing) >= 16:
+                        existing[-1] = driver
+                    else:
+                        existing.append(driver)
+
+                # If cars/standings were already created, rebuild them so the
+                # player shows up on the grid and in the table.
+                if getattr(self, 'track_widget', None) is not None:
+                    # Recreate cars using the same logic as in _load_data
+                    cars = []
+                    for i, drv in enumerate(self.drivers):
+                        row = i // 2
+                        grid_spacing = 15.0
+                        start_position = row * grid_spacing
+                        car_colour = self.driver_colours.get(getattr(drv, 'id', None), QColor(200, 200, 200))
+                        cars.append(Car(
+                            driver_id=getattr(drv, 'id', None),
+                            driver_name=getattr(drv, 'name', ''),
+                            s=start_position,
+                            colour=car_colour,
+                            total_time=0.0,
+                            avg_lap_time=60.0,
+                            last_lap=0
+                        ))
+                    # Push updated cars to the track widget
+                    try:
+                        self.track_widget.set_cars(cars)
+                        print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+                    except Exception:
+                        print("[RACE WINDOW] Failed to set rebuilt cars")
+
+                    # Update standings table names to match new drivers list
+                    try:
+                        self.standings_table.setRowCount(len(self.drivers))
+                        for i, drv in enumerate(self.drivers):
+                            self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
+                        print("[RACE WINDOW] Standings updated to include player driver")
+                    except Exception:
+                        print("[RACE WINDOW] Failed to update standings table")
+        except Exception:
+            # Non-fatal: log and continue
+            print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
+
     def set_tuning_preset(self, preset: str):
         """Set the simulation tuning preset."""
         self.tuning_preset = preset or 'balanced'
@@ -3072,20 +3333,23 @@ class RaceWindow(QMainWindow):
         screen = screen_obj.geometry() if screen_obj else None
 
         if mode == "windowed":
-            self.setWindowFlags(Qt.WindowType.Window)
+            # Ensure frameless disabled for normal windowed mode
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
             self.showNormal()
             self.setGeometry(100, 100, 1600, 900)
             print("[INFO] Race window: windowed mode (1600x900)")
 
         elif mode == "borderless":
-            self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            # Enable frameless for borderless-windowed fullscreen
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
             if screen is not None:
                 self.setGeometry(screen)
             self.showMaximized()
             print("[INFO] Race window: borderless windowed fullscreen")
 
         elif mode == "fullscreen":
-            self.setWindowFlags(Qt.WindowType.Window)
+            # Use native fullscreen; ensure frameless is disabled so system handles fullscreen
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
             self.showFullScreen()
             print("[INFO] Race window: exclusive fullscreen")
 

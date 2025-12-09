@@ -1,7 +1,7 @@
 """
 Vehicle Appearance Integration for GUI
 
-Provides utilities to bridge vehicle appearance system with race visualization.
+Provides utilities to bridge vehicle appearance system with race visualisation.
 Handles livery creation, single seater car rendering during races, and telemetry display.
 
 MVP Focus: Single Seater Formula Racing Only
@@ -20,7 +20,7 @@ class VehicleAppearanceManager:
     """Manages vehicle appearance for all race participants"""
 
     def __init__(self):
-        """Initialize appearance cache for drivers"""
+        """Initialise appearance cache for drivers"""
         self.vehicle_configs: Dict[int, VehicleConfiguration] = {}
         self.driver_liveries: Dict[int, Livery] = {}
 
@@ -95,7 +95,7 @@ class VehicleAppearanceManager:
         return True
 
     def get_car_color_for_driver(self, driver_id: int) -> Optional[QColor]:
-        """Get primary car color for a driver (for UI elements)"""
+        """Get primary car colour for a driver (for UI elements)"""
         livery = self.driver_liveries.get(driver_id)
         if livery:
             return livery.primary_color
@@ -157,7 +157,7 @@ def get_appearance_manager() -> VehicleAppearanceManager:
 
 
 def initialize_appearance_manager() -> VehicleAppearanceManager:
-    """Initialize appearance manager (called at application startup)"""
+    """Initialise appearance manager (called at application startup)"""
     global _appearance_manager
     _appearance_manager = VehicleAppearanceManager()
     return _appearance_manager
