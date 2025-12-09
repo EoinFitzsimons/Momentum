@@ -171,37 +171,21 @@ class DatabaseManager:
         except TypeError:
             return None
 
-        # Attach extra attributes provided in attributes_extra JSON (if any)
-        extras_raw = row_dict.get('attributes_extra') or '{}'
-        try:
-            extras = json.loads(extras_raw) if isinstance(extras_raw, str) else extras_raw
-        except Exception:
-            extras = {}
-
-        if isinstance(extras, dict):
-            for k, v in extras.items():
-                # Don't overwrite compact persisted fields
-                if not hasattr(driver, k):
-                    try:
-                        setattr(driver, k, v)
-                    except Exception:
-                        # ignore non-serializable or problematic values
-                        continue
-
         # Provide sensible defaults/aliases for commonly-used legacy attributes
         # so callers in the engine/GUI that expect them won't break.
         if not hasattr(driver, 'raw_speed'):
-            setattr(driver, 'raw_speed', float(getattr(driver, 'overall_rating', 50.0)))
-        if not hasattr(driver, 'racecraft'):
-            setattr(driver, 'racecraft', float(getattr(driver, 'racecraft_rating', 50.0)))
+            setattr(driver, 'raw_speed', float(getattr(driver, 'speed', 50.0)))
         if not hasattr(driver, 'vehicle_control'):
-            setattr(driver, 'vehicle_control', float(getattr(driver, 'vehicle_handling', 50.0)))
+            # approximate vehicle control from setup_knowledge and tyre_management
+            sk = float(getattr(driver, 'setup_knowledge', 50.0))
+            tm = float(getattr(driver, 'tyre_management', 50.0))
+            setattr(driver, 'vehicle_control', round((sk + tm) / 2.0, 2))
         if not hasattr(driver, 'cornering_skill'):
-            # approximate cornering from vehicle_handling
-            vh = float(getattr(driver, 'vehicle_handling', 50.0))
-            setattr(driver, 'cornering_skill', round(vh * 0.95, 2))
+            # approximate cornering from consistency
+            cs = float(getattr(driver, 'consistency', 50.0))
+            setattr(driver, 'cornering_skill', round(cs * 0.95, 2))
         if not hasattr(driver, 'defensive_driving'):
-            setattr(driver, 'defensive_driving', float(getattr(driver, 'defensive_rating', 50.0)))
+            setattr(driver, 'defensive_driving', float(getattr(driver, 'racecraft', 50.0)))
 
         return driver
 

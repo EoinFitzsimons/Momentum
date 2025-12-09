@@ -47,17 +47,10 @@ CREATE TABLE IF NOT EXISTS driver_career_stats (
 '''
 
 
-def alter_add_attributes_extra(conn: sqlite3.Connection):
-    cur = conn.cursor()
-    # Check if column already exists
-    cur.execute("PRAGMA table_info(drivers)")
-    cols = [r[1] for r in cur.fetchall()]
-    if 'attributes_extra' in cols:
-        return False
-    # SQLite doesn't support ADD COLUMN with complex constraints easily, keep it simple
-    cur.execute("ALTER TABLE drivers ADD COLUMN attributes_extra TEXT DEFAULT '{}'")
-    conn.commit()
-    return True
+# attributes_extra column is deprecated and removed from codebase; migration
+# to drop the column should be performed manually if desired. The scaffold no
+# longer attempts to add this column.
+
 
 
 def create_career_stats(conn: sqlite3.Connection):
@@ -98,7 +91,6 @@ def main():
     actions = []
 
     actions.append(('Create driver_career_stats table', CREATE_DRIVER_CAREER_STATS_SQL))
-    actions.append(('Add attributes_extra column to drivers', "ALTER TABLE drivers ADD COLUMN attributes_extra TEXT DEFAULT '{}'"))
 
     print(f"Planned actions for DB: {db}")
     for title, sql in actions:
@@ -116,11 +108,6 @@ def main():
     conn = sqlite3.connect(db)
     try:
         create_career_stats(conn)
-        added = alter_add_attributes_extra(conn)
-        if added:
-            print('Added attributes_extra column')
-        else:
-            print('attributes_extra column already exists')
         if args.backfill:
             print('Backfilling simple career stats...')
             simple_backfill_career_stats(conn)
