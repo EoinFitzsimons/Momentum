@@ -528,7 +528,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 
 - [X] **Main Menu Screen** - Clean entry point with "Choose Driver" and "Exit" options
 - [X] **Driver Selection Dialog** - Interactive driver browser with biography and attributes
-- [X] **Radar Chart Visualization** - 4 tabbed attribute displays (Core Skills, Physical/Mental, Technical, Disciplines)
+- [X] **Radar Chart Visualisation** - 4 tabbed attribute displays (Core Skills, Physical/Mental, Technical, Disciplines)
 - [X] **Live Race View** - Real-time race standings table updating every lap
 - [X] **Lap Counter Display** - Current lap / total laps indicator
 - [X] **4-Column Results Table** - Position | # | Driver | Time with persistent names
@@ -551,9 +551,9 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 The current MVP provides a complete race simulation experience:
 
 1. **Launch Application** → Main menu appears
-2. **Choose Driver** → Browse 20 drivers with full attribute visualization
+2. **Choose Driver** → Browse 20 drivers with full attribute visualisation
 3. **View Driver Stats** → 4 radar charts showing comprehensive driver capabilities
-4. **Start Race** → Automatic race initialization with selected driver
+4. **Start Race** → Automatic race initialisation with selected driver
 5. **Watch Live Race** → Real-time position updates every lap with pit stops and incidents
 6. **View Final Results** → Complete race results with times in HH:MM:SS.mmm format
 
@@ -578,7 +578,7 @@ python gui/gui_game.py
 #### GUI Architecture (`gui/gui_game.py`)
 
 - **QStackedLayout Pattern**: Clean screen transitions (Menu ↔ Race)
-- **Custom Radar Charts**: QPainter-based attribute visualization with 4 categories
+- **Custom Radar Charts**: QPainter-based attribute visualisation with 4 categories
 - **Threading Integration**: Race runs on background thread preventing UI freeze
 - **Event-Driven Updates**: Callback system for lap-by-lap UI updates
 - **Database Integration**: Real-time driver name lookup for results display

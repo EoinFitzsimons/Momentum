@@ -59,7 +59,7 @@ def create_career_stats(conn: sqlite3.Connection):
 
 def simple_backfill_career_stats(conn: sqlite3.Connection):
     cur = conn.cursor()
-    # If race_results exists, aggregate simple counts. Otherwise initialize rows.
+    # If race_results exists, aggregate simple counts. Otherwise initialise rows.
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='race_results'")
     if cur.fetchone():
         # Aggregate from race_results
@@ -76,7 +76,7 @@ def simple_backfill_career_stats(conn: sqlite3.Connection):
         '''
         run_sql(conn, agg_sql)
     else:
-        # Initialize empty stats for existing drivers
+        # Initialise empty stats for existing drivers
         run_sql(conn, "INSERT OR IGNORE INTO driver_career_stats (driver_id, career_wins, career_podiums, career_points, career_starts, career_dnf) SELECT id,0,0,0,0,0 FROM drivers;")
 
 

@@ -9,8 +9,16 @@ Provides:
 """
 
 from database.database_manager import DatabaseManager
+from config import QUICK_RACE_LIST_SIZE
 from PyQt6.QtGui import QFont, QKeyEvent
 from PyQt6.QtCore import Qt, pyqtSignal
+from services.driver_attributes import (
+    get_driver_skill,
+    get_driver_skill_int,
+    get_display_name,
+    get_display_nationality,
+    get_preferred_window_size,
+)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QGroupBox, QRadioButton,
@@ -32,7 +40,9 @@ class MainMenuWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Momentum - Main Menu")
-        self.setMinimumSize(1000, 700)
+        # Use preferred application dialog size to match the rest of the game
+        pref_w, pref_h = get_preferred_window_size()
+        self.setMinimumSize(pref_w, pref_h)
 
         # Apply a dark Momentum palette consistent with existing branding
         self.setStyleSheet("""
@@ -64,7 +74,9 @@ class MainMenuWindow(QMainWindow):
 
             /* List / Driver selector */
             QListWidget { background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }
-            QListWidget::item:selected { background-color: #FFB000; color: #1A1A1A; font-weight: 700; }
+            QListWidget::item { border: none; }
+            /* Remove the default selection background; cards will draw their own */
+            QListWidget::item:selected { background-color: transparent; color: #1A1A1A; font-weight: 700; }
 
             /* Headers */
             QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
@@ -77,6 +89,7 @@ class MainMenuWindow(QMainWindow):
         self.selected_driver = None
         self.pace_setting = 50  # 0-100 scale
         self.overtake_aggression = 50  # 0-100 scale
+        
 
         # Database
         self.db: Optional[DatabaseManager] = None
@@ -315,6 +328,8 @@ class MainMenuWindow(QMainWindow):
         apply_btn.clicked.connect(self._apply_display_mode)
         layout.addWidget(apply_btn)
 
+        
+
         layout.addStretch()
 
         # About button
@@ -444,10 +459,27 @@ class QuickRaceSetupWindow(QDialog):
         self.selected_driver = None
 
         self.setWindowTitle("Quick Race Setup")
+        # Use application-modal dialog with window flags so it appears as a
+        # standalone dialog (not an embedded child) and can be resized.
         self.setModal(True)
-        self.setMinimumSize(800, 600)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        # Ensure dialog has a normal window frame so it can be resized and
+        # positioned independent of the (possibly frameless) main window.
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window)
 
-        self._setup_ui()
+        # Size dialog slightly smaller than main app window for comfortable padding
+        pref_w, pref_h = get_preferred_window_size()
+        w = int(pref_w * 0.85)
+        h = int(pref_h * 0.85)
+        self.setMinimumSize(w, h)
+        # Also explicitly resize so the window shows at the preferred size
+        # instead of relying only on layout hints.
+        try:
+            self.resize(w, h)
+        except Exception:
+            pass
+
+        # Build UI once
         self._setup_ui()
 
     def _setup_ui(self):
@@ -464,33 +496,170 @@ class QuickRaceSetupWindow(QDialog):
         title.setFont(title_font)
         layout.addWidget(title)
 
-        # Driver selection
+        # Driver selection + profile area
+        selection_container = QHBoxLayout()
+        selection_container.setSpacing(16)
+
+        # Left: driver list with compact cards
         driver_group = QGroupBox("Select Your Driver")
+        driver_group.setMinimumWidth(420)
         driver_layout = QVBoxLayout(driver_group)
 
         self.driver_list = QListWidget()
-        self.driver_list.setMinimumHeight(200)
+        self.driver_list.setMinimumHeight(480)
         self.driver_list.setStyleSheet("""
-            QListWidget::item:selected {
-                background-color: #FFD700;
-                color: #353839;
-                font-weight: bold;
-            }
+            QListWidget::item:selected { background-color: transparent; color: #353839; font-weight: bold; }
         """)
 
-        # Populate driver list
-        for driver in self.drivers[:20]:  # Show first 20 drivers
-            name = driver.name  # Use the name field directly
-            # Use raw_speed as overall skill indicator
-            skill = int(driver.raw_speed)
-            item = QListWidgetItem(f"{name} (Skill: {skill})")
-            item.setData(Qt.ItemDataRole.UserRole, driver)
-            self.driver_list.addItem(item)
+        # Use SingleSelection so keyboard up/down arrows change the current
+        # item; the stylesheet prevents the native selection background so
+        # our DriverCard draws the visible selection instead.
+        self.driver_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
 
-        self.driver_list.setCurrentRow(0)  # Select first driver by default
+        # Small DriverCard widget for visual entries
+        class DriverCard(QWidget):
+            def __init__(self, drv, parent=None):
+                super().__init__(parent)
+                self.drv = drv
+                h = QHBoxLayout(self)
+                # Small internal padding, the card will draw its own background
+                h.setContentsMargins(6, 6, 6, 6)
+                h.setSpacing(8)
+                # Base card appearance
+                self._base_style = (
+                    'background:#2E2E2E; color:#B9F2FF; border-radius:8px; padding:6px;'
+                )
+                self._selected_style = (
+                    'background:#2E2E2E; color:#1A1A1A; border:3px solid #FFB000; border-radius:8px; padding:6px;'
+                )
+                self.setStyleSheet(self._base_style)
+
+                # Use display name helper for robust name access
+                display_name = get_display_name(drv)
+                initials_text = (display_name[:3].upper() if display_name and display_name != 'Unknown' else '---')
+                initials = QLabel(initials_text)
+                initials.setFixedSize(48, 48)
+                initials.setStyleSheet('background:transparent; color:#B9F2FF; border-radius:6px; font-weight:700; font-size:14px;')
+                initials.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                h.addWidget(initials)
+
+                v = QVBoxLayout()
+                title = QLabel(display_name)
+                title.setStyleSheet('font-weight:700; color:#B9F2FF; background: transparent;')
+                v.addWidget(title)
+
+                nat = get_display_nationality(drv)
+                sub = QLabel(f"{nat} • Skill: {get_driver_skill_int(drv)}")
+                sub.setStyleSheet('color:#999; font-size:11px; background: transparent;')
+                v.addWidget(sub)
+
+                h.addLayout(v)
+
+        # Populate with DriverCard widgets (selection pool defined in config)
+        for driver in self.drivers[:QUICK_RACE_LIST_SIZE]:
+            item = QListWidgetItem()
+            # Store driver object for retrieval
+            item.setData(Qt.ItemDataRole.UserRole, driver)
+
+            # Create a small visual card. We avoid setting the item's text
+            # because the custom widget draws the name; setting text causes
+            # duplicate name rendering in some Qt themes.
+            card = DriverCard(driver)
+            # Ensure the item has enough height to show the widget
+            item.setSizeHint(card.sizeHint())
+
+            self.driver_list.addItem(item)
+            self.driver_list.setItemWidget(item, card)
+
+        self.driver_list.setCurrentRow(0)
         driver_layout.addWidget(self.driver_list)
 
-        layout.addWidget(driver_group)
+        selection_container.addWidget(driver_group)
+
+        # Right side: profile + presets
+        right_vbox = QVBoxLayout()
+        # Driver profile with radar polygon visualisation
+        profile_group = QGroupBox("Driver Profile")
+        profile_layout = QVBoxLayout(profile_group)
+
+        self.profile_name = QLabel("Name: -")
+        self.profile_name.setStyleSheet('font-weight:700; font-size:16px; color:#B9F2FF;')
+        profile_layout.addWidget(self.profile_name)
+
+        self.profile_nationality = QLabel("Nationality: -")
+        profile_layout.addWidget(self.profile_nationality)
+
+        self.profile_skill = QLabel("Skill: -")
+        profile_layout.addWidget(self.profile_skill)
+
+        # RadarWidget placeholder - draws a 6-axis polygon visualisation
+        from PyQt6.QtWidgets import QSizePolicy
+        from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
+        from PyQt6.QtCore import QPointF
+
+        class RadarWidget(QWidget):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.values = [50.0] * 6
+                self.setMinimumSize(220, 220)
+                self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+            def set_values(self, vals: list[float]):
+                if not vals or len(vals) < 6:
+                    return
+                self.values = [float(v) for v in vals[:6]]
+                self.update()
+
+            def paintEvent(self, event):
+                painter = QPainter(self)
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                w = self.width()
+                h = self.height()
+                cx = w / 2
+                cy = h / 2
+                radius = min(w, h) * 0.40
+
+                # Draw concentric rings
+                pen = QPen(QColor('#555555'))
+                painter.setPen(pen)
+                for i in range(1, 5):
+                    r = radius * (i / 5.0)
+                    painter.drawEllipse(QPointF(cx, cy), r, r)
+
+                # Draw axes and labels
+                axes = 6
+                import math
+                labels = ['Speed', 'Racecraft', 'Consistency', 'Reactions', 'Setup', 'Tyres']
+                for i in range(axes):
+                    angle = (math.pi * 2.0 * i) / axes - math.pi / 2
+                    x = cx + math.cos(angle) * radius
+                    y = cy + math.sin(angle) * radius
+                    painter.setPen(QPen(QColor('#888888')))
+                    painter.drawLine(QPointF(cx, cy), QPointF(x, y))
+                    # Label
+                    lx = cx + math.cos(angle) * (radius + 18)
+                    ly = cy + math.sin(angle) * (radius + 18)
+                    painter.setPen(QPen(QColor('#B9F2FF')))
+                    painter.drawText(int(lx - 20), int(ly - 6), 80, 16, Qt.AlignmentFlag.AlignCenter, labels[i])
+
+                # Draw polygon filled
+                points = []
+                for i, val in enumerate(self.values):
+                    ratio = float(val) / 100.0
+                    angle = (math.pi * 2.0 * i) / axes - math.pi / 2
+                    x = cx + math.cos(angle) * radius * ratio
+                    y = cy + math.sin(angle) * radius * ratio
+                    points.append(QPointF(x, y))
+
+                # Fill
+                painter.setBrush(QBrush(QColor(255, 200, 0, 120)))
+                painter.setPen(QPen(QColor('#FFB000'), 2))
+                painter.drawPolygon(*points)
+
+        self.radar = RadarWidget()
+        profile_layout.addWidget(self.radar, 0, Qt.AlignmentFlag.AlignCenter)
+
+        right_vbox.addWidget(profile_group)
 
         # Tuning preset selection
         preset_group = QGroupBox("Race Tuning Preset")
@@ -544,7 +713,7 @@ class QuickRaceSetupWindow(QDialog):
         preset_desc.setStyleSheet("font-size: 11px; color: #999;")
         preset_layout.addWidget(preset_desc)
 
-        layout.addWidget(preset_group)
+        right_vbox.addWidget(preset_group)
 
         # Info note about controls
         info_label = QLabel(
@@ -552,7 +721,7 @@ class QuickRaceSetupWindow(QDialog):
         info_label.setStyleSheet(
             "font-size: 12px; color: #888; font-style: italic;")
         info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(info_label)
+        right_vbox.addWidget(info_label)
 
         # Buttons
         button_layout = QHBoxLayout()
@@ -569,7 +738,22 @@ class QuickRaceSetupWindow(QDialog):
         start_btn.clicked.connect(self._start_race)
         button_layout.addWidget(start_btn)
 
-        layout.addLayout(button_layout)
+        right_vbox.addLayout(button_layout)
+
+        # Attach right_vbox into selection container and add to main layout
+        selection_container.addLayout(right_vbox)
+        layout.addLayout(selection_container)
+
+        # Connect selection updates
+        # Manage selection both for mouse and keyboard changes
+        self._prev_selected_item = None
+        self.driver_list.itemClicked.connect(self._handle_item_clicked)
+        # currentItemChanged handles keyboard-based selection changes
+        self.driver_list.currentItemChanged.connect(self._on_driver_selected)
+
+        # Initialise profile with first driver if present
+        if self.driver_list.count() > 0:
+            self._on_driver_selected(self.driver_list.currentItem(), None)
 
     def _start_race(self):
         """Start race with current settings."""
@@ -591,12 +775,127 @@ class QuickRaceSetupWindow(QDialog):
             "tuning_preset": selected_preset
         }
 
-        driver_name = getattr(self.selected_driver, 'name',
-                              f"{getattr(self.selected_driver, 'first_name', 'Unknown')} {getattr(self.selected_driver, 'last_name', 'Driver')}")
+        driver_name = get_display_name(self.selected_driver)
         print(f"[INFO] Starting race with driver: {driver_name}")
 
         self.race_start.emit(config)
         self.accept()  # Close dialog with accept status
+
+    def _on_driver_selected(self, current, previous):
+        """Update the right-hand profile panel when selection changes."""
+        if current is None:
+            return
+        driver = current.data(Qt.ItemDataRole.UserRole)
+        if driver is None:
+            return
+
+        # Use service helpers for robust, canonical-driven display
+        name = get_display_name(driver)
+        nationality = get_display_nationality(driver)
+        skill = get_driver_skill_int(driver)
+
+        self.profile_name.setText(name)
+        self.profile_nationality.setText(f"Nationality: {nationality}")
+        self.profile_skill.setText(f"Skill: {skill}")
+
+        # Update radar widget with canonical 6-axis values
+        try:
+            from services.driver_attributes import get_driver_radar_values
+            radar_vals = get_driver_radar_values(driver)
+            # radar widget expects floats 0-100
+            self.radar.set_values(radar_vals)
+        except Exception:
+            # If radar helper missing, leave the default values
+            pass
+
+        # Update visual selection on DriverCard widgets: clear previous, set selected border
+        try:
+            prev_widget = None
+            if previous is not None:
+                prev_widget = self.driver_list.itemWidget(previous)
+            cur_widget = self.driver_list.itemWidget(current)
+
+            if prev_widget is not None and hasattr(prev_widget, 'setStyleSheet'):
+                # revert to base style if available
+                try:
+                    base = getattr(prev_widget, '_base_style', None)
+                    if base:
+                        prev_widget.setStyleSheet(base)
+                    else:
+                        prev_widget.setStyleSheet('')
+                except Exception:
+                    pass
+
+            if cur_widget is not None and hasattr(cur_widget, 'setStyleSheet'):
+                try:
+                    sel = getattr(cur_widget, '_selected_style', None)
+                    if sel:
+                        cur_widget.setStyleSheet(sel)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _handle_item_clicked(self, item):
+        """Handle clicks on list items and manage selection styles manually."""
+        try:
+            previous = self._prev_selected_item
+            current = item
+
+            # Update previous/current visuals via the existing handler
+            self._on_driver_selected(current, previous)
+
+            # Track previous item and update current selection state
+            self._prev_selected_item = current
+
+            # Also ensure currentItem is set so other code can read it
+            try:
+                self.driver_list.setCurrentItem(current)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts inside the quick race dialog.
+
+        - Up/Down: navigate driver list (handled by list when focused)
+        - Enter/Return: start the race
+        - Backspace: close dialog (go back)
+        - Left/Right: change preset when preset combo has focus or when list has focus
+        """
+        from PyQt6.QtGui import QKeyEvent
+        try:
+            k = event.key()
+            # Start race on Enter/Return
+            if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self._start_race()
+                return
+
+            # Backspace -> go back / cancel
+            if k == Qt.Key.Key_Backspace:
+                self.close()
+                return
+
+            # Left/Right to change preset if focus is on preset combo or driver list
+            if k in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+                fw = self.focusWidget()
+                if fw is self.preset_combo or fw is self.driver_list:
+                    idx = max(0, self.preset_combo.currentIndex())
+                    if k == Qt.Key.Key_Left:
+                        idx = max(0, idx - 1)
+                    else:
+                        idx = min(self.preset_combo.count() - 1, idx + 1)
+                    self.preset_combo.setCurrentIndex(idx)
+                    return
+
+            # Default: let Qt handle navigation (so Up/Down change current item)
+            super().keyPressEvent(event)
+        except Exception:
+            try:
+                super().keyPressEvent(event)
+            except Exception:
+                pass
 
 
 def main():

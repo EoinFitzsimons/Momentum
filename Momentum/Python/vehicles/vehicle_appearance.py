@@ -48,7 +48,7 @@ class VehicleRenderer:
         half_l = body_length / 2.0
         half_w = body_width / 2.0
 
-        # Body polygon (tapered nose and rear) - centered at (0,0), Y along length
+        # Body polygon (tapered nose and rear) - centred at (0,0), Y along length
         # Ensure perfect symmetry by mirroring X coordinates
         # Points ordered counter-clockwise from nose tip
         nose_taper_fraction = 0.48  # controls nose taper width
@@ -57,7 +57,7 @@ class VehicleRenderer:
         mid_end = 0.38              # where rear taper begins
         
         body_poly = [
-            QPointF(0.0, -half_l),                                        # nose tip (top center)
+            QPointF(0.0, -half_l),                                        # nose tip (top centre)
             QPointF(-nose_taper_fraction * half_w, -half_l + nose_taper_length * body_length),  # left nose taper
             QPointF(-half_w, mid_start * body_length),                   # left mid-front
             QPointF(-half_w, half_l),                                    # left rear (flat edge)
@@ -71,7 +71,7 @@ class VehicleRenderer:
         painter.setPen(QPen(livery.trim_color, 1.0))
         painter.drawPolygon(QPolygonF(body_poly))
 
-        # Central narrow stripe (primary color) - perfectly centered
+        # Central narrow stripe (primary colour) - perfectly centred
         stripe_w = max(1.0, 0.24 * scale)
         stripe_poly = [
             QPointF(-stripe_w / 2, -half_l + 0.08 * body_length),
@@ -109,14 +109,14 @@ class VehicleRenderer:
         ]
         painter.drawPolygon(QPolygonF(rear_wing))
 
-        # Halo (simplified rectangular frame) - thin, non-filled, centered
+        # Halo (simplified rectangular frame) - thin, non-filled, centred
         halo_w = 2.4 * scale
         halo_h = 1.6 * scale
         painter.setPen(QPen(QColor(200, 200, 200), max(1.0, 1.0 * scale)))
         painter.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         painter.drawRect(int(-halo_w / 2), int(-0.5 * scale - halo_h / 2), int(halo_w), int(halo_h))
 
-        # Cockpit + driver (simple rectangles, centered)
+        # Cockpit + driver (simple rectangles, centred)
         cockpit_w = 1.7 * scale
         cockpit_h = 1.0 * scale
         painter.setBrush(QBrush(QColor(20, 20, 20)))

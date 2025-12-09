@@ -50,7 +50,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     """
 
     def __init__(self, seed: Optional[int] = None):
-        """Initialize single seater engine"""
+        """Initialise single seater engine"""
         super().__init__(seed if seed is not None else 0)
         self.discipline: RacingDiscipline = RacingDiscipline.SINGLE_SEATER
 
@@ -424,7 +424,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         return final_slowdown
 
     def _initialize_race_state(self, context: RaceContext) -> Dict[str, Any]:
-        """Initialize race state tracking"""
+        """Initialise race state tracking"""
         driver_ids = [d.id for d in context.drivers]
 
         return {

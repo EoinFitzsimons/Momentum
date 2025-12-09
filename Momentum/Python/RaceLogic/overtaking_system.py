@@ -18,10 +18,13 @@ import numpy as np
 
 from database.models import Driver
 from RaceLogic.track_physics import TrackCorner, TrackSection, RacingLine, calculate_corner_performance
-from services.driver_attributes import (
-    get_safe_attribute, get_driver_bravery, get_driver_aggression,
-    get_driver_wheel_to_wheel_ability, get_driver_confidence
-)
+from services.driver_attributes import get_safe_attribute
+
+# Simpler policy: use canonical `racecraft` where previously derived
+# aggregates were used. This keeps logic straightforward and avoids
+# creating additional computed signals.
+def get_racecraft(drv: Driver) -> float:
+    return get_safe_attribute(drv, "racecraft")
 
 
 class OvertakeAttemptType(Enum):
@@ -131,21 +134,21 @@ def evaluate_overtaking_opportunity(
         if gap_m < 10.0 and speed_advantage > 3.0:
             # Factors affecting success
             attacker_factors = (
-                0.25 * (attacker.overtaking / 100.0) +
-                0.20 * (attacker.spatial_awareness / 100.0) +
-                0.15 * (get_driver_bravery(attacker) / 100.0) +
-                0.15 * (attacker.reaction_time / 100.0) +
-                0.10 * (get_driver_confidence(attacker) / 100.0) +
-                0.10 * (get_driver_aggression(attacker) / 100.0) +
-                0.05 * (attacker.racecraft / 100.0)
+                0.25 * (get_racecraft(attacker) / 100.0) +
+                0.20 * (get_racecraft(attacker) / 100.0) +
+                0.15 * (get_racecraft(attacker) / 100.0) +
+                0.15 * (get_racecraft(attacker) / 100.0) +
+                0.10 * (get_racecraft(attacker) / 100.0) +
+                0.10 * (get_racecraft(attacker) / 100.0) +
+                0.05 * (get_racecraft(attacker) / 100.0)
             )
 
             defender_factors = (
-                0.30 * (defender.defensive_driving / 100.0) +
-                0.25 * (defender.spatial_awareness / 100.0) +
-                0.20 * (defender.racecraft / 100.0) +
-                0.15 * (defender.reaction_time / 100.0) +
-                0.10 * (defender.professionalism / 100.0)
+                0.30 * (get_racecraft(defender) / 100.0) +
+                0.25 * (get_racecraft(defender) / 100.0) +
+                0.20 * (get_racecraft(defender) / 100.0) +
+                0.15 * (get_racecraft(defender) / 100.0) +
+                0.10 * (get_racecraft(defender) / 100.0)
             )
 
             # Speed advantage gives attacker edge
@@ -156,7 +159,7 @@ def evaluate_overtaking_opportunity(
             success_prob = np.clip(success_prob, 0.05, 0.95)
 
             # Decision threshold (aggressive drivers attempt earlier)
-            threshold = 0.4 - (get_driver_aggression(attacker) / 100.0) * 0.2
+            threshold = 0.4 - (get_racecraft(attacker) / 100.0) * 0.2
 
             should_attempt = success_prob > threshold
             return should_attempt, success_prob, OvertakeAttemptType.SLIPSTREAM_STRAIGHT
@@ -167,19 +170,19 @@ def evaluate_overtaking_opportunity(
         if gap_m < 15.0:
             # Attacker needs brave, late-braking skill
             attacker_factors = (
-                0.30 * (attacker.braking_technique / 100.0) +
-                0.25 * (get_driver_bravery(attacker) / 100.0) +
-                0.20 * (attacker.overtaking / 100.0) +
-                0.15 * (attacker.spatial_awareness / 100.0) +
-                0.10 * (attacker.vehicle_control / 100.0)
+                0.30 * (get_racecraft(attacker) / 100.0) +
+                0.25 * (get_racecraft(attacker) / 100.0) +
+                0.20 * (get_racecraft(attacker) / 100.0) +
+                0.15 * (get_racecraft(attacker) / 100.0) +
+                0.10 * (get_racecraft(attacker) / 100.0)
             )
 
             # Defender awareness of attack
             defender_factors = (
-                0.35 * (defender.defensive_driving / 100.0) +
-                0.25 * (defender.spatial_awareness / 100.0) +
-                0.20 * (defender.braking_technique / 100.0) +
-                0.20 * (defender.racecraft / 100.0)
+                0.35 * (get_racecraft(defender) / 100.0) +
+                0.25 * (get_racecraft(defender) / 100.0) +
+                0.20 * (get_racecraft(defender) / 100.0) +
+                0.20 * (get_racecraft(defender) / 100.0)
             )
 
             # Corner difficulty affects success
@@ -190,8 +193,7 @@ def evaluate_overtaking_opportunity(
             success_prob = np.clip(success_prob, 0.05, 0.85)
 
             # Divebombs are risky - cautious drivers avoid
-            risk_tolerance = (get_driver_bravery(
-                attacker) + get_driver_aggression(attacker) - attacker.professionalism * 0.5) / 150.0
+            risk_tolerance = (get_racecraft(attacker) + get_racecraft(attacker) - get_racecraft(attacker) * 0.5) / 150.0
             threshold = 0.5 - risk_tolerance
 
             should_attempt = success_prob > threshold
@@ -205,20 +207,20 @@ def evaluate_overtaking_opportunity(
             width_factor = min(track_width_m / 10.0, 1.2)
 
             attacker_factors = (
-                0.25 * (attacker.cornering_skill / 100.0) +
-                0.20 * (attacker.vehicle_control / 100.0) +
-                0.20 * (attacker.spatial_awareness / 100.0) +
-                0.15 * (get_driver_bravery(attacker) / 100.0) +
-                0.10 * (attacker.overtaking / 100.0) +
-                0.10 * (get_driver_wheel_to_wheel_ability(attacker) / 100.0)
+                0.25 * (get_racecraft(attacker) / 100.0) +
+                0.20 * (get_racecraft(attacker) / 100.0) +
+                0.20 * (get_racecraft(attacker) / 100.0) +
+                0.15 * (get_racecraft(attacker) / 100.0) +
+                0.10 * (get_racecraft(attacker) / 100.0) +
+                0.10 * (get_racecraft(attacker) / 100.0)
             )
 
             defender_factors = (
-                0.30 * (defender.cornering_skill / 100.0) +
-                0.25 * (defender.defensive_driving / 100.0) +
-                0.20 * (defender.spatial_awareness / 100.0) +
-                0.15 * (defender.racecraft / 100.0) +
-                0.10 * (get_driver_wheel_to_wheel_ability(defender) / 100.0)
+                0.30 * (get_racecraft(defender) / 100.0) +
+                0.25 * (get_racecraft(defender) / 100.0) +
+                0.20 * (get_racecraft(defender) / 100.0) +
+                0.15 * (get_racecraft(defender) / 100.0) +
+                0.10 * (get_racecraft(defender) / 100.0)
             )
 
             # Defensive line gives advantage
@@ -229,12 +231,10 @@ def evaluate_overtaking_opportunity(
             success_prob = np.clip(success_prob, 0.02, 0.70)
 
             # Patient drivers wait for better opportunity
-            from services.driver_attributes import get_driver_patience
-            patience_factor = get_driver_patience(attacker) / 100.0
+            patience_factor = get_racecraft(attacker) / 100.0
             threshold = 0.4 - (patience_factor * 0.1)
 
-            should_attempt = success_prob > threshold and get_driver_wheel_to_wheel_ability(
-                attacker) > 40
+            should_attempt = success_prob > threshold and get_racecraft(attacker) > 40
             return should_attempt, success_prob, OvertakeAttemptType.AROUND_OUTSIDE
 
     # No good opportunity
@@ -259,11 +259,10 @@ def calculate_defensive_action(
     # === STRAIGHT DEFENSE ===
     if section == TrackSection.STRAIGHT:
         if gap_m < 10.0:
-            # Defend aggressively if under pressure
-            if defender.defensive_driving > 70 and get_driver_aggression(
-                    defender) > 60:
+            # Defend aggressively if under pressure (use canonical `racecraft`)
+            if get_racecraft(defender) > 70:
                 # Weaving (risky, may draw penalty if excessive)
-                if defender.professionalism < 50:
+                if get_racecraft(defender) < 50:
                     return DefensiveAction.WEAVING, RacingLine.DEFENSIVE
                 else:
                     return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
@@ -276,12 +275,8 @@ def calculate_defensive_action(
     # === BRAKING ZONE DEFENSE ===
     elif section == TrackSection.BRAKING_ZONE and corner:
         if gap_m < 15.0:
-            # Awareness of attack determines response
-            awareness = (
-                defender.spatial_awareness * 0.4 +
-                defender.defensive_driving * 0.3 +
-                defender.racecraft * 0.3
-            ) / 100.0
+            # Awareness of attack determines response - simplified to `racecraft`
+            awareness = get_racecraft(defender) / 100.0
 
             if awareness > 0.6:
                 # Cover inside line early
@@ -298,8 +293,8 @@ def calculate_defensive_action(
     # === CORNER DEFENSE ===
     elif section in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER]:
         if gap_m < 5.0:
-            # Side-by-side - squeeze but stay legal
-            if defender.defensive_driving > 60:
+            # Side-by-side - squeeze but stay legal (use racecraft)
+            if get_racecraft(defender) > 60:
                 return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
             else:
                 return DefensiveAction.HOLD_LINE, RacingLine.DEFENSIVE
@@ -336,27 +331,13 @@ def calculate_incident_risk(
     base_risk = base_risks.get(section, 0.0001)  # 0.01% default for testing
 
     # Skill mitigates risk
-    attacker_control = (
-        attacker.spatial_awareness * 0.30 +
-        attacker.vehicle_control * 0.25 +
-        get_driver_wheel_to_wheel_ability(attacker) * 0.20 +
-        attacker.professionalism * 0.15 +
-        attacker.concentration * 0.10
-    ) / 100.0
-
-    defender_control = (
-        defender.spatial_awareness * 0.30 +
-        defender.vehicle_control * 0.25 +
-        defender.defensive_driving * 0.20 +
-        defender.professionalism * 0.15 +
-        get_driver_wheel_to_wheel_ability(defender) * 0.10
-    ) / 100.0
-
+    # Simplify skill and aggression calculations to use canonical `racecraft`
+    attacker_control = get_racecraft(attacker) / 100.0
+    defender_control = get_racecraft(defender) / 100.0
     combined_skill = (attacker_control + defender_control) / 2.0
 
-    # Aggression increases risk
-    aggression_factor = (get_driver_aggression(
-        attacker) + get_driver_aggression(defender)) / 200.0
+    # Aggression increases risk - use racecraft as proxy
+    aggression_factor = (get_racecraft(attacker) + get_racecraft(defender)) / 200.0
 
     # Overlap affects risk (most dangerous at 0.5 = side-by-side)
     overlap_risk = 1.0 - abs(1.0 - 2.0 * overtake_attempt.lateral_overlap)

@@ -2,7 +2,7 @@
 
 This module contains the small 7-table dataclasses (Driver, Team, Track, Championship,
 Race, RaceResult, StaffMember) and a  `SCHEMA_SQL` string used for
-lightweight schema initialization where desired.
+lightweight schema initialisation where desired.
 """
 
 from dataclasses import dataclass
@@ -237,7 +237,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     name TEXT NOT NULL,
     country TEXT NOT NULL,
     primary_discipline TEXT NOT NULL,
-    -- Special segments & behavior flags
+    -- Special segments & behaviour flags
     is_point_to_point INTEGER NOT NULL DEFAULT 0,
     joker_enabled INTEGER NOT NULL DEFAULT 0,
     instructions_json TEXT DEFAULT NULL,
@@ -262,6 +262,8 @@ CREATE TABLE IF NOT EXISTS races (
     season INTEGER NOT NULL,
     round_number INTEGER NOT NULL,
     race_date TEXT NOT NULL,
+    weather_conditions TEXT DEFAULT '',
+    laps INTEGER NOT NULL DEFAULT 0,
     status TEXT DEFAULT 'scheduled',
     FOREIGN KEY (championship_id) REFERENCES championships(id),
     FOREIGN KEY (track_id) REFERENCES tracks(id)
@@ -273,7 +275,9 @@ CREATE TABLE IF NOT EXISTS race_results (
     driver_id INTEGER NOT NULL,
     team_id INTEGER NOT NULL,
     position INTEGER NOT NULL,
+    fastest_lap INTEGER NOT NULL DEFAULT 0,
     points INTEGER DEFAULT 0,
+    dnf_reason TEXT DEFAULT NULL,
     FOREIGN KEY (race_id) REFERENCES races(id),
     FOREIGN KEY (driver_id) REFERENCES drivers(id),
     FOREIGN KEY (team_id) REFERENCES teams(id)
@@ -283,6 +287,7 @@ CREATE TABLE IF NOT EXISTS staff_members (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     role TEXT NOT NULL,
+    rating REAL NOT NULL DEFAULT 50.0,
     current_team_id INTEGER,
     FOREIGN KEY (current_team_id) REFERENCES teams(id)
 );

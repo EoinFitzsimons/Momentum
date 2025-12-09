@@ -4,7 +4,7 @@ Test suite for vehicle appearance rendering system.
 Verifies that:
 1. Liveries are created and stored correctly
 2. Vehicle renderer outputs detailed car shapes (not rectangles)
-3. Car rendering is called during race visualization
+3. Car rendering is called during race visualisation
 4. All drivers have liveries initialized before grid display
 """
 

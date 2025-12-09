@@ -108,12 +108,12 @@ class BaseDisciplineEngine(ABC):
 
     def __init__(self, seed: int = RANDOM_SEED):
         """
-        Initialize engine with random seed for reproducible results
+        Initialise engine with random seed for reproducible results
 
         Args:
             seed: Random seed for numpy and python random generators
         """
-        # Initialize numpy random generator (modern API)
+        # Initialise numpy random generator (modern API)
         self.rng = np.random.default_rng(seed)
         random.seed(seed)
         self.discipline: Optional[RacingDiscipline] = None
@@ -219,14 +219,22 @@ class BaseDisciplineEngine(ABC):
         driver_score = 0.0
         total_weight = 0.0
 
+        # Use canonical-aware attribute lookup so discipline weightings that
+        # reference legacy names still compute values derived from the
+        # canonical schema. This avoids creating synthesized legacy fields.
+        from services.driver_attributes import get_attribute_value
+
         for attr_name, weight in weights.items():
-            if hasattr(driver, attr_name):
-                attr_value = getattr(driver, attr_name)
-                if attr_value is not None:
-                    # Normalize attribute (0-100 scale) to 0-1 scale
-                    normalized_value = attr_value / 100.0
-                    driver_score += normalized_value * weight
-                    total_weight += weight
+            try:
+                attr_value = get_attribute_value(driver, attr_name)
+            except Exception:
+                attr_value = DRIVER_ATTRIBUTE_DEFAULT if 'DRIVER_ATTRIBUTE_DEFAULT' in globals() else 50.0
+
+            if attr_value is not None:
+                # Normalize attribute (0-100 scale) to 0-1 scale
+                normalized_value = float(attr_value) / 100.0
+                driver_score += normalized_value * weight
+                total_weight += weight
 
         # Normalize driver score to 0-1 scale
         if total_weight > 0:
