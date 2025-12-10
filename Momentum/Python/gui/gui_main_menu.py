@@ -13,16 +13,28 @@ from config import QUICK_RACE_LIST_SIZE
 from PyQt6.QtGui import QFont, QKeyEvent
 from PyQt6.QtCore import Qt, pyqtSignal
 from services.driver_attributes import (
-    get_driver_skill,
+    # get_driver_skill removed (unused)
     get_driver_skill_int,
     get_display_name,
     get_display_nationality,
     get_preferred_window_size,
 )
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QComboBox, QGroupBox, QRadioButton,
-    QButtonGroup, QMessageBox, QListWidget, QListWidgetItem, QDialog
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QComboBox,
+    QGroupBox,
+    QRadioButton,
+    QButtonGroup,
+    QMessageBox,
+    QListWidget,
+    QListWidgetItem,
+    QDialog,
 )
 import sys
 import os
@@ -89,7 +101,6 @@ class MainMenuWindow(QMainWindow):
         self.selected_driver = None
         self.pace_setting = 50  # 0-100 scale
         self.overtake_aggression = 50  # 0-100 scale
-        
 
         # Database
         self.db: Optional[DatabaseManager] = None
@@ -327,9 +338,6 @@ class MainMenuWindow(QMainWindow):
         """)
         apply_btn.clicked.connect(self._apply_display_mode)
         layout.addWidget(apply_btn)
-
-        
-
         layout.addStretch()
 
         # About button
@@ -864,7 +872,7 @@ class QuickRaceSetupWindow(QDialog):
         - Backspace: close dialog (go back)
         - Left/Right: change preset when preset combo has focus or when list has focus
         """
-        from PyQt6.QtGui import QKeyEvent
+        # local import removed - QKeyEvent imported at module level
         try:
             k = event.key()
             # Start race on Enter/Return
