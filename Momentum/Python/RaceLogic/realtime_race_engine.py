@@ -107,6 +107,8 @@ class DriverState:
     # Accumulated fatigue from pushing hard (0.0-1.0)
     push_fatigue: float = 0.0
     frames_since_mistake: int = 999  # Frames since last mistake (cooldown)
+    # Stall detection: consecutive frames with no position change
+    stall_frames: int = 0
 
 
 @dataclass
@@ -261,6 +263,13 @@ class RealtimeRaceEngine:
                 # Calculate performance for this timestep
                 speed_mps = self._calculate_speed(state, track_length_m)
 
+                # Guard against non-finite speed values (NaN/inf) which can
+                # corrupt positions and stall the race loop. Replace with a
+                # conservative minimum speed and log once.
+                if not np.isfinite(speed_mps):
+                    print(f"  [WARN] Non-finite speed for {state.driver_name} -> replacing with MIN_SPEED_MPS")
+                    speed_mps = float(self.MIN_SPEED_MPS)
+
                 # Check for driver mistakes (overdriving)
                 mistake_occurred = self._check_driver_mistake(state)
                 if mistake_occurred:
@@ -283,6 +292,33 @@ class RealtimeRaceEngine:
                 # Update degradation and fatigue
                 state.tire_condition -= self.TIRE_DEGRADATION_RATE * state.push_intensity
                 state.fuel_load -= self.FUEL_BURN_RATE
+
+                # --- Stall detection: if a car's position does not change for
+                # a long period, mark it as stalled to avoid infinite races.
+                try:
+                    moved = abs(state.position_m - state.prev_position_m) > 0.01
+                except Exception:
+                    moved = True
+
+                if not moved:
+                    state.stall_frames += 1
+                else:
+                    state.stall_frames = 0
+
+                # If stalled for > 900 frames (~30s at 30 FPS) consider it a
+                # retirement to allow the race to conclude.
+                if state.stall_frames > 900:
+                    state.running = False
+                    state.dnf_reason = 'stalled'
+                    print(f"  [STALL] {state.driver_name} marked DNF (stalled) after {state.stall_frames} frames")
+                    if event_callback:
+                        event_callback({
+                            "type": "dnf",
+                            "driver_id": state.driver_id,
+                            "driver_name": state.driver_name,
+                            "lap": state.lap,
+                            "reason": state.dnf_reason
+                        })
 
                 # Accumulate push fatigue (higher when pushing hard)
                 if state.push_intensity > 0.8:

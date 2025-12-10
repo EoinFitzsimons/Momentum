@@ -1606,9 +1606,29 @@ class RaceWindow(QMainWindow):
             # Borderless windowed fullscreen (use setWindowFlag to toggle)
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
             screen_obj = QApplication.primaryScreen()
-            screen = screen_obj.geometry() if screen_obj else None
-            if screen is not None:
-                self.setGeometry(screen)
+            available = screen_obj.availableGeometry() if screen_obj else None
+            if available is not None:
+                # Ensure widget minimums don't force a larger geometry than the screen
+                try:
+                    self.setMinimumSize(0, 0)
+                except Exception:
+                    pass
+                # Also clear minimums on child widgets to avoid min>max issues
+                try:
+                    for w in self.findChildren(QWidget):
+                        try:
+                            w.setMinimumSize(0, 0)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                # Constrain maximum size to available screen area
+                try:
+                    self.setMaximumSize(available.width(), available.height())
+                except Exception:
+                    pass
+                # Use available geometry (accounts for taskbar/docked panels)
+                self.setGeometry(available)
             self.showMaximized()
             # Race state
             self.db: Optional[DatabaseManager] = None
@@ -3330,7 +3350,7 @@ class RaceWindow(QMainWindow):
         """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
         self.display_mode = mode
         screen_obj = QApplication.primaryScreen()
-        screen = screen_obj.geometry() if screen_obj else None
+        available = screen_obj.availableGeometry() if screen_obj else None
 
         if mode == "windowed":
             # Ensure frameless disabled for normal windowed mode
@@ -3342,14 +3362,44 @@ class RaceWindow(QMainWindow):
         elif mode == "borderless":
             # Enable frameless for borderless-windowed fullscreen
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-            if screen is not None:
-                self.setGeometry(screen)
+            if available is not None:
+                try:
+                    self.setMinimumSize(0, 0)
+                except Exception:
+                    pass
+                try:
+                    for w in self.findChildren(QWidget):
+                        try:
+                            w.setMinimumSize(0, 0)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    self.setMaximumSize(available.width(), available.height())
+                except Exception:
+                    pass
+                self.setGeometry(available)
             self.showMaximized()
             print("[INFO] Race window: borderless windowed fullscreen")
 
         elif mode == "fullscreen":
             # Use native fullscreen; ensure frameless is disabled so system handles fullscreen
             self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
+            # Clamp maximum size to available geometry before fullscreen request
+            if available is not None:
+                try:
+                    for w in self.findChildren(QWidget):
+                        try:
+                            w.setMinimumSize(0, 0)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    self.setMaximumSize(available.width(), available.height())
+                except Exception:
+                    pass
             self.showFullScreen()
             print("[INFO] Race window: exclusive fullscreen")
 
