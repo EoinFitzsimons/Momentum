@@ -482,7 +482,6 @@ class DatabaseManager:
                 return Track(
                     **{k: v for k, v in dict(row).items() if k != 'created_at'})
             return None
-
     # Alias for consistency
     def get_track_by_id(self, track_id: int) -> Optional[Track]:
         """Get track by ID (alias for get_track)"""

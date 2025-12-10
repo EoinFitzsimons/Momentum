@@ -30,7 +30,7 @@ from enum import Enum
 from abc import ABC, abstractmethod
 
 from database.models import Driver, Team, Track
-from config import RANDOM_SEED
+from config import RANDOM_SEED, DRIVER_ATTRIBUTE_DEFAULT
 
 
 class RacingDiscipline(Enum):

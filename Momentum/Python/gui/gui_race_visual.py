@@ -11,10 +11,41 @@ from services.race_simulation_api import simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
 from vehicles.appearance_integration import VehicleAppearanceManager
-from vehicles.vehicle_appearance import Livery, VehicleRenderer, VehicleType, create_team_livery
-from PyQt6.QtGui import QPainter, QPen, QColor, QBrush, QPainterPath, QKeyEvent, QPaintEvent
-from PyQt6.QtCore import Qt, QPointF, QTimer, pyqtSignal, QObject
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget, QTableWidgetItem
+from vehicles.vehicle_appearance import (
+    Livery,
+    VehicleRenderer,
+    create_team_livery,
+)
+
+from PyQt6.QtGui import (
+    QPainter,
+    QPen,
+    QColor,
+    QBrush,
+    QPainterPath,
+    QKeyEvent,
+    QPaintEvent,
+)
+
+from PyQt6.QtCore import (
+    Qt,
+    QPointF,
+    QTimer,
+    pyqtSignal,
+    QObject,
+)
+
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QTableWidget,
+    QTableWidgetItem,
+)
 import sys
 import os
 import math
@@ -144,41 +175,8 @@ class CircuitGenerator:
 
         return routes
 
-        # Scale circuit instructions based on track length
-        # Note: This is approximate - final track will be rescaled to exact
-        # length
-        scale = track_length_km / 6.0  # Base is ~6km
-
-        # Interesting varied circuit - closure will be calculated dynamically
-        circuit_instructions = [
-            ('S', int(600 * scale)),
-            ('C', 45, 170, 60, 0.00008),
-            ('S', int(400 * scale)),
-            ('C', 65, 95, 50, 0.0001),
-            ('S', int(220 * scale)),
-            ('C', -55, 100, 52, 0.0001),
-            ('S', int(350 * scale)),
-            ('C', 155, 48, 42, 0.00014),
-            ('S', int(550 * scale)),
-            ('C', -65, 145, 58, 0.00009),
-            ('S', int(380 * scale)),
-            ('C', 55, 115, 54, 0.00009),
-            ('S', int(180 * scale)),
-            ('C', 60, 90, 50, 0.0001),
-            ('S', int(300 * scale)),
-            ('C', -50, 135, 56, 0.00009),
-            ('S', int(160 * scale)),
-            ('C', 50, 135, 56, 0.00009),
-            ('S', int(320 * scale)),
-            # Closure corners will be added automatically by
-            # _process_instructions
-        ]
-
-        CircuitGenerator._process_instructions(circuit_instructions, state)
-        CircuitGenerator._rescale_to_target_length(segments, state)
-        CircuitGenerator._finalize_circuit(segments)
-
-        return segments
+        # (legacy/generated-instructions block removed - generation now returns
+        # 'routes' above. This dead code caused undefined-name mypy errors.)
 
     @staticmethod
     def _process_instructions(instructions, state, routes: Dict[str, Any]):
@@ -872,9 +870,13 @@ class TrackWidget(QWidget):
                     painter.translate(center_x, center_y)
                     painter.scale(1, -1)
             else:
-                # Full track view with increased zoom
+                # Full track view with responsive zoom based on viewport size
                 painter.translate(center_x, center_y)
-                painter.scale(1.5, -1.5)  # Reduced to 1.5x for better overview
+                # Reduce zoom on smaller screens for better overview
+                base_zoom = 1.5
+                if self.width() < 1600:
+                    base_zoom = 1.2  # Zoom out more on smaller screens
+                painter.scale(base_zoom, -base_zoom)
 
             # CORRECT LAYER ORDER for visibility
             self._draw_runoff_areas(painter)  # Layer 2
@@ -1922,12 +1924,14 @@ class RaceWindow(QMainWindow):
         self.standings_table.setColumnCount(4)
         self.standings_table.setHorizontalHeaderLabels(
             ["", "Driver", "Lap", "Gap"])
-        self.standings_table.setMinimumWidth(500)
+        self.standings_table.setMinimumWidth(450)  # Match total column width + margins
         self.standings_table.setMinimumHeight(400)
         self.standings_table.setColumnWidth(0, 40)  # Colour indicator
         self.standings_table.setColumnWidth(1, 210)  # Driver name
         self.standings_table.setColumnWidth(2, 60)   # Lap
         self.standings_table.setColumnWidth(3, 100)  # Gap
+        self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.horizontalHeader().setStretchLastSection(True)  # Let Gap column expand
         right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1
 
         layout.addLayout(right_panel, 1)
@@ -3123,7 +3127,7 @@ class RaceWindow(QMainWindow):
                             'gap_ahead',
                             0.0):.1f}s)")
 
-    def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: int = None):
+    def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: Optional[int] = None):
         """Set an item in the standings table but respect DNF state.
 
         If `driver_id` is provided and that driver is marked DNF in
