@@ -151,6 +151,8 @@ class RealtimeRaceEngine:
         # Recent overtake print timestamps to avoid duplicate console lines
         # key -> last printed race_state.current_time
         self._recent_overtakes: Dict[Tuple[int, int], float] = {}
+        # Cooldown for overtakes between the same pair (unordered pair -> expiry time)
+        self._overtake_pair_cooldown: Dict[frozenset, float] = {}
 
         # Physics constants
         self.BASE_SPEED_MPS = 70.0  # ~250 km/h base racing speed
@@ -574,18 +576,24 @@ class RealtimeRaceEngine:
                     if self._overtake_log_counter % 30 == 1:  # Log once per second
                         print(f"  OVERTAKING: {driver.name} attempting to overtake {car_ahead.driver.name}! Gap: {gap_m:.1f}m, Success chance: {success_prob * 100:.0f}%")
 
-                    # Create or update active overtake
+                    # Create or update active overtake (respect pair cooldown)
                     key = (state.driver_id, car_ahead.driver_id)
-                    if key not in self.active_overtakes:
-                        self.active_overtakes[key] = OvertakeAttempt(
+                    pair_key = frozenset((state.driver_id, car_ahead.driver_id))
+                    cooldown_expiry = self._overtake_pair_cooldown.get(pair_key, 0.0)
+                    if race_state.current_time < cooldown_expiry:
+                        # Skip creating a new attempt during cooldown window
+                        pass
+                    else:
+                        if key not in self.active_overtakes:
+                            self.active_overtakes[key] = OvertakeAttempt(
                             attacker_id=state.driver_id,
                             defender_id=car_ahead.driver_id,
                             attempt_type=attempt_type,
-                            position_m=state.position_m,
-                            gap_m=gap_m,
-                            speed_advantage_kmh=(
-                                state.velocity_mps - car_ahead.velocity_mps) * 3.6,
-                            corner=corner
+                                position_m=state.position_m,
+                                gap_m=gap_m,
+                                speed_advantage_kmh=(
+                                    state.velocity_mps - car_ahead.velocity_mps) * 3.6,
+                                corner=corner
                         )
                 else:
                     state.racing_mode = RacingMode.MANAGE
@@ -1215,7 +1223,32 @@ class RealtimeRaceEngine:
                     if last_print is None or (race_state.current_time - last_print) > 0.8:
                         print(f"  OK {attacker_state.driver_name} overtakes {defender_state.driver_name}! ({attempt.attempt_type.value})")
                         self._recent_overtakes[key] = race_state.current_time
-                    # Swap positions will happen naturally in next update
+                    # Nudge the attacker ahead of the defender so positions reflect
+                    # the successful overtake on the next sorting update.
+                    try:
+                        # Place attacker ahead of defender by a safe margin (CAR_LENGTH + 1m)
+                        SAFE_NUDGE = 5.0
+                        attacker_state.position_m = defender_state.position_m + SAFE_NUDGE
+                        # Give attacker a small velocity bump to reflect momentum
+                        attacker_state.velocity_mps = max(attacker_state.velocity_mps, defender_state.velocity_mps + 0.5)
+                        # Add a short cooldown for this pair to avoid immediate reversal
+                        pair_key_done = frozenset((attacker_state.driver_id, defender_state.driver_id))
+                        self._overtake_pair_cooldown[pair_key_done] = race_state.current_time + 1.0
+                        # Log overtake event into collision_log (reuse for events)
+                        race_state.collision_log.append({
+                            "time": race_state.current_time,
+                            "lap": attacker_state.lap,
+                            "position_m": attacker_state.position_m,
+                            "type": "overtake",
+                            "attacker_id": attacker_state.driver_id,
+                            "attacker_name": attacker_state.driver_name,
+                            "defender_id": defender_state.driver_id,
+                            "defender_name": defender_state.driver_name,
+                            "attempt_type": attempt.attempt_type.value,
+                            "description": f"{attacker_state.driver_name} overtook {defender_state.driver_name} ({attempt.attempt_type.value})"
+                        })
+                    except Exception:
+                        pass
                 elif result == "incident":
                     # Collision occurred
                     # For simplicity, both cars out (can refine later with

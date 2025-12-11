@@ -163,7 +163,7 @@ class DatabaseManager:
         row_dict.pop('updated_at', None)
 
         # Build kwargs only for fields present in the compact Driver dataclass
-        driver_fields = {f: None for f in Driver.__dataclass_fields__.keys()}
+        driver_fields = dict.fromkeys(Driver.__dataclass_fields__.keys(), None)
         driver_kwargs = {k: v for k, v in row_dict.items() if k in driver_fields}
 
         try:
@@ -408,13 +408,6 @@ class DatabaseManager:
             return [Track(**{k: v for k, v in dict(row).items()
                           if k != 'created_at'}) for row in rows]
 
-    def get_track(self, track_id: int) -> Optional[Track]:
-        """Get a single track by ID"""
-        with self.get_connection() as conn:
-            row = conn.execute("SELECT * FROM tracks WHERE id = ?", (track_id,)).fetchone()
-            if not row:
-                return None
-            return Track(**{k: v for k, v in dict(row).items() if k != 'created_at'})
 
     def get_track_instructions(self, track_id: int) -> Optional[Dict]:
         """Return parsed instructions JSON for a track, or None."""

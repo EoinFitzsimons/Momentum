@@ -9,6 +9,7 @@ uvicorn
 numpy
 pandas
 scipy
+matplotlib
 
 # Machine learning
 torch
@@ -28,7 +29,7 @@ requests
 
 # Geometry and track generation
 shapely
-bezier
+
 
 # Dev & Test tools (included while coding)
 pytest
