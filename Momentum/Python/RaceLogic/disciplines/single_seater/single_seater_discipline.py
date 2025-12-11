@@ -176,7 +176,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             _preset_raw, str) else 'balanced'
         apply_preset(preset_choice)
 
-        print(f"→ SingleSeaterEngine tuning preset applied: {preset_choice}")
+        print(f"-> SingleSeaterEngine tuning preset applied: {preset_choice}")
 
         # Build teams dictionary if not supplied
         teams = getattr(context, 'teams', {}) or {}

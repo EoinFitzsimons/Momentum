@@ -97,6 +97,8 @@ class DriverState:
     # Incident tracking
     running: bool = True
     dnf_reason: Optional[str] = None
+    # Has a DNF event already been emitted for this driver (prevents dupes)
+    dnf_event_emitted: bool = False
 
     # Timing
     total_time: float = 0.0         # Total race time elapsed
@@ -146,6 +148,9 @@ class RealtimeRaceEngine:
         self.track_map: Optional[TrackMap] = None
         # (attacker_id, defender_id) -> attempt
         self.active_overtakes: Dict[Tuple[int, int], OvertakeAttempt] = {}
+        # Recent overtake print timestamps to avoid duplicate console lines
+        # key -> last printed race_state.current_time
+        self._recent_overtakes: Dict[Tuple[int, int], float] = {}
 
         # Physics constants
         self.BASE_SPEED_MPS = 70.0  # ~250 km/h base racing speed
@@ -211,25 +216,24 @@ class RealtimeRaceEngine:
             Final race results
         """
         # Initialise track map for racing physics
-        print(f"→ Generating track map for {track.name}...")
+        print(f"-> Generating track map for {track.name}...")
         self.track_map = TrackMap(track=track)
-        print(
-            f"  ✓ Track map ready: {len(self.track_map.corners)} corners, {len(self.track_map.drs_zones)} DRS zones")
+        # Keep a reference to the external event callback so internal
+        # helpers (overtake resolution / collision detection) can emit
+        # DNF events for both parties when necessary.
+        self._event_callback = event_callback
+        print(f"  OK Track map ready: {len(self.track_map.corners)} corners, {len(self.track_map.drs_zones)} DRS zones")
 
         # Store visual track points for unified position mapping
         self.track_points = track_points
         if track_points:
-            print(
-                f"  ✓ Using visual track with {
-                    len(track_points)} points for position mapping")
+            print(f"  OK Using visual track with {len(track_points)} points for position mapping")
 
         # Store player controls
         self.player_driver_id = player_driver_id
         self.player_overrides = player_overrides or {}
         if player_driver_id:
-            print(
-                f"  ✓ Player driver ID {player_driver_id} with overrides: {
-                    self.player_overrides}")
+            print(f"  OK Player driver ID {player_driver_id} with overrides: {self.player_overrides}")
 
         # Initialise race state
         track_length_m = track.length_km * 1000.0
@@ -335,23 +339,26 @@ class RealtimeRaceEngine:
                 # Check for incidents
                 if self._check_incident(state, race_state):
                     state.running = False
-                    if event_callback:
-                        event_callback({
-                            "type": "dnf",
-                            "driver_id": driver_id,
-                            "driver_name": state.driver_name,
-                            "lap": state.lap,
-                            "reason": state.dnf_reason
-                        })
+                    # Emit DNF event for this driver if not already emitted
+                    if hasattr(self, '_event_callback') and callable(self._event_callback) and not getattr(state, 'dnf_event_emitted', False):
+                        try:
+                            self._event_callback({
+                                "type": "dnf",
+                                "driver_id": driver_id,
+                                "driver_name": state.driver_name,
+                                "lap": state.lap,
+                                "reason": state.dnf_reason
+                            })
+                            state.dnf_event_emitted = True
+                        except Exception:
+                            pass
 
             # Update race situation (gaps, positions, nearby cars)
             self._update_race_situation(race_state)
 
             # === COMPREHENSIVE LOGGING: Track every car every second ===
             if frame % 30 == 0:  # Every 1 second at 30 FPS
-                print(
-                    f"\n[FRAME {frame}] Race time: {
-                        race_state.current_time:.1f}s")
+                print(f"\n[FRAME {frame}] Race time: {race_state.current_time:.1f}s")
                 active_count = sum(
                     1 for s in race_state.driver_states.values() if s.running)
                 print(
@@ -374,8 +381,7 @@ class RealtimeRaceEngine:
                 position_event = self._create_position_event(race_state, frame)
                 # Log how many positions we're sending
                 if frame % 90 == 0:  # Every 3 seconds
-                    print(
-                        f"  → Emitting {len(position_event['positions'])} car positions to GUI")
+                    print(f"  -> Emitting {len(position_event['positions'])} car positions to GUI")
                 event_callback(position_event)
 
             # Throttle to realtime_speed if needed
@@ -481,11 +487,7 @@ class RealtimeRaceEngine:
                     # Debug first application
                     if not hasattr(self, '_player_push_logged'):
                         self._player_push_logged = True
-                        print(
-                            f"[PLAYER PUSH APPLIED] {
-                                driver.name}: {
-                                old_push:.2f} → {
-                                state.push_intensity:.2f} (from sliders)")
+                        print(f"[PLAYER PUSH APPLIED] {driver.name}: {old_push:.2f} -> {state.push_intensity:.2f} (from sliders)")
 
                 # Overtake slider affects racing mode only
                 if 'overtake' in self.player_overrides:
@@ -570,12 +572,7 @@ class RealtimeRaceEngine:
                         self._overtake_log_counter = 0
                     self._overtake_log_counter += 1
                     if self._overtake_log_counter % 30 == 1:  # Log once per second
-                        print(
-                            f"  ⚡ {
-                                driver.name} OVERTAKING {
-                                car_ahead.driver.name}! Gap: {
-                                gap_m:.1f}m, Success chance: {
-                                success_prob * 100:.0f}%")
+                        print(f"  OVERTAKING: {driver.name} attempting to overtake {car_ahead.driver.name}! Gap: {gap_m:.1f}m, Success chance: {success_prob * 100:.0f}%")
 
                     # Create or update active overtake
                     key = (state.driver_id, car_ahead.driver_id)
@@ -950,11 +947,7 @@ class RealtimeRaceEngine:
             # Determine severity
             severity = "minor" if self.rng.random() > 0.3 else "major"
             if severity == "major":
-                print(
-                    f"  ⚠️  {
-                        state.driver_name} runs wide! (push={
-                        state.push_intensity:.2f}, fatigue={
-                        state.push_fatigue:.2f})")
+                print(f"  WARNING: {state.driver_name} runs wide! (push={state.push_intensity:.2f}, fatigue={state.push_fatigue:.2f})")
             return True
 
         return False
@@ -1049,6 +1042,22 @@ class RealtimeRaceEngine:
                             "driver2_name": other_state.driver_name,
                             "description": f"{state.driver_name} and {other_state.driver_name} collided during overtake"
                         })
+                        # Emit DNF event for the other driver (state will be
+                        # emitted by the caller's event path). This ensures the
+                        # GUI is notified for both parties even if the main loop
+                        # skips the other driver later.
+                        try:
+                            if hasattr(self, '_event_callback') and callable(self._event_callback) and not getattr(other_state, 'dnf_event_emitted', False):
+                                self._event_callback({
+                                    "type": "dnf",
+                                    "driver_id": other_state.driver_id,
+                                    "driver_name": other_state.driver_name,
+                                    "lap": other_state.lap,
+                                    "reason": other_state.dnf_reason
+                                })
+                                other_state.dnf_event_emitted = True
+                        except Exception:
+                            pass
                         return True
 
                 elif not is_overtaking and longitudinal_gap < CAR_LENGTH:
@@ -1125,15 +1134,13 @@ class RealtimeRaceEngine:
             consistency = state.driver.consistency / 100.0
             if self.rng.random() > consistency:
                 state.dnf_reason = "tire_failure_spin"
-                print(
-                    f"  ✘ {
-                        state.driver_name} spins off - tire condition critical!")
+                print(f"  X {state.driver_name} spins off - tire condition critical!")
                 return True
 
         # Mechanical DNF (extremely rare)
         if self.rng.random() < 0.00001:  # 0.001% per frame
             state.dnf_reason = "mechanical"
-            print(f"  ✘ {state.driver_name} retires - mechanical failure!")
+            print(f"  X {state.driver_name} retires - mechanical failure!")
             return True
 
         return False
@@ -1202,11 +1209,12 @@ class RealtimeRaceEngine:
                     result = outcome
 
                 if result == "success":
-                    print(
-                        f"  \u2713 {
-                            attacker_state.driver_name} overtakes {
-                            defender_state.driver_name}! ({
-                            attempt.attempt_type.value})")
+                    # Prevent immediate duplicate prints for the same pair
+                    last_print = self._recent_overtakes.get(key)
+                    # If we printed this overtake within the last 0.8s, skip
+                    if last_print is None or (race_state.current_time - last_print) > 0.8:
+                        print(f"  OK {attacker_state.driver_name} overtakes {defender_state.driver_name}! ({attempt.attempt_type.value})")
+                        self._recent_overtakes[key] = race_state.current_time
                     # Swap positions will happen naturally in next update
                 elif result == "incident":
                     # Collision occurred
@@ -1216,10 +1224,32 @@ class RealtimeRaceEngine:
                     attacker_state.dnf_reason = "collision"
                     defender_state.running = False
                     defender_state.dnf_reason = "collision"
-                    print(
-                        f"  \u2718 COLLISION! {
-                            attacker_state.driver_name} and {
-                            defender_state.driver_name} crash!")
+                    print(f"  COLLISION! {attacker_state.driver_name} and {defender_state.driver_name} crash!")
+                    # Emit DNF events for both parties if an external event
+                    # callback is available and we haven't previously emitted
+                    # for these drivers.
+                    try:
+                        if hasattr(self, '_event_callback') and callable(self._event_callback):
+                            if not getattr(attacker_state, 'dnf_event_emitted', False):
+                                self._event_callback({
+                                    'type': 'dnf',
+                                    'driver_id': attacker_state.driver_id,
+                                    'driver_name': attacker_state.driver_name,
+                                    'lap': attacker_state.lap,
+                                    'reason': attacker_state.dnf_reason
+                                })
+                                attacker_state.dnf_event_emitted = True
+                            if not getattr(defender_state, 'dnf_event_emitted', False):
+                                self._event_callback({
+                                    'type': 'dnf',
+                                    'driver_id': defender_state.driver_id,
+                                    'driver_name': defender_state.driver_name,
+                                    'lap': defender_state.lap,
+                                    'reason': defender_state.dnf_reason
+                                })
+                                defender_state.dnf_event_emitted = True
+                    except Exception:
+                        pass
                 else:
                     # Failed attempt - defender holds position
                     pass
@@ -1321,6 +1351,13 @@ class RealtimeRaceEngine:
         all_states.sort(key=lambda s: (-s.lap, -s.position_m))
 
         for position, state in enumerate(all_states, 1):
+            # Determine status: mark as DNF if a dnf_reason exists or the driver
+            # did not complete the full race distance. Otherwise mark FINISHED.
+            if state.dnf_reason is not None:
+                status = 'DNF'
+            else:
+                status = 'FINISHED' if state.lap >= race_state.total_laps else 'DNF'
+
             results.append({
                 "driver_id": state.driver_id,
                 "driver_name": state.driver_name,
@@ -1330,7 +1367,8 @@ class RealtimeRaceEngine:
                 "time_seconds": state.total_time,  # Total elapsed race time for this driver
                 "dnf_reason": state.dnf_reason,
                 "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
-                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None
+                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
+                "status": status
             })
 
         return results

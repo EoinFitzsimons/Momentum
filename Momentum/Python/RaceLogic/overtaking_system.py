@@ -18,7 +18,7 @@ import numpy as np
 
 from database.models import Driver
 from RaceLogic.track_physics import TrackCorner, TrackSection, RacingLine, calculate_corner_performance
-from services.driver_attributes import get_safe_attribute
+from services.driver_attributes import get_safe_attribute, get_driver_aggression, get_driver_bravery
 
 # Simpler policy: use canonical `racecraft` where previously derived
 # aggregates were used. This keeps logic straightforward and avoids
@@ -130,112 +130,113 @@ def evaluate_overtaking_opportunity(
 
     # === STRAIGHT OVERTAKING ===
     if section == TrackSection.STRAIGHT:
-        # Slipstream/DRS overtake
-        if gap_m < 10.0 and speed_advantage > 3.0:
-            # Factors affecting success
-            attacker_factors = (
-                0.25 * (get_racecraft(attacker) / 100.0) +
-                0.20 * (get_racecraft(attacker) / 100.0) +
-                0.15 * (get_racecraft(attacker) / 100.0) +
-                0.15 * (get_racecraft(attacker) / 100.0) +
-                0.10 * (get_racecraft(attacker) / 100.0) +
-                0.10 * (get_racecraft(attacker) / 100.0) +
-                0.05 * (get_racecraft(attacker) / 100.0)
+        # Make slipstream/DRS attempts more common on longer straights
+        # by widening the gap and lowering the required speed advantage.
+        if gap_m < 20.0 and speed_advantage > 1.5:
+            # Attacker mix: racecraft, aggression and bravery help here
+            attacker_score = (
+                0.50 * (get_racecraft(attacker) / 100.0) +
+                0.30 * (get_driver_aggression(attacker) / 100.0) +
+                0.20 * (get_driver_bravery(attacker) / 100.0)
             )
 
-            defender_factors = (
-                0.30 * (get_racecraft(defender) / 100.0) +
-                0.25 * (get_racecraft(defender) / 100.0) +
-                0.20 * (get_racecraft(defender) / 100.0) +
-                0.15 * (get_racecraft(defender) / 100.0) +
-                0.10 * (get_racecraft(defender) / 100.0)
+            defender_score = (
+                0.60 * (get_racecraft(defender) / 100.0) +
+                0.40 * (get_safe_attribute(defender, 'reactions') / 100.0)
             )
 
-            # Speed advantage gives attacker edge
-            speed_factor = min(speed_advantage / 15.0, 1.0)
+            # Speed advantage scales the chance (larger advantage -> easier pass)
+            speed_factor = min(max(speed_advantage / 12.0, 0.0), 1.0)
 
-            success_prob = 0.3 + (0.4 * attacker_factors) - \
-                (0.2 * defender_factors) + (0.3 * speed_factor)
-            success_prob = np.clip(success_prob, 0.05, 0.95)
+            success_prob = 0.25 + (0.45 * attacker_score) - (0.25 * defender_score) + (0.35 * speed_factor)
+            success_prob = np.clip(success_prob, 0.03, 0.97)
 
-            # Decision threshold (aggressive drivers attempt earlier)
-            threshold = 0.4 - (get_racecraft(attacker) / 100.0) * 0.2
+            # Aggressive or brave drivers try earlier
+            threshold = 0.45 - (get_driver_aggression(attacker) / 100.0) * 0.25 - (get_driver_bravery(attacker) / 100.0) * 0.10
 
             should_attempt = success_prob > threshold
-            return should_attempt, success_prob, OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+            return should_attempt, float(success_prob), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
 
     # === BRAKING ZONE OVERTAKING ===
     elif section == TrackSection.BRAKING_ZONE and corner:
         # Late braking divebomb
-        if gap_m < 15.0:
-            # Attacker needs brave, late-braking skill
-            attacker_factors = (
-                0.30 * (get_racecraft(attacker) / 100.0) +
-                0.25 * (get_racecraft(attacker) / 100.0) +
-                0.20 * (get_racecraft(attacker) / 100.0) +
-                0.15 * (get_racecraft(attacker) / 100.0) +
-                0.10 * (get_racecraft(attacker) / 100.0)
+        # Reduce frequency of divebombs: require closer gap and use
+        # aggregated signals (bravery/aggression) rather than repeating
+        # `racecraft` which inflated earlier probability calculations.
+        if gap_m < 8.0:
+            # Attacker skill mix: bravery, aggression and reactions
+            attacker_score = (
+                0.50 * (get_driver_bravery(attacker) / 100.0) +
+                0.30 * (get_driver_aggression(attacker) / 100.0) +
+                0.20 * (get_safe_attribute(attacker, 'reactions') / 100.0)
             )
 
-            # Defender awareness of attack
-            defender_factors = (
-                0.35 * (get_racecraft(defender) / 100.0) +
-                0.25 * (get_racecraft(defender) / 100.0) +
-                0.20 * (get_racecraft(defender) / 100.0) +
-                0.20 * (get_racecraft(defender) / 100.0)
+            # Defender awareness: professionalism and reactions
+            defender_score = (
+                0.60 * (get_safe_attribute(defender, 'reactions') / 100.0) +
+                0.40 * (get_safe_attribute(defender, 'racecraft') / 100.0)
             )
 
-            # Corner difficulty affects success
-            difficulty_factor = 1.0 - corner.overtaking_difficulty
+            # Corner difficulty reduces overtaking chance when high
+            difficulty_factor = max(0.0, 1.0 - getattr(corner, 'overtaking_difficulty', 0.5))
 
-            success_prob = 0.2 + (0.5 * attacker_factors) - \
-                (0.3 * defender_factors) + (0.3 * difficulty_factor)
-            success_prob = np.clip(success_prob, 0.05, 0.85)
+            success_prob = 0.12 + (0.6 * attacker_score) - (0.35 * defender_score) + (0.25 * difficulty_factor)
+            success_prob = np.clip(success_prob, 0.02, 0.85)
 
-            # Divebombs are risky - cautious drivers avoid
-            risk_tolerance = (get_racecraft(attacker) + get_racecraft(attacker) - get_racecraft(attacker) * 0.5) / 150.0
+            # Risk tolerance driven by aggression (not raw racecraft)
+            risk_tolerance = (get_driver_aggression(attacker) / 100.0) * 0.25
             threshold = 0.5 - risk_tolerance
 
             should_attempt = success_prob > threshold
-            return should_attempt, success_prob, OvertakeAttemptType.LATE_BRAKING
+            return should_attempt, float(success_prob), OvertakeAttemptType.LATE_BRAKING
 
     # === CORNER OVERTAKING ===
     elif section in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER] and corner:
-        # Around outside or switchback
-        if gap_m < 5.0 and corner.has_overtaking_opportunity:
+        # Consider both Around-Outside and Switchback attempts and choose
+        # the maneuver with the better odds. This increases variety.
+        if gap_m < 7.0 and corner.has_overtaking_opportunity:
             # Wide track enables side-by-side
             width_factor = min(track_width_m / 10.0, 1.2)
 
-            attacker_factors = (
-                0.25 * (get_racecraft(attacker) / 100.0) +
-                0.20 * (get_racecraft(attacker) / 100.0) +
-                0.20 * (get_racecraft(attacker) / 100.0) +
-                0.15 * (get_racecraft(attacker) / 100.0) +
-                0.10 * (get_racecraft(attacker) / 100.0) +
-                0.10 * (get_racecraft(attacker) / 100.0)
+            # Common defender score
+            defender_score = (
+                0.50 * (get_safe_attribute(defender, 'reactions') / 100.0) +
+                0.50 * (get_racecraft(defender) / 100.0)
             )
 
-            defender_factors = (
-                0.30 * (get_racecraft(defender) / 100.0) +
-                0.25 * (get_racecraft(defender) / 100.0) +
-                0.20 * (get_racecraft(defender) / 100.0) +
-                0.15 * (get_racecraft(defender) / 100.0) +
-                0.10 * (get_racecraft(defender) / 100.0)
+            # Outside attempt (requires space and racecraft)
+            attacker_outside = (
+                0.55 * (get_racecraft(attacker) / 100.0) +
+                0.25 * (get_driver_aggression(attacker) / 100.0) +
+                0.20 * (get_driver_bravery(attacker) / 100.0)
             )
+            outside_success = 0.12 + (0.45 * attacker_outside) - (0.30 * defender_score) + (0.10 * width_factor)
+            outside_success = np.clip(outside_success, 0.02, 0.80)
 
-            # Defensive line gives advantage
-            line_advantage = corner.defensive_line_advantage
+            # Switchback attempt (requires patience and racecraft to set up)
+            attacker_switch = (
+                0.60 * (get_racecraft(attacker) / 100.0) +
+                0.25 * (get_safe_attribute(attacker, 'patience') / 100.0) +
+                0.15 * (get_driver_bravery(attacker) / 100.0)
+            )
+            switch_success = 0.10 + (0.50 * attacker_switch) - (0.28 * defender_score) + (0.08 * width_factor)
+            switch_success = np.clip(switch_success, 0.02, 0.78)
 
-            success_prob = 0.1 + (0.4 * attacker_factors) - (
-                0.3 * defender_factors) - (0.2 * line_advantage) + (0.1 * width_factor)
-            success_prob = np.clip(success_prob, 0.02, 0.70)
+            # Choose the maneuver with higher success probability but require
+            # a modest minimum to avoid spamming very unlikely moves.
+            candidates = [
+                (outside_success, OvertakeAttemptType.AROUND_OUTSIDE),
+                (switch_success, OvertakeAttemptType.SWITCHBACK)
+            ]
 
-            # Patient drivers wait for better opportunity
-            patience_factor = get_racecraft(attacker) / 100.0
-            threshold = 0.4 - (patience_factor * 0.1)
+            # Pick best candidate
+            best_prob, best_type = max(candidates, key=lambda x: x[0])
 
-            should_attempt = success_prob > threshold and get_racecraft(attacker) > 40
-            return should_attempt, success_prob, OvertakeAttemptType.AROUND_OUTSIDE
+            # Threshold depends on attacker's aggression/patience
+            threshold = 0.4 - (get_driver_aggression(attacker) / 100.0) * 0.1 + (get_safe_attribute(attacker, 'patience') / 100.0) * -0.05
+
+            should_attempt = best_prob > threshold and get_racecraft(attacker) > 30
+            return should_attempt, float(best_prob), best_type
 
     # No good opportunity
     return False, 0.0, OvertakeAttemptType.SLIPSTREAM_STRAIGHT

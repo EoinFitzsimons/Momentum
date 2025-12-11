@@ -45,13 +45,14 @@ from PyQt6.QtWidgets import (
     QLabel,
     QTableWidget,
     QTableWidgetItem,
+    QDialog,
 )
 import sys
 import os
 import math
 import time
 import threading
-import traceback
+import traceback as _traceback
 from typing import Any, List, Dict, Optional, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
@@ -602,7 +603,7 @@ class TrackWidget(QWidget):
             # Start lap counting at 1 (first racing lap)
             car.lap = 1
             car.s = 0.0
-            # initialise interpolation state
+            # initialize interpolation state
             car.display_s = car.s
             car.target_s = car.s
             now = time.time()
@@ -890,7 +891,7 @@ class TrackWidget(QWidget):
             painter.end()
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
-            traceback.print_exc()
+            _traceback.print_exc()
 
     def _draw_runoff_areas(self, painter):
         """Draw red asphalt runoff zones on outside of fast corners."""
@@ -1565,7 +1566,7 @@ class TrackWidget(QWidget):
                         painter.restore()
                         # Highlight player's car with a subtle halo
                         try:
-                            if getattr(self, 'player_driver_id', None) is not None and car.driver_id == self.player_driver_id:
+                            if getattr(self, 'player_driver_id', None) is not None and car.driver_id == getattr(self, 'player_driver_id', None):
                                 painter.save()
                                 halo_pen = QPen(QColor(255, 215, 0, 200))
                                 halo_pen.setWidth(4)
@@ -1684,7 +1685,7 @@ class RaceWindow(QMainWindow):
             print("[INFO] GUI ready - click Start Race when ready")
         except Exception as e:
             print("[ERROR] Exception in RaceWindow.__init__:", e)
-            traceback.print_exc()
+            _traceback.print_exc()
             raise
 
     # Auto-start logic removed: user must click Start Race manually
@@ -1696,7 +1697,8 @@ class RaceWindow(QMainWindow):
         layout = QHBoxLayout(central)
 
         # Left: Track display (MUCH BIGGER)
-        self.track_widget = None  # Will be created after track loads
+        # Annotate type so static checkers know this will be a TrackWidget
+        self.track_widget: Optional["TrackWidget"] = None  # Will be created after track loads
         left_container = QWidget()
         self.left_layout = QVBoxLayout(left_container)
         self.left_layout.addWidget(QLabel("Loading track..."))
@@ -1931,7 +1933,9 @@ class RaceWindow(QMainWindow):
         self.standings_table.setColumnWidth(2, 60)   # Lap
         self.standings_table.setColumnWidth(3, 100)  # Gap
         self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.standings_table.horizontalHeader().setStretchLastSection(True)  # Let Gap column expand
+        header = self.standings_table.horizontalHeader()
+        if header is not None:
+            header.setStretchLastSection(True)  # Let Gap column expand
         right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1
 
         layout.addLayout(right_panel, 1)
@@ -1977,7 +1981,7 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Database connection failed: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Database initialisation failed: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Load drivers
@@ -2045,14 +2049,13 @@ class RaceWindow(QMainWindow):
                     print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
                 except Exception as e:
                     print(f"ERROR: Livery initialisation failed: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    _traceback.print_exc()
 
             except Exception as e:
                 self.info_label.setText(f"Failed to load drivers: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Failed to load drivers: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Load track - HARDCODED for now (database track system needs
@@ -2098,7 +2101,7 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create track: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Failed to create track: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Generate circuit
@@ -2129,7 +2132,7 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Circuit generation failed: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Circuit generation failed: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Create track widget
@@ -2154,7 +2157,7 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create track display: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Track widget creation failed: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Create cars with grid alignment
@@ -2192,7 +2195,7 @@ class RaceWindow(QMainWindow):
                 self.info_label.setText(f"Failed to create cars: {e}")
                 self.start_btn.setEnabled(False)
                 print(f"ERROR: Car creation failed: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
                 return
 
             # Initialise standings table (row order = position)
@@ -2211,6 +2214,12 @@ class RaceWindow(QMainWindow):
                     # Column 3: Gap
                     self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
                 print("Standings table initialized")
+                # Record starting grid order for post-race comparison
+                try:
+                    self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
+                    print(f"Starting grid recorded: {self._starting_grid}")
+                except Exception:
+                    self._starting_grid = []
             except Exception as e:
                 print(f"WARNING: Standings table initialisation failed: {e}")
                 # Non-critical, continue
@@ -2223,7 +2232,7 @@ class RaceWindow(QMainWindow):
             self.info_label.setText(f"Unexpected error: {e}")
             self.start_btn.setEnabled(False)
             print(f"ERROR: Unexpected error in _load_data: {e}")
-            traceback.print_exc()
+            _traceback.print_exc()
 
     # _auto_start_race method removed: user must click Start Race manually
 
@@ -2443,19 +2452,19 @@ class RaceWindow(QMainWindow):
                                 pass
                             # Mark in standings and rebuild table so DNF
                             # appears immediately
-                            if driver_id is not None:
-                                existing = self._race_state.get(driver_id, {
-                                    'name': driver_name,
-                                    'position': event.get('position', 0),
-                                    'lap': lap,
-                                    'time': event.get('race_time', 0.0),
-                                    'distance': 0.0,
-                                    'gap_ahead': 0.0
-                                })
-                                existing['dnf'] = True
-                                existing['lap'] = lap
-                                self._race_state[driver_id] = existing
-                                self._rebuild_standings_table()
+                                if driver_id is not None:
+                                    existing = self._race_state.get(driver_id, {
+                                        'name': driver_name,
+                                        'position': event.get('position', 0),
+                                        'lap': lap,
+                                        'time': event.get('race_time', 0.0),
+                                        'distance': 0.0,
+                                        'gap_ahead': 0.0
+                                    })
+                                    existing['dnf'] = True
+                                    existing['lap'] = lap
+                                    self._race_state[driver_id] = existing
+                                    self._rebuild_standings_table()
 
                         elif event_type == "race_finished":
                             total_laps = event.get("total_laps", 0)
@@ -2479,41 +2488,36 @@ class RaceWindow(QMainWindow):
                                 print(
                                     f"Race simulation complete, {len(event.get('results', []))} results")
 
-                            # Emit actual results to the GUI if provided by the engine.
-                            # Previously this emitted an empty list which left the
-                            # standings unpopulated. Use the `results` field from
-                            # the event if available, otherwise fall back to an
-                            # empty list to avoid exceptions.
-                            results_payload = event.get(
-                                'results') if isinstance(event, dict) else None
-                            if results_payload is None:
-                                # If the engine didn't include results in the event,
-                                # try to use a `results` variable in outer
-                                # scope if set.
-                                results_payload = event.get(
-                                    'results', []) if isinstance(
-                                    event, dict) else []
-
-                            if hasattr(self.emitter, 'race_finished'):
+                            # Emit actual results to the GUI reliably.
+                            # Ensure we always emit a (possibly empty) results list
+                            # so the GUI can build final standings and show the
+                            # Start→Finish summary dialog.
+                            try:
+                                results_payload = event.get('results', []) if isinstance(event, dict) else []
+                                # Emit on GUI thread via signal
                                 try:
-                                    self.emitter.race_finished.emit(
-                                        results_payload)
+                                    self.emitter.race_finished.emit(results_payload)
                                 except Exception as ex:
-                                    # Log exception to help debug malformed
-                                    # payloads
-                                    print(
-                                        f"ERROR: failed to emit race_finished with payload type={
-                                            type(results_payload)}: {ex}")
+                                    print(f"ERROR: failed to emit race_finished: {ex}")
                                     try:
-                                        traceback.print_exc()
+                                        _traceback.print_exc()
                                     except Exception:
                                         pass
-                                    # Fallback to empty list to avoid GUI crash
-                                    self.emitter.race_finished.emit([])
+                                    # Best-effort fallback: emit empty list
+                                    try:
+                                        self.emitter.race_finished.emit([])
+                                    except Exception:
+                                        pass
+                            except Exception as e:
+                                print(f"ERROR preparing results payload for emit: {e}")
+                                try:
+                                    _traceback.print_exc()
+                                except Exception:
+                                    pass
 
                     except Exception as e:
                         print(f"ERROR in event_callback: {e}")
-                        traceback.print_exc()
+                        _traceback.print_exc()
 
                 print(
                     "Starting simulate_race with comprehensive engine via RaceContext...")
@@ -2570,8 +2574,11 @@ class RaceWindow(QMainWindow):
             except Exception as e:
                 error_msg = f"Race error: {e}"
                 print(f"ERROR in race_runner: {e}")
-                traceback.print_exc()
-                self.emitter.event_signal.emit(error_msg)
+                _traceback.print_exc()
+                try:
+                    self.emitter.event_signal.emit(error_msg)
+                except Exception:
+                    pass
 
         self.race_thread = threading.Thread(target=race_runner, daemon=True)
         self.race_thread.start()
@@ -2681,6 +2688,8 @@ class RaceWindow(QMainWindow):
 
     def _on_race_finished(self, results: list):
         """Handle race finish."""
+        # Ensure results_sorted is always defined for downstream reporting
+        results_sorted: list = []
         try:
             print(f"Race finished event received with {len(results)} results")
 
@@ -2778,7 +2787,78 @@ class RaceWindow(QMainWindow):
 
         except Exception as e:
             print(f"ERROR in _on_race_finished: {e}")
-            traceback.print_exc()
+            _traceback.print_exc()
+
+        # Show a post-race position change summary including DNFs
+        try:
+            self._show_position_change_summary(results_sorted)
+        except Exception as e:
+            print(f"ERROR showing position change summary: {e}")
+
+    def _show_position_change_summary(self, results_sorted: list):
+        """Display a modal dialog that compares starting grid to final positions.
+
+        Columns: StartPos, FinishPos, Driver, Change, Status
+        """
+        try:
+            if not hasattr(self, '_starting_grid') or not self._starting_grid:
+                print("No starting grid recorded; skipping position-change summary")
+                return
+
+            # Map driver_id -> start position (1-based)
+            start_pos = {did: idx + 1 for idx, did in enumerate(self._starting_grid)}
+
+            # Build rows: finish_pos, driver_id, driver_name, status
+            rows = []
+            for res in results_sorted:
+                did = res.get('driver_id')
+                finish = res.get('position') or 999
+                name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
+                status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
+                start = start_pos.get(did, None)
+                change = None
+                if start is not None:
+                    change = start - finish
+                else:
+                    change = 0
+                rows.append((start, finish, name, change, status))
+
+            # Create modal dialog with table
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Race Position Changes")
+            dlg_layout = QVBoxLayout()
+
+            info = QLabel("Start → Finish (positive = gained positions). DNFs are highlighted.")
+            dlg_layout.addWidget(info)
+
+            table = QTableWidget()
+            table.setColumnCount(5)
+            table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
+            table.setRowCount(len(rows))
+            for r, row in enumerate(rows):
+                start, finish, name, change, status = row
+                table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
+                table.setItem(r, 1, QTableWidgetItem(str(finish)))
+                table.setItem(r, 2, QTableWidgetItem(name))
+                table.setItem(r, 3, QTableWidgetItem(f"{change:+d}"))
+                status_item = QTableWidgetItem(status)
+                if status == 'DNF':
+                    status_item.setBackground(QColor(220, 40, 40))
+                    status_item.setForeground(QColor(255, 255, 255))
+                table.setItem(r, 4, status_item)
+
+            table.resizeColumnsToContents()
+            dlg_layout.addWidget(table)
+
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(dlg.accept)
+            dlg_layout.addWidget(close_btn)
+
+            dlg.setLayout(dlg_layout)
+            dlg.setModal(True)
+            dlg.exec()
+        except Exception as e:
+            print(f"Error building position change summary: {e}")
 
     def _on_event(self, message: str):
         """
@@ -2854,7 +2934,7 @@ class RaceWindow(QMainWindow):
 
             except Exception as e:
                 print(f"Error updating telemetry display: {e}")
-                traceback.print_exc()
+                _traceback.print_exc()
             return
 
         # Handle mark_dnf command emitted from simulation thread (run on GUI
@@ -3298,9 +3378,14 @@ class RaceWindow(QMainWindow):
                         row = i // 2
                         grid_spacing = 15.0
                         start_position = row * grid_spacing
-                        car_colour = self.driver_colours.get(getattr(drv, 'id', None), QColor(200, 200, 200))
+                        drv_id_raw = getattr(drv, 'id', 0)
+                        try:
+                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
+                        except Exception:
+                            drv_id = 0
+                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
                         cars.append(Car(
-                            driver_id=getattr(drv, 'id', None),
+                            driver_id=drv_id,
                             driver_name=getattr(drv, 'name', ''),
                             s=start_position,
                             colour=car_colour,
@@ -3310,8 +3395,12 @@ class RaceWindow(QMainWindow):
                         ))
                     # Push updated cars to the track widget
                     try:
-                        self.track_widget.set_cars(cars)
-                        print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+                        tw = getattr(self, 'track_widget', None)
+                        if tw is not None:
+                            tw.set_cars(cars)
+                            print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+                        else:
+                            print("[RACE WINDOW] Track widget not available to set cars")
                     except Exception:
                         print("[RACE WINDOW] Failed to set rebuilt cars")
 
@@ -3433,7 +3522,7 @@ def main():
         # Show a message box to confirm GUI launch
     except Exception as e:
         print("[ERROR] Exception during GUI launch:", e)
-        traceback.print_exc()
+        _traceback.print_exc()
         raise
     sys.exit(app.exec())
 

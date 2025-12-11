@@ -115,6 +115,19 @@ class Track:
     geometry_json: Optional[str] = None
     pit_entry_index: Optional[int] = None
     pit_exit_index: Optional[int] = None
+    # Minimal physical attributes used by the simulation engine
+    length_km: float = 3.2
+    turns: Optional[int] = 12
+    # Additional physical attributes expected by the simulation engine
+    avg_speed_kmh: float = 160.0
+    top_speed_kmh: float = 300.0
+    longest_straight_m: float = 700.0
+    shortest_straight_m: float = 200.0
+    tightest_corner_radius_m: float = 30.0
+    left_turns: int = 6
+    right_turns: int = 6
+    drs_zones: int = 1
+    surface: str = "asphalt"
 
 
 @dataclass
@@ -152,6 +165,19 @@ class RaceResult:
     fastest_lap: bool = False
     points: int = 0
     dnf_reason: Optional[str] = None
+    # Expanded runtime / persisted fields
+    time_seconds: Optional[float] = None
+    grid_position: Optional[int] = None
+    laps_completed: Optional[int] = 0
+    best_lap_time: Optional[float] = None
+    average_lap_time: Optional[float] = None
+    pitstops: Optional[int] = 0
+    tyre_strategy: Optional[str] = None
+    penalties_seconds: Optional[float] = 0.0
+    penalty_reason: Optional[str] = None
+    gap_to_winner_seconds: Optional[float] = None
+    status: Optional[str] = "FINISHED"
+    recorded_at: Optional[str] = None
 
 
 @dataclass
@@ -278,6 +304,19 @@ CREATE TABLE IF NOT EXISTS race_results (
     fastest_lap INTEGER NOT NULL DEFAULT 0,
     points INTEGER DEFAULT 0,
     dnf_reason TEXT DEFAULT NULL,
+    -- Expanded persisted fields
+    time_seconds REAL DEFAULT NULL,
+    grid_position INTEGER DEFAULT NULL,
+    laps_completed INTEGER DEFAULT 0,
+    best_lap_time REAL DEFAULT NULL,
+    average_lap_time REAL DEFAULT NULL,
+    pitstops INTEGER DEFAULT 0,
+    tyre_strategy TEXT DEFAULT NULL,
+    penalties_seconds REAL DEFAULT 0.0,
+    penalty_reason TEXT DEFAULT NULL,
+    gap_to_winner_seconds REAL DEFAULT NULL,
+    status TEXT DEFAULT 'FINISHED',
+    recorded_at TEXT DEFAULT NULL,
     FOREIGN KEY (race_id) REFERENCES races(id),
     FOREIGN KEY (driver_id) REFERENCES drivers(id),
     FOREIGN KEY (team_id) REFERENCES teams(id)

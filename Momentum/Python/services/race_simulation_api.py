@@ -52,6 +52,7 @@ def simulate_race(
     track: Optional[Track] = None,
     seed: Optional[int] = None,
     laps: Optional[int] = None,
+    race_id: int = 0,
     verbose: bool = False,
     event_callback: Optional[Callable[[dict], None]] = None,
     stop_event=None,
@@ -80,11 +81,10 @@ def simulate_race(
                         id=d.current_team_id,
                         name=f"Team {d.current_team_id}",
                         nationality="USA",
-                        founded_year=2020,
                         discipline="formula",
                         tier="tier2",
                         budget=100.0,
-                        headquarters="Unknown",
+                        founded_year=2020,
                         team_principal="Unknown"
                     )
                 context.teams = ctx_teams
@@ -154,11 +154,10 @@ def simulate_race(
                     id=driver.current_team_id,
                     name=f"Team {driver.current_team_id}",
                     nationality="USA",
-                    founded_year=2020,
                     discipline="formula",
                     tier="tier2",
                     budget=100.0,
-                    headquarters="Unknown",
+                    founded_year=2020,
                     team_principal="Unknown"
                 )
     
@@ -203,19 +202,46 @@ def simulate_race(
     # Convert to RaceResult objects
     db_results = []
     for result in results_list:
+        # Attempt to extract a sensible total time from common keys
+        def _extract_time(res):
+            for k in ("time_seconds", "total_time", "total_time_seconds", "race_time", "total_seconds"):
+                if k in res and res[k] is not None:
+                    try:
+                        return float(res[k])
+                    except Exception:
+                        continue
+            # Fallback: if average lap time and laps are present, estimate total
+            avg = res.get("average_lap_time") or res.get("best_lap_time")
+            laps = res.get("laps_completed") or 0
+            try:
+                if avg and laps:
+                    return float(avg) * float(laps)
+            except Exception:
+                pass
+            return None
+
+        total_time = _extract_time(result)
+
         rr = RaceResult(
-            id=0, race_id=0,
-            driver_id=result["driver_id"],
-            team_id=result["team_id"],
-            position=result["position"],
-            points=0,
-            fastest_lap=False,
-            dnf_reason=result["dnf_reason"],
-            grid_position=result["position"]
+            id=0,
+            race_id=race_id,
+            driver_id=result.get("driver_id"),
+            team_id=result.get("team_id"),
+            position=result.get("position"),
+            points=result.get("points", 0),
+            fastest_lap=bool(result.get("fastest_lap", False)),
+            dnf_reason=result.get("dnf_reason"),
+            grid_position=result.get("position"),
+            time_seconds=total_time,
+            best_lap_time=result.get("best_lap_time"),
+            average_lap_time=result.get("average_lap_time")
         )
-        setattr(rr, 'laps_completed', result["laps_completed"])
-        setattr(rr, 'best_lap_time', result.get("best_lap_time"))
-        setattr(rr, 'average_lap_time', result.get("average_lap_time"))
+        setattr(rr, 'laps_completed', result.get("laps_completed", 0))
+        # Persist explicit status if engine provided one (DNF/FINISHED)
+        try:
+            rr.status = result.get('status') or ('DNF' if result.get('dnf_reason') else 'FINISHED')
+        except Exception:
+            rr.status = 'FINISHED'
         db_results.append(rr)
     
     if verbose:
@@ -228,4 +254,19 @@ def simulate_race(
             print(f"{i:2d}. {result['driver_name']:20s} - {status:15s} | Best: {best}")
         print(f"{'='*70}\n")
     
+    # Persist results if a persistence layer and race_id provided
+    try:
+        if db and race_id and getattr(db, 'save_race_results', None):
+            save_fn = getattr(db, 'save_race_results')
+            if callable(save_fn):
+                try:
+                    save_fn(race_id, db_results)
+                except Exception:
+                    # Do not hide simulation results on persistence failure
+                    if verbose:
+                        print(f"Warning: failed to persist race results for race_id={race_id}")
+    except Exception:
+        # Silently ignore persistence-related errors here
+        pass
+
     return db_results
