@@ -59,6 +59,40 @@ class PersistenceSQLite(PersistenceIface):
         except Exception:
             pass
 
+    def _ensure_race_result_columns(self, cur) -> None:
+        """Ensure race_results contains the expanded set of columns.
+
+        This is idempotent and will add any missing columns with safe defaults.
+        """
+        try:
+            cur.execute("PRAGMA table_info(race_results)")
+            existing = {r[1] for r in cur.fetchall()}
+            # Map of column -> SQL to add it
+            extras = {
+                'time_seconds': "ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT NULL;",
+                'grid_position': "ALTER TABLE race_results ADD COLUMN grid_position INTEGER DEFAULT NULL;",
+                'laps_completed': "ALTER TABLE race_results ADD COLUMN laps_completed INTEGER DEFAULT 0;",
+                'best_lap_time': "ALTER TABLE race_results ADD COLUMN best_lap_time REAL DEFAULT NULL;",
+                'average_lap_time': "ALTER TABLE race_results ADD COLUMN average_lap_time REAL DEFAULT NULL;",
+                'pitstops': "ALTER TABLE race_results ADD COLUMN pitstops INTEGER DEFAULT 0;",
+                'tyre_strategy': "ALTER TABLE race_results ADD COLUMN tyre_strategy TEXT DEFAULT NULL;",
+                'penalties_seconds': "ALTER TABLE race_results ADD COLUMN penalties_seconds REAL DEFAULT 0.0;",
+                'penalty_reason': "ALTER TABLE race_results ADD COLUMN penalty_reason TEXT DEFAULT NULL;",
+                'gap_to_winner_seconds': "ALTER TABLE race_results ADD COLUMN gap_to_winner_seconds REAL DEFAULT NULL;",
+                'status': "ALTER TABLE race_results ADD COLUMN status TEXT DEFAULT 'FINISHED';",
+                'recorded_at': "ALTER TABLE race_results ADD COLUMN recorded_at TEXT DEFAULT NULL;",
+            }
+            for col, sql in extras.items():
+                if col not in existing:
+                    try:
+                        cur.execute(sql)
+                        self.conn.commit()
+                    except Exception:
+                        # Best-effort: do not raise during migration
+                        pass
+        except Exception:
+            pass
+
     def ensure_schema(self) -> None:
         cur = self.conn.cursor()
         try:
@@ -75,7 +109,9 @@ class PersistenceSQLite(PersistenceIface):
                     pass  # Silently fail migration; caller will handle missing data
 
         self._verify_and_recreate_drivers_table(cur)
+        # Ensure legacy and expanded race_results columns exist
         self._ensure_time_seconds_column(cur)
+        self._ensure_race_result_columns(cur)
 
     def seed_sample_data(self, count: int = 20, force: bool = False) -> None:
         """Populate the DB with a small sample dataset for demos.
@@ -201,19 +237,67 @@ class PersistenceSQLite(PersistenceIface):
         cur = self.conn.cursor()
         cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
 
+        # Detect available columns and insert only those present (backwards compatible)
+        cur.execute("PRAGMA table_info(race_results)")
+        existing_cols = [r[1] for r in cur.fetchall()]
+
+        preferred_cols = [
+            'race_id', 'driver_id', 'team_id', 'position', 'fastest_lap', 'points', 'dnf_reason',
+            'time_seconds', 'grid_position', 'laps_completed', 'best_lap_time', 'average_lap_time',
+            'pitstops', 'tyre_strategy', 'penalties_seconds', 'penalty_reason', 'gap_to_winner_seconds',
+            'status', 'recorded_at'
+        ]
+
+        insert_cols = [c for c in preferred_cols if c in existing_cols]
+        insert_sql = f"INSERT INTO race_results ({', '.join(insert_cols)}) VALUES ({', '.join(['?'] * len(insert_cols))})"
+
         for res in results:
-            driver_id = self._extract_result_field(res, 'driver_id')
-            position = self._extract_result_field(res, 'position')
-            team_id = self._parse_team_id(res)
-            time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
+            vals = []
+            # Helper to get attribute/dict key
+            for col in insert_cols:
+                if col == 'race_id':
+                    vals.append(race_id)
+                    continue
+                if col == 'team_id':
+                    vals.append(self._parse_team_id(res))
+                    continue
+                if col == 'fastest_lap':
+                    v = self._extract_result_field(res, 'fastest_lap', False)
+                    vals.append(1 if v else 0)
+                    continue
+                # standard fields
+                v = self._extract_result_field(res, col, None)
+                # Some runtime attributes are named slightly differently
+                if v is None:
+                    if col == 'time_seconds':
+                        v = self._extract_result_field(res, 'time_seconds', None)
+                    elif col == 'best_lap_time':
+                        v = self._extract_result_field(res, 'best_lap_time', None)
+                    elif col == 'average_lap_time':
+                        v = self._extract_result_field(res, 'average_lap_time', None)
+                    elif col == 'grid_position':
+                        v = self._extract_result_field(res, 'grid_position', None)
+                    elif col == 'laps_completed':
+                        v = self._extract_result_field(res, 'laps_completed', None)
+                vals.append(v)
 
             try:
-                cur.execute(
-                    "INSERT INTO race_results (race_id, driver_id, team_id, position, time_seconds) VALUES (?, ?, ?, ?, ?)",
-                    (race_id, driver_id, team_id, position, time_sec),
-                )
+                cur.execute(insert_sql, tuple(vals))
             except sqlite3.IntegrityError as ie:
                 raise ValueError(
-                    f"IntegrityError inserting race_result: {ie}; params=(race_id={race_id}, driver_id={driver_id}, team_id={team_id}, position={position}, time_seconds={time_sec})"
+                    f"IntegrityError inserting race_result: {ie}; params=(race_id={race_id}, values={vals})"
                 )
+            except sqlite3.OperationalError:
+                # Best-effort fallback: try older minimal insert
+                try:
+                    driver_id = self._extract_result_field(res, 'driver_id')
+                    position = self._extract_result_field(res, 'position')
+                    time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
+                    cur.execute(
+                        "INSERT INTO race_results (race_id, driver_id, team_id, position, time_seconds) VALUES (?, ?, ?, ?, ?)",
+                        (race_id, driver_id, self._parse_team_id(res), position, time_sec),
+                    )
+                except Exception:
+                    raise
+
         self.conn.commit()

@@ -37,15 +37,8 @@ def test_simulate_and_save_results():
     drivers = db.list_drivers()
     track = db.get_track(1)
 
-    # Build a minimal teams dict for the engine (use driver.current_team_id)
+    # Teams are out-of-scope for this MVP test; pass an empty teams dict
     teams = {}
-    for d in drivers:
-        # Use actual current_team_id (may be None) so engine finds teams
-        # correctly
-        tid = d.current_team_id
-        if tid not in teams:
-            teams[tid] = Team(id=tid, name=f"Team {tid}", nationality="UNK", founded_year=2020,
-                              discipline="formula", tier="tier2", budget=100.0, headquarters="", team_principal="")
 
     # Run simulation via the public race simulation API (GUI/backed)
     results = simulate_race(
@@ -64,6 +57,19 @@ def test_simulate_and_save_results():
     assert len(results) == len(drivers)
     # Persist results using persistence layer
     db.save_race_results(42, results)
+    # Verify persistence: ensure rows were written for the race
+    import sqlite3
+    conn = sqlite3.connect(db.db_path)
+    cur = conn.cursor()
+    cnt = cur.execute('SELECT COUNT(1) FROM race_results WHERE race_id = ?', (42,)).fetchone()[0]
+    conn.close()
+    assert cnt == len(results)
+    # Ensure at least some drivers have a recorded total time
+    conn = sqlite3.connect(db.db_path)
+    cur = conn.cursor()
+    non_null_times = cur.execute('SELECT COUNT(1) FROM race_results WHERE race_id = ? AND time_seconds IS NOT NULL', (42,)).fetchone()[0]
+    conn.close()
+    assert non_null_times > 0
     # basic verification: first finisher has position 1
     first = results[0]
     pos = getattr(

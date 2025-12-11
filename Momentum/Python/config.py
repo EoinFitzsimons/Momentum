@@ -287,7 +287,7 @@ DRIVER_ATTRIBUTE_DEFAULT = 50.0
 
 # UI / Race configuration
 # Number of drivers on the grid by default (used by race visualiser and quick race)
-RACE_GRID_SIZE = int(os.getenv("RACE_GRID_SIZE", "16"))
+RACE_GRID_SIZE = int(os.getenv("RACE_GRID_SIZE", "20"))
 # Number of drivers to show in the quick-race selection list
 QUICK_RACE_LIST_SIZE = int(os.getenv("QUICK_RACE_LIST_SIZE", "20"))
 # Rendering configuration: target frames per second for GUI animation

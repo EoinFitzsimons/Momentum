@@ -65,9 +65,16 @@ HONORIFIC_SUFFIX_RE = re.compile(r'\b(MD|M\.D\.|DDS|D\.D\.S\.|PhD|Ph\.D\.|Jr\.|S
 from data.countries import COUNTRIES
 COUNTRY_CODES = list(COUNTRIES.keys())
 LOCALES = ['en_GB', 'en_US', 'it_IT', 'fr_FR', 'de_DE', 'es_ES', 'ja_JP', 'nl_NL', 'pt_BR', 'pt_PT', 'ru_RU', 'zh_CN', 'ko_KR', 'sv_SE', 'pl_PL', 'fi_FI', 'en_AU', 'en_CA', 'da_DK', 'no_NO']
-NAME_TYPES = ['full', 'initials', 'mononym', 'nickname']
 
-NUM_DRIVERS = 12
+# Use only full names for seeding so the GUI shows full driver names
+NAME_TYPES = ['full']
+
+# Number of drivers to create. Default to configured race grid size so GUI
+# and quick-race scripts get a full grid by default. Can be overridden with
+# the FAKER_NUM_DRIVERS env var if needed.
+from config import RACE_GRID_SIZE
+import os
+NUM_DRIVERS = int(os.getenv('FAKER_NUM_DRIVERS', str(RACE_GRID_SIZE or 20)))
 
 
 def random_birth_date(min_age=18, max_age=45):
