@@ -47,6 +47,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QDialog,
 )
+from PyQt6.QtWidgets import QHeaderView, QSizePolicy
 import sys
 import os
 import math
@@ -56,9 +57,38 @@ import traceback as _traceback
 from typing import Any, List, Dict, Optional, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
+from services.driver_attributes import get_preferred_window_size
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
+    """
+    Return a canonical starting grid list where index 0 == start pos 1.
+
+    If the visual `track_widget` provides a cars list and the set of driver
+    ids matches `starting_grid` but the order differs, prefer the visual
+    ordering (sorted by `s`) which reflects the actual on-track layout.
+    Otherwise return `starting_grid` unchanged.
+    """
+    if not starting_grid:
+        return starting_grid
+    try:
+        tw_cars = getattr(track_widget, 'cars', None)
+        if tw_cars:
+            # Some track representations use larger `s` for the front
+            # of the grid (cars nearer the line). Sort by `s` DESC so
+            # that the highest `s` maps to P1. This is robust across
+            # different track widget coordinate conventions.
+            tw_ids = [getattr(c, 'driver_id', None) for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)]
+            # Force using the track widget ordering as authoritative when
+            # the set of drivers matches the recorded starting grid.
+            if set(tw_ids) == set(starting_grid):
+                return tw_ids
+    except Exception:
+        pass
+    return starting_grid
 
 
 @dataclass
@@ -2165,13 +2195,21 @@ class RaceWindow(QMainWindow):
                 cars = []
 
                 # Starting grid: Stagger cars along track direction (not side-to-side)
-                # Formation: 2 cars per row, 10m spacing between rows
-                # Row 1: positions 0, 0 (side by side via lateral offset)
-                # Row 2: positions 15, 15
-                # Row 3: positions 30, 30, etc.
+                # Formation: 2 cars per row, 15m spacing between rows.
+                # The UI historically filled the grid from the back which made
+                # the first driver end up at the highest grid number. To be
+                # explicit: assign grid numbers descending (e.g. 20..1) so the
+                # grid is filled from the rear forwards and recorded start
+                # positions match that ordering.
+                total_drivers = len(self.drivers)
+                grid_spacing = 15.0  # meters between rows
+                gridpos_map = {}
+
                 for i, driver in enumerate(self.drivers):
-                    row = i // 2  # 0,1 -> row 0; 2,3 -> row 1; etc.
-                    grid_spacing = 15.0  # meters between rows
+                    # Assign grid number descending so first loop gets highest number
+                    grid_number = total_drivers - i
+                    # Compute row index (0-based) from grid_number (two cars per row)
+                    row = (grid_number - 1) // 2
                     start_position = row * grid_spacing
 
                     # Assign colour to this driver from precomputed palette
@@ -2180,17 +2218,92 @@ class RaceWindow(QMainWindow):
                     cars.append(Car(
                         driver_id=driver.id,
                         driver_name=driver.name,
-                        s=start_position,  # Staggered start positions
+                        s=start_position,  # Staggered start positions (by row)
                         colour=car_colour,
                         total_time=0.0,
                         avg_lap_time=60.0,
                         last_lap=0
                     ))
 
+                    # Remember which driver was assigned to which grid number
+                    try:
+                        gridpos_map[int(grid_number)] = int(driver.id)
+                    except Exception:
+                        gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
+
                 self.track_widget.set_cars(cars)
                 print(f"Created {len(cars)} cars at start line")
-                print(
-                    f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
+                print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
+                # Build canonical starting grid list where index 0 = start pos 1
+                try:
+                    self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+                    print(f"Starting grid recorded (pos1..posN): {self._starting_grid}")
+                except Exception:
+                    # Fallback to simple driver order if anything goes wrong
+                    try:
+                        self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
+                    except Exception:
+                        self._starting_grid = []
+
+                # Detect if the recorded grid is exactly the reverse of the
+                # driver ordering (i.e. filled in the opposite direction).
+                # If so, flip it so start positions map to the expected order.
+                try:
+                    ordered_ids = [getattr(d, 'id', None) for d in self.drivers]
+                    if self._starting_grid == ordered_ids[::-1]:
+                        # Rebuild cars and starting grid using ascending grid numbers
+                        cars = []
+                        gridpos_map = {}
+                        for i, driver in enumerate(self.drivers):
+                            grid_number = i + 1
+                            row = (grid_number - 1) // 2
+                            start_position = row * grid_spacing
+                            car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+                            cars.append(Car(
+                                driver_id=driver.id,
+                                driver_name=driver.name,
+                                s=start_position,
+                                colour=car_colour,
+                                total_time=0.0,
+                                avg_lap_time=60.0,
+                                last_lap=0
+                            ))
+                            try:
+                                gridpos_map[int(grid_number)] = int(driver.id)
+                            except Exception:
+                                gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
+
+                        # Apply corrected cars to track widget
+                        try:
+                            self.track_widget.set_cars(cars)
+                        except Exception:
+                            pass
+
+                        # Recompute starting grid (pos1..posN)
+                        try:
+                            self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+                        except Exception:
+                            self._starting_grid = ordered_ids
+                        print("Detected reversed grid order; flipped to ascending start positions")
+                        # Ensure the authoritative starting grid reflects the actual
+                        # visual car ordering used by the track widget. The engine and
+                        # the visualiser both publish positions; derive start positions
+                        # from the cars' `s` values (highest `s` == P1 at start).
+                        try:
+                            tw_cars = getattr(self.track_widget, 'cars', None)
+                            if tw_cars:
+                                # Sort cars by `s` descending so the largest `s` (front
+                                # of the grid) maps to P1. Some track widgets place
+                                # the front-of-grid at higher `s` values; using
+                                # reverse=True ensures the computed starting grid
+                                # matches the visual placement.
+                                sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
+                                self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
+                                print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
             except Exception as e:
                 self.info_label.setText(f"Failed to create cars: {e}")
                 self.start_btn.setEnabled(False)
@@ -2201,25 +2314,42 @@ class RaceWindow(QMainWindow):
             # Initialise standings table (row order = position)
             try:
                 self.standings_table.setRowCount(len(self.drivers))
-                for i, driver in enumerate(self.drivers):
-                    driver_name = driver.name
-                    print(
-                        f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
-                    # Column 0: colour/position indicator (empty for now)
-                    self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None))
-                    # Column 1: Driver name
-                    self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None))
-                    # Column 2: Lap (1-based)
-                    self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None))
-                    # Column 3: Gap
-                    self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
-                print("Standings table initialized")
-                # Record starting grid order for post-race comparison
-                try:
-                    self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
-                    print(f"Starting grid recorded: {self._starting_grid}")
-                except Exception:
-                    self._starting_grid = []
+
+                # If we recorded a canonical starting grid earlier, use it so
+                # the table rows map directly to start positions (row 0 == P1).
+                # This prevents the UI showing row 0 as a different grid number
+                # than what the engine reports at race start.
+                if hasattr(self, '_starting_grid') and self._starting_grid:
+                    for i, did in enumerate(self._starting_grid):
+                        # Find driver object by id
+                        driver = next((d for d in self.drivers if getattr(d, 'id', None) == did), None)
+                        driver_name = driver.name if driver is not None else f"Driver {did}"
+                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}' (start pos {i+1})")
+                        # Column 0: colour/position indicator (empty for now)
+                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None) if driver else did)
+                        # Column 1: Driver name
+                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None) if driver else did)
+                        # Column 2: Lap (1-based)
+                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None) if driver else did)
+                        # Column 3: Gap
+                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None) if driver else did)
+                    print("Standings table initialized from starting grid")
+                else:
+                    # Fallback: use the current drivers list order
+                    for i, driver in enumerate(self.drivers):
+                        driver_name = driver.name
+                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
+                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None))
+                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None))
+                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None))
+                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
+                    print("Standings table initialized")
+                # NOTE: do not overwrite previously-computed self._starting_grid here
+                # — it is authoritative for start→finish comparisons later.
+
+            # If anything goes wrong while initializing the standings, log
+            # a warning and continue — standings are non-critical for race
+            # operation.
             except Exception as e:
                 print(f"WARNING: Standings table initialisation failed: {e}")
                 # Non-critical, continue
@@ -2805,8 +2935,93 @@ class RaceWindow(QMainWindow):
                 print("No starting grid recorded; skipping position-change summary")
                 return
 
-            # Map driver_id -> start position (1-based)
-            start_pos = {did: idx + 1 for idx, did in enumerate(self._starting_grid)}
+
+            # Build starting positions map.
+            # Use the recorded `_starting_grid` (captured when the race began)
+            # as the authoritative source. However, double-check against the
+            # track widget's car ordering (by `s`) to detect a reversed mapping
+            # that can occasionally reappear; if we can derive a consistent
+            # ordering from the visual cars, prefer that ordering (P1..PN).
+            start_pos = {}
+            try:
+                if hasattr(self, '_starting_grid') and self._starting_grid:
+                    # If track widget provides a reliable car ordering, prefer
+                    # that to correct any accidental reversal of `self._starting_grid`.
+                    try:
+                        tw_cars = getattr(self.track_widget, 'cars', None)
+                        if tw_cars:
+                            tw_ids = [getattr(c, 'driver_id', None) for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0))]
+                            # If the sets match but the orders differ, prefer the
+                            # visual ordering (P1..PN). This fixes cases where the
+                            # recorded grid was reversed relative to the track widget.
+                            # If the visual ordering contains the same drivers as
+                            # the recorded starting grid, prefer the visual ordering
+                            # as the authoritative start positions. This forces the
+                            # UI Start column to match the track widget layout.
+                            if set(tw_ids) == set(self._starting_grid):
+                                if tw_ids != self._starting_grid:
+                                    print("Correcting starting grid order from visual track widget")
+                                else:
+                                    print("Using visual track widget ordering as authoritative for starting grid")
+                                self._starting_grid = tw_ids
+                    except Exception:
+                        pass
+
+                    # `_starting_grid` is a list where index 0 == start pos 1
+                    for idx, did in enumerate(self._starting_grid):
+                        if did is None:
+                            continue
+                        try:
+                            start_pos[int(did)] = idx + 1
+                        except Exception:
+                            start_pos[did] = idx + 1
+            except Exception:
+                start_pos = {}
+
+            # Prefer engine-provided grid positions when available.
+            # The engine's `grid_position`/`grid` is authoritative for start
+            # ordering; override the GUI-recorded `_starting_grid` when the
+            # engine supplies explicit values. If the engine does not provide
+            # grid info, fall back to the GUI-recorded starting grid.
+            for res in results_sorted:
+                did = res.get('driver_id')
+                if did is None:
+                    continue
+                try:
+                    key = int(did)
+                except Exception:
+                    key = did
+                gp = res.get('grid_position') or res.get('grid')
+                if gp is not None:
+                    try:
+                        start_pos[key] = int(gp)
+                    except Exception:
+                        try:
+                            start_pos[key] = int(float(gp))
+                        except Exception:
+                            pass
+
+            # If the track widget provides a full ordering and its set of
+            # drivers matches the race results, force the start_pos mapping
+            # to follow the visual ordering. This makes the Start column
+            # in the summary match the track widget (visual grid) exactly
+            # regardless of engine-provided `grid_position` values.
+            try:
+                tw_cars = getattr(self.track_widget, 'cars', None)
+                if tw_cars:
+                    tw_ids = [getattr(c, 'driver_id', None) for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)]
+                    result_ids = [res.get('driver_id') for res in results_sorted if res.get('driver_id') is not None]
+                    if set(tw_ids) == set(result_ids):
+                        # Rebuild start_pos using visual ordering (P1..PN)
+                        start_pos = {}
+                        for idx, did in enumerate(tw_ids):
+                            try:
+                                start_pos[int(did)] = idx + 1
+                            except Exception:
+                                start_pos[did] = idx + 1
+                        print("[DEBUG] Overrode start_pos with visual track ordering")
+            except Exception:
+                pass
 
             # Build rows: finish_pos, driver_id, driver_name, status
             rows = []
@@ -2816,21 +3031,130 @@ class RaceWindow(QMainWindow):
                 name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
                 status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
                 start = start_pos.get(did, None)
-                change = None
-                if start is not None:
-                    change = start - finish
-                else:
-                    change = 0
+                change = start - finish if start is not None else 0
                 rows.append((start, finish, name, change, status))
+
+            # Sort rows so Start position (P1) appears at the top of the table.
+            # Drivers without a known start position appear after those with one.
+            rows = sorted(rows, key=lambda r: (r[0] is None, r[0] if r[0] is not None else 9999))
 
             # Create modal dialog with table
             dlg = QDialog(self)
             dlg.setWindowTitle("Race Position Changes")
             dlg_layout = QVBoxLayout()
 
-            info = QLabel("Start → Finish (positive = gained positions). DNFs are highlighted.")
+            # Header with clearer styling
+            info = QLabel("<h2>Start → Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
+            info.setTextFormat(Qt.TextFormat.RichText)
             dlg_layout.addWidget(info)
 
+            # Create a horizontal split: left = plot & filters, right = results table
+            from PyQt6.QtWidgets import QSplitter, QListWidget, QListWidgetItem
+            splitter = QSplitter()
+
+            # Left pane: plot canvas (matplotlib) + filter list
+            left_widget = QWidget()
+            left_layout = QVBoxLayout(left_widget)
+
+            # Try to import matplotlib; if unavailable, show explanatory label
+            use_plot = True
+            try:
+                from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+                from matplotlib.figure import Figure
+            except Exception:
+                use_plot = False
+
+            if use_plot:
+                fig = Figure(figsize=(6, 3))
+                canvas = FigureCanvas(fig)
+                ax = fig.add_subplot(111)
+                ax.invert_yaxis()  # position 1 at top
+                ax.set_ylabel('Position')
+                ax.set_xlabel('Distance (m)')
+                ax.set_title('Positions Over Time')
+                left_layout.addWidget(canvas)
+
+                # Filter list to show/hide drivers
+                filter_label = QLabel('Show drivers:')
+                left_layout.addWidget(filter_label)
+                filter_list = QListWidget()
+                filter_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+                try:
+                    filter_list.setMinimumHeight(140)
+                except Exception:
+                    pass
+                # Populate with drivers found in results_sorted (use driver names)
+                driver_map = {}
+                for res in results_sorted:
+                    did = res.get('driver_id')
+                    name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
+                    driver_map[did] = name
+                    item = QListWidgetItem(name)
+                    item.setData(Qt.ItemDataRole.UserRole, did)
+                    item.setSelected(True)
+                    filter_list.addItem(item)
+                try:
+                    filter_list.selectAll()
+                except Exception:
+                    pass
+                left_layout.addWidget(filter_list)
+
+                def redraw_plot():
+                    try:
+                        ax.clear()
+                        ax.invert_yaxis()
+                        ax.set_ylabel('Position')
+                        ax.set_xlabel('Distance (m)')
+                        ax.set_title('Positions Over Time')
+                        # For each selected driver, plot its time-series
+                        for idx in range(filter_list.count()):
+                            it = filter_list.item(idx)
+                            if not it.isSelected():
+                                continue
+                            did = it.data(Qt.ItemDataRole.UserRole)
+                            hist = getattr(self, '_position_history', {}).get(did, None)
+                            if hist:
+                                # history stored as (distance_m, position)
+                                xs = [t for (t, p) in hist]
+                                ys = [p for (t, p) in hist]
+                                ax.plot(xs, ys, label=driver_map.get(did, str(did)))
+                            else:
+                                # No history available: show flat line at final pos
+                                final = next((r.get('position') for r in results_sorted if r.get('driver_id') == did), None)
+                                if final is not None:
+                                    max_dist = max((h[-1][0] for h in getattr(self, '_position_history', {}).values() if h), default=1000)
+                                    ax.plot([0, max_dist], [final, final], '--', label=driver_map.get(did, str(did)))
+                        try:
+                            ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0., fontsize='small')
+                            try:
+                                fig.subplots_adjust(right=0.72, bottom=0.12)
+                            except Exception:
+                                pass
+                        except Exception:
+                            ax.legend(loc='upper right', fontsize='small', ncol=1)
+                        try:
+                            fig.tight_layout()
+                        except Exception:
+                            pass
+                        try:
+                            canvas.draw()
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        print(f"ERROR drawing positions plot: {e}")
+
+                filter_list.itemSelectionChanged.connect(redraw_plot)
+                # Initial draw
+                redraw_plot()
+
+            else:
+                left_layout.addWidget(QLabel('matplotlib not available — install matplotlib to see position plot.'))
+
+            # Note: add the results table first so it appears on the left side
+            # of the splitter. The plot/filter pane will be added after so it
+            # appears on the right and does not get overly compressed.
+
+            # Right pane: results table (added first to splitter)
             table = QTableWidget()
             table.setColumnCount(5)
             table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
@@ -2848,7 +3172,57 @@ class RaceWindow(QMainWindow):
                 table.setItem(r, 4, status_item)
 
             table.resizeColumnsToContents()
-            dlg_layout.addWidget(table)
+            try:
+                # Make the Driver column stretch and keep others sized to contents
+                hdr = table.horizontalHeader()
+                hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+                hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+                hdr.setSectionResizeMode(2, QHeaderView.Stretch)
+                hdr.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+                hdr.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+                table.setAlternatingRowColors(True)
+            except Exception:
+                pass
+            # Add table to splitter first (index 0)
+            splitter.addWidget(table)
+
+            # Ensure the plot/filter pane has a usable minimum width so it
+            # remains visible when the table is large.
+            try:
+                left_widget.setMinimumWidth(360)
+                # If canvas exists, ensure a reasonable min size
+                try:
+                    canvas.setMinimumSize(360, 260)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+            # Now add the plot/filter pane (index 1)
+            splitter.addWidget(left_widget)
+
+            # Give the results table the majority of horizontal space but allow
+            # the plot pane to remain usable.
+            splitter.setStretchFactor(0, 2)
+            splitter.setStretchFactor(1, 1)
+            dlg_layout.addWidget(splitter)
+
+            # Resize dialog to a consistent application-scale size so the
+            # position-change summary matches the main UI resolution.
+            try:
+                pref_w, pref_h = get_preferred_window_size()
+                dlg_w = int(pref_w * 0.75)
+                dlg_h = int(pref_h * 0.55)
+                dlg.setMinimumSize(dlg_w, dlg_h)
+                dlg.resize(dlg_w, dlg_h)
+                # Set table min width and left_widget min width relative to dialog
+                try:
+                    table.setMinimumWidth(int(dlg_w * 0.55))
+                    left_widget.setMinimumWidth(int(dlg_w * 0.35))
+                except Exception:
+                    pass
+            except Exception:
+                pass
 
             close_btn = QPushButton("Close")
             close_btn.clicked.connect(dlg.accept)
@@ -3084,6 +3458,30 @@ class RaceWindow(QMainWindow):
                         'dnf': dnf_flag
                     }
                     self._driver_push_intensity[driver_id] = push_intensity
+
+                # Record time-series for position plotting (used in post-race
+                # position-over-time chart). Use a simple list of (time, pos).
+                try:
+                    if not hasattr(self, '_position_history'):
+                        self._position_history = {}
+                    hist = self._position_history.get(driver_id)
+                    if hist is None:
+                        hist = []
+                        self._position_history[driver_id] = hist
+                    # Append tuple of (total_distance_m, race_position)
+                    try:
+                        track_obj = getattr(self, 'track', None)
+                        track_length_m = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+                    except Exception:
+                        track_length_m = 6350.0
+                    try:
+                        total_distance = (max(1, int(lap)) - 1) * track_length_m + position_m
+                    except Exception:
+                        # Fallback to race_time if distance unavailable
+                        total_distance = race_time
+                    hist.append((total_distance, race_position))
+                except Exception:
+                    pass
 
                 self._rebuild_standings_table()
 

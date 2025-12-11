@@ -274,8 +274,46 @@ def get_preferred_window_size() -> tuple[int, int]:
 	The rest of the game's dialogs use a larger, consistent window size; use
 	a sensible default here so the GUI can ask the service for sizing.
 	"""
-	# Pick a width/height that matches the main UI dialogs (approximate)
-	return (1100, 800)
+	import os
+	import re
+
+	# Priority order for determining preferred size:
+	# 1. Environment variable `PREFERRED_WINDOW_SIZE` or `APP_WINDOW_SIZE` as "WxH" or "W,H"
+	# 2. Environment variables `APP_WINDOW_WIDTH` and `APP_WINDOW_HEIGHT`
+	# 3. If a QApplication exists, ask the primary screen size
+	# 4. Fallback to 1920x1080
+
+	env_size = os.getenv("PREFERRED_WINDOW_SIZE") or os.getenv("APP_WINDOW_SIZE")
+	if env_size:
+		m = re.match(r"\s*(\d+)\s*[x,\s]\s*(\d+)\s*", env_size)
+		if m:
+			try:
+				return (int(m.group(1)), int(m.group(2)))
+			except Exception:
+				pass
+
+	w = os.getenv("APP_WINDOW_WIDTH")
+	h = os.getenv("APP_WINDOW_HEIGHT")
+	if w and h:
+		try:
+			return (int(w), int(h))
+		except Exception:
+			pass
+
+	# If running inside a Qt application, use the primary screen resolution
+	try:
+		from PyQt6.QtWidgets import QApplication
+		app = QApplication.instance()
+		if app is not None:
+			screen = app.primaryScreen()
+			if screen is not None:
+				size = screen.size()
+				return (int(size.width()), int(size.height()))
+	except Exception:
+		pass
+
+	# Final fallback
+	return (1920, 1080)
 
 
 def get_driver_radar_values(driver: Any) -> list[float]:
