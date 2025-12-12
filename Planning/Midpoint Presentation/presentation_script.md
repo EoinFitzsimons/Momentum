@@ -3,9 +3,7 @@ Presentation Script - Teleprompter Version (3 minute slot)
 Notes: This is a teleprompter-style script. Each slide has one paragraph to read aloud, an exact timing, an emphasis cue, and a single-line takeaway to repeat aloud.
 
 Slide 1 - Title (20 seconds)
-Read: "Hello, I am Eoin Fitzsimons. I am a passionate fan of motorsport and sports-simulation games. Momentum models seven racing disciplines and a persistent career system designed to increase replayability and strategic depth."
-Emphasis: say "passionate fan" and "replayability" with clarity. Pause 0.5 seconds after the sentence.
-Takeaway (speak once): "Scope and intent." Pause 1 second before moving on.
+Motorsport management games are niche and often single‑discipline or shallow in simulation. Inspired by modding work on car‑centric titles and by low‑fi, vehicle‑focused play, the project aims are: broader coverage across disciplines, depth in management systems (contracts, staff, budgets, vehicle setup), and practical deliverability in a single repository with lightweight dependencies.
 
 Slide 2 - The Past - What Compares? (40 seconds)
 Read: "Existing titles deliver strong presentation and race visuals, but often rely on linear progression and scripted outcomes. My starting question was how to create systemic depth while keeping simulations performant and reproducible. Audits and playtests revealed brittle data imports and fragile demo flows, which set the early priorities for automated validation and a simple, testable quick-race path."
@@ -32,10 +30,12 @@ Read: "Thank you. I am ready for questions."
 Cue: smile and pause for questions.
 
 Delivery and rehearsal guidance
+
 - Read each paragraph at a steady pace; use the specified pauses as breathing and emphasis points.
 - If time runs long: remove the second sentence from Slide 3 and Slide 2 first. Practice until each slide fits the allotted time.
 - Keep language direct: one headline, one paragraph, one takeaway per slide.
 
 Additional presenter cues (for practice)
+
 - Before Slide 2: take a 1.5 second breath, set eye contact, then read.
 - Before Slide 3: emphasise the words listed in emphasis above and slow slightly on the key metric words.

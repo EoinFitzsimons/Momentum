@@ -1630,7 +1630,7 @@ class RaceWindow(QMainWindow):
     # Signals
     return_to_menu = pyqtSignal()  # Signal to return to main menu
 
-    def __init__(self):
+    def __init__(self, track_id: Optional[int] = None):
         try:
             super().__init__()
             self.setWindowTitle("Momentum - Race Visualisation")
@@ -1667,6 +1667,7 @@ class RaceWindow(QMainWindow):
             self.db: Optional[DatabaseManager] = None
             self.drivers = []
             self.track = None
+            self._initial_track_id = track_id
             self.race_thread: Optional[threading.Thread] = None
             self.stop_event: Optional[threading.Event] = None
             # Track last lap time per driver
@@ -2088,11 +2089,17 @@ class RaceWindow(QMainWindow):
                 _traceback.print_exc()
                 return
 
-            # Load track - HARDCODED for now (database track system needs
-            # redesign)
+            # Load track - prefer database-backed tracks, create default if missing
             try:
-                # Create a simple track object with fields needed by race
-                # simulation
+                # Use requested track id if provided by launcher/setup
+                try:
+                    req_id = getattr(self, '_initial_track_id', None)
+                    self.track = self.db.get_simple_track(req_id)
+                except Exception:
+                    self.track = self.db.get_simple_track()
+                print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
+            except Exception as e:
+                # Fallback: recreate the previous hard-coded simple track
                 from dataclasses import dataclass
 
                 @dataclass
@@ -2118,21 +2125,8 @@ class RaceWindow(QMainWindow):
                     climate: str = "temperate"
                     drs_zones: int = 2
 
-                self.track = SimpleTrack(
-                    name="Test Circuit",
-                    length_km=4.5
-                )
-
-                print(
-                    f"Loaded track: {
-                        self.track.name} ({
-                        self.track.length_km:.2f}km)")
-            except Exception as e:
-                self.info_label.setText(f"Failed to create track: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Failed to create track: {e}")
-                _traceback.print_exc()
-                return
+                self.track = SimpleTrack(name="Test Circuit", length_km=4.5)
+                print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
 
             # Generate circuit
             try:

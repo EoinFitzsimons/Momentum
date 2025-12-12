@@ -47,8 +47,13 @@ class MomentumLauncher:
             self.race_window.close()
             self.race_window = None
 
-        # Create race window with display mode
-        self.race_window = RaceWindow()
+        # Create race window with display mode, pass selected track_id if present
+        track_id = config.get('track_id')
+        try:
+            self.race_window = RaceWindow(track_id=track_id)
+        except TypeError:
+            # Older signature fallback
+            self.race_window = RaceWindow()
 
         # Set player driver
         player_driver = config.get('driver')

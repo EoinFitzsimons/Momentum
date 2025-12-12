@@ -462,6 +462,7 @@ class QuickRaceSetupWindow(QDialog):
 
     def __init__(self, parent, drivers, display_mode):
         super().__init__(parent)
+        self.parent_window = parent
         self.drivers = drivers
         self.display_mode = display_mode
         self.selected_driver = None
@@ -750,6 +751,29 @@ class QuickRaceSetupWindow(QDialog):
 
         # Attach right_vbox into selection container and add to main layout
         selection_container.addLayout(right_vbox)
+        # Track selection (below driver selection)
+        track_group = QGroupBox("Track Selection")
+        track_layout = QVBoxLayout(track_group)
+        track_label = QLabel("Choose Track:")
+        track_layout.addWidget(track_label)
+
+        self.track_combo = QComboBox()
+        # Populate from database if available
+        try:
+            db = self.parent_window.db if hasattr(self.parent_window, 'db') else None
+            tracks = db.get_all_tracks() if db else []
+            if not tracks:
+                # No tracks in DB -> placeholder
+                self.track_combo.addItem("Test Circuit (Default)", None)
+            else:
+                for t in tracks:
+                    # store track id as user data
+                    self.track_combo.addItem(t.name, t.id)
+        except Exception:
+            self.track_combo.addItem("Test Circuit (Default)", None)
+
+        track_layout.addWidget(self.track_combo)
+        layout.addWidget(track_group)
         layout.addLayout(selection_container)
 
         # Connect selection updates
@@ -777,10 +801,19 @@ class QuickRaceSetupWindow(QDialog):
         selected_preset = self.preset_combo.currentData()
 
         # Build config (pace and overtake will be controlled during race)
+        # Determine selected track id (None -> default)
+        track_id = None
+        try:
+            data = self.track_combo.currentData()
+            track_id = int(data) if data is not None else None
+        except Exception:
+            track_id = None
+
         config = {
             "driver": self.selected_driver,
             "display_mode": self.display_mode,
-            "tuning_preset": selected_preset
+            "tuning_preset": selected_preset,
+            "track_id": track_id
         }
 
         driver_name = get_display_name(self.selected_driver)
