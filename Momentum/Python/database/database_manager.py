@@ -33,10 +33,35 @@ Authors: Final Year Project - Computer Science
 
 import sqlite3
 import json
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from database.models import Driver, Team, Track, Championship, Race, RaceResult, SCHEMA_SQL
 from config import DATABASE_PATH
+
+
+@dataclass
+class SimpleTrack:
+    name: str
+    length_km: float = 3.2
+    turns: int = 12
+    left_turns: int = 6
+    right_turns: int = 6
+    elevation_change_m: float = 0.0
+    avg_corner_radius_m: float = 40.0
+    min_corner_radius_m: float = 20.0
+    max_corner_radius_m: float = 80.0
+    tightest_corner_radius_m: float = 20.0
+    longest_straight_m: float = 700.0
+    shortest_straight_m: float = 150.0
+    avg_speed_kmh: float = 160.0
+    top_speed_kmh: float = 300.0
+    surface: str = "asphalt"
+    surface_type: str = "asphalt"
+    surface_grip: float = 12.0
+    surface_abrasiveness: float = 8.0
+    climate: str = "temperate"
+    drs_zones: int = 1
 
 
 class DatabaseManager:
@@ -443,6 +468,94 @@ class DatabaseManager:
         """Persist canonical instructions JSON for a track."""
         with self.get_connection() as conn:
             conn.execute("UPDATE tracks SET instructions_json = ? WHERE id = ?", (instructions_json, track_id))
+
+    def get_simple_track(self, track_id: Optional[int] = None) -> "SimpleTrack":
+        """Return a simple track object suitable for the GUI and simulation.
+
+        If `track_id` is provided the specific track is returned. If no tracks
+        exist in the database a default "Test Circuit" will be created with the
+        same hard-coded values previously used by the GUI so behaviour is
+        identical.
+        """
+        with self.get_connection() as conn:
+            if track_id is not None:
+                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?", (track_id,)).fetchone()
+            else:
+                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks ORDER BY id LIMIT 1").fetchone()
+
+            if not row:
+                # Insert default Test Circuit using geometry_json to store full attributes
+                default_attrs = {
+                    "length_km": 4.5,
+                    "turns": 12,
+                    "left_turns": 6,
+                    "right_turns": 6,
+                    "elevation_change_m": 15.0,
+                    "avg_corner_radius_m": 40.0,
+                    "min_corner_radius_m": 20.0,
+                    "max_corner_radius_m": 80.0,
+                    "tightest_corner_radius_m": 20.0,
+                    "longest_straight_m": 800.0,
+                    "shortest_straight_m": 150.0,
+                    "avg_speed_kmh": 180.0,
+                    "top_speed_kmh": 280.0,
+                    "surface": "asphalt",
+                    "surface_type": "asphalt",
+                    "surface_grip": 12.0,
+                    "surface_abrasiveness": 8.0,
+                    "climate": "temperate",
+                    "drs_zones": 2
+                }
+                cursor = conn.execute(
+                    "INSERT INTO tracks (name, country, primary_discipline, geometry_json) VALUES (?, ?, ?, ?)",
+                    ("Test Circuit", "Nowhere", "SINGLE_SEATER", json.dumps(default_attrs))
+                )
+                new_id = cursor.lastrowid
+                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?", (new_id,)).fetchone()
+
+            rowd = dict(row)
+            geom = None
+            raw_geom = rowd.get('geometry_json')
+            try:
+                if raw_geom:
+                    if isinstance(raw_geom, str):
+                        parsed = json.loads(raw_geom)
+                    elif isinstance(raw_geom, (dict, list)):
+                        parsed = raw_geom
+                    else:
+                        parsed = None
+                    # Only accept dict-style geometry for attribute mapping
+                    geom = parsed if isinstance(parsed, dict) else None
+                else:
+                    geom = None
+            except Exception:
+                geom = None
+
+            # Build a simple object merging DB fields and geometry attributes
+            attrs = {
+                'name': rowd.get('name') or 'Unnamed Circuit',
+                'length_km': float(geom.get('length_km')) if geom and geom.get('length_km') is not None else float(rowd.get('length_km') or 3.2),
+                'turns': int(geom.get('turns')) if geom and geom.get('turns') is not None else int(rowd.get('turns') or 12),
+                'left_turns': int(geom.get('left_turns')) if geom and geom.get('left_turns') is not None else int(rowd.get('left_turns') or 6),
+                'right_turns': int(geom.get('right_turns')) if geom and geom.get('right_turns') is not None else int(rowd.get('right_turns') or 6),
+                'elevation_change_m': float(geom.get('elevation_change_m')) if geom and geom.get('elevation_change_m') is not None else 0.0,
+                'avg_corner_radius_m': float(geom.get('avg_corner_radius_m')) if geom and geom.get('avg_corner_radius_m') is not None else 40.0,
+                'min_corner_radius_m': float(geom.get('min_corner_radius_m')) if geom and geom.get('min_corner_radius_m') is not None else 20.0,
+                'max_corner_radius_m': float(geom.get('max_corner_radius_m')) if geom and geom.get('max_corner_radius_m') is not None else 80.0,
+                'tightest_corner_radius_m': float(geom.get('tightest_corner_radius_m')) if geom and geom.get('tightest_corner_radius_m') is not None else 20.0,
+                'longest_straight_m': float(geom.get('longest_straight_m')) if geom and geom.get('longest_straight_m') is not None else 800.0,
+                'shortest_straight_m': float(geom.get('shortest_straight_m')) if geom and geom.get('shortest_straight_m') is not None else 150.0,
+                'avg_speed_kmh': float(geom.get('avg_speed_kmh')) if geom and geom.get('avg_speed_kmh') is not None else 180.0,
+                'top_speed_kmh': float(geom.get('top_speed_kmh')) if geom and geom.get('top_speed_kmh') is not None else 280.0,
+                'surface': geom.get('surface') if geom and geom.get('surface') else (rowd.get('surface') or 'asphalt'),
+                'surface_type': geom.get('surface_type') if geom and geom.get('surface_type') else (rowd.get('surface_type') or 'asphalt'),
+                'surface_grip': float(geom.get('surface_grip')) if geom and geom.get('surface_grip') is not None else 12.0,
+                'surface_abrasiveness': float(geom.get('surface_abrasiveness')) if geom and geom.get('surface_abrasiveness') is not None else 8.0,
+                'climate': geom.get('climate') if geom and geom.get('climate') else 'temperate',
+                'drs_zones': int(geom.get('drs_zones')) if geom and geom.get('drs_zones') is not None else 1
+            }
+
+            return SimpleTrack(**attrs)
 
     def synthesize_instructions_from_fields(self, track: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Create a simple instruction list from compact track fields as fallback.
