@@ -20,7 +20,7 @@ Design response: a canonical attribute schema and modular systems. Instead of do
 
 Approach: procedural generation to create teams, drivers and tracks when needed; agentic simulation for live interactions; and a small set of automated tests to validate edge cases and preserve reproducibility.
 
-Who it’s for: players, academics and designers who need deep, consistent multi‑discipline simulation and reproducible scenarios for balancing and analysis.
+Who it’s for: players, and designers who need deep, consistent multi‑discipline simulation and reproducible scenarios for balancing and analysis.
 
 What sets it apart: Momentum persists a small canonical attribute set and computes nuanced derived signals (aggression, bravery, vehicle control) at runtime - enabling rich emergent behaviour without a large, redundant dataset. Runs are intentionally unseeded to promote variability and emergent stories; optional export enables post‑run verification if required.
 
@@ -33,11 +33,11 @@ Key technical notes
 - The GUI is PyQt6 and drives the demo flow (launcher -> MainMenu -> RaceWindow).
 - The simulation API chooses a discipline adapter when available or falls back to RealtimeRaceEngine which simulates agents making attack/defend/manage decisions each tick.
 - Driver attributes are canonical and hydrated from the DB; derived signals (aggression, bravery, vehicle control) are computed in services/driver_attributes.py.
- Python 3.13 - stable, typed, easy to work with.
- FastAPI - simple HTTP endpoints for running simulations and tests.
- SQLite - single-file database for saving runs and evidence.
- NumPy - small numeric helpers and RNG used in the race code (no pandas or SciPy).
- PyQt6 - desktop GUI toolkit used for the Quick Race visualiser.
+  Python 3.13 - stable, typed, easy to work with.
+  FastAPI - simple HTTP endpoints for running simulations and tests.
+  SQLite - single-file database for saving runs and evidence.
+  NumPy - small numeric helpers and RNG used in the race code (no pandas or SciPy).
+  PyQt6 - desktop GUI toolkit used for the Quick Race visualiser.
 
 Slide 4: THE FUTURE
 
