@@ -25,6 +25,9 @@ from PyQt6.QtGui import (
     QPainterPath,
     QKeyEvent,
     QPaintEvent,
+    QPixmap,
+    QImage,
+    QLinearGradient,
 )
 
 from PyQt6.QtCore import (
@@ -47,6 +50,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QDialog,
 )
+import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
 import sys
 import os
@@ -672,6 +676,8 @@ class TrackWidget(QWidget):
         except Exception:
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
+        # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
+        self._infield_cache: Dict[tuple, QPixmap] = {}
         # Ensure track_points' arc-lengths match provided track_length.
         # Some generators produce a track whose last point's `s` differs
         # slightly from the authoritative database length. If so,
@@ -1070,6 +1076,74 @@ class TrackWidget(QWidget):
         except Exception:
             pass
 
+    def _generate_infield_pixmap(self, bbox, w: int, h: int, seed: int) -> QPixmap:
+        """Generate a procedural blended turf pixmap for the given bbox.
+
+        bbox: QRectF in world coords (top-left origin)
+        w,h: integer pixel dimensions for the pixmap
+        seed: integer seed to vary output per-track
+        """
+        try:
+            pix = QPixmap(w, h)
+            pix.fill(QColor(0, 0, 0, 0))
+            p = QPainter(pix)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            # Base grass tone
+            base = QColor(80, 160, 70)
+            p.fillRect(0, 0, w, h, base)
+
+            # Soft vertical gradient to add variation
+            grad = QLinearGradient(0, 0, 0, h)
+            grad.setColorAt(0.0, QColor(90, 170, 80, 120))
+            grad.setColorAt(1.0, QColor(60, 140, 55, 120))
+            p.fillRect(0, 0, w, h, grad)
+
+            rnd = random.Random(seed)
+
+            # Layered translucent ellipses to create perceptual noise
+            for i in range(int(max(80, (w * h) // 6000))):
+                cx = rnd.uniform(0, w)
+                cy = rnd.uniform(0, h)
+                rw = rnd.uniform(w * 0.02, w * 0.12)
+                rh = rnd.uniform(h * 0.02, h * 0.12)
+                shade = rnd.randint(-20, 20)
+                r = max(30, min(255, base.red() + shade))
+                g = max(30, min(255, base.green() + shade))
+                b = max(30, min(255, base.blue() + shade))
+                alpha = rnd.randint(18, 48)
+                col = QColor(r, g, b, alpha)
+                p.setBrush(QBrush(col))
+                p.setPen(Qt.PenStyle.NoPen)
+                p.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
+
+            # Add small darker 'molehills' with higher contrast
+            for i in range(int(max(30, (w * h) // 20000))):
+                cx = rnd.uniform(0, w)
+                cy = rnd.uniform(0, h)
+                r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
+                col = QColor(40, 100, 30, rnd.randint(80, 160))
+                p.setBrush(QBrush(col))
+                p.setPen(Qt.PenStyle.NoPen)
+                p.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
+
+            # Gentle dirt streaks (random thin lines)
+            p.setPen(QPen(QColor(80, 60, 40, 90), 1))
+            for i in range(int(max(20, (w * h) // 25000))):
+                x1 = rnd.uniform(0, w)
+                y1 = rnd.uniform(0, h)
+                x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
+                y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
+                p.drawLine(int(x1), int(y1), int(x2), int(y2))
+
+            p.end()
+            return pix
+        except Exception:
+            # Return a tiny fallback pixmap
+            p = QPixmap(max(2, w), max(2, h))
+            p.fill(QColor(34, 139, 34))
+            return p
+
     def _draw_joker(self, painter):
         """Draw an alternate 'joker' route if provided by the track data."""
         try:
@@ -1375,68 +1449,46 @@ class TrackWidget(QWidget):
 
             centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
 
-            # === Infield fill: match outer grass and add water pool ===
+            # === Infield fill: procedural blended turf and small water pool ===
             try:
                 from PyQt6.QtGui import QPolygonF
                 infield_points = []
                 for pt in self.track_points:
                     normal_x = -math.sin(pt.theta)
                     normal_y = math.cos(pt.theta)
-                    # Move inward from centerline towards infield by
-                    # TRACK_WIDTH - 2
+                    # Move inward from centerline towards infield by TRACK_WIDTH - 2
                     ix = pt.x - normal_x * (TRACK_WIDTH - 2)
                     iy = pt.y - normal_y * (TRACK_WIDTH - 2)
                     infield_points.append(QPointF(ix, iy))
 
                 if infield_points:
                     poly = QPolygonF(infield_points)
-                    # Fill with same forest green as background
-                    painter.setBrush(QBrush(QColor(34, 139, 34)))
+                    # Prepare cached pixmap for infield
+                    bbox = poly.boundingRect()
+                    w = max(2, int(math.ceil(bbox.width())))
+                    h = max(2, int(math.ceil(bbox.height())))
+                    seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
+                    key = (w, h, seed)
+                    pix = self._infield_cache.get(key)
+                    if pix is None:
+                        pix = self._generate_infield_pixmap(bbox, w, h, seed)
+                        self._infield_cache[key] = pix
+
+                    # Draw the pixmap clipped to the infield polygon
+                    painter.save()
                     painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawPolygon(poly)
-
-                    # Add a water pool matching the infield shape (scaled
-                    # down), rotated clockwise 20°
-                    cx = sum(p.x()
-                             for p in infield_points) / len(infield_points)
-                    cy = sum(p.y()
-                             for p in infield_points) / len(infield_points)
-                    scale = 0.6  # scale down the infield polygon to make the pool
-                    raw_poly = []
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.translate(bbox.x(), bbox.y())
+                    local_poly = QPolygonF()
                     for p in infield_points:
-                        sx = cx + (p.x() - cx) * scale
-                        sy = cy + (p.y() - cy) * scale
-                        raw_poly.append((sx, sy))
+                        local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
+                    clip_path = QPainterPath()
+                    clip_path.addPolygon(local_poly)
+                    painter.setClipPath(clip_path)
+                    painter.drawPixmap(0, 0, pix)
+                    painter.restore()
 
-                    # Rotate polygon clockwise by 20 degrees (clockwise ->
-                    # negative angle)
-                    rot_rad = math.radians(-20)
-                    cos_t = math.cos(rot_rad)
-                    sin_t = math.sin(rot_rad)
-                    pool_poly = QPolygonF()
-                    for (sx, sy) in raw_poly:
-                        dx = sx - cx
-                        dy = sy - cy
-                        rx = cx + (dx * cos_t - dy * sin_t)
-                        ry = cy + (dx * sin_t + dy * cos_t)
-                        pool_poly.append(QPointF(rx, ry))
-
-                    # Use requested water colour #006994 (deeper, realistic) and
-                    # darker edge
-                    water_color = QColor("#006994")
-                    water_edge = QColor("#004A66")
-                    painter.setBrush(QBrush(water_color))
-                    painter.setPen(QPen(water_edge, 2))
-                    painter.drawPolygon(pool_poly)
-
-                    # Small specular highlight near upper-left of pool
-                    # (relative)
-                    if len(pool_poly) > 0:
-                        hp = pool_poly[int(len(pool_poly) * 0.22)]
-                        painter.setBrush(QBrush(QColor(255, 255, 255, 140)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawEllipse(
-                            QPointF(hp.x() + 8, hp.y() + 6), 14, 7)
+                    # No decorative water pool: prefer clean procedural infield
             except Exception:
                 pass
 
