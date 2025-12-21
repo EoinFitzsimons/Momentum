@@ -148,35 +148,35 @@ def import_circuits():
     # Load circuits from JSON (now in data/ folder)
     parent_dir = Path(__file__).parent.parent
     circuits_file = parent_dir / 'data' / 'circuits_database.json'
-    print(f"\n1. Loading circuits from: {circuits_file}")
+    print("\n1. Loading circuits from:", circuits_file)
     
     if not circuits_file.exists():
-        print(f"   ❌ ERROR: circuits_database.json not found!")
-        print(f"   Expected location: {circuits_file}")
+        print("   ❌ ERROR: circuits_database.json not found!")
+        print("   Expected location:", circuits_file)
         return
     
     with open(circuits_file, 'r', encoding='utf-8') as f:
         circuits = json.load(f)
     
-    print(f"   ✅ Loaded {len(circuits)} circuits from JSON")
+    print("   ✅ Loaded", len(circuits), "circuits from JSON")
     
     # Connect to database
     db_path = Path(DATABASE_PATH)
-    print(f"\n2. Connecting to database: {db_path}")
+    print("\n2. Connecting to database:", db_path)
     
     if not db_path.exists():
-        print(f"   ❌ ERROR: Database not found at {db_path}")
-        print(f"   Run generate_initial_database.py first!")
+        print("   ❌ ERROR: Database not found at", db_path)
+        print("   Run generate_initial_database.py first!")
         return
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    print(f"   ✅ Connected to database")
+    print("   ✅ Connected to database")
     
     # Check current track count
     cursor.execute("SELECT COUNT(*) FROM tracks")
     existing_count = cursor.fetchone()[0]
-    print(f"   📊 Current tracks in database: {existing_count}")
+    print("   📊 Current tracks in database:", existing_count)
     
     if existing_count > 0:
         print(f"\n   ⚠️  WARNING: Database already has {existing_count} tracks!")
@@ -184,9 +184,9 @@ def import_circuits():
         if response == 'yes':
             cursor.execute("DELETE FROM tracks")
             conn.commit()
-            print(f"   ✅ Deleted {existing_count} existing tracks")
+            print("   ✅ Deleted", existing_count, "existing tracks")
         else:
-            print(f"   ℹ️  Skipping import (database unchanged)")
+            print("   ℹ️  Skipping import (database unchanged)")
             conn.close()
             return
     
@@ -226,7 +226,7 @@ def import_circuits():
     """
     
     # Import circuits
-    print(f"\n3. Importing {len(circuits)} circuits...")
+    print("\n3. Importing", len(circuits), "circuits...")
     success_count = 0
     error_count = 0
     errors = []
@@ -239,7 +239,7 @@ def import_circuits():
             
             # Progress indicator
             if i % 25 == 0:
-                print(f"   Progress: {i}/{len(circuits)} circuits processed...")
+                print("   Progress:", i, "/", len(circuits), "circuits processed...")
         
         except Exception as e:
             error_count += 1
@@ -247,7 +247,7 @@ def import_circuits():
                 'circuit': circuit['name'],
                 'error': str(e)
             })
-            print(f"   ❌ Error importing {circuit['name']}: {e}")
+            print("   ❌ Error importing", circuit.get('name'), ":", e)
     
     # Commit transaction
     conn.commit()
@@ -260,19 +260,19 @@ def import_circuits():
     print("\n" + "=" * 80)
     print("IMPORT SUMMARY")
     print("=" * 80)
-    print(f"✅ Successfully imported: {success_count} circuits")
-    print(f"❌ Failed imports: {error_count} circuits")
-    print(f"📊 Total tracks in database: {final_count}")
+    print("✅ Successfully imported:", success_count, "circuits")
+    print("❌ Failed imports:", error_count, "circuits")
+    print("📊 Total tracks in database:", final_count)
     
     if errors:
         print(f"\n⚠️  ERRORS ENCOUNTERED:")
         for err in errors[:10]:  # Show first 10 errors
             print(f"   - {err['circuit']}: {err['error']}")
         if len(errors) > 10:
-            print(f"   ... and {len(errors) - 10} more errors")
+            print("   ... and", (len(errors) - 10), "more errors")
     
     # Show sample circuits by discipline
-    print(f"\n📋 CIRCUITS BY DISCIPLINE:")
+    print("\n📋 CIRCUITS BY DISCIPLINE:")
     disciplines = [
         'SINGLE_SEATER', 'PRODUCTION_TOURING', 'RALLY_STAGE',
         'URBAN_STREET', 'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS', 'ENDURANCE'
@@ -287,7 +287,7 @@ def import_circuits():
         print(f"   {discipline:20s}: {total:3d} circuits ({active:3d} active)")
     
     # Show sample circuits
-    print(f"\n🏁 SAMPLE CIRCUITS:")
+    print("\n🏁 SAMPLE CIRCUITS:")
     cursor.execute("""
         SELECT name, country, ima_grade, circuit_type, length_km, primary_discipline
         FROM tracks
@@ -297,7 +297,7 @@ def import_circuits():
     """)
     
     for row in cursor.fetchall():
-        name, country, grade, ctype, length, disc = row
+        name, country, grade, _ctype, length, disc = row
         print(f"   {name:30s} | {country:15s} | {grade:8s} | {length:.2f}km | {disc}")
     
     conn.close()

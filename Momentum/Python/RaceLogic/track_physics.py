@@ -164,6 +164,32 @@ class TrackMap:
             angle_deg = 90 if corner_type == "medium" else (
                 45 if corner_type == "fast" else 120)
 
+            # Determine grip level from track properties. Prefer an explicit
+            # numeric `surface_grip` if available (scale may be >1), otherwise
+            # fall back to a simple mapping from surface name.
+            raw_surface_grip = getattr(self.track, 'surface_grip', None)
+            if raw_surface_grip is not None:
+                try:
+                    # If stored as a >1 value (e.g. 12.0), normalise to 0.0-1.0
+                    if raw_surface_grip > 1.0:
+                        grip_level_val = min(1.0, float(raw_surface_grip) / 20.0)
+                    else:
+                        grip_level_val = float(raw_surface_grip)
+                except Exception:
+                    grip_level_val = 1.0
+            else:
+                surface_name = getattr(self.track, 'surface', '') or getattr(self.track, 'surface_type', '')
+                surface_map = {
+                    'asphalt': 1.0,
+                    'tarmac': 1.0,
+                    'concrete': 0.95,
+                    'gravel': 0.6,
+                    'mixed': 0.75,
+                    'dirt': 0.55,
+                    'grassy': 0.65,
+                }
+                grip_level_val = surface_map.get(surface_name.lower(), 0.9)
+
             corner = TrackCorner(
                 corner_number=i + 1,
                 position_m=position_m,
@@ -176,7 +202,7 @@ class TrackMap:
                 has_overtaking_opportunity=(overtaking_diff < 0.5),
                 overtaking_difficulty=overtaking_diff,
                 defensive_line_advantage=0.2 if overtaking_diff < 0.5 else 0.4,
-                grip_level=1.0 if self.track.surface == "asphalt" else 0.9
+                grip_level=grip_level_val
             )
 
             self.corners.append(corner)

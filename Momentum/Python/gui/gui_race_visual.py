@@ -213,6 +213,13 @@ class CircuitGenerator:
     def _process_instructions(instructions, state, routes: Dict[str, Any]):
         start_x, start_y = 0, 0  # Track starts at origin
 
+        # Optionally solve closure exactly when requested in options attached
+        # to the instruction block: if the top-level 'solve_closure' key is
+        # present and true, we will attempt to adjust primitive multipliers
+        # so the composed sequence closes precisely. The caller may pass
+        # this flag via the `options` argument to `generate_with_routes`.
+        from RaceLogic import closure_solver
+
         # helper to process a sub-instruction list into a fresh segments list
         def process_subinstructions(sub_instructions):
             sub_segments: List[TrackPoint] = []
@@ -233,6 +240,31 @@ class CircuitGenerator:
             return sub_segments
 
         # Process all instructions
+        # If instructions is a dict with control flags, respect them
+        solve_requested = False
+        if isinstance(instructions, dict) and instructions.get('solve_closure'):
+            # instructions provided as dict wrapper: {'solve_closure': True, 'instructions': [...]}
+            wrapper = instructions
+            instructions = wrapper.get('instructions', [])
+            solve_requested = True
+        elif isinstance(instructions, list) and len(instructions) > 0:
+            # allow options via attached sentinel instruction dict at start
+            if isinstance(instructions[0], dict) and instructions[0].get('solve_closure'):
+                solve_requested = True
+
+        closure_solved = False
+        if solve_requested:
+            try:
+                # Attempt closure solve; this mutates instruction angles/lengths
+                success, multipliers, diag = closure_solver.solve_closure(instructions)
+                if success:
+                    closure_solver.apply_multipliers_to_instructions(instructions, multipliers)
+                    closure_solved = True
+                else:
+                    print(f"Closure solver failed: {diag}")
+            except Exception as e:
+                print(f"Error running closure solver: {e}")
+
         for instruction in instructions:
             # Normalize instruction forms: allow tuple legacy or dict
             if isinstance(instruction, tuple) or isinstance(instruction, list):
@@ -287,6 +319,29 @@ class CircuitGenerator:
                 continue
 
         # NOW: Calculate what we need to close the loop
+        # If closure solver already produced a closed sequence, skip heuristic
+        if closure_solved:
+            # compute gap for logging but skip adding corrective segments
+            dx = start_x - state['current_x']
+            dy = start_y - state['current_y']
+            distance_to_start = math.hypot(dx, dy)
+            angle_to_start = math.atan2(dy, dx)
+
+            heading_error = angle_to_start - state['current_theta']
+            while heading_error > math.pi:
+                heading_error -= 2 * math.pi
+            while heading_error < -math.pi:
+                heading_error += 2 * math.pi
+
+            angle_deficit = 2 * math.pi - state['total_angle']
+
+            print(
+                f"  [CLOSURE solver] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
+        else:
+            dx = start_x - state['current_x']
+            dy = start_y - state['current_y']
+            distance_to_start = math.hypot(dx, dy)
+            angle_to_start = math.atan2(dy, dx)
         dx = start_x - state['current_x']
         dy = start_y - state['current_y']
         distance_to_start = math.hypot(dx, dy)
@@ -313,145 +368,147 @@ class CircuitGenerator:
         # We need to balance: 1) Turn to complete 360 degrees, 2) Turn to point
         # at start, 3) Cover remaining distance
 
-        if abs(angle_deficit) > 0.1 or distance_to_start > 50:
-            # Split the angular deficit into interesting corners
-            if abs(angle_deficit) > math.radians(120):
-                # Large angle: Create S-bend with 3 alternating corners
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.15), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit * 0.35, 110, 50, 0.00009, state)
-
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.15), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit * -0.15, 120, 52, 0.00009, state)
-
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.15), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit * 0.80, 100, 48, 0.00009, state)
-            elif abs(angle_deficit) > math.radians(60):
-                # Medium angle: 2-corner S-bend
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.2), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit * 0.6, 115, 52, 0.00009, state)
-
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.2), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit * 0.4, 125, 54, 0.00009, state)
-            else:
-                # Small angle: Single corner
-                CircuitGenerator._add_straight(
-                    int(distance_to_start * 0.3), state)
-                CircuitGenerator._add_corner(
-                    angle_deficit, 130, 55, 0.00008, state)
-
-            # Recalculate position after closure corners
-            final_dx = start_x - state['current_x']
-            final_dy = start_y - state['current_y']
-            final_angle = math.atan2(final_dy, final_dx)
-            final_heading_error = final_angle - state['current_theta']
-
-            while final_heading_error > math.pi:
-                final_heading_error -= 2 * math.pi
-            while final_heading_error < -math.pi:
-                final_heading_error += 2 * math.pi
-
-            # Iteratively refine closure - CORNERS ONLY to avoid overshooting
-            # Stop if gap starts increasing (diverging)
-            max_iterations = 12
-            prev_gap = float('inf')
-            for iteration in range(max_iterations):
-                # Recalculate where we are relative to start
-                gap_dx = start_x - state['current_x']
-                gap_dy = start_y - state['current_y']
-                gap_dist = math.hypot(gap_dx, gap_dy)
-                gap_angle = math.atan2(gap_dy, gap_dx)
-                gap_heading_error = gap_angle - state['current_theta']
-
-                while gap_heading_error > math.pi:
-                    gap_heading_error -= 2 * math.pi
-                while gap_heading_error < -math.pi:
-                    gap_heading_error += 2 * math.pi
-
-                print(
-                    f"  [CLOSURE ITER {iteration}] Gap: {
-                        gap_dist:.1f}m, Heading error: {
-                        math.degrees(gap_heading_error):.1f}deg")
-
-                # STOP if gap is increasing (diverging)
-                if gap_dist > prev_gap * 1.2:
-                    print(
-                        f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {
-                            prev_gap:.1f}m to {
-                            gap_dist:.1f}m)")
-                    break
-
-                # Convergence check: if gap is small AND heading is reasonable, stop
-                # Combined condition prevents risky corrections that could flip heading
-                # Tighter thresholds when gap is very small to avoid heading
-                # flips
-                heading_error_deg = abs(math.degrees(gap_heading_error))
-                if gap_dist < 100 and heading_error_deg < 20:
-                    print(
-                        f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                            gap_dist:.1f}m, heading={
-                            heading_error_deg:.1f}deg - final straight will handle it")
-                    break
-                if gap_dist < 200 and heading_error_deg < 25:
-                    print(
-                        f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                            gap_dist:.1f}m, heading={
-                            heading_error_deg:.1f}deg - final straight will handle it")
-                    break
-
-                # PROPORTIONAL CORRECTION based on BOTH gap distance AND heading error
-                # Key insight: if heading is already good, be MORE conservative
-                # with corrections
-
-                # Base correction factor on gap distance
-                if gap_dist > 300:
-                    base_factor = 0.6
-                elif gap_dist > 150:
-                    base_factor = 0.45
-                elif gap_dist > 75:
-                    base_factor = 0.3
-                else:
-                    base_factor = 0.2
-
-                # REDUCE correction if heading error is small (already pointing
-                # the right way)
-                if heading_error_deg < 5:
-                    correction_factor = base_factor * 0.3  # Very gentle - heading is good
-                elif heading_error_deg < 15:
-                    correction_factor = base_factor * 0.5  # Gentle - heading is decent
-                elif heading_error_deg < 30:
-                    correction_factor = base_factor * 0.7  # Moderate
-                else:
-                    correction_factor = base_factor  # Full correction - heading is bad
-
-                # Add corner to correct heading
-                if abs(gap_heading_error) > math.radians(1):
+        # If closure was solved analytically, skip heuristic corrections
+        if not closure_solved:
+            if abs(angle_deficit) > 0.1 or distance_to_start > 50:
+                # Split the angular deficit into interesting corners
+                if abs(angle_deficit) > math.radians(120):
+                    # Large angle: Create S-bend with 3 alternating corners
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.15), state)
                     CircuitGenerator._add_corner(
-                        gap_heading_error * correction_factor, 180, 60, 0.00006, state)
+                        angle_deficit * 0.35, 110, 50, 0.00009, state)
 
-                prev_gap = gap_dist
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.15), state)
+                    CircuitGenerator._add_corner(
+                        angle_deficit * -0.15, 120, 52, 0.00009, state)
 
-            # Final straight to close remaining gap (NO FINAL CORNER - that
-            # made it worse)
-            final_gap_dist = math.hypot(
-                start_x - state['current_x'],
-                start_y - state['current_y'])
-            print(
-                f"  [CLOSURE FINAL] Gap before final straight: {
-                    final_gap_dist:.1f}m")
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.15), state)
+                    CircuitGenerator._add_corner(
+                        angle_deficit * 0.80, 100, 48, 0.00009, state)
+                elif abs(angle_deficit) > math.radians(60):
+                    # Medium angle: 2-corner S-bend
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.2), state)
+                    CircuitGenerator._add_corner(
+                        angle_deficit * 0.6, 115, 52, 0.00009, state)
 
-            if final_gap_dist > 2:
-                # Add slightly more than the gap to ensure closure
-                CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.2), state)
+                    CircuitGenerator._add_corner(
+                        angle_deficit * 0.4, 125, 54, 0.00009, state)
+                else:
+                    # Small angle: Single corner
+                    CircuitGenerator._add_straight(
+                        int(distance_to_start * 0.3), state)
+                    CircuitGenerator._add_corner(
+                        angle_deficit, 130, 55, 0.00008, state)
+
+                # Recalculate position after closure corners
+                final_dx = start_x - state['current_x']
+                final_dy = start_y - state['current_y']
+                final_angle = math.atan2(final_dy, final_dx)
+                final_heading_error = final_angle - state['current_theta']
+
+                while final_heading_error > math.pi:
+                    final_heading_error -= 2 * math.pi
+                while final_heading_error < -math.pi:
+                    final_heading_error += 2 * math.pi
+
+                # Iteratively refine closure - CORNERS ONLY to avoid overshooting
+                # Stop if gap starts increasing (diverging)
+                max_iterations = 12
+                prev_gap = float('inf')
+                for iteration in range(max_iterations):
+                    # Recalculate where we are relative to start
+                    gap_dx = start_x - state['current_x']
+                    gap_dy = start_y - state['current_y']
+                    gap_dist = math.hypot(gap_dx, gap_dy)
+                    gap_angle = math.atan2(gap_dy, gap_dx)
+                    gap_heading_error = gap_angle - state['current_theta']
+
+                    while gap_heading_error > math.pi:
+                        gap_heading_error -= 2 * math.pi
+                    while gap_heading_error < -math.pi:
+                        gap_heading_error += 2 * math.pi
+
+                    print(
+                        f"  [CLOSURE ITER {iteration}] Gap: {
+                            gap_dist:.1f}m, Heading error: {
+                            math.degrees(gap_heading_error):.1f}deg")
+
+                    # STOP if gap is increasing (diverging)
+                    if gap_dist > prev_gap * 1.2:
+                        print(
+                            f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {
+                                prev_gap:.1f}m to {
+                                gap_dist:.1f}m)")
+                        break
+
+                    # Convergence check: if gap is small AND heading is reasonable, stop
+                    # Combined condition prevents risky corrections that could flip heading
+                    # Tighter thresholds when gap is very small to avoid heading
+                    # flips
+                    heading_error_deg = abs(math.degrees(gap_heading_error))
+                    if gap_dist < 100 and heading_error_deg < 20:
+                        print(
+                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
+                                gap_dist:.1f}m, heading={
+                                heading_error_deg:.1f}deg - final straight will handle it")
+                        break
+                    if gap_dist < 200 and heading_error_deg < 25:
+                        print(
+                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
+                                gap_dist:.1f}m, heading={
+                                heading_error_deg:.1f}deg - final straight will handle it")
+                        break
+
+                    # PROPORTIONAL CORRECTION based on BOTH gap distance AND heading error
+                    # Key insight: if heading is already good, be MORE conservative
+                    # with corrections
+
+                    # Base correction factor on gap distance
+                    if gap_dist > 300:
+                        base_factor = 0.6
+                    elif gap_dist > 150:
+                        base_factor = 0.45
+                    elif gap_dist > 75:
+                        base_factor = 0.3
+                    else:
+                        base_factor = 0.2
+
+                    # REDUCE correction if heading error is small (already pointing
+                    # the right way)
+                    if heading_error_deg < 5:
+                        correction_factor = base_factor * 0.3  # Very gentle - heading is good
+                    elif heading_error_deg < 15:
+                        correction_factor = base_factor * 0.5  # Gentle - heading is decent
+                    elif heading_error_deg < 30:
+                        correction_factor = base_factor * 0.7  # Moderate
+                    else:
+                        correction_factor = base_factor  # Full correction - heading is bad
+
+                    # Add corner to correct heading
+                    if abs(gap_heading_error) > math.radians(1):
+                        CircuitGenerator._add_corner(
+                            gap_heading_error * correction_factor, 180, 60, 0.00006, state)
+
+                    prev_gap = gap_dist
+
+                # Final straight to close remaining gap (NO FINAL CORNER - that
+                # made it worse)
+                final_gap_dist = math.hypot(
+                    start_x - state['current_x'],
+                    start_y - state['current_y'])
+                print(
+                    f"  [CLOSURE FINAL] Gap before final straight: {
+                        final_gap_dist:.1f}m")
+
+                if final_gap_dist > 2:
+                    # Add slightly more than the gap to ensure closure
+                    CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
 
         final_gap = math.hypot(
             start_x - state['current_x'],
@@ -579,10 +636,18 @@ class TrackWidget(QWidget):
     """Widget displaying the racing circuit and cars."""
 
     def __init__(self, track_points: List[TrackPoint], track_length: float,
-                 appearance_manager: VehicleAppearanceManager):
+                 appearance_manager: VehicleAppearanceManager,
+                 track_surface: str = "asphalt", surface_grip: float = None,
+                 pit_points: Optional[List[TrackPoint]] = None,
+                 joker_points: Optional[List[TrackPoint]] = None):
         super().__init__()
         self.track_points = track_points
         self.track_length = track_length
+        self.track_surface = track_surface
+        self.surface_grip = surface_grip
+        # Optional alternate routes (pit lane, joker lap)
+        self.pit_points = pit_points
+        self.joker_points = joker_points
         self.cars: List[Car] = []
         self.setMinimumSize(1400, 900)
         self.race_active = False
@@ -607,6 +672,28 @@ class TrackWidget(QWidget):
         except Exception:
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
+        # Ensure track_points' arc-lengths match provided track_length.
+        # Some generators produce a track whose last point's `s` differs
+        # slightly from the authoritative database length. If so,
+        # scale the `s` values so visual mapping (engine position -> s)
+        # aligns correctly with the provided `track_length` used by
+        # the physics engine. This prevents mismatches that can skip
+        # short segments when mapping positions to track points.
+        try:
+            if self.track_points and self.track_length and len(self.track_points) > 1:
+                gen_length = float(self.track_points[-1].s)
+                if gen_length > 0.0:
+                    # If generator length and DB length differ by more than 1 metre,
+                    # rescale the s-values proportionally.
+                    if abs(gen_length - float(self.track_length)) > 1.0:
+                        scale = float(self.track_length) / gen_length
+                        for pt in self.track_points:
+                            pt.s = float(pt.s) * scale
+        except Exception:
+            # Non-fatal: if scaling fails, fall back to original values
+            pass
+        # Diagnostic: recent large-jump history per car (time, prev_display, normalized_pos, delta)
+        self._telemetry_jumps: Dict[int, List[tuple]] = {}
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
         """Set camera mode and target car."""
@@ -750,7 +837,26 @@ class TrackWidget(QWidget):
                     # Update position (store authoritative simulation position)
                     # and set interpolation targets for smooth rendering on every update.
                     prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
-                    # Shift previous -> target timestamps
+                    # Set interpolation targets using previous displayed position
+                    # Do NOT overwrite `car.prev_s` with the new target here —
+                    # `_animate_cars` expects `car.prev_s` to hold the prior
+                    # position at `car.prev_update_time` so it can interpolate
+                    # smoothly to `car.target_s` over the span.
+                    try:
+                        # Capture previous displayed position for interpolation
+                        last = prev_display if prev_display is not None else normalized_pos
+                        raw_delta = abs(normalized_pos - last)
+                        if self.track_length and self.track_length > 0 and raw_delta > (self.track_length / 2):
+                            delta = self.track_length - raw_delta
+                        else:
+                            delta = raw_delta
+                        # (No logging here) - avoid noisy telemetry prints
+                    except Exception:
+                        delta = 0.0
+
+                    # Shift previous -> target timestamps and set targets
+                    # Preserve existing `car.prev_s` as the previous displayed
+                    # position so interpolation can occur on the GUI timer.
                     car.prev_s = prev_display
                     car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
                     car.target_s = normalized_pos
@@ -759,15 +865,13 @@ class TrackWidget(QWidget):
                     car.s = normalized_pos
 
                     # Track movement direction for rotation (based on latest sim pos and previous display)
-                    prev_s = car.prev_s if car.prev_s is not None else normalized_pos
-                    car.movement_direction = normalized_pos - prev_s
+                    prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
+                    car.movement_direction = normalized_pos - prev_s_val
                     # Handle wrap-around
-                    if car.movement_direction < -self.track_length / 2:
+                    if self.track_length and car.movement_direction < -self.track_length / 2:
                         car.movement_direction += self.track_length
-                    elif car.movement_direction > self.track_length / 2:
+                    elif self.track_length and car.movement_direction > self.track_length / 2:
                         car.movement_direction -= self.track_length
-
-                    car.prev_s = normalized_pos
                 else:
                     # Fallback if track not loaded
                     car.s = position_m
@@ -913,6 +1017,8 @@ class TrackWidget(QWidget):
             self._draw_runoff_areas(painter)  # Layer 2
             self._draw_grandstands(painter)    # Layer 3
             self._draw_garages(painter)        # Layer 4
+            # Draw joker/pit if present
+            self._draw_joker(painter)          # optional joker route
             self._draw_pit_lane(painter)       # Layer 5
             self._draw_track(painter)          # Layers 6-12
             self._draw_cars(painter)           # Layer 13
@@ -964,10 +1070,32 @@ class TrackWidget(QWidget):
         except Exception:
             pass
 
+    def _draw_joker(self, painter):
+        """Draw an alternate 'joker' route if provided by the track data."""
+        try:
+            if not getattr(self, 'joker_points', None):
+                return
+            pts = self.joker_points
+            if not pts:
+                return
+            painter.save()
+            pen = QPen(QColor(255, 140, 0), 3, Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            path = QPainterPath()
+            path.moveTo(pts[0].x, pts[0].y)
+            for pt in pts[1:]:
+                path.lineTo(pt.x, pt.y)
+            painter.drawPath(path)
+            painter.restore()
+        except Exception:
+            pass
+
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
         try:
-            if not self.track_points:
+            # Use explicit pit geometry if provided, else fallback to main track_points
+            points = self.pit_points if getattr(self, 'pit_points', None) else self.track_points
+            if not points:
                 return
 
             from PyQt6.QtGui import QPolygonF
@@ -976,18 +1104,18 @@ class TrackWidget(QWidget):
             pit_inner_points = []  # 22m offset from centerline
             pit_outer_points = []  # 40m offset (18m wide pit lane)
 
-            for pt in self.track_points:
-                if pt.s < 300:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
+            for pt in points:
+                # pit geometry may be provided with its own s coordinates; draw full lane
+                normal_x = -math.sin(pt.theta)
+                normal_y = math.cos(pt.theta)
 
-                    inner_x = pt.x + normal_x * 22
-                    inner_y = pt.y + normal_y * 22
-                    outer_x = pt.x + normal_x * 40
-                    outer_y = pt.y + normal_y * 40
+                inner_x = pt.x + normal_x * 22
+                inner_y = pt.y + normal_y * 22
+                outer_x = pt.x + normal_x * 40
+                outer_y = pt.y + normal_y * 40
 
-                    pit_inner_points.append((inner_x, inner_y))
-                    pit_outer_points.append((outer_x, outer_y))
+                pit_inner_points.append((inner_x, inner_y))
+                pit_outer_points.append((outer_x, outer_y))
 
             # Draw filled polygon
             polygon = QPolygonF()
@@ -1046,23 +1174,17 @@ class TrackWidget(QWidget):
                         break
 
             # Pit exit green light marker (s=285)
-            for pt in self.track_points:
-                if abs(pt.s - 285) < 2:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-                    painter.setBrush(QBrush(QColor(0, 255, 0)))
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawEllipse(
-                        QPointF(
-                            pt.x +
-                            normal_x *
-                            31,
-                            pt.y +
-                            normal_y *
-                            31),
-                        3,
-                        3)
-                    break
+            # If pit_points provided they may have their own exit marker; otherwise leave as-is
+            if not getattr(self, 'pit_points', None):
+                for pt in self.track_points:
+                    if abs(pt.s - 285) < 2:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        painter.setBrush(QBrush(QColor(0, 255, 0)))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        painter.drawEllipse(
+                            QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
+                        break
 
         except Exception:
             pass
@@ -1319,12 +1441,34 @@ class TrackWidget(QWidget):
                 pass
 
             # LAYER 6: Base track surface (lighter grey off-line)
+            # Choose base colour by surface type and adjust brightness by
+            # numeric surface grip when available.
+            surface = getattr(self, 'track_surface', '') or ''
+            base_colors = {
+                'asphalt': (85, 85, 85),
+                'tarmac': (85, 85, 85),
+                'concrete': (100, 100, 100),
+                'gravel': (120, 90, 50),
+                'mixed': (80, 75, 70),
+                'dirt': (110, 80, 45)
+            }
+            r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
+            grip_val = getattr(self, 'surface_grip', None)
+            try:
+                if grip_val is not None:
+                    gv = float(grip_val)
+                    if gv > 1.0:
+                        gv = min(1.0, gv / 20.0)
+                    # adjust brightness slightly based on grip (higher grip -> lighter)
+                    factor = 0.75 + 0.25 * gv
+                    r = int(max(0, min(255, r * factor)))
+                    g = int(max(0, min(255, g * factor)))
+                    b = int(max(0, min(255, b * factor)))
+            except Exception:
+                pass
             painter.setPen(
                 QPen(
-                    QColor(
-                        85,
-                        85,
-                        85),
+                    QColor(r, g, b),
                     TRACK_WIDTH * 2,
                     Qt.PenStyle.SolidLine,
                     Qt.PenCapStyle.RoundCap,
@@ -2128,12 +2272,34 @@ class RaceWindow(QMainWindow):
                 self.track = SimpleTrack(name="Test Circuit", length_km=4.5)
                 print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
 
-            # Generate circuit
+            # Generate circuit (use closure solver to produce exact-first-pass geometry)
             try:
-                print(
-                    f"Generating circuit for {
-                        self.track.length_km}km track...")
-                track_points = CircuitGenerator.generate(self.track.length_km)
+                print(f"Generating circuit for {self.track.length_km}km track (closure solver enabled)...")
+                # Build instruction list matching the legacy generator pattern
+                circuit_instructions = [
+                    ('S', int(600 * (self.track.length_km / 6.0))),
+                    ('C', 45, 170, 60, 0.00008),
+                    ('S', int(400 * (self.track.length_km / 6.0))),
+                    ('C', 65, 95, 50, 0.0001),
+                    ('S', int(220 * (self.track.length_km / 6.0))),
+                    ('C', -55, 100, 52, 0.0001),
+                    ('S', int(350 * (self.track.length_km / 6.0))),
+                    ('C', 155, 48, 42, 0.00014),
+                    ('S', int(550 * (self.track.length_km / 6.0))),
+                    ('C', -65, 145, 58, 0.00009),
+                    ('S', int(380 * (self.track.length_km / 6.0))),
+                    ('C', 55, 115, 54, 0.00009),
+                    ('S', int(180 * (self.track.length_km / 6.0))),
+                    ('C', 60, 90, 50, 0.0001),
+                    ('S', int(300 * (self.track.length_km / 6.0))),
+                    ('C', -50, 135, 56, 0.00009),
+                    ('S', int(160 * (self.track.length_km / 6.0))),
+                    ('C', 50, 135, 56, 0.00009),
+                    ('S', int(320 * (self.track.length_km / 6.0))),
+                ]
+                wrapper = {'solve_closure': True, 'instructions': circuit_instructions}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+                track_points = routes.get('main')
                 if not track_points:
                     self.info_label.setText(
                         "Error: Failed to generate circuit")
@@ -2164,7 +2330,9 @@ class RaceWindow(QMainWindow):
                 self.track_widget = TrackWidget(
                     track_points,
                     track_length,
-                    self.appearance_manager
+                    self.appearance_manager,
+                    track_surface=getattr(self.track, 'surface', 'asphalt'),
+                    surface_grip=getattr(self.track, 'surface_grip', None)
                 )
 
                 # Clear loading message and add track widget

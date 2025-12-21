@@ -89,6 +89,7 @@ class DriverState:
     # Component degradation
     tire_condition: float = 1.0     # 1.0=new tires, 0.0=completely worn
     fuel_load: float = 1.0          # 1.0=full tank, 0.0=empty
+    tire_compound: str = "medium"  # soft, medium, hard, rain
 
     # Performance modifiers
     in_slipstream: bool = False     # Currently benefiting from draft
@@ -296,7 +297,37 @@ class RealtimeRaceEngine:
                 state.total_time += timestep
 
                 # Update degradation and fatigue
-                state.tire_condition -= self.TIRE_DEGRADATION_RATE * state.push_intensity
+                # Apply surface x compound wear multipliers
+                base_deg = self.TIRE_DEGRADATION_RATE
+                # Determine surface from track map (fallbacks supported)
+                surf = None
+                try:
+                    surf = getattr(self.track_map.track, 'surface', None) or getattr(self.track_map.track, 'surface_type', None)
+                except Exception:
+                    surf = None
+
+                surface_multipliers = {
+                    'asphalt': 1.0,
+                    'tarmac': 1.0,
+                    'concrete': 1.05,
+                    'gravel': 1.6,
+                    'mixed': 1.3,
+                    'dirt': 1.8
+                }
+                surf_key = (surf or '').lower()
+                surface_mul = surface_multipliers.get(surf_key, 1.0)
+
+                compound_multipliers = {
+                    'soft': 1.3,
+                    'medium': 1.0,
+                    'hard': 0.8,
+                    'rain': 1.2
+                }
+                comp_key = (getattr(state, 'tire_compound', 'medium') or 'medium').lower()
+                comp_mul = compound_multipliers.get(comp_key, 1.0)
+
+                degradation = base_deg * state.push_intensity * surface_mul * comp_mul
+                state.tire_condition = max(0.0, state.tire_condition - degradation)
                 state.fuel_load -= self.FUEL_BURN_RATE
 
                 # --- Stall detection: if a car's position does not change for
