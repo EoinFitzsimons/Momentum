@@ -62,6 +62,8 @@ from typing import Any, List, Dict, Optional, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
+from .infield_presets import select_preset
+from .props_placer import place_props, draw_props
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -678,6 +680,8 @@ class TrackWidget(QWidget):
         self.animation_timer.setInterval(interval_ms)
         # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
         self._infield_cache: Dict[tuple, QPixmap] = {}
+        # Cache for placed props keyed by same key as pixmap
+        self._infield_props_cache: Dict[tuple, list] = {}
         # Ensure track_points' arc-lengths match provided track_length.
         # Some generators produce a track whose last point's `s` differs
         # slightly from the authoritative database length. If so,
@@ -711,6 +715,65 @@ class TrackWidget(QWidget):
         else:
             self.camera_zoom = 3.0
         self.update()
+
+    def _point_at_s(self, s: float) -> Optional[TrackPoint]:
+        """Return an interpolated TrackPoint at arc-length s (meters).
+
+        Handles wrap-around and non-uniform sampling by binary-searching the
+        nearest segment and linearly interpolating between samples. Returns
+        a new TrackPoint (s,x,y,theta,curvature).
+        """
+        if not getattr(self, 'track_points', None) or not self.track_length or self.track_length <= 0:
+            return None
+
+        target = float(s) % float(self.track_length)
+        pts = self.track_points
+        # Binary search for first index with s >= target
+        left, right = 0, len(pts) - 1
+        while left < right:
+            mid = (left + right) // 2
+            if pts[mid].s < target:
+                left = mid + 1
+            else:
+                right = mid
+        idx = max(0, min(left, len(pts) - 1))
+        next_pt = pts[idx]
+        prev_idx = idx - 1 if idx > 0 else len(pts) - 1
+        prev_pt = pts[prev_idx]
+
+        prev_s = float(prev_pt.s)
+        next_s = float(next_pt.s)
+
+        # Handle wrap-around between last and first point
+        if next_s <= prev_s:
+            next_s += float(self.track_length)
+        adj_target = float(target)
+        if adj_target < prev_s:
+            adj_target += float(self.track_length)
+
+        span = next_s - prev_s
+        if span == 0:
+            t = 0.0
+        else:
+            t = max(0.0, min(1.0, (adj_target - prev_s) / span))
+
+        # Linear interpolation for position
+        x = prev_pt.x + (next_pt.x - prev_pt.x) * t
+        y = prev_pt.y + (next_pt.y - prev_pt.y) * t
+
+        # Angular interpolation (shortest path)
+        a0 = prev_pt.theta
+        a1 = next_pt.theta
+        diff = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        theta = a0 + diff * t
+
+        # Curvature interpolation
+        curvature = prev_pt.curvature + (next_pt.curvature - prev_pt.curvature) * t
+
+        interp_s = prev_s + span * t
+        interp_s = interp_s % float(self.track_length)
+
+        return TrackPoint(interp_s, x, y, theta, curvature)
 
     def set_cars(self, cars: List[Car]):
         """Update car list."""
@@ -985,15 +1048,9 @@ class TrackWidget(QWidget):
                 if followed_car and len(self.track_points) > 0:
                     # Get car position - use binary search like _draw_cars does
                     normalized_s = followed_car.s % self.track_length
-                    left, right = 0, len(self.track_points) - 1
-                    while left < right:
-                        mid = (left + right) // 2
-                        if self.track_points[mid].s < normalized_s:
-                            left = mid + 1
-                        else:
-                            right = mid
-                    idx = max(0, min(left, len(self.track_points) - 1))
-                    pt = self.track_points[idx]
+                    pt = self._point_at_s(normalized_s)
+                    if pt is None:
+                        pt = self.track_points[0]
 
                     # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
                     # 1. Translate viewport centre to canvas origin
@@ -1082,6 +1139,8 @@ class TrackWidget(QWidget):
         bbox: QRectF in world coords (top-left origin)
         w,h: integer pixel dimensions for the pixmap
         seed: integer seed to vary output per-track
+        Uses `select_preset` to pick a color palette based on `track_surface`
+        and `surface_grip` so biomes vary by track parameters.
         """
         try:
             pix = QPixmap(w, h)
@@ -1089,8 +1148,13 @@ class TrackWidget(QWidget):
             p = QPainter(pix)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            # Base grass tone
-            base = QColor(80, 160, 70)
+            # Choose palette based on current track properties
+            palette = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
+            base = palette.get('base', QColor(80, 160, 70))
+            highlight = palette.get('highlight', QColor(95, 180, 85))
+            mole_col = palette.get('mole', QColor(40, 100, 30))
+            streak_col = palette.get('streak', QColor(70, 50, 30, 100))
+
             p.fillRect(0, 0, w, h, base)
 
             # Soft vertical gradient to add variation
@@ -1101,8 +1165,11 @@ class TrackWidget(QWidget):
 
             rnd = random.Random(seed)
 
-            # Layered translucent ellipses to create perceptual noise
-            for i in range(int(max(80, (w * h) // 6000))):
+            # Layered translucent ellipses to create perceptual noise. Density
+            # scales with preset.
+            base_count = int(max(80, (w * h) // 6000))
+            count = int(base_count * palette.get('density_mult', 1.0))
+            for i in range(count):
                 cx = rnd.uniform(0, w)
                 cy = rnd.uniform(0, h)
                 rw = rnd.uniform(w * 0.02, w * 0.12)
@@ -1118,23 +1185,62 @@ class TrackWidget(QWidget):
                 p.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
 
             # Add small darker 'molehills' with higher contrast
-            for i in range(int(max(30, (w * h) // 20000))):
+            mole_count = int(max(30, (w * h) // 20000) * palette.get('molehills_mult', 1.0))
+            for i in range(mole_count):
                 cx = rnd.uniform(0, w)
                 cy = rnd.uniform(0, h)
                 r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
-                col = QColor(40, 100, 30, rnd.randint(80, 160))
+                col = mole_col if mole_col is not None else QColor(40, 100, 30, rnd.randint(80, 160))
                 p.setBrush(QBrush(col))
                 p.setPen(Qt.PenStyle.NoPen)
                 p.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
 
-            # Gentle dirt streaks (random thin lines)
-            p.setPen(QPen(QColor(80, 60, 40, 90), 1))
-            for i in range(int(max(20, (w * h) // 25000))):
+            # Gentle dirt streaks (random thin lines) using preset streak color
+            p.setPen(QPen(streak_col, 1))
+            streak_count = int(max(20, (w * h) // 25000) * max(0.5, palette.get('density_mult', 1.0)))
+            for i in range(streak_count):
                 x1 = rnd.uniform(0, w)
                 y1 = rnd.uniform(0, h)
                 x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
                 y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
                 p.drawLine(int(x1), int(y1), int(x2), int(y2))
+
+            # Add visible mowing stripes (diagonal bands) to make infield read at-a-glance
+            try:
+                stripe_w = max(8, int(min(w, h) * 0.08))
+                stripe_alpha = 80 if palette.get('name') != 'dry' else 70
+                stripe_col_light = QColor(min(255, highlight.red()), min(255, highlight.green()), min(255, highlight.blue()), stripe_alpha)
+                stripe_col_dark = QColor(max(0, base.red() - 18), max(0, base.green() - 18), max(0, base.blue() - 18), stripe_alpha)
+                # diagonal angle
+                angle = -18 * math.pi / 180
+                dx = math.cos(angle) * stripe_w * 0.6
+                dy = math.sin(angle) * stripe_w * 0.6
+                i = -w
+                toggle = True
+                while i < w * 2:
+                    col = stripe_col_light if toggle else stripe_col_dark
+                    p.setBrush(QBrush(col))
+                    # draw band as rectangle long enough
+                    p.setPen(Qt.PenStyle.NoPen)
+                    # compute polygon for band
+                    x0 = i
+                    y0 = 0
+                    band = [
+                        QPointF(x0, y0),
+                        QPointF(x0 + dx * 200, y0 + dy * 200),
+                        QPointF(x0 + dx * 200 + stripe_w * -math.sin(angle), y0 + dy * 200 + stripe_w * math.cos(angle)),
+                        QPointF(x0 + stripe_w * -math.sin(angle), y0 + stripe_w * math.cos(angle))
+                    ]
+                    path = QPainterPath()
+                    path.moveTo(band[0])
+                    for bp in band[1:]:
+                        path.lineTo(bp)
+                    path.closeSubpath()
+                    p.drawPath(path)
+                    toggle = not toggle
+                    i += stripe_w * 0.7
+            except Exception:
+                pass
 
             p.end()
             return pix
@@ -1473,6 +1579,13 @@ class TrackWidget(QWidget):
                     if pix is None:
                         pix = self._generate_infield_pixmap(bbox, w, h, seed)
                         self._infield_cache[key] = pix
+                        # Place props deterministically and cache them
+                        try:
+                            world_pts = [(pt.x(), pt.y()) for pt in infield_points]
+                            props = place_props(world_pts, seed=seed, density=0.00035)
+                            self._infield_props_cache[key] = props
+                        except Exception:
+                            self._infield_props_cache[key] = []
 
                     # Draw the pixmap clipped to the infield polygon
                     painter.save()
@@ -1682,6 +1795,17 @@ class TrackWidget(QWidget):
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
 
+        # Draw cached procedural props on top of the infield but under cars
+        try:
+            # key was computed earlier when building infield pixmap
+            key = (w, h, seed) if 'w' in locals() and 'h' in locals() and 'seed' in locals() else None
+            if key:
+                props = self._infield_props_cache.get(key)
+                if props:
+                    draw_props(painter, props)
+        except Exception:
+            pass
+
     def _draw_cars(self, painter):
         """Draw cars at current positions."""
         try:
@@ -1710,18 +1834,9 @@ class TrackWidget(QWidget):
                         # don't match array indices. Must search for closest .s value!
                         # Binary search for the track point with .s closest to
                         # normalized_s
-                        left, right = 0, len(self.track_points) - 1
-                        while left < right:
-                            mid = (left + right) // 2
-                            if self.track_points[mid].s < normalized_s:
-                                left = mid + 1
-                            else:
-                                right = mid
-
-                        idx = left
-                        # Safety clamp
-                        idx = max(0, min(idx, len(self.track_points) - 1))
-                        pt = self.track_points[idx]
+                        pt = self._point_at_s(normalized_s)
+                        if pt is None:
+                            continue
 
                         # === STEP 3: LATERAL POSITIONING (SIDE-BY-SIDE RACING) ===
                         # Spread cars across track width to simulate racing lines
