@@ -10,9 +10,15 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from GUI.gui_race_visual import RaceWindow
-from GUI.gui_main_menu import MainMenuWindow
 from PyQt6.QtWidgets import QApplication
+
+# Ensure a QGuiApplication exists early to avoid QPixmap-before-QApplication errors
+# Some GUI modules may (incorrectly) create QPixmaps at import time; creating a
+# QApplication here prevents the runtime error when running the launcher.
+_existing_app = QApplication.instance()
+if _existing_app is None:
+    # Create a lightweight application early; MomentumLauncher will reuse it.
+    _early_app = QApplication(sys.argv)
 
 
 class MomentumLauncher:
@@ -21,6 +27,14 @@ class MomentumLauncher:
     def __init__(self):
         self.app = QApplication(sys.argv)
         self.app.setStyle("Fusion")
+
+        # Defer importing GUI modules until after QApplication exists to avoid
+        # creating QPixmaps or other Qt GUI objects at module import time.
+        from GUI.gui_race_visual import RaceWindow
+        from GUI.gui_main_menu import MainMenuWindow
+
+        self.RaceWindow = RaceWindow
+        self.MainMenuWindow = MainMenuWindow
 
         self.main_menu = None
         self.race_window = None
@@ -33,7 +47,7 @@ class MomentumLauncher:
 
     def show_main_menu(self):
         """Show main menu window."""
-        self.main_menu = MainMenuWindow()
+        self.main_menu = self.MainMenuWindow()
         self.main_menu.start_race_signal.connect(self.start_race)
         self.main_menu.show()
 
@@ -50,10 +64,10 @@ class MomentumLauncher:
         # Create race window with display mode, pass selected track_id if present
         track_id = config.get('track_id')
         try:
-            self.race_window = RaceWindow(track_id=track_id)
+            self.race_window = self.RaceWindow(track_id=track_id)
         except TypeError:
             # Older signature fallback
-            self.race_window = RaceWindow()
+            self.race_window = self.RaceWindow()
 
         # Set player driver
         player_driver = config.get('driver')

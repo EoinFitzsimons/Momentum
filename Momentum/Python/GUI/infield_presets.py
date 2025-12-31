@@ -12,6 +12,8 @@ PRESETS = {
     'lush': {
         'base': QColor(80, 160, 70),
         'highlight': QColor(95, 180, 85),
+        'texture_tint': QColor(70, 150, 60, 200),
+        'occlusion': 0.08,
         'mole': QColor(40, 100, 30),
         'streak': QColor(70, 50, 30, 100),
         'density_mult': 1.2,
@@ -20,6 +22,8 @@ PRESETS = {
     'dry': {
         'base': QColor(150, 140, 80),
         'highlight': QColor(170, 155, 95),
+        'texture_tint': QColor(140, 120, 70, 200),
+        'occlusion': 0.10,
         'mole': QColor(90, 70, 40),
         'streak': QColor(100, 80, 50, 110),
         'density_mult': 0.7,
@@ -28,6 +32,8 @@ PRESETS = {
     'autumn': {
         'base': QColor(140, 110, 60),
         'highlight': QColor(160, 130, 80),
+        'texture_tint': QColor(130, 100, 55, 200),
+        'occlusion': 0.12,
         'mole': QColor(80, 60, 30),
         'streak': QColor(110, 70, 40, 120),
         'density_mult': 0.8,
@@ -36,6 +42,8 @@ PRESETS = {
     'wet': {
         'base': QColor(60, 120, 60),
         'highlight': QColor(75, 140, 75),
+        'texture_tint': QColor(55, 110, 55, 200),
+        'occlusion': 0.06,
         'mole': QColor(30, 80, 30),
         'streak': QColor(30, 20, 20, 140),
         'density_mult': 1.0,

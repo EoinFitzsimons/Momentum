@@ -112,7 +112,8 @@ def draw_props(painter: QPainter, props: List[Dict], offset_x: float = 0.0, offs
         ry = int(y * 1000)
         rnd_seed = (rx * 73856093) ^ (ry * 19349663) & 0xffffffff
         # Lightweight deterministic jitter for rotation/scale
-        rot = (rnd_seed % 360) * 0.5
+        # small deterministic jitter for natural variation (-15..+15 degrees)
+        rot = (((rnd_seed % 100) / 100.0) - 0.5) * 30.0
 
         sprite_drawn = False
         if prop['type'] in _SPRITE_INDEX and _SPRITE_INDEX.get(prop['type']):
