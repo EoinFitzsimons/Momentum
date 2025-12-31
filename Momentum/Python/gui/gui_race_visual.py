@@ -1026,8 +1026,11 @@ class TrackWidget(QWidget):
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            # GRASS BACKGROUND
-            painter.fillRect(self.rect(), QColor(34, 139, 34))  # Forest green
+            # Background fill for areas outside the track
+            painter.fillRect(self.rect(), QColor(28, 90, 36))
+
+            # (Forest layer will be drawn after camera/world transform so
+            # it correctly aligns with world coordinates.)
 
             # Centre point for transformations
             center_x = self.width() // 2
@@ -1077,6 +1080,71 @@ class TrackWidget(QWidget):
                 painter.scale(base_zoom, -base_zoom)
 
             # CORRECT LAYER ORDER for visibility
+            # Draw full-canvas forest as the true bottom layer in world coordinates
+            # (draw a large tiled area in world space so the forest appears under
+            # everything and is visible through a transparent infield).
+            try:
+                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                forest_tile = os.path.join(assets_dir, 'forest_tile.png')
+                painter.save()
+                if os.path.exists(forest_tile):
+                    ft_pix = QPixmap(forest_tile)
+                    if not ft_pix.isNull():
+                        painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
+                else:
+                    rnd_bg = random.Random(42)
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QBrush(QColor(34, 100, 34)))
+                    # scatter simple tree dots across a large world region
+                    for _ in range(int((self.width() * self.height()) // 15000)):
+                        tx = rnd_bg.uniform(-4000, 4000)
+                        ty = rnd_bg.uniform(-4000, 4000)
+                        tr = rnd_bg.uniform(6, 18)
+                        painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
+                painter.restore()
+            except Exception:
+                pass
+
+            # Draw forest as bottom layer in world coordinates (inside inner infield polygon)
+            try:
+                TRACK_WIDTH = 14
+                inner_infield_points = []
+                inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                for pt in self.track_points:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
+                    iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
+                    inner_infield_points.append(QPointF(iix, iiy))
+                if inner_infield_points:
+                    inner_poly = QPolygonF(inner_infield_points)
+                    band_path = QPainterPath()
+                    band_path.addPolygon(inner_poly)
+                    painter.save()
+                    painter.setClipPath(band_path)
+                    try:
+                        assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                        forest_tile = os.path.join(assets_dir, 'forest_tile.png')
+                        if os.path.exists(forest_tile):
+                            ft_pix = QPixmap(forest_tile)
+                            if not ft_pix.isNull():
+                                # draw in world coords covering a generous region
+                                painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
+                        else:
+                            rnd2 = random.Random(42)
+                            painter.setPen(Qt.PenStyle.NoPen)
+                            painter.setBrush(QBrush(QColor(34, 100, 34)))
+                            for _ in range(int((self.width() * self.height()) // 20000)):
+                                tx = rnd2.uniform(-2000, 2000)
+                                ty = rnd2.uniform(-2000, 2000)
+                                tr = rnd2.uniform(6, 18)
+                                painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
+                    except Exception:
+                        pass
+                    painter.restore()
+            except Exception:
+                pass
+
             self._draw_runoff_areas(painter)  # Layer 2
             self._draw_grandstands(painter)    # Layer 3
             self._draw_garages(painter)        # Layer 4
@@ -1151,33 +1219,77 @@ class TrackWidget(QWidget):
             # Choose palette based on current track properties
             palette = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
             base = palette.get('base', QColor(80, 160, 70))
+            # Slightly mute the base colour to remove neon appearance
+            try:
+                # stronger mute to avoid neon greens
+                muted_base = QColor(max(0, int(base.red() * 0.45)), max(0, int(base.green() * 0.5)), max(0, int(base.blue() * 0.45)))
+            except Exception:
+                muted_base = base
             highlight = palette.get('highlight', QColor(95, 180, 85))
             mole_col = palette.get('mole', QColor(40, 100, 30))
             streak_col = palette.get('streak', QColor(70, 50, 30, 100))
 
-            p.fillRect(0, 0, w, h, base)
+            # Use muted base fill to lower overall vibrancy
+            p.fillRect(0, 0, w, h, muted_base)
 
             # Soft vertical gradient to add variation
             grad = QLinearGradient(0, 0, 0, h)
-            grad.setColorAt(0.0, QColor(90, 170, 80, 120))
-            grad.setColorAt(1.0, QColor(60, 140, 55, 120))
+            grad.setColorAt(0.0, QColor(80, 150, 70, 70))
+            grad.setColorAt(1.0, QColor(55, 120, 50, 70))
             p.fillRect(0, 0, w, h, grad)
+
+            # Tile a subtle grass texture if available to break the flat neon look
+            try:
+                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                tile_path = os.path.join(assets_dir, 'grass_tile.png')
+                if os.path.exists(tile_path):
+                    tile_pix = QPixmap(tile_path)
+                    if not tile_pix.isNull():
+                        # tile at native size for crisp low-poly look
+                        p.save()
+                        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+                        p.drawTiledPixmap(0, 0, w, h, tile_pix)
+                        p.restore()
+                        # apply a subtle tint over the tile to match the preset
+                        tint = palette.get('texture_tint')
+                        if tint is not None:
+                            # reduce tint alpha so tile shows through
+                            tint_col = QColor(tint.red(), tint.green(), tint.blue(), 50)
+                            p.fillRect(0, 0, w, h, tint_col)
+                        # apply soft occlusion near track edges by painting a translucent
+                        # radial/linear darkening; use occlusion parameter from preset
+                        occ = float(palette.get('occlusion', 0.08))
+                        if occ > 0:
+                            occ_col = QColor(0, 0, 0, int(occ * 255))
+                            # subtle vignette using gradient
+                            try:
+                                occ_grad = QLinearGradient(w/2, 0, w/2, h)
+                                occ_grad.setColorAt(0.0, QColor(0,0,0,0))
+                                occ_grad.setColorAt(0.5, QColor(0,0,0,int(occ*180)))
+                                occ_grad.setColorAt(1.0, QColor(0,0,0,int(occ*240)))
+                                p.fillRect(0, 0, w, h, occ_grad)
+                            except Exception:
+                                p.fillRect(0, 0, w, h, occ_col)
+            except Exception:
+                # Non-fatal; fall back to painted base
+                pass
 
             rnd = random.Random(seed)
 
             # Layered translucent ellipses to create perceptual noise. Density
             # scales with preset.
-            base_count = int(max(80, (w * h) // 6000))
-            count = int(base_count * palette.get('density_mult', 1.0))
+            base_count = int(max(40, (w * h) // 8000))
+            count = int(base_count * max(0.6, palette.get('density_mult', 1.0)))
             for i in range(count):
                 cx = rnd.uniform(0, w)
                 cy = rnd.uniform(0, h)
                 rw = rnd.uniform(w * 0.02, w * 0.12)
                 rh = rnd.uniform(h * 0.02, h * 0.12)
                 shade = rnd.randint(-20, 20)
-                r = max(30, min(255, base.red() + shade))
-                g = max(30, min(255, base.green() + shade))
-                b = max(30, min(255, base.blue() + shade))
+                # Use muted_base for noise so overall tone stays desaturated
+                r = max(30, min(255, muted_base.red() + shade))
+                g = max(30, min(255, muted_base.green() + shade))
+                b = max(30, min(255, muted_base.blue() + shade))
                 alpha = rnd.randint(18, 48)
                 col = QColor(r, g, b, alpha)
                 p.setBrush(QBrush(col))
@@ -1190,7 +1302,7 @@ class TrackWidget(QWidget):
                 cx = rnd.uniform(0, w)
                 cy = rnd.uniform(0, h)
                 r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
-                col = mole_col if mole_col is not None else QColor(40, 100, 30, rnd.randint(80, 160))
+                col = mole_col if mole_col is not None else QColor(max(0, muted_base.red()-40), max(0, muted_base.green()-60), max(0, muted_base.blue()-40), rnd.randint(80, 160))
                 p.setBrush(QBrush(col))
                 p.setPen(Qt.PenStyle.NoPen)
                 p.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
@@ -1208,9 +1320,9 @@ class TrackWidget(QWidget):
             # Add visible mowing stripes (diagonal bands) to make infield read at-a-glance
             try:
                 stripe_w = max(8, int(min(w, h) * 0.08))
-                stripe_alpha = 80 if palette.get('name') != 'dry' else 70
+                stripe_alpha = 40 if palette.get('name') != 'dry' else 35
                 stripe_col_light = QColor(min(255, highlight.red()), min(255, highlight.green()), min(255, highlight.blue()), stripe_alpha)
-                stripe_col_dark = QColor(max(0, base.red() - 18), max(0, base.green() - 18), max(0, base.blue() - 18), stripe_alpha)
+                stripe_col_dark = QColor(max(0, muted_base.red() - 18), max(0, muted_base.green() - 18), max(0, muted_base.blue() - 18), stripe_alpha)
                 # diagonal angle
                 angle = -18 * math.pi / 180
                 dx = math.cos(angle) * stripe_w * 0.6
@@ -1360,10 +1472,12 @@ class TrackWidget(QWidget):
                     if abs(pt.s - 285) < 2:
                         normal_x = -math.sin(pt.theta)
                         normal_y = math.cos(pt.theta)
+                        painter.save()
                         painter.setBrush(QBrush(QColor(0, 255, 0)))
                         painter.setPen(Qt.PenStyle.NoPen)
                         painter.drawEllipse(
                             QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
+                        painter.restore()
                         break
 
         except Exception:
@@ -1555,59 +1669,198 @@ class TrackWidget(QWidget):
 
             centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
 
-            # === Infield fill: procedural blended turf and small water pool ===
+            # === Infield fill: procedural blended turf with pixmap + props ===
             try:
                 from PyQt6.QtGui import QPolygonF
+                # Build two polygons: the visible infield (slightly shrunk) which
+                # will receive the turf pixmap and props, and an outer polygon
+                # (expanded) used for the forest/vegetation band.
                 infield_points = []
-                for pt in self.track_points:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-                    # Move inward from centerline towards infield by TRACK_WIDTH - 2
-                    ix = pt.x - normal_x * (TRACK_WIDTH - 2)
-                    iy = pt.y - normal_y * (TRACK_WIDTH - 2)
-                    infield_points.append(QPointF(ix, iy))
+                inner_infield_points = []
+                outer_pts = []
+                # Increase inner shrink proportional to viewport so the
+                # generated infield pixmap stays well inside the outer band.
+                try:
+                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                    for pt in self.track_points:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        # visible infield edge (just inside track edge)
+                        ix = pt.x - normal_x * (TRACK_WIDTH - 2)
+                        iy = pt.y - normal_y * (TRACK_WIDTH - 2)
+                        infield_points.append(QPointF(ix, iy))
+                        # inner shrink to ensure the turf pixmap doesn't overlap outer band
+                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
+                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
+                        inner_infield_points.append(QPointF(iix, iiy))
+                        # outer band edge (outside track)
+                        forest_margin = max(20, int(min(self.width(), self.height()) * 0.06))
+                        ox = pt.x + normal_x * (TRACK_WIDTH + forest_margin)
+                        oy = pt.y + normal_y * (TRACK_WIDTH + forest_margin)
+                        outer_pts.append(QPointF(ox, oy))
+                except Exception:
+                    pass
 
                 if infield_points:
                     poly = QPolygonF(infield_points)
-                    # Prepare cached pixmap for infield
-                    bbox = poly.boundingRect()
+                    inner_poly = QPolygonF(inner_infield_points)
+                    outer_poly = QPolygonF(outer_pts) if outer_pts else None
+                    # Use inner_poly's bbox for the generated pixmap so it won't
+                    # cover the outer band we draw later.
+                    bbox = inner_poly.boundingRect()
                     w = max(2, int(math.ceil(bbox.width())))
                     h = max(2, int(math.ceil(bbox.height())))
                     seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
-                    key = (w, h, seed)
+
+                    # include preset name and grass tile mtime so cache invalidates
+                    try:
+                        preset = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
+                        palette_name = preset.get('name', '')
+                    except Exception:
+                        palette_name = ''
+                    tile_mtime = None
+                    try:
+                        assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                        tile_path = os.path.join(assets_dir, 'grass_tile.png')
+                        if os.path.exists(tile_path):
+                            tile_mtime = int(os.path.getmtime(tile_path))
+                    except Exception:
+                        tile_mtime = None
+
+                    key = (w, h, seed, palette_name, tile_mtime)
                     pix = self._infield_cache.get(key)
                     if pix is None:
-                        pix = self._generate_infield_pixmap(bbox, w, h, seed)
-                        self._infield_cache[key] = pix
-                        # Place props deterministically and cache them
                         try:
-                            world_pts = [(pt.x(), pt.y()) for pt in infield_points]
-                            props = place_props(world_pts, seed=seed, density=0.00035)
-                            self._infield_props_cache[key] = props
+                            pix = self._generate_infield_pixmap(bbox, w, h, seed)
                         except Exception:
-                            self._infield_props_cache[key] = []
+                            pix = QPixmap(max(1, w), max(1, h))
+                            pix.fill(QColor(100, 160, 100))
+                        self._infield_cache[key] = pix
+
+                        # Place props deterministically and cache them using inner polygon
+                        try:
+                            world_pts = [(pt.x(), pt.y()) for pt in inner_infield_points]
+                            props = place_props(world_pts, seed=seed, density=0.00035)
+                        except Exception:
+                            props = []
+                        self._infield_props_cache[key] = props
 
                     # Draw the pixmap clipped to the infield polygon
                     painter.save()
                     painter.setPen(Qt.PenStyle.NoPen)
                     painter.setBrush(Qt.BrushStyle.NoBrush)
+                    # Translate to bbox origin, then unflip Y and position pixmap
                     painter.translate(bbox.x(), bbox.y())
+                    # Because the main painter has Y flipped (scale(..., -...)),
+                    # draw the pixmap in local top-left coords by flipping back
+                    # and translating by -h so the pixmap's top aligns correctly.
+                    painter.save()
+                    painter.scale(1, -1)
+                    painter.translate(0, -h)
                     local_poly = QPolygonF()
-                    for p in infield_points:
+                    for p in inner_infield_points:
                         local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
                     clip_path = QPainterPath()
                     clip_path.addPolygon(local_poly)
                     painter.setClipPath(clip_path)
-                    painter.drawPixmap(0, 0, pix)
+                    # We intentionally do not draw the turf pixmap here so the
+                    # previously-rendered forest (bottom layer) shows through.
+                    # Leave area transparent; draw props on top.
+                    # Draw placed props in the same unflipped local space
+                    try:
+                        props = self._infield_props_cache.get(key, [])
+                        if props:
+                            try:
+                                draw_props(painter, props, offset_x=bbox.x(), offset_y=bbox.y())
+                            except Exception:
+                                for prop in props:
+                                    x = prop.get('x', 0) - bbox.x()
+                                    y = prop.get('y', 0) - bbox.y()
+                                    s = prop.get('size', 8.0)
+                                    painter.setPen(Qt.PenStyle.NoPen)
+                                    painter.setBrush(QBrush(QColor(34, 120, 34)))
+                                    painter.drawEllipse(int(x - s/2), int(y - s/2), int(s), int(s))
+                    except Exception:
+                        pass
+                    painter.restore()
                     painter.restore()
 
-                    # No decorative water pool: prefer clean procedural infield
+                    # Draw an outer forest band if we were able to compute it.
+                    try:
+                        if outer_poly is not None:
+                            band_path = QPainterPath()
+                            band_path.addPolygon(outer_poly)
+                            inner_path = QPainterPath()
+                            inner_path.addPolygon(inner_poly)
+                            band_path = band_path.subtracted(inner_path)
+                            painter.save()
+                            painter.setClipPath(band_path)
+                            # Tile the grass texture into the band when available
+                            try:
+                                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                                tile_path = os.path.join(assets_dir, 'grass_tile.png')
+                                if os.path.exists(tile_path):
+                                    tile_pix = QPixmap(tile_path)
+                                    if not tile_pix.isNull():
+                                        # draw a slightly expanded tiled area to cover edges
+                                        painter.drawTiledPixmap(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, tile_pix)
+                                        painter.fillRect(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, QColor(60, 120, 60, 40))
+                                    else:
+                                        painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+                                else:
+                                    painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+                            except Exception:
+                                painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+                            painter.restore()
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
             # LAYER 6: Base track surface (lighter grey off-line)
             # Choose base colour by surface type and adjust brightness by
             # numeric surface grip when available.
+            # Ensure inner infield forest is visible: draw a clipped forest
+            # layer over the infield area so it shows through even if the
+            # generated turf pixmap (or other draw) is opaque.
+            try:
+                if len(self.track_points) > 0:
+                    TRACK_WIDTH = 14
+                    inner_infield_points = []
+                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                    for pt in self.track_points:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
+                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
+                        inner_infield_points.append(QPointF(iix, iiy))
+                    if inner_infield_points:
+                        inner_poly = QPolygonF(inner_infield_points)
+                        clip_path = QPainterPath()
+                        clip_path.addPolygon(inner_poly)
+                        painter.save()
+                        painter.setClipPath(clip_path)
+                        try:
+                            assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+                            forest_tile = os.path.join(assets_dir, 'forest_tile.png')
+                            if os.path.exists(forest_tile):
+                                ft_pix = QPixmap(forest_tile)
+                                if not ft_pix.isNull():
+                                    painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
+                            else:
+                                rnd2 = random.Random(123)
+                                painter.setPen(Qt.PenStyle.NoPen)
+                                painter.setBrush(QBrush(QColor(34, 100, 34, 220)))
+                                for _ in range(int((self.width() * self.height()) // 22000)):
+                                    tx = rnd2.uniform(-2000, 2000)
+                                    ty = rnd2.uniform(-2000, 2000)
+                                    tr = rnd2.uniform(6, 18)
+                                    painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
+                        except Exception:
+                            pass
+                        painter.restore()
+            except Exception:
+                pass
             surface = getattr(self, 'track_surface', '') or ''
             base_colors = {
                 'asphalt': (85, 85, 85),
@@ -1795,16 +2048,8 @@ class TrackWidget(QWidget):
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
 
-        # Draw cached procedural props on top of the infield but under cars
-        try:
-            # key was computed earlier when building infield pixmap
-            key = (w, h, seed) if 'w' in locals() and 'h' in locals() and 'seed' in locals() else None
-            if key:
-                props = self._infield_props_cache.get(key)
-                if props:
-                    draw_props(painter, props)
-        except Exception:
-            pass
+        # Cached props are already drawn within the infield pixmap block
+        # to ensure correct orientation and clipping. Avoid duplicate drawing here.
 
     def _draw_cars(self, painter):
         """Draw cars at current positions."""
