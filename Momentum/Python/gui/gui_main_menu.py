@@ -238,8 +238,9 @@ class MainMenuWindow(QMainWindow):
                 border-color: #555;
             }
         """)
-        championship_btn.setEnabled(False)  # Not implemented yet
-        championship_btn.setToolTip("Coming Soon")
+        championship_btn.setEnabled(True)  # Now implemented!
+        championship_btn.setToolTip("Start or continue a championship season")
+        championship_btn.clicked.connect(self._show_championship_mode)
         layout.addWidget(championship_btn)
 
         # Career Mode (placeholder)
@@ -373,6 +374,34 @@ class MainMenuWindow(QMainWindow):
             self, self.drivers, self.display_mode)
         setup_window.race_start.connect(self._on_race_start)
         setup_window.exec()
+    
+    def _show_championship_mode(self):
+        """Show championship selection/management."""
+        from GUI.gui_championship import ChampionshipSelectionDialog, ChampionshipWindow
+        
+        # Show championship selection
+        dialog = ChampionshipSelectionDialog(self.db, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_championship:
+            # Show championship window
+            self.championship_window = ChampionshipWindow(dialog.selected_championship, self)
+            self.championship_window.return_to_menu.connect(self._return_from_championship)
+            self.championship_window.start_race_signal.connect(self._start_championship_race)
+            self.championship_window.show()
+            self.hide()
+    
+    def _return_from_championship(self):
+        """Return from championship to main menu."""
+        if hasattr(self, 'championship_window'):
+            self.championship_window.close()
+        self.show()
+    
+    def _start_championship_race(self, config: dict):
+        """Start a championship race."""
+        # Add display mode to config
+        config["display_mode"] = self.display_mode
+        self.start_race_signal.emit(config)
+        if hasattr(self, 'championship_window'):
+            self.championship_window.hide()
 
     def _on_display_mode_changed(self, button):
         """Handle display mode radio button change."""
@@ -751,30 +780,97 @@ class QuickRaceSetupWindow(QDialog):
 
         # Attach right_vbox into selection container and add to main layout
         selection_container.addLayout(right_vbox)
-        # Track selection (below driver selection)
+        layout.addLayout(selection_container)
+
+        # Discipline selection (comes first, affects track list)
+        discipline_group = QGroupBox("Racing Discipline")
+        discipline_layout = QVBoxLayout(discipline_group)
+        discipline_label = QLabel("Choose Discipline:")
+        discipline_layout.addWidget(discipline_label)
+
+        self.discipline_combo = QComboBox()
+        # Add all available disciplines
+        self.disciplines_map = {
+            "SINGLE_SEATER": "Single Seater (Default)",
+            "DRAG_ACCELERATION": "Drag Acceleration",
+            "RALLY_STAGE": "Rally Stage",
+            "PRODUCTION_TOURING": "Production/Touring",
+            "URBAN_STREET": "Urban Street",
+            "SPRINT_RALLYCROSS": "Sprint/Rallycross",
+            "ENDURANCE": "Endurance",
+        }
+        for discipline_id, display_name in self.disciplines_map.items():
+            self.discipline_combo.addItem(display_name, discipline_id)
+        
+        self.discipline_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 2px solid #B9F2FF;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 8px solid #B9F2FF;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #353839;
+                color: #B9F2FF;
+                selection-background-color: #DD2D4A;
+                selection-color: #F5F5F5;
+                border: 2px solid #B9F2FF;
+            }
+        """)
+        self.discipline_combo.setCurrentIndex(0)
+        self.discipline_combo.currentIndexChanged.connect(self._on_discipline_changed)
+        discipline_layout.addWidget(self.discipline_combo)
+        layout.addWidget(discipline_group)
+
+        # Track selection (populates based on selected discipline)
         track_group = QGroupBox("Track Selection")
         track_layout = QVBoxLayout(track_group)
         track_label = QLabel("Choose Track:")
         track_layout.addWidget(track_label)
 
         self.track_combo = QComboBox()
-        # Populate from database if available
-        try:
-            db = self.parent_window.db if hasattr(self.parent_window, 'db') else None
-            tracks = db.get_all_tracks() if db else []
-            if not tracks:
-                # No tracks in DB -> placeholder
-                self.track_combo.addItem("Test Circuit (Default)", None)
-            else:
-                for t in tracks:
-                    # store track id as user data
-                    self.track_combo.addItem(t.name, t.id)
-        except Exception:
-            self.track_combo.addItem("Test Circuit (Default)", None)
-
+        self.track_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #353839;
+                color: #B9F2FF;
+                border: 2px solid #B9F2FF;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 8px solid #B9F2FF;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #353839;
+                color: #B9F2FF;
+                selection-background-color: #DD2D4A;
+                selection-color: #F5F5F5;
+                border: 2px solid #B9F2FF;
+            }
+        """)
         track_layout.addWidget(self.track_combo)
         layout.addWidget(track_group)
-        layout.addLayout(selection_container)
+
+        # Populate tracks for initial discipline
+        self._update_tracks_for_discipline()
 
         # Connect selection updates
         # Manage selection both for mouse and keyboard changes
@@ -800,6 +896,9 @@ class QuickRaceSetupWindow(QDialog):
         # Get selected tuning preset
         selected_preset = self.preset_combo.currentData()
 
+        # Get selected discipline
+        selected_discipline = self.discipline_combo.currentData()
+
         # Build config (pace and overtake will be controlled during race)
         # Determine selected track id (None -> default)
         track_id = None
@@ -813,14 +912,49 @@ class QuickRaceSetupWindow(QDialog):
             "driver": self.selected_driver,
             "display_mode": self.display_mode,
             "tuning_preset": selected_preset,
-            "track_id": track_id
+            "track_id": track_id,
+            "discipline": selected_discipline
         }
 
         driver_name = get_display_name(self.selected_driver)
-        print(f"[INFO] Starting race with driver: {driver_name}")
+        print(f"[INFO] Starting race with driver: {driver_name}, discipline: {selected_discipline}")
 
         self.race_start.emit(config)
         self.accept()  # Close dialog with accept status
+
+    def _on_discipline_changed(self):
+        """Handle discipline selection change."""
+        self._update_tracks_for_discipline()
+
+    def _update_tracks_for_discipline(self):
+        """Populate track list based on selected discipline."""
+        self.track_combo.clear()
+        
+        selected_discipline = self.discipline_combo.currentData()
+        
+        try:
+            db = self.parent_window.db if hasattr(self.parent_window, 'db') else None
+            if db:
+                # Try to get tracks by discipline
+                try:
+                    tracks = db.get_circuits_by_discipline(selected_discipline)
+                except Exception:
+                    # Fallback: get all tracks
+                    tracks = db.get_all_tracks()
+            else:
+                tracks = []
+            
+            if not tracks:
+                # No tracks found -> placeholder
+                self.track_combo.addItem("Test Circuit (Default)", None)
+            else:
+                for track in tracks:
+                    # Store track id as user data
+                    track_name = getattr(track, 'name', f'Track {track.id}')
+                    self.track_combo.addItem(track_name, track.id)
+        except Exception as e:
+            print(f"[WARNING] Error loading tracks: {e}")
+            self.track_combo.addItem("Test Circuit (Default)", None)
 
     def _on_driver_selected(self, current, previous):
         """Update the right-hand profile panel when selection changes."""

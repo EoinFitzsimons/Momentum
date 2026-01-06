@@ -740,30 +740,16 @@ class DatabaseManager:
             discipline: Racing discipline (e.g., "SINGLE_SEATER")
 
         Returns:
-            List of circuit objects (simplified from database)
+            List of Track objects matching the discipline
         """
         with self.get_connection() as conn:
             rows = conn.execute("""
-                SELECT id, name, country, region, length_km, turns,
-                       primary_discipline as discipline, circuit_type
-                FROM tracks
+                SELECT * FROM tracks
                 WHERE primary_discipline = ?
                 ORDER BY name
             """, (discipline,)).fetchall()
 
-            # Return as simple objects with necessary attributes
-            class SimpleCircuit:
-                country: str
-                region: str
-                location: str
-
-                def __init__(self, row_dict):
-                    for key, value in row_dict.items():
-                        setattr(self, key, value)
-                    # Add location as combined string for compatibility
-                    self.location = f"{self.country}, {self.region}"
-
-            return [SimpleCircuit(dict(row)) for row in rows]
+            return [Track(**dict(row)) for row in rows]
 
     def get_circuit_by_id(self, circuit_id: int) -> Optional[Any]:
         """

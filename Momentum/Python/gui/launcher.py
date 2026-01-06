@@ -61,13 +61,17 @@ class MomentumLauncher:
             self.race_window.close()
             self.race_window = None
 
-        # Create race window with display mode, pass selected track_id if present
+        # Create race window with display mode, pass selected track_id and discipline if present
         track_id = config.get('track_id')
+        discipline = config.get('discipline', 'SINGLE_SEATER')
         try:
-            self.race_window = self.RaceWindow(track_id=track_id)
+            self.race_window = self.RaceWindow(track_id=track_id, discipline=discipline)
         except TypeError:
             # Older signature fallback
-            self.race_window = self.RaceWindow()
+            try:
+                self.race_window = self.RaceWindow(track_id=track_id)
+            except TypeError:
+                self.race_window = self.RaceWindow()
 
         # Set player driver
         player_driver = config.get('driver')
@@ -89,7 +93,7 @@ class MomentumLauncher:
 
         # Player driver is selected, pace/overtake are controlled during race
         driver_name = getattr(config['driver'], 'name', 'Unknown Driver')
-        print(f"[LAUNCHER] Race started with player: {driver_name}")
+        print(f"[LAUNCHER] Race started with player: {driver_name}, discipline: {discipline}")
         print("[LAUNCHER] Pace and overtaking controls are available in the race window")
 
     def return_to_menu(self):
