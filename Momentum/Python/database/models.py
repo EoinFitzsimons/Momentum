@@ -138,6 +138,10 @@ class Championship:
     season_length: int
     points_system: str
     current_season: int
+    tier: str = "TOP_TIER"
+    founded_year: int = 2025
+    description: str = ""
+    archived: bool = False
 
 
 @dataclass
@@ -151,6 +155,7 @@ class Race:
     weather_conditions: str
     laps: int
     status: str = "scheduled"
+    race_duration_minutes: int = 90
     
 
 
@@ -278,7 +283,12 @@ CREATE TABLE IF NOT EXISTS championships (
     discipline TEXT NOT NULL,
     season_length INTEGER NOT NULL,
     points_system TEXT NOT NULL,
-    current_season INTEGER NOT NULL
+    current_season INTEGER NOT NULL,
+    tier TEXT DEFAULT 'TOP_TIER',
+    founded_year INTEGER DEFAULT 2025,
+    description TEXT DEFAULT '',
+    archived INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS races (
@@ -290,7 +300,9 @@ CREATE TABLE IF NOT EXISTS races (
     race_date TEXT NOT NULL,
     weather_conditions TEXT DEFAULT '',
     laps INTEGER NOT NULL DEFAULT 0,
+    race_duration_minutes INTEGER DEFAULT 90,
     status TEXT DEFAULT 'scheduled',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (championship_id) REFERENCES championships(id),
     FOREIGN KEY (track_id) REFERENCES tracks(id)
 );

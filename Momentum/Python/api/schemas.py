@@ -186,3 +186,136 @@ class APIInfoResponse(BaseModel):
     version: str
     status: str
     endpoints: Dict[str, str]
+
+
+# ============================================================================
+# CHAMPIONSHIP SCHEMAS
+# ============================================================================
+
+class ChampionshipCreate(BaseModel):
+    """Request model for POST /championships"""
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(
+        ...,
+        description="Racing discipline",
+        examples=["SINGLE_SEATER", "RALLY_STAGE", "ENDURANCE"]
+    )
+    season_length: int = Field(ge=1, le=50, default=20)
+    points_system: str = Field(default="standard")
+    tier: str = Field(default="TOP_TIER")
+    founded_year: int = Field(ge=1900, le=2100, default=2025)
+    description: str = Field(default="")
+    track_ids: List[int] = Field(
+        default=[],
+        description="List of track IDs for the season calendar"
+    )
+    start_date: Optional[str] = Field(
+        default=None,
+        description="Season start date (YYYY-MM-DD)"
+    )
+
+
+class ChampionshipResponse(BaseModel):
+    """Response model for championship details"""
+    id: int
+    name: str
+    discipline: str
+    season_length: int
+    points_system: str
+    current_season: int
+    tier: str
+    founded_year: int
+    description: str
+    archived: bool
+
+
+class StandingEntry(BaseModel):
+    """Championship standing entry"""
+    position: int
+    driver_id: int
+    driver_name: str
+    team_id: int
+    team_name: str
+    total_points: int
+    wins: int
+    podiums: int
+    races_started: int
+    dnf_count: int
+    fastest_laps: int
+
+
+class ChampionshipStandingsResponse(BaseModel):
+    """Response model for GET /championships/{id}/standings"""
+    championship_id: int
+    championship_name: str
+    season: int
+    standings: List[StandingEntry]
+
+
+class RaceEventCreate(BaseModel):
+    """Request model for POST /championships/{id}/events"""
+    track_id: int
+    race_date: str = Field(
+        ...,
+        description="Race date (YYYY-MM-DD)"
+    )
+    weather_conditions: str = Field(default="clear")
+    laps: int = Field(ge=1, default=50)
+
+
+class RaceEventResponse(BaseModel):
+    """Response model for race event details"""
+    race_id: int
+    round_number: int
+    race_date: str
+    track_id: int
+    track_name: str
+    track_country: str
+    status: str
+    weather_conditions: str
+    laps: int
+
+
+class ChampionshipScheduleResponse(BaseModel):
+    """Response model for GET /championships/{id}/schedule"""
+    championship_id: int
+    season: int
+    races: List[RaceEventResponse]
+
+
+class RaceStatusUpdate(BaseModel):
+    """Request model for PATCH /races/{id}/status"""
+    status: str = Field(
+        ...,
+        description="New race status",
+        examples=["scheduled", "in-progress", "completed", "cancelled"]
+    )
+
+
+class ChampionshipDetailsResponse(BaseModel):
+    """Response model for GET /championships/{id} with full details"""
+    championship: ChampionshipResponse
+    current_standings: List[StandingEntry]
+    calendar: List[RaceEventResponse]
+
+
+class RaceResultDetailResponse(BaseModel):
+    """Response model for GET /races/{id}/results with full classification"""
+    race_id: int
+    championship_id: int
+    season: int
+    round_number: int
+    track_name: str
+    race_date: str
+    status: str
+    classification: List[Dict[str, Any]]
+    fastest_lap: Optional[Dict[str, Any]] = None
+
+
+class RecalculateStandingsResponse(BaseModel):
+    """Response model for POST /championships/{id}/standings/recalculate"""
+    success: bool
+    championship_id: int
+    season: int
+    standings: List[StandingEntry]
+    message: str

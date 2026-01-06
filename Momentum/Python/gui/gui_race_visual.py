@@ -200,7 +200,7 @@ class CircuitGenerator:
         routes = {'main': main_segments, 'joker': None, 'pit': None}
 
         # Internal: process instructions and collect alternate routes when present
-        CircuitGenerator._process_instructions(instructions, state, routes)
+        CircuitGenerator._process_instructions(instructions, state, routes, is_point_to_point)
 
         # Rescale / finalize only for main route unless point-to-point
         if state.get('target_length_m') is None:
@@ -216,7 +216,7 @@ class CircuitGenerator:
         # 'routes' above. This dead code caused undefined-name mypy errors.)
 
     @staticmethod
-    def _process_instructions(instructions, state, routes: Dict[str, Any]):
+    def _process_instructions(instructions, state, routes: Dict[str, Any], is_point_to_point: bool = False):
         start_x, start_y = 0, 0  # Track starts at origin
 
         # Optionally solve closure exactly when requested in options attached
@@ -259,7 +259,8 @@ class CircuitGenerator:
                 solve_requested = True
 
         closure_solved = False
-        if solve_requested:
+        # Skip closure solver for point-to-point tracks
+        if solve_requested and not is_point_to_point:
             try:
                 # Attempt closure solve; this mutates instruction angles/lengths
                 success, multipliers, diag = closure_solver.solve_closure(instructions)
@@ -364,18 +365,21 @@ class CircuitGenerator:
         # degrees)
         angle_deficit = 2 * math.pi - state['total_angle']
 
-        print(
-            f"  [CLOSURE] Distance to start: {
-                distance_to_start:.1f}m, Heading error: {
-                math.degrees(heading_error):.1f}deg, Angle deficit: {
-                math.degrees(angle_deficit):.1f}deg")
+        # Skip closure calculation/printing for point-to-point tracks
+        if not is_point_to_point:
+            print(
+                f"  [CLOSURE] Distance to start: {
+                    distance_to_start:.1f}m, Heading error: {
+                    math.degrees(heading_error):.1f}deg, Angle deficit: {
+                    math.degrees(angle_deficit):.1f}deg")
 
         # Strategy: Add corners and straights to navigate back to start
         # We need to balance: 1) Turn to complete 360 degrees, 2) Turn to point
         # at start, 3) Cover remaining distance
 
         # If closure was solved analytically, skip heuristic corrections
-        if not closure_solved:
+        # Also skip for point-to-point tracks
+        if not closure_solved and not is_point_to_point:
             if abs(angle_deficit) > 0.1 or distance_to_start > 50:
                 # Split the angular deficit into interesting corners
                 if abs(angle_deficit) > math.radians(120):
@@ -503,23 +507,25 @@ class CircuitGenerator:
 
                     prev_gap = gap_dist
 
-                # Final straight to close remaining gap (NO FINAL CORNER - that
-                # made it worse)
-                final_gap_dist = math.hypot(
-                    start_x - state['current_x'],
-                    start_y - state['current_y'])
-                print(
-                    f"  [CLOSURE FINAL] Gap before final straight: {
-                        final_gap_dist:.1f}m")
+                # Final straight to close remaining gap (ONLY for circuits)
+                if not is_point_to_point:
+                    final_gap_dist = math.hypot(
+                        start_x - state['current_x'],
+                        start_y - state['current_y'])
+                    print(
+                        f"  [CLOSURE FINAL] Gap before final straight: {
+                            final_gap_dist:.1f}m")
 
-                if final_gap_dist > 2:
-                    # Add slightly more than the gap to ensure closure
-                    CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
+                    if final_gap_dist > 2:
+                        # Add slightly more than the gap to ensure closure
+                        CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
 
-        final_gap = math.hypot(
-            start_x - state['current_x'],
-            start_y - state['current_y'])
-        print(f"  [CLOSURE] Final gap after closure: {final_gap:.1f}m")
+        # Skip final closure report for point-to-point tracks
+        if not is_point_to_point:
+            final_gap = math.hypot(
+                start_x - state['current_x'],
+                start_y - state['current_y'])
+            print(f"  [CLOSURE] Final gap after closure: {final_gap:.1f}m")
 
     @staticmethod
     def _add_straight(length, state):
@@ -2186,7 +2192,7 @@ class RaceWindow(QMainWindow):
     # Signals
     return_to_menu = pyqtSignal()  # Signal to return to main menu
 
-    def __init__(self, track_id: Optional[int] = None):
+    def __init__(self, track_id: Optional[int] = None, discipline: Optional[str] = None):
         try:
             super().__init__()
             self.setWindowTitle("Momentum - Race Visualisation")
@@ -2224,6 +2230,7 @@ class RaceWindow(QMainWindow):
             self.drivers = []
             self.track = None
             self._initial_track_id = track_id
+            self._initial_discipline = discipline or "SINGLE_SEATER"
             self.race_thread: Optional[threading.Thread] = None
             self.stop_event: Optional[threading.Event] = None
             # Track last lap time per driver
@@ -3247,7 +3254,7 @@ class RaceWindow(QMainWindow):
                 # Create RaceContext and populate track_conditions for
                 # discipline adapter
                 context = RaceContext(
-                    discipline=RacingDiscipline.SINGLE_SEATER,
+                    discipline=RacingDiscipline[self._initial_discipline],
                     track=self.track,
                     drivers=self.drivers,
                     teams=teams,
