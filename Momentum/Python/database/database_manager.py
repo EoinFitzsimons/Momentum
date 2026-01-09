@@ -413,13 +413,45 @@ class DatabaseManager:
     def create_track(self, track: Track) -> Optional[int]:
         """Create a new track and return ID"""
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                INSERT INTO tracks (name, country, length_km, surface_type, difficulty,
-                                  weather_impact, overtaking_difficulty, discipline, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (track.name, track.country, track.length_km, track.surface_type,
-                  track.difficulty, track.weather_impact, track.overtaking_difficulty,
-                  track.discipline, track.description))
+            table_info = conn.execute("PRAGMA table_info(tracks)").fetchall()
+            existing_cols = {row[1] for row in table_info}
+
+            # Build a safe geometry payload for schemas that lack physical columns
+            geometry_payload = getattr(track, "geometry_json", None)
+            if geometry_payload is None:
+                phys_fields = [
+                    "length_km", "turns", "avg_speed_kmh", "top_speed_kmh",
+                    "longest_straight_m", "shortest_straight_m", "tightest_corner_radius_m",
+                    "left_turns", "right_turns", "drs_zones", "surface", "surface_type",
+                    "surface_grip", "surface_abrasiveness", "climate"
+                ]
+                payload = {k: getattr(track, k) for k in phys_fields if getattr(track, k, None) is not None}
+                geometry_payload = json.dumps(payload) if payload else None
+
+            preferred = {
+                "name": track.name,
+                "country": track.country,
+                "primary_discipline": getattr(track, "primary_discipline", None),
+                "is_point_to_point": int(getattr(track, "is_point_to_point", False)),
+                "joker_enabled": int(getattr(track, "joker_enabled", False)),
+                "instructions_json": getattr(track, "instructions_json", None),
+                "geometry_json": geometry_payload,
+                "pit_entry_index": getattr(track, "pit_entry_index", None),
+                "pit_exit_index": getattr(track, "pit_exit_index", None),
+            }
+
+            columns = [c for c in preferred.keys() if c in existing_cols]
+            if not columns:
+                return None
+
+            values = [preferred[c] for c in columns]
+            placeholders = ", ".join(["?" for _ in columns])
+            col_clause = ", ".join(columns)
+
+            cursor = conn.execute(
+                f"INSERT INTO tracks ({col_clause}) VALUES ({placeholders})",
+                values,
+            )
             return cursor.lastrowid
 
     def get_tracks_by_discipline(self, discipline: str) -> List[Track]:
@@ -597,13 +629,31 @@ class DatabaseManager:
     def create_championship(self, championship: Championship) -> Optional[int]:
         """Create a new championship and return ID"""
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                INSERT INTO championships (name, discipline, tier, season_length,
-                                         points_system, current_season, founded_year, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (championship.name, championship.discipline, championship.tier,
-                  championship.season_length, championship.points_system,
-                  championship.current_season, championship.founded_year, championship.description))
+            # Align insert columns with whatever exists in the current schema to
+            # avoid failures on older databases without newer fields.
+            table_info = conn.execute("PRAGMA table_info(championships)").fetchall()
+            existing_cols = {row[1] for row in table_info}
+
+            preferred_columns = [
+                ("name", championship.name),
+                ("discipline", championship.discipline),
+                ("tier", championship.tier),
+                ("season_length", championship.season_length),
+                ("points_system", championship.points_system),
+                ("current_season", championship.current_season),
+                ("founded_year", championship.founded_year),
+                ("description", championship.description),
+                ("archived", getattr(championship, "archived", False)),
+            ]
+
+            columns, values = zip(*[(col, val) for col, val in preferred_columns if col in existing_cols])
+            placeholders = ", ".join(["?" for _ in columns])
+            col_clause = ", ".join(columns)
+
+            cursor = conn.execute(
+                f"INSERT INTO championships ({col_clause}) VALUES ({placeholders})",
+                values,
+            )
             return cursor.lastrowid
 
     def get_championship(self, championship_id: int) -> Optional[Championship]:

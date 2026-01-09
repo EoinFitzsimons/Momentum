@@ -283,7 +283,7 @@ class CreateChampionshipDialog(QDialog):
                 track_ids = [t.id for t in all_tracks[:self.season_spin.value()]]
             else:
                 logger.info(f"Using {self.season_spin.value()} discipline-specific tracks")
-                track_ids = [t["id"] for t in tracks[:self.season_spin.value()]]
+                track_ids = [t.id for t in tracks[:self.season_spin.value()]]
             
             if not track_ids:
                 logger.error("No tracks available in database - cannot create championship")
