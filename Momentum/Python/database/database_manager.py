@@ -141,6 +141,51 @@ class DatabaseManager:
             # Execute the complete schema creation script
             conn.executescript(SCHEMA_SQL)
             conn.commit()
+        
+        # Apply any schema migrations for existing databases
+        self._apply_schema_migrations()
+    
+    def _apply_schema_migrations(self):
+        """
+        Apply schema migrations to existing databases
+        
+        Adds missing columns that may not exist in older databases,
+        ensuring backward compatibility with existing data.
+        """
+        with self.get_connection() as conn:
+            # Check if tracks table exists and add missing columns
+            try:
+                cursor = conn.execute("PRAGMA table_info(tracks)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+                
+                # Define columns that should exist in tracks table
+                required_columns = {
+                    'length_km': 'REAL DEFAULT 3.2',
+                    'turns': 'INTEGER DEFAULT 12',
+                    'avg_speed_kmh': 'REAL DEFAULT 160.0',
+                    'longest_straight_m': 'REAL DEFAULT 700.0',
+                    'tightest_corner_radius_m': 'REAL DEFAULT 30.0',
+                    'left_turns': 'INTEGER DEFAULT 6',
+                    'right_turns': 'INTEGER DEFAULT 6',
+                    'drs_zones': 'INTEGER DEFAULT 1',
+                    'surface': "TEXT DEFAULT 'asphalt'",
+                    'surface_type': "TEXT DEFAULT 'asphalt'",
+                    'surface_grip': 'REAL DEFAULT 1.0',
+                    'surface_abrasiveness': 'REAL DEFAULT 8.0',
+                    'climate': "TEXT DEFAULT 'temperate'"
+                }
+                
+                # Add missing columns
+                for column_name, column_def in required_columns.items():
+                    if column_name not in existing_columns:
+                        try:
+                            conn.execute(f"ALTER TABLE tracks ADD COLUMN {column_name} {column_def}")
+                        except sqlite3.OperationalError:
+                            pass  # Column already exists or other issue
+                
+                conn.commit()
+            except Exception:
+                pass  # Table might not exist yet, will be created by SCHEMA_SQL
 
     def get_connection(self) -> sqlite3.Connection:
         """
@@ -454,6 +499,41 @@ class DatabaseManager:
             )
             return cursor.lastrowid
 
+    def _track_from_row(self, row_dict: dict) -> Track:
+        """Convert database row to Track object with proper defaults"""
+        from services.track_surface_service import TrackSurfaceService
+        from dataclasses import fields
+        
+        row_dict.pop('created_at', None)
+        
+        # Only keep fields that exist in Track model
+        track_field_names = {f.name for f in fields(Track)}
+        row_dict = {k: v for k, v in row_dict.items() if k in track_field_names}
+        
+        # Set defaults for missing physical attributes that are used in race logic
+        physical_attrs = {
+            'length_km': 3.2,
+            'turns': 12,
+            'avg_speed_kmh': 160.0,
+            'longest_straight_m': 700.0,
+            'tightest_corner_radius_m': 30.0,
+            'left_turns': 6,
+            'right_turns': 6,
+            'drs_zones': 1,
+            'surface': 'asphalt'  # Default to asphalt
+        }
+        # Only set defaults for missing fields
+        for attr, default_val in physical_attrs.items():
+            if attr not in row_dict:
+                row_dict[attr] = default_val
+        
+        # Calculate grip level from surface if not provided
+        surface = row_dict.get('surface', 'asphalt')
+        if 'surface_grip' not in row_dict or row_dict['surface_grip'] is None:
+            row_dict['surface_grip'] = TrackSurfaceService.get_grip_level(surface)
+        
+        return Track(**row_dict)
+
     def get_tracks_by_discipline(self, discipline: str) -> List[Track]:
         """Get all tracks for a specific discipline"""
         with self.get_connection() as conn:
@@ -461,9 +541,7 @@ class DatabaseManager:
                 "SELECT * FROM tracks WHERE primary_discipline = ? ORDER BY name",
                 (discipline,)
             ).fetchall()
-            # Filter out created_at field which isn't in the Track model
-            return [Track(**{k: v for k, v in dict(row).items()
-                          if k != 'created_at'}) for row in rows]
+            return [self._track_from_row(dict(row)) for row in rows]
 
 
     def get_track_instructions(self, track_id: int) -> Optional[Dict]:
@@ -616,10 +694,32 @@ class DatabaseManager:
             row = conn.execute(
                 "SELECT * FROM tracks WHERE id = ?", (track_id,)).fetchone()
             if row:
-                # Filter out created_at field which isn't in the Track model
-                return Track(
-                    **{k: v for k, v in dict(row).items() if k != 'created_at'})
+                return self._track_from_row(dict(row))
             return None
+    
+    def update_track_surface(self, track_id: int, surface: str) -> bool:
+        """
+        Update track surface type
+        
+        Args:
+            track_id: Track ID to update
+            surface: Surface type (asphalt, concrete, gravel, mixed, dirt, grassy)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute(
+                    "UPDATE tracks SET surface = ?, surface_type = ? WHERE id = ?",
+                    (surface, surface, track_id)
+                )
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            # Error updating surface, but continue gracefully
+            return False
+    
     # Alias for consistency
     def get_track_by_id(self, track_id: int) -> Optional[Track]:
         """Get track by ID (alias for get_track)"""
@@ -673,14 +773,27 @@ class DatabaseManager:
     # Race operations
     def create_race(self, race: Race) -> Optional[int]:
         """Create a new race and return ID"""
-        with self.get_connection() as conn:
-            cursor = conn.execute("""
-                INSERT INTO races (championship_id, track_id, season, round_number,
-                                 race_date, weather_conditions, race_duration_minutes, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (race.championship_id, race.track_id, race.season, race.round_number,
-                  race.race_date, race.weather_conditions, race.race_duration_minutes, race.status))
-            return cursor.lastrowid
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    INSERT INTO races (championship_id, track_id, season, round_number,
+                                     race_date, weather_conditions, race_duration_minutes, laps, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (race.championship_id, race.track_id, race.season, race.round_number,
+                      race.race_date, race.weather_conditions, race.race_duration_minutes, race.laps, race.status))
+                return cursor.lastrowid
+        except Exception as e:
+            # Fallback for databases without race_duration_minutes column
+            if "race_duration_minutes" in str(e):
+                with self.get_connection() as conn:
+                    cursor = conn.execute("""
+                        INSERT INTO races (championship_id, track_id, season, round_number,
+                                         race_date, weather_conditions, laps, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (race.championship_id, race.track_id, race.season, race.round_number,
+                          race.race_date, race.weather_conditions, race.laps, race.status))
+                    return cursor.lastrowid
+            raise
 
     def get_race_results(self, race_id: int) -> List[RaceResult]:
         """Get all results for a specific race"""
@@ -700,9 +813,11 @@ class DatabaseManager:
             row = conn.execute(
                 "SELECT * FROM races WHERE id = ?", (race_id,)).fetchone()
             if row:
-                # Filter out created_at field which isn't in the Race model
-                return Race(
-                    **{k: v for k, v in dict(row).items() if k != 'created_at'})
+                row_dict = {k: v for k, v in dict(row).items() if k != 'created_at'}
+                # Provide default for race_duration_minutes if missing
+                if 'race_duration_minutes' not in row_dict:
+                    row_dict['race_duration_minutes'] = 90
+                return Race(**row_dict)
             return None
 
     def update_race_status(self, race_id: int, status: str):
@@ -780,7 +895,7 @@ class DatabaseManager:
         with self.get_connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM tracks ORDER BY name").fetchall()
-            return [Track(**dict(row)) for row in rows]
+            return [self._track_from_row(dict(row)) for row in rows]
 
     def get_circuits_by_discipline(self, discipline: str) -> List[Any]:
         """

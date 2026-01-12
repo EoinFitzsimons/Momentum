@@ -120,14 +120,13 @@ class Track:
     turns: Optional[int] = 12
     # Additional physical attributes expected by the simulation engine
     avg_speed_kmh: float = 160.0
-    top_speed_kmh: float = 300.0
     longest_straight_m: float = 700.0
-    shortest_straight_m: float = 200.0
     tightest_corner_radius_m: float = 30.0
     left_turns: int = 6
     right_turns: int = 6
     drs_zones: int = 1
-    surface: str = "asphalt"
+    surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
+    surface_grip: float = 1.0  # Grip level for visualization and simulation (0-1 scale)
 
 
 @dataclass
@@ -274,7 +273,22 @@ CREATE TABLE IF NOT EXISTS tracks (
     instructions_json TEXT DEFAULT NULL,
     geometry_json TEXT DEFAULT NULL,
     pit_entry_index INTEGER DEFAULT NULL,
-    pit_exit_index INTEGER DEFAULT NULL
+    pit_exit_index INTEGER DEFAULT NULL,
+    -- Track physics fields
+    length_km REAL DEFAULT 3.2,
+    turns INTEGER DEFAULT 12,
+    avg_speed_kmh REAL DEFAULT 160.0,
+    longest_straight_m REAL DEFAULT 700.0,
+    tightest_corner_radius_m REAL DEFAULT 30.0,
+    left_turns INTEGER DEFAULT 6,
+    right_turns INTEGER DEFAULT 6,
+    drs_zones INTEGER DEFAULT 1,
+    -- Surface type and grip characteristics
+    surface TEXT DEFAULT 'asphalt',
+    surface_type TEXT DEFAULT 'asphalt',
+    surface_grip REAL DEFAULT 1.0,
+    surface_abrasiveness REAL DEFAULT 8.0,
+    climate TEXT DEFAULT 'temperate'
 );
 
 CREATE TABLE IF NOT EXISTS championships (

@@ -9,13 +9,12 @@ Provides comprehensive championship management including:
 - Event scheduling and validation
 
 Points Systems:
-- SINGLE_SEATER: F1-style (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
-- RALLY_STAGE: WRC-style (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
-- ENDURANCE: Endurance-style (25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-- PRODUCTION_TOURING: Touring-style (32, 28, 25, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1)
-- URBAN_STREET: Formula E-style (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
-- DRAG_ACCELERATION: Elimination-style (20, 17, 14, 11, 8, 5, 2, 1)
-- SPRINT_RALLYCROSS: Rallycross-style (30, 25, 22, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1)
+- SINGLE_SEATER: Pinnacle open-wheel format (25, 18, 15, 12, 10, 8, 6, 4, 2, 1)
+- ENDURANCE: Long-distance format (25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+- PRODUCTION_TOURING: Production car racing (32, 28, 25, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1)
+- URBAN_STREET: Street circuit drifting (28, 23, 19, 16, 13, 11, 9, 7, 5, 3, 2, 1)
+- DRAG_ACCELERATION: Straight-line acceleration racing (20, 17, 14, 11, 8, 5, 2, 1)
+- SPRINT_RALLYCROSS: Mixed-surface sprint series (30, 25, 22, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1)
 """
 
 from typing import Dict, List, Optional, Any, Tuple
@@ -23,17 +22,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from database.database_manager import DatabaseManager
 from database.models import Championship, Race, RaceResult
+from services.track_surface_service import TrackSurfaceService
 
 
 # Points systems by discipline
 POINTS_SYSTEMS = {
-    "SINGLE_SEATER": [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],  # F1-style
-    "RALLY_STAGE": [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],  # WRC-style
-    "ENDURANCE": [25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],  # Endurance
-    "PRODUCTION_TOURING": [32, 28, 25, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1],  # Touring
-    "URBAN_STREET": [28, 23, 19, 16, 13, 11, 9, 7, 5, 3, 2, 1],  # Drifting-focused (bonus on wins)
-    "DRAG_ACCELERATION": [20, 17, 14, 11, 8, 5, 2, 1],  # Elimination-style
-    "SPRINT_RALLYCROSS": [30, 25, 22, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1]  # Rallycross
+    "SINGLE_SEATER": [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],  # Pinnacle open-wheel
+    "ENDURANCE": [25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],  # Long-distance racing
+    "PRODUCTION_TOURING": [32, 28, 25, 22, 20, 18, 16, 14, 12, 10, 8, 6, 4, 2, 1],  # Production car racing
+    "URBAN_STREET": [28, 23, 19, 16, 13, 11, 9, 7, 5, 3, 2, 1],  # Drifting-focused
+    "DRAG_ACCELERATION": [20, 17, 14, 11, 8, 5, 2, 1],  # Straight-line acceleration
+    "SPRINT_RALLYCROSS": [30, 25, 22, 19, 17, 15, 13, 11, 9, 7, 5, 3, 1]  # Mixed-surface sprint
 }
 
 
@@ -85,9 +84,9 @@ class ChampionshipService:
         else:
             base_points = points_table[position - 1]
         
-        # Add fastest lap bonus (F1 style - only if finished in top 10)
+        # Add fastest lap bonus (selected disciplines - only if finished in top 10)
         fastest_lap_bonus = 0
-        if fastest_lap and position <= 10 and discipline in ["SINGLE_SEATER", "URBAN_STREET"]:
+        if fastest_lap and position <= 10 and discipline in ["SINGLE_SEATER"]:
             fastest_lap_bonus = 1
         
         return base_points + fastest_lap_bonus
@@ -207,6 +206,8 @@ class ChampionshipService:
         """
         Create a new championship season with race calendar
         
+        Assigns discipline-appropriate surfaces to all tracks in the championship.
+        
         Args:
             championship: Championship object
             tracks: List of track IDs for the season
@@ -221,11 +222,21 @@ class ChampionshipService:
         if not champ_id:
             raise ValueError("Failed to create championship")
         
-        # Create race calendar
+        # Create race calendar with surface assignment
         race_ids = []
         current_date = start_date
         
         for round_num, track_id in enumerate(tracks, start=1):
+            # Get track and assign surface for this discipline
+            track = self.db.get_track(track_id)
+            if track:
+                track = TrackSurfaceService.assign_surface_to_track(
+                    track, 
+                    championship.discipline
+                )
+                # Update track with assigned surface
+                self.db.update_track_surface(track.id, track.surface)
+            
             race = Race(
                 id=0,  # Will be assigned by database
                 championship_id=champ_id,
@@ -374,5 +385,11 @@ class ChampionshipService:
                 ORDER BY round_number
             """, (championship_id, season)).fetchall()
             
-            return [Race(**{k: v for k, v in dict(row).items() if k != 'created_at'}) 
-                    for row in rows]
+            races = []
+            for row in rows:
+                row_dict = {k: v for k, v in dict(row).items() if k != 'created_at'}
+                # Provide default for race_duration_minutes if missing
+                if 'race_duration_minutes' not in row_dict:
+                    row_dict['race_duration_minutes'] = 90
+                races.append(Race(**row_dict))
+            return races

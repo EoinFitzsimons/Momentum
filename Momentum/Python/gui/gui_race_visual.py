@@ -49,6 +49,8 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QDialog,
+    QListWidget,
+    QListWidgetItem,
 )
 import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
@@ -3639,13 +3641,14 @@ class RaceWindow(QMainWindow):
 
             # Try to import matplotlib; if unavailable, show explanatory label
             use_plot = True
+            canvas = None
+            fig = None
+            ax = None
             try:
                 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
                 from matplotlib.figure import Figure
-            except Exception:
-                use_plot = False
-
-            if use_plot:
+                from PyQt6.QtWidgets import QListWidget, QListWidgetItem
+                
                 fig = Figure(figsize=(6, 3))
                 canvas = FigureCanvas(fig)
                 ax = fig.add_subplot(111)
@@ -3654,7 +3657,12 @@ class RaceWindow(QMainWindow):
                 ax.set_xlabel('Distance (m)')
                 ax.set_title('Positions Over Time')
                 left_layout.addWidget(canvas)
+            except Exception as e:
+                use_plot = False
+                # Log the error but continue gracefully
+                print(f"[RACE RESULTS] matplotlib unavailable: {e}")
 
+            if use_plot and canvas and fig and ax:
                 # Filter list to show/hide drivers
                 filter_label = QLabel('Show drivers:')
                 left_layout.addWidget(filter_label)
@@ -3682,6 +3690,8 @@ class RaceWindow(QMainWindow):
 
                 def redraw_plot():
                     try:
+                        if not ax or not fig or not canvas:
+                            return
                         ax.clear()
                         ax.invert_yaxis()
                         ax.set_ylabel('Position')
@@ -4072,7 +4082,7 @@ class RaceWindow(QMainWindow):
             self.info_label.setText(message)
 
     def _rebuild_standings_table(self):
-        """Rebuild the standings table with live gaps and aggression symbols."""
+        """Rebuild the standings table with live gaps and proper lapped classification."""
         if not hasattr(self, '_race_state'):
             return
 
@@ -4106,8 +4116,26 @@ class RaceWindow(QMainWindow):
         leader = standings_list[0]
         leader_lap = leader['lap']
         cumulative_gap = 0.0
-
-        for row, entry in enumerate(standings_list):
+        
+        # CLASSIFICATION: Separate finished drivers from lapped drivers
+        finished_drivers = []
+        lapped_drivers = []
+        dnf_drivers = []
+        
+        for entry in standings_list:
+            if entry['dnf']:
+                dnf_drivers.append(entry)
+            elif entry['lap'] < leader_lap:
+                # Lapped driver (on fewer laps than leader)
+                lapped_drivers.append(entry)
+            else:
+                # Finished driver (on same or more laps as leader)
+                finished_drivers.append(entry)
+        
+        # Recalculate positions: finished drivers get P1, P2, P3...
+        # Lapped drivers go after all finishers with "+X laps" notation
+        all_classified = finished_drivers + lapped_drivers + dnf_drivers
+        for row, entry in enumerate(all_classified):
             colour_item = QTableWidgetItem()
             if entry['driver_id'] in self.driver_colours:
                 colour = self.driver_colours[entry['driver_id']]
@@ -4139,25 +4167,28 @@ class RaceWindow(QMainWindow):
 
             self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), entry['driver_id'])
 
+            # Column 3: Gap or Classification
             if entry.get('dnf', False):
+                gap_text = "DNF"
+            elif entry in dnf_drivers:
                 gap_text = "DNF"
             elif row == 0:
                 gap_text = "LEADER"
+            elif entry in lapped_drivers:
+                # Lapped driver - show lap deficit
+                lap_deficit = leader_lap - entry['lap']
+                gap_text = f"+{lap_deficit}L"
             else:
-                lap_diff = leader_lap - entry['lap']
+                # Finished driver - show time gap
                 raw_gap = entry.get('gap_ahead', 0.0)
-
-                if lap_diff > 0:
-                    # Car is behind on laps
-                    gap_text = f"+{lap_diff}L"
-                elif raw_gap >= 1000.0:
+                if raw_gap >= 1000.0:
                     # Gap encoded as 999+N means N laps (from engine)
                     laps_behind = int(raw_gap - 999.0)
                     if laps_behind > 0:
                         gap_text = f"+{laps_behind}L"
                     else:
-                        # Fallback if just large gap
-                        gap_text = f"+{raw_gap:.1f}s"
+                        cumulative_gap += max(raw_gap - 999.0, 0.0)
+                        gap_text = f"+{cumulative_gap:.1f}s" if cumulative_gap > 0.1 else "-"
                 else:
                     # Normal time gap accumulation
                     cumulative_gap += max(raw_gap, 0.0)
@@ -4174,8 +4205,9 @@ class RaceWindow(QMainWindow):
         import time
         if time.time() - self._last_standings_log > 3.0:
             self._last_standings_log = time.time()
-            print("\n  [STANDINGS] Current order:")
-            for i, entry in enumerate(standings_list[:5]):
+            print("\n  [STANDINGS] Current order (CORRECTED CLASSIFICATION):")
+            # Show first 5 finished drivers
+            for i, entry in enumerate(finished_drivers[:5]):
                 print(
                     f"    P{
                         i +
@@ -4185,6 +4217,13 @@ class RaceWindow(QMainWindow):
                         entry.get(
                             'gap_ahead',
                             0.0):.1f}s)")
+            # Show lapped drivers separately
+            if lapped_drivers:
+                print("    --- LAPPED ---")
+                for entry in lapped_drivers[:3]:
+                    lap_deficit = leader_lap - entry['lap']
+                    print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
+
 
     def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: Optional[int] = None):
         """Set an item in the standings table but respect DNF state.
