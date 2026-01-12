@@ -7,6 +7,13 @@ Integrates main menu with race visualization window.
 import sys
 import os
 
+# Configure matplotlib backend BEFORE any imports that might use it
+try:
+    import matplotlib
+    matplotlib.use('Qt5Agg')  # Use Qt5 backend for matplotlib with PyQt6
+except Exception:
+    pass  # matplotlib may not be installed
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

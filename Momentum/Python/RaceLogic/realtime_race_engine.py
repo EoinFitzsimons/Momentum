@@ -131,6 +131,10 @@ class RaceState:
 
     # Collision tracking
     collision_log: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Checkered flag logic: when leader finishes, allow other drivers to finish at line
+    checkered_flag_deployed: bool = False  # Set when leader completes all laps
+    leader_lap_count: int = 0  # Highest lap count when checkered flag deployed
 
 
 class RealtimeRaceEngine:
@@ -932,6 +936,17 @@ class RealtimeRaceEngine:
             race_state.lap_times[state.driver_id].append(lap_time)
 
         race_state.lap_start_positions[state.driver_id] = state.position_m
+        
+        # Check if this driver completed all required laps
+        if state.lap >= race_state.total_laps:
+            state.running = False
+            # If this is the first driver to finish, deploy checkered flag
+            if not race_state.checkered_flag_deployed:
+                race_state.checkered_flag_deployed = True
+                race_state.leader_lap_count = state.lap
+        # If checkered flag is deployed, finish any driver crossing the line
+        elif race_state.checkered_flag_deployed:
+            state.running = False
 
     def _check_driver_mistake(self, state: DriverState) -> bool:
         """
@@ -1360,7 +1375,13 @@ class RealtimeRaceEngine:
         return behind_car
 
     def _race_finished(self, race_state: RaceState) -> bool:
-        """Check if race is complete - ends when all running cars finish"""
+        """Check if race is complete with checkered flag logic
+        
+        Two-phase finishing:
+        1. When leader completes all laps, deploy checkered flag
+        2. Other drivers finish when they cross the line (don't need full laps)
+        3. Race ends when all drivers have finished or DNF'd
+        """
         # Get all drivers who are still running (not DNF)
         active_drivers = [
             s for s in race_state.driver_states.values() if s.running]
@@ -1369,9 +1390,16 @@ class RealtimeRaceEngine:
         if not active_drivers:
             return True
 
-        # Race ends when ALL running drivers have completed all laps
-        # (slowest car still running finishes their race)
-        return all(driver.lap >= race_state.total_laps for driver in active_drivers)
+        # If checkered flag not yet deployed, check if leader finished
+        if not race_state.checkered_flag_deployed:
+            leader_laps = max(driver.lap for driver in active_drivers)
+            if leader_laps >= race_state.total_laps:
+                # Leader finished - deploy checkered flag but don't end race yet
+                # Let other drivers finish when they cross the line
+                return False
+        
+        # If checkered flag deployed, race continues until all drivers finish
+        return False
 
     def _create_position_event(
             self, race_state: RaceState, frame: int) -> Dict[str, Any]:
@@ -1407,32 +1435,80 @@ class RealtimeRaceEngine:
         }
 
     def _compile_results(self, race_state: RaceState) -> List[Dict[str, Any]]:
-        """Compile final race results with accurate timing"""
+        """Compile final race results with accurate timing and proper lapped classification"""
         results = []
 
-        # Sort by laps completed and final position
+        # Separate finished drivers from lapped/DNF drivers FIRST
         all_states = list(race_state.driver_states.values())
-        all_states.sort(key=lambda s: (-s.lap, -s.position_m))
-
-        for position, state in enumerate(all_states, 1):
-            # Determine status: mark as DNF if a dnf_reason exists or the driver
-            # did not complete the full race distance. Otherwise mark FINISHED.
+        finished_drivers = []
+        lapped_drivers = []
+        dnf_drivers = []
+        
+        for state in all_states:
             if state.dnf_reason is not None:
-                status = 'DNF'
+                # DNF - excluded from classification
+                dnf_drivers.append(state)
+            elif state.lap >= race_state.total_laps:
+                # Completed all required laps
+                finished_drivers.append(state)
             else:
-                status = 'FINISHED' if state.lap >= race_state.total_laps else 'DNF'
-
+                # Lapped - completed fewer than required laps
+                lapped_drivers.append(state)
+        
+        # Sort finished drivers by position on track
+        finished_drivers.sort(key=lambda s: s.position_m)
+        
+        # Sort lapped drivers by laps completed (descending), then by position (ascending)
+        lapped_drivers.sort(key=lambda s: (-s.lap, s.position_m))
+        
+        # Add finished drivers first (positions 1, 2, 3...)
+        for position, state in enumerate(finished_drivers, 1):
             results.append({
                 "driver_id": state.driver_id,
                 "driver_name": state.driver_name,
                 "team_id": state.team.id,
                 "position": position,
                 "laps_completed": state.lap,
-                "time_seconds": state.total_time,  # Total elapsed race time for this driver
+                "time_seconds": state.total_time,
                 "dnf_reason": state.dnf_reason,
                 "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
                 "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
-                "status": status
+                "status": "FINISHED",
+                "lapped": False
+            })
+        
+        # Add lapped drivers after finishers, marked as lapped with their lap deficit
+        for position, state in enumerate(lapped_drivers, len(finished_drivers) + 1):
+            lap_deficit = race_state.total_laps - state.lap
+            results.append({
+                "driver_id": state.driver_id,
+                "driver_name": state.driver_name,
+                "team_id": state.team.id,
+                "position": position,
+                "laps_completed": state.lap,
+                "time_seconds": state.total_time,
+                "dnf_reason": state.dnf_reason,
+                "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
+                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
+                "status": "LAPPED",
+                "lapped": True,
+                "lap_deficit": lap_deficit
+            })
+        
+        # Add DNF drivers at the end
+        for state in dnf_drivers:
+            results.append({
+                "driver_id": state.driver_id,
+                "driver_name": state.driver_name,
+                "team_id": state.team.id,
+                "position": len(results) + 1,
+                "laps_completed": state.lap,
+                "time_seconds": state.total_time,
+                "dnf_reason": state.dnf_reason,
+                "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
+                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
+                "status": "DNF",
+                "lapped": False
             })
 
         return results
