@@ -99,6 +99,8 @@ class Team:
     championships: int = 0
     operations_rating: float = 50.0
     strategy_profile: str = "standard"
+    headquarters: str = ""
+    biography: str = ""
 
 
 @dataclass
@@ -255,6 +257,8 @@ CREATE TABLE IF NOT EXISTS teams (
     founded_year INTEGER DEFAULT NULL,
     team_principal TEXT DEFAULT '',
     history TEXT DEFAULT '',
+    headquarters TEXT DEFAULT '',
+    biography TEXT DEFAULT '',
     total_wins INTEGER DEFAULT 0,
     total_podiums INTEGER DEFAULT 0,
     championships INTEGER DEFAULT 0,

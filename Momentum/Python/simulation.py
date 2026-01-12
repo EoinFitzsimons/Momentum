@@ -41,6 +41,7 @@ import uvicorn
 from database.database_manager import DatabaseManager
 from database.models import Championship, Race, RaceResult
 from services.championship_service import ChampionshipService
+from services.team_service import TeamService
 from api.schemas import (
     ChampionshipCreate,
     ChampionshipResponse,
@@ -53,7 +54,15 @@ from api.schemas import (
     RaceResultDetailResponse,
     RecalculateStandingsResponse,
     HealthCheckResponse,
-    StandingEntry
+    StandingEntry,
+    TeamCreate,
+    TeamCreateResponse,
+    TeamDetails,
+    TeamUpdate,
+    TeamUpdateResponse,
+    TeamBudgetResponse,
+    BudgetTransactionRequest,
+    BudgetTransactionResponse
 )
 from config import API_HOST, API_PORT, API_RELOAD
 
@@ -78,6 +87,7 @@ app.add_middleware(
 # Initialize services
 db_manager = DatabaseManager()
 championship_service = ChampionshipService(db_manager)
+team_service = TeamService(db_manager)
 
 
 # ============================================================================
@@ -173,6 +183,153 @@ def list_teams(
             "teams": teams,
             "count": len(teams)
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# TEAM MANAGEMENT ENDPOINTS (UC-11 to UC-14)
+# ============================================================================
+
+@app.get("/teams/{team_id}", response_model=TeamDetails)
+def get_team_details(team_id: int):
+    """
+    UC-11: Read Team Details
+    
+    Get full team profile including roster, staff, and financial information.
+    
+    Args:
+        team_id: Team ID
+        
+    Returns:
+        Complete team details with roster aggregation
+    """
+    try:
+        team_details = team_service.get_team_details(team_id)
+        if not team_details:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        return team_details
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/teams", response_model=TeamCreateResponse, status_code=201)
+def create_team(request: TeamCreate):
+    """
+    UC-12: Create New Team
+    
+    Create a new team with initial budget allocation and provisioning.
+    Applies tier-based budget caps and staff limits.
+    
+    Args:
+        request: Team creation parameters (name required)
+        
+    Returns:
+        Created team with initial budget and limits
+    """
+    try:
+        result = team_service.create_team(
+            name=request.name,
+            discipline=request.discipline,
+            nationality=request.nationality,
+            tier=request.tier,
+            team_principal=request.team_principal,
+            headquarters=request.headquarters
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/teams/me")
+def get_player_team():
+    """
+    UC-13: Read Player Team
+    
+    Get the authenticated player's owned team with edit permissions.
+    Requires authentication (not yet implemented).
+    
+    Returns:
+        Player's team with editable flags
+    """
+    # TODO: Implement authentication and player tracking
+    raise HTTPException(status_code=501, detail="Player authentication not yet implemented")
+
+
+@app.patch("/teams/{team_id}", response_model=TeamUpdateResponse)
+def update_team(team_id: int, request: TeamUpdate):
+    """
+    UC-14: Update Team Attributes
+    
+    Update team attributes with audit logging.
+    Prevents modification of budget and tier directly.
+    
+    Args:
+        team_id: Team ID
+        request: Team update parameters
+        
+    Returns:
+        Update confirmation with audit trail
+    """
+    try:
+        result = team_service.update_team(
+            team_id,
+            request.model_dump(exclude_none=True)
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/teams/{team_id}/budget/allocate", response_model=BudgetTransactionResponse)
+def allocate_budget(
+    team_id: int,
+    request: BudgetTransactionRequest
+):
+    """
+    Allocate budget to a specific category.
+    
+    Args:
+        team_id: Team ID
+        request: Budget allocation request
+        
+    Returns:
+        Budget transaction confirmation with remaining balance
+    """
+    try:
+        result = team_service.allocate_budget(
+            team_id,
+            request.category,
+            request.amount,
+            request.description or ""
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/teams/{team_id}/budget", response_model=TeamBudgetResponse)
+def get_team_budget(team_id: int):
+    """
+    Get current budget status and allocation breakdown.
+    
+    Args:
+        team_id: Team ID
+        
+    Returns:
+        Budget summary with category breakdown
+    """
+    try:
+        budget_status = team_service.get_budget_status(team_id)
+        if not budget_status:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        return budget_status
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

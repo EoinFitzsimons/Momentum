@@ -153,6 +153,29 @@ class DatabaseManager:
         ensuring backward compatibility with existing data.
         """
         with self.get_connection() as conn:
+            # Check if teams table exists and add missing columns
+            try:
+                cursor = conn.execute("PRAGMA table_info(teams)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+                
+                # Define columns that should exist in teams table
+                required_columns = {
+                    'headquarters': "TEXT DEFAULT ''",
+                    'biography': "TEXT DEFAULT ''"
+                }
+                
+                # Add missing columns
+                for column_name, column_def in required_columns.items():
+                    if column_name not in existing_columns:
+                        try:
+                            conn.execute(f"ALTER TABLE teams ADD COLUMN {column_name} {column_def}")
+                        except sqlite3.OperationalError:
+                            pass  # Column already exists or other issue
+                
+                conn.commit()
+            except Exception:
+                pass  # Table might not exist yet, will be created by SCHEMA_SQL
+            
             # Check if tracks table exists and add missing columns
             try:
                 cursor = conn.execute("PRAGMA table_info(tracks)")
@@ -372,7 +395,7 @@ class DatabaseManager:
         """Get all drivers for a specific team"""
         with self.get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM drivers WHERE current_team_id = ? ORDER BY overall_rating DESC",
+                "SELECT * FROM drivers WHERE current_team_id = ? ORDER BY speed DESC",
                 (team_id,)
             ).fetchall()
             drivers = []
@@ -453,6 +476,18 @@ class DatabaseManager:
             # Filter out created_at field which isn't in the Team model
             return [Team(**{k: v for k, v in dict(row).items()
                          if k != 'created_at'}) for row in rows]
+
+    def update_team(self, team_id: int, team: Team) -> bool:
+        """Update an existing team's attributes"""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                UPDATE teams
+                SET name = ?, nationality = ?, discipline = ?, tier = ?,
+                    budget = ?, headquarters = ?, team_principal = ?, biography = ?
+                WHERE id = ?
+            """, (team.name, team.nationality, team.discipline, team.tier,
+                  team.budget, team.headquarters, team.team_principal, team.biography, team_id))
+            return cursor.rowcount > 0
 
     # Track operations
     def create_track(self, track: Track) -> Optional[int]:
