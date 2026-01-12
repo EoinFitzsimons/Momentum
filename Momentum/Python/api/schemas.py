@@ -154,7 +154,7 @@ class TeamSummary(BaseModel):
     name: str
     discipline: str
     nationality: str = "INT"
-    tier: int = Field(ge=1, le=3, default=2)
+    tier: str = Field(default="TIER_2")
     budget: float = Field(ge=0.0, default=50000000.0)
 
 
@@ -162,6 +162,151 @@ class TeamsListResponse(BaseModel):
     """Response model for GET /teams"""
     teams: List[TeamSummary]
     count: int
+
+
+# ============================================================================
+# TEAM MANAGEMENT SCHEMAS (UC-11, UC-12, UC-13, UC-14)
+# ============================================================================
+
+class StaffEntry(BaseModel):
+    """Staff member entry in team roster"""
+    id: int
+    name: str
+    role: str
+    rating: float = Field(ge=0.0, le=100.0)
+    annual_salary: float
+
+
+class DriverEntry(BaseModel):
+    """Driver entry in team roster"""
+    id: int
+    name: str
+    position: int
+    nationality: str
+    current_rating: float = Field(ge=0.0, le=100.0)
+    career_points: int
+    contract_length: Optional[int] = None
+
+
+class TeamDetails(BaseModel):
+    """UC-11: Full team profile with roster and financials"""
+    id: int
+    name: str
+    discipline: str
+    nationality: str
+    tier: str
+    founded_year: int
+    team_principal: str
+    
+    # Financials
+    budget: float
+    annual_income: float
+    total_expenditure: float
+    available_budget: float
+    
+    # Performance
+    total_wins: int
+    total_podiums: int
+    championships: int
+    operations_rating: float
+    
+    # Roster
+    drivers: List[DriverEntry]
+    staff: List[StaffEntry]
+    staff_count: int
+    
+    # Metadata
+    headquarters: str = ""
+    biography: str = ""
+
+
+class TeamCreate(BaseModel):
+    """UC-12: Request model for creating a new team"""
+    name: str = Field(..., min_length=1, max_length=100)
+    discipline: str = Field(
+        ...,
+        description="Racing discipline",
+        examples=["SINGLE_SEATER", "RALLY_STAGE", "ENDURANCE", "PRODUCTION_TOURING"]
+    )
+    nationality: str = Field(default="INT")
+    tier: str = Field(
+        default="TIER_2",
+        description="Team tier level affects budget and staff limits",
+        examples=["TIER_1", "TIER_2", "TIER_3"]
+    )
+    team_principal: str = Field(default="")
+    headquarters: str = Field(default="")
+
+
+class TeamCreateResponse(BaseModel):
+    """UC-12: Response after team creation with initial assets"""
+    id: int
+    name: str
+    discipline: str
+    tier: str
+    initial_budget: float
+    staff_limit: int
+    driver_slots: int
+    message: str
+
+
+class TeamUpdate(BaseModel):
+    """UC-14: Request model for updating team attributes"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    team_principal: Optional[str] = None
+    headquarters: Optional[str] = None
+    biography: Optional[str] = None
+    strategy_profile: Optional[str] = Field(None, examples=["aggressive", "defensive", "standard"])
+
+
+class TeamUpdateResponse(BaseModel):
+    """UC-14: Response after team update with audit log"""
+    id: int
+    name: str
+    updated_at: str
+    changes: Dict[str, Any]
+    message: str
+
+
+class BudgetAllocation(BaseModel):
+    """Budget allocation breakdown"""
+    category: str
+    allocated: float
+    used: float
+    remaining: float
+
+
+class TeamBudgetResponse(BaseModel):
+    """Current team budget status"""
+    team_id: int
+    team_name: str
+    total_budget: float
+    allocated: List[BudgetAllocation]
+    available: float
+    monthly_income: float
+    monthly_expenditure: float
+
+
+class BudgetTransactionRequest(BaseModel):
+    """Request to allocate or transfer budget"""
+    category: str = Field(
+        ...,
+        description="Budget category",
+        examples=["staff", "facility_upgrade", "driver_development", "marketing"]
+    )
+    amount: float = Field(..., gt=0)
+    description: Optional[str] = None
+
+
+class BudgetTransactionResponse(BaseModel):
+    """Response after budget transaction"""
+    success: bool
+    transaction_id: int
+    team_id: int
+    amount: float
+    category: str
+    remaining_budget: float
+    timestamp: str
 
 
 # ============================================================================
