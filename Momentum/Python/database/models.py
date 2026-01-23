@@ -128,7 +128,10 @@ class Track:
     right_turns: int = 6
     drs_zones: int = 1
     surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
+    surface_type: str = "asphalt"  # Legacy surface type field (kept for database compatibility)
     surface_grip: float = 1.0  # Grip level for visualization and simulation (0-1 scale)
+    surface_abrasiveness: float = 8.0  # Abrasiveness for tire wear
+    climate: str = "temperate"  # Climate type for track conditions
 
 
 @dataclass
