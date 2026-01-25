@@ -2193,8 +2193,9 @@ class RaceWindow(QMainWindow):
 
     # Signals
     return_to_menu = pyqtSignal()  # Signal to return to main menu
+    next_race = pyqtSignal(dict)  # Signal to start next race in championship with config
 
-    def __init__(self, track_id: Optional[int] = None, discipline: Optional[str] = None):
+    def __init__(self, track_id: Optional[int] = None, discipline: Optional[str] = None, championship_id: Optional[int] = None, race_id: Optional[int] = None):
         try:
             super().__init__()
             self.setWindowTitle("Momentum - Race Visualisation")
@@ -2233,6 +2234,8 @@ class RaceWindow(QMainWindow):
             self.track = None
             self._initial_track_id = track_id
             self._initial_discipline = discipline or "SINGLE_SEATER"
+            self._championship_id = championship_id  # Championship this race belongs to
+            self._race_id = race_id  # Current race ID in championship
             self.race_thread: Optional[threading.Thread] = None
             self.stop_event: Optional[threading.Event] = None
             # Track last lap time per driver
@@ -2493,6 +2496,35 @@ class RaceWindow(QMainWindow):
 
         # Menu/Exit controls
         menu_layout = QHBoxLayout()
+        
+        self.next_race_btn = QPushButton("Next Race")
+        self.next_race_btn.clicked.connect(self._next_race)
+        self.next_race_btn.setMinimumHeight(40)
+        self.next_race_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1a6b1a;
+                color: #FFFFFF;
+                border: 2px solid #00FF00;
+                border-radius: 5px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #2a8a2a;
+                border: 2px solid #00FF00;
+            }
+            QPushButton:pressed {
+                background-color: #0a4a0a;
+            }
+            QPushButton:disabled {
+                background-color: #1a1a1a;
+                color: #555555;
+                border: 2px solid #555555;
+            }
+        """)
+        self.next_race_btn.setEnabled(False)  # Only enabled in championship mode after race
+        menu_layout.addWidget(self.next_race_btn)
+        
         self.menu_btn = QPushButton("Return to Menu")
         self.menu_btn.clicked.connect(self._return_to_menu)
         self.menu_btn.setMinimumHeight(40)
@@ -3168,16 +3200,16 @@ class RaceWindow(QMainWindow):
                             if driver_id is not None:
                                 existing = self._race_state.get(driver_id, {
                                     'name': driver_name,
-                                        'position': event.get('position', 0),
-                                        'lap': lap,
-                                        'time': event.get('race_time', 0.0),
-                                        'distance': 0.0,
-                                        'gap_ahead': 0.0
-                                    })
-                                    existing['dnf'] = True
-                                    existing['lap'] = lap
-                                    self._race_state[driver_id] = existing
-                                    self._rebuild_standings_table()
+                                    'position': event.get('position', 0),
+                                    'lap': lap,
+                                    'time': event.get('race_time', 0.0),
+                                    'distance': 0.0,
+                                    'gap_ahead': 0.0
+                                })
+                                existing['dnf'] = True
+                                existing['lap'] = lap
+                                self._race_state[driver_id] = existing
+                                self._rebuild_standings_table()
 
                         elif event_type == "race_finished":
                             total_laps = event.get("total_laps", 0)
@@ -3325,6 +3357,27 @@ class RaceWindow(QMainWindow):
         self.stop_btn.setEnabled(False)
         self.info_label.setText("Race stopped")
         print("[STOP RACE] Stop complete")
+
+    def _next_race(self):
+        """Proceed to next race in championship."""
+        print("[NEXT RACE] User requested next race in championship")
+        
+        if not self._championship_id:
+            print("[NEXT RACE] Not in championship mode, ignoring")
+            return
+        
+        # Stop race if running
+        if self.stop_event and not self.stop_event.is_set():
+            print("[NEXT RACE] Stopping active race...")
+            self._stop_race()
+        
+        # Emit signal with championship and race info
+        config = {
+            'championship_id': self._championship_id,
+            'race_id': self._race_id,
+        }
+        self.next_race.emit(config)
+        print(f"[NEXT RACE] Emitted next_race signal with config: {config}")
 
     def _return_to_menu(self):
         """Return to main menu."""
@@ -3502,11 +3555,50 @@ class RaceWindow(QMainWindow):
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
 
+        # Save race results to database if in championship mode
+        try:
+            if self._championship_id and self._race_id and results_sorted:
+                from database.models import RaceResult
+                
+                for result in results_sorted:
+                    driver_id = result.get('driver_id')
+                    position = result.get('position')
+                    points = result.get('points', 0)
+                    fastest_lap = result.get('fastest_lap', False)
+                    dnf_reason = result.get('dnf_reason')
+                    grid_position = result.get('grid_position', position)
+                    
+                    race_result = RaceResult(
+                        id=None,  # Will be auto-generated on insert
+                        race_id=self._race_id,
+                        driver_id=driver_id,
+                        team_id=None,  # Could be retrieved from driver's team if needed
+                        position=position,
+                        points=points,
+                        fastest_lap=fastest_lap,
+                        dnf_reason=dnf_reason,
+                        grid_position=grid_position
+                    )
+                    
+                    try:
+                        self.db.save_race_result(race_result)
+                    except Exception as e:
+                        print(f"WARNING: Could not save result for driver {driver_id}: {e}")
+                
+                print(f"[RACE FINISHED] Saved {len(results_sorted)} race results to database")
+        except Exception as e:
+            print(f"WARNING: Error saving race results: {e}")
+
         # Show a post-race position change summary including DNFs
         try:
             self._show_position_change_summary(results_sorted)
         except Exception as e:
             print(f"ERROR showing position change summary: {e}")
+        
+        # Enable "Next Race" button if in championship mode
+        if self._championship_id:
+            self.next_race_btn.setEnabled(True)
+            print("[RACE FINISHED] Next Race button enabled (championship mode)")
 
     def _show_position_change_summary(self, results_sorted: list):
         """Display a modal dialog that compares starting grid to final positions.
