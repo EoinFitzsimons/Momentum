@@ -375,7 +375,7 @@ def create_championship(request: ChampionshipCreate):
         
         # Create championship with calendar
         if request.track_ids:
-            champ_id, race_ids = championship_service.create_championship_season(
+            champ_id, _ = championship_service.create_championship_season(
                 championship,
                 request.track_ids,
                 start_date
@@ -813,6 +813,120 @@ def get_race_results(race_id: int):
             classification=classification,
             fastest_lap=fastest_lap_info
         )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# RACE COMPLETION & STANDINGS UPDATE
+# ============================================================================
+
+@app.post("/races/{race_id}/complete")
+def complete_race_and_update_standings(race_id: int):
+    """
+    Complete a race and automatically update championship standings.
+    
+    Updates race status to 'completed' and recalculates standings.
+    
+    Args:
+        race_id: Race ID to complete
+        
+    Returns:
+        Updated standings
+    """
+    try:
+        race = db_manager.get_race(race_id)
+        
+        if not race:
+            raise HTTPException(status_code=404, detail=f"Race {race_id} not found")
+        
+        # Update race status to completed
+        success, error_msg = championship_service.update_race_lifecycle_status(
+            race_id,
+            "completed"
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Recalculate standings
+        standings = championship_service.recalculate_standings(
+            race.championship_id,
+            race.season
+        )
+        
+        # Return updated standings
+        return {
+            "success": True,
+            "race_id": race_id,
+            "standings": [
+                StandingEntry(
+                    driver_id=entry.driver_id,
+                    driver_name=entry.driver_name,
+                    team_id=entry.team_id,
+                    team_name=entry.team_name,
+                    total_points=entry.total_points,
+                    wins=entry.wins,
+                    podiums=entry.podiums,
+                    races_started=entry.races_started,
+                    dnf_count=entry.dnf_count,
+                    fastest_laps=entry.fastest_laps,
+                    position=entry.position
+                ) for entry in standings
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to complete race: {str(e)}")
+
+
+@app.get("/championships/{championship_id}/next-race")
+def get_next_race(championship_id: int):
+    """
+    Get the next scheduled race in a championship.
+    
+    Args:
+        championship_id: Championship ID
+        
+    Returns:
+        Next race details or null if season complete
+    """
+    try:
+        championship = db_manager.get_championship(championship_id)
+        
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
+        
+        # Get calendar
+        calendar = championship_service.get_championship_calendar(
+            championship_id,
+            championship.current_season
+        )
+        
+        # Find next scheduled race
+        for race in calendar:
+            if race['status'] == 'scheduled':
+                return {
+                    "found": True,
+                    "race_id": race['race_id'],
+                    "round_number": race['round_number'],
+                    "track_name": race['track_name'],
+                    "track_country": race['track_country'],
+                    "race_date": race['race_date'],
+                    "laps": race['laps'],
+                    "weather": race['weather_conditions']
+                }
+        
+        # No scheduled races found
+        return {
+            "found": False,
+            "message": "No scheduled races remaining"
+        }
         
     except HTTPException:
         raise

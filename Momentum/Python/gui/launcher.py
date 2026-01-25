@@ -40,8 +40,8 @@ class MomentumLauncher:
         from GUI.gui_race_visual import RaceWindow
         from GUI.gui_main_menu import MainMenuWindow
 
-        self.RaceWindow = RaceWindow
-        self.MainMenuWindow = MainMenuWindow
+        self.race_window_class = RaceWindow
+        self.main_menu_class = MainMenuWindow
 
         self.main_menu = None
         self.race_window = None
@@ -54,7 +54,7 @@ class MomentumLauncher:
 
     def show_main_menu(self):
         """Show main menu window."""
-        self.main_menu = self.MainMenuWindow()
+        self.main_menu = self.main_menu_class()
         self.main_menu.start_race_signal.connect(self.start_race)
         self.main_menu.show()
 
@@ -72,11 +72,11 @@ class MomentumLauncher:
         track_id = config.get('track_id')
         discipline = config.get('discipline', 'SINGLE_SEATER')
         try:
-            self.race_window = self.RaceWindow(track_id=track_id, discipline=discipline)
+            self.race_window = self.race_window_class(track_id=track_id, discipline=discipline)
         except TypeError:
             # Older signature fallback
             try:
-                self.race_window = self.RaceWindow(track_id=track_id)
+                self.race_window = self.race_window_class(track_id=track_id)
             except TypeError:
                 self.race_window = self.RaceWindow()
 
