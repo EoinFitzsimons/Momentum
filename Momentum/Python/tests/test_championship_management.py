@@ -14,7 +14,13 @@ Usage:
 """
 
 import sys
+import io
 from pathlib import Path
+
+# Force UTF-8 encoding on Windows
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -111,7 +117,7 @@ class TestChampionshipManagement:
             
             conn.commit()
         
-        print(f"✓ Created {len(self.drivers)} drivers, {len(self.teams)} teams, {len(self.tracks)} tracks")
+        print(f"[OK] Created {len(self.drivers)} drivers, {len(self.teams)} teams, {len(self.tracks)} tracks")
     
     def test_uc10_create_championship(self):
         """UC-10: Create Championship"""
@@ -158,7 +164,6 @@ class TestChampionshipManagement:
         
         # Get existing races count
         calendar = self.service.get_championship_calendar(championship_id, 1)
-        existing_count = len(calendar)
         
         # Validate race event (should succeed)
         future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")

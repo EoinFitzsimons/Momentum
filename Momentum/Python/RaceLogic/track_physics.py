@@ -129,6 +129,7 @@ class TrackMap:
         """Generate corner analysis from track data"""
         track_length_m = self.track.length_km * 1000
         num_corners = self.track.turns
+        rng = np.random.default_rng(seed=42)  # Create random generator with seed
 
         # Distribute corners around track
         for i in range(num_corners):
@@ -141,17 +142,17 @@ class TrackMap:
             # Corner characteristics
             if corner_type == "slow":
                 radius_m = self.track.tightest_corner_radius_m * \
-                    np.random.uniform(0.8, 1.2)
+                    rng.uniform(0.8, 1.2)
                 apex_speed_kmh = self.track.avg_speed_kmh * 0.4
                 overtaking_diff = 0.3  # Easier to overtake at slow corners
             elif corner_type == "medium":
                 radius_m = self.track.tightest_corner_radius_m * \
-                    np.random.uniform(2.0, 4.0)
+                    rng.uniform(2.0, 4.0)
                 apex_speed_kmh = self.track.avg_speed_kmh * 0.7
                 overtaking_diff = 0.6
             else:  # fast
                 radius_m = self.track.tightest_corner_radius_m * \
-                    np.random.uniform(5.0, 10.0)
+                    rng.uniform(5.0, 10.0)
                 apex_speed_kmh = self.track.avg_speed_kmh * 0.85
                 overtaking_diff = 0.9  # Very difficult
 
@@ -160,9 +161,13 @@ class TrackMap:
                 i %
                 2 == 0 and self.track.left_turns >= self.track.right_turns) else "right"
 
-            # Angle based on radius
-            angle_deg = 90 if corner_type == "medium" else (
-                45 if corner_type == "fast" else 120)
+            # Angle based on corner type
+            if corner_type == "medium":
+                angle_deg = 90
+            elif corner_type == "fast":
+                angle_deg = 45
+            else:
+                angle_deg = 120
 
             # Determine grip level from track properties. Prefer an explicit
             # numeric `surface_grip` if available (scale may be >1), otherwise
@@ -214,21 +219,32 @@ class TrackMap:
         ratio = corner_index / total_corners
 
         if self.track.avg_speed_kmh > 220:  # Fast track
-            return "fast" if ratio > 0.3 else (
-                "medium" if ratio > 0.15 else "slow")
+            if ratio > 0.3:
+                return "fast"
+            elif ratio > 0.15:
+                return "medium"
+            else:
+                return "slow"
         elif self.track.avg_speed_kmh < 160:  # Slow/twisty track
-            return "slow" if ratio > 0.5 else (
-                "medium" if ratio > 0.25 else "fast")
+            if ratio > 0.5:
+                return "slow"
+            elif ratio > 0.25:
+                return "medium"
+            else:
+                return "fast"
         else:  # Balanced
-            return "medium" if 0.3 < ratio < 0.7 else (
-                "slow" if ratio < 0.3 else "fast")
+            if 0.3 < ratio < 0.7:
+                return "medium"
+            elif ratio < 0.3:
+                return "slow"
+            else:
+                return "fast"
 
     def _generate_drs_zones(self):
         """Generate DRS activation zones"""
         track_length_m = self.track.length_km * 1000
 
         # Place DRS zones on longest straights
-        straight_positions = []
         for i in range(self.track.drs_zones):
             # DRS typically after slow corners leading to straights
             start_fraction = (i + 0.5) / self.track.drs_zones

@@ -44,7 +44,7 @@ def main():
         widget = getattr(race_win, 'track_widget', None)
         if widget is None:
             print('RaceWindow did not create track_widget — falling back to direct TrackWidget')
-            TrackWidget, CircuitGenerator = import_gui()
+            track_widget, circuit_generator = import_gui()
             # fallback: generate a circuit from default length
             try:
                 from database.database_manager import DatabaseManager
@@ -54,15 +54,15 @@ def main():
             except Exception:
                 length_km = 4.5
             try:
-                pts = CircuitGenerator.generate(length_km)
+                pts = circuit_generator.generate(length_km)
             except Exception:
                 pts = []
             track_length = pts[-1].s if pts else 2000
-            widget = TrackWidget(pts, track_length, appearance_manager=None)
+            widget = track_widget(pts, track_length, appearance_manager=None)
     except Exception as e:
         print('Failed to use MomentumLauncher:', e)
         # fallback to direct construction
-        TrackWidget, CircuitGenerator = import_gui()
+        track_widget, circuit_generator = import_gui()
         try:
             from database.database_manager import DatabaseManager
             db = DatabaseManager()
@@ -71,11 +71,11 @@ def main():
         except Exception:
             length_km = 4.5
         try:
-            pts = CircuitGenerator.generate(length_km)
+            pts = circuit_generator.generate(length_km)
         except Exception:
             pts = []
         track_length = pts[-1].s if pts else 2000
-        widget = TrackWidget(pts, track_length, appearance_manager=None)
+        widget = track_widget(pts, track_length, appearance_manager=None)
 
     widget.resize(1400, 900)
     widget.show()

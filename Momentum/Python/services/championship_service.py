@@ -86,7 +86,7 @@ class ChampionshipService:
         
         # Add fastest lap bonus (selected disciplines - only if finished in top 10)
         fastest_lap_bonus = 0
-        if fastest_lap and position <= 10 and discipline in ["SINGLE_SEATER"]:
+        if fastest_lap and position <= 10 and discipline in ["SINGLE_SEATER", "URBAN_STREET"]:
             fastest_lap_bonus = 1
         
         return base_points + fastest_lap_bonus

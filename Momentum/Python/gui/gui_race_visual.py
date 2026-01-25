@@ -3165,9 +3165,9 @@ class RaceWindow(QMainWindow):
                                 pass
                             # Mark in standings and rebuild table so DNF
                             # appears immediately
-                                if driver_id is not None:
-                                    existing = self._race_state.get(driver_id, {
-                                        'name': driver_name,
+                            if driver_id is not None:
+                                existing = self._race_state.get(driver_id, {
+                                    'name': driver_name,
                                         'position': event.get('position', 0),
                                         'lap': lap,
                                         'time': event.get('race_time', 0.0),

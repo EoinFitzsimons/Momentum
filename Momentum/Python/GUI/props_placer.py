@@ -45,7 +45,7 @@ def _load_sprites() -> None:
 _load_sprites()
 
 
-def place_props(points: List[Tuple[float, float]], seed: int = 0, density: float = 0.0005, style: str = 'default') -> List[Dict]:
+def place_props(points: List[Tuple[float, float]], seed: int = 0, density: float = 0.0005) -> List[Dict]:
     """Place props inside polygon defined by `points` (list of (x,y)).
 
     density is props per pixel^2 of bounding box; this function returns a
