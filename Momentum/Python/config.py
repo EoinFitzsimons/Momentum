@@ -291,4 +291,4 @@ RACE_GRID_SIZE = int(os.getenv("RACE_GRID_SIZE", "20"))
 # Number of drivers to show in the quick-race selection list
 QUICK_RACE_LIST_SIZE = int(os.getenv("QUICK_RACE_LIST_SIZE", "20"))
 # Rendering configuration: target frames per second for GUI animation
-RENDER_FPS = int(os.getenv("RENDER_FPS", "60"))
+RENDER_FPS = int(os.getenv("RENDER_FPS", "200"))  # 200 FPS = ultra-smooth (high CPU usage)

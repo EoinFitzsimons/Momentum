@@ -663,7 +663,8 @@ class TrackWidget(QWidget):
         self.pit_points = pit_points
         self.joker_points = joker_points
         self.cars: List[Car] = []
-        self.setMinimumSize(1400, 900)
+        # Remove fixed minimum size - let layout determine size
+        # self.setMinimumSize(1400, 900)
         self.race_active = False
         self.start_time = 0.0
 
@@ -677,6 +678,17 @@ class TrackWidget(QWidget):
         self.camera_x = 0
         self.camera_y = 0
         self.camera_rotation = 0
+        
+        # Cache track bounds to avoid recalculating every frame
+        self._cached_track_bounds = None
+        self._cached_track_zoom = 1.0
+        
+        # Cache expensive visual elements
+        self._cached_forest_pixmap = None
+        self._cached_inner_infield_polygon = None
+        self._cached_assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+        self._cached_forest_tile_path = os.path.join(self._cached_assets_dir, 'forest_tile.png')
+        self._forest_tile_exists = os.path.exists(self._cached_forest_tile_path)
 
         # Animation timer for smooth movement (interval derived from config)
         self.animation_timer = QTimer()
@@ -1081,74 +1093,77 @@ class TrackWidget(QWidget):
             else:
                 # Full track view with responsive zoom based on viewport size
                 painter.translate(center_x, center_y)
-                # Reduce zoom on smaller screens for better overview
-                base_zoom = 1.5
-                if self.width() < 1600:
-                    base_zoom = 1.2  # Zoom out more on smaller screens
+                
+                # Use cached zoom calculation (only recalculate if track changes)
+                if self._cached_track_bounds is None and self.track_points:
+                    track_min_x = min(pt.x for pt in self.track_points)
+                    track_max_x = max(pt.x for pt in self.track_points)
+                    track_min_y = min(pt.y for pt in self.track_points)
+                    track_max_y = max(pt.y for pt in self.track_points)
+                    
+                    track_width = track_max_x - track_min_x
+                    track_height = track_max_y - track_min_y
+                    
+                    # Cache bounds for reuse
+                    self._cached_track_bounds = (track_width, track_height)
+                
+                # Calculate zoom using cached bounds
+                if self._cached_track_bounds:
+                    track_width, track_height = self._cached_track_bounds
+                    
+                    # Calculate zoom to fit track with padding
+                    padding_factor = 1.15  # 15% padding around track
+                    zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
+                    zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
+                    
+                    # Use the smaller zoom to ensure everything fits
+                    base_zoom = min(zoom_x, zoom_y)
+                    
+                    # Apply reasonable limits to zoom
+                    base_zoom = max(0.5, min(base_zoom, 2.5))
+                else:
+                    # Fallback if no track points or bounds
+                    base_zoom = 1.0
+                
                 painter.scale(base_zoom, -base_zoom)
 
-            # CORRECT LAYER ORDER for visibility
-            # Draw full-canvas forest as the true bottom layer in world coordinates
-            # (draw a large tiled area in world space so the forest appears under
-            # everything and is visible through a transparent infield).
+            # OPTIMIZED: Draw full-canvas forest (cached)
             try:
-                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                forest_tile = os.path.join(assets_dir, 'forest_tile.png')
                 painter.save()
-                if os.path.exists(forest_tile):
-                    ft_pix = QPixmap(forest_tile)
+                if self._forest_tile_exists:
+                    ft_pix = QPixmap(self._cached_forest_tile_path)
                     if not ft_pix.isNull():
                         painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
-                else:
-                    rnd_bg = random.Random(42)
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.setBrush(QBrush(QColor(34, 100, 34)))
-                    # scatter simple tree dots across a large world region
-                    for _ in range(int((self.width() * self.height()) // 15000)):
-                        tx = rnd_bg.uniform(-4000, 4000)
-                        ty = rnd_bg.uniform(-4000, 4000)
-                        tr = rnd_bg.uniform(6, 18)
-                        painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
+                # Skip random forest generation - too expensive for real-time rendering
                 painter.restore()
             except Exception:
                 pass
 
-            # Draw forest as bottom layer in world coordinates (inside inner infield polygon)
+            # OPTIMIZED: Draw forest in inner infield (cached polygon)
             try:
-                TRACK_WIDTH = 14
-                inner_infield_points = []
-                inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                for pt in self.track_points:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-                    iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                    iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                    inner_infield_points.append(QPointF(iix, iiy))
-                if inner_infield_points:
-                    inner_poly = QPolygonF(inner_infield_points)
+                # Build inner infield polygon once and cache it
+                if self._cached_inner_infield_polygon is None and self.track_points:
+                    TRACK_WIDTH = 14
+                    inner_infield_points = []
+                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                    for pt in self.track_points:
+                        normal_x = -math.sin(pt.theta)
+                        normal_y = math.cos(pt.theta)
+                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
+                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
+                        inner_infield_points.append(QPointF(iix, iiy))
+                    if inner_infield_points:
+                        self._cached_inner_infield_polygon = QPolygonF(inner_infield_points)
+                
+                if self._cached_inner_infield_polygon:
                     band_path = QPainterPath()
-                    band_path.addPolygon(inner_poly)
+                    band_path.addPolygon(self._cached_inner_infield_polygon)
                     painter.save()
                     painter.setClipPath(band_path)
-                    try:
-                        assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                        forest_tile = os.path.join(assets_dir, 'forest_tile.png')
-                        if os.path.exists(forest_tile):
-                            ft_pix = QPixmap(forest_tile)
-                            if not ft_pix.isNull():
-                                # draw in world coords covering a generous region
-                                painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
-                        else:
-                            rnd2 = random.Random(42)
-                            painter.setPen(Qt.PenStyle.NoPen)
-                            painter.setBrush(QBrush(QColor(34, 100, 34)))
-                            for _ in range(int((self.width() * self.height()) // 20000)):
-                                tx = rnd2.uniform(-2000, 2000)
-                                ty = rnd2.uniform(-2000, 2000)
-                                tr = rnd2.uniform(6, 18)
-                                painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
-                    except Exception:
-                        pass
+                    if self._forest_tile_exists:
+                        ft_pix = QPixmap(self._cached_forest_tile_path)
+                        if not ft_pix.isNull():
+                            painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
                     painter.restore()
             except Exception:
                 pass
@@ -1825,50 +1840,9 @@ class TrackWidget(QWidget):
             except Exception:
                 pass
 
-            # LAYER 6: Base track surface (lighter grey off-line)
-            # Choose base colour by surface type and adjust brightness by
-            # numeric surface grip when available.
-            # Ensure inner infield forest is visible: draw a clipped forest
-            # layer over the infield area so it shows through even if the
-            # generated turf pixmap (or other draw) is opaque.
-            try:
-                if len(self.track_points) > 0:
-                    TRACK_WIDTH = 14
-                    inner_infield_points = []
-                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                    for pt in self.track_points:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                        inner_infield_points.append(QPointF(iix, iiy))
-                    if inner_infield_points:
-                        inner_poly = QPolygonF(inner_infield_points)
-                        clip_path = QPainterPath()
-                        clip_path.addPolygon(inner_poly)
-                        painter.save()
-                        painter.setClipPath(clip_path)
-                        try:
-                            assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                            forest_tile = os.path.join(assets_dir, 'forest_tile.png')
-                            if os.path.exists(forest_tile):
-                                ft_pix = QPixmap(forest_tile)
-                                if not ft_pix.isNull():
-                                    painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
-                            else:
-                                rnd2 = random.Random(123)
-                                painter.setPen(Qt.PenStyle.NoPen)
-                                painter.setBrush(QBrush(QColor(34, 100, 34, 220)))
-                                for _ in range(int((self.width() * self.height()) // 22000)):
-                                    tx = rnd2.uniform(-2000, 2000)
-                                    ty = rnd2.uniform(-2000, 2000)
-                                    tr = rnd2.uniform(6, 18)
-                                    painter.drawEllipse(int(tx - tr/2), int(ty - tr/2), int(tr), int(tr))
-                        except Exception:
-                            pass
-                        painter.restore()
-            except Exception:
-                pass
+            # REMOVED: Duplicate forest rendering (already drawn earlier, this was causing massive lag)
+            # The inner infield forest is already rendered in the optimized section above
+            
             surface = getattr(self, 'track_surface', '') or ''
             base_colors = {
                 'asphalt': (85, 85, 85),
@@ -2301,10 +2275,14 @@ class RaceWindow(QMainWindow):
         left_container = QWidget()
         self.left_layout = QVBoxLayout(left_container)
         self.left_layout.addWidget(QLabel("Loading track..."))
-        layout.addWidget(left_container, 5)  # Was 3, now 5 for bigger track
+        layout.addWidget(left_container, 1)  # Track gets all remaining space
 
-        # Right: Controls and standings
-        right_panel = QVBoxLayout()
+        # Right: Controls and standings - fixed width to avoid layout churn
+        right_container = QWidget()
+        right_container.setFixedWidth(430)
+        right_panel = QVBoxLayout(right_container)
+        right_panel.setContentsMargins(10, 10, 10, 10)  # Compact margins
+        layout.addWidget(right_container)
 
         # Title
         title = QLabel("<h1>Race Control</h1>")
@@ -2548,25 +2526,38 @@ class RaceWindow(QMainWindow):
         menu_layout.addWidget(self.menu_btn)
         right_panel.addLayout(menu_layout)
 
-        # Standings table (MUCH BIGGER)
+        # Standings table (fixed widths to avoid reflow and scrolling)
         right_panel.addWidget(QLabel("<h2>Live Standings</h2>"))
         self.standings_table = QTableWidget()
         self.standings_table.setColumnCount(4)
-        self.standings_table.setHorizontalHeaderLabels(
-            ["", "Driver", "Lap", "Gap"])
-        self.standings_table.setMinimumWidth(450)  # Match total column width + margins
-        self.standings_table.setMinimumHeight(400)
-        self.standings_table.setColumnWidth(0, 40)  # Colour indicator
-        self.standings_table.setColumnWidth(1, 210)  # Driver name
-        self.standings_table.setColumnWidth(2, 60)   # Lap
-        self.standings_table.setColumnWidth(3, 100)  # Gap
-        self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.setHorizontalHeaderLabels(["", "Driver", "Lap", "Gap"])
+        self.standings_table.setSizePolicy(
+            QSizePolicy.Policy.Fixed,
+            QSizePolicy.Policy.Expanding
+        )
+        # Match right panel width (430) minus margins for stable layout
+        self.standings_table.setFixedWidth(410)
         header = self.standings_table.horizontalHeader()
         if header is not None:
-            header.setStretchLastSection(True)  # Let Gap column expand
-        right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1
-
-        layout.addLayout(right_panel, 1)
+            self.standings_table.setColumnWidth(0, 32)   # color chip
+            self.standings_table.setColumnWidth(1, 240)  # driver name width budget
+            self.standings_table.setColumnWidth(2, 48)   # lap number
+            self.standings_table.setColumnWidth(3, 88)   # gap like "+888:888"
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+            header.setStretchLastSection(False)
+        
+        self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.setSizeAdjustPolicy(QTableWidget.SizeAdjustPolicy.AdjustToContents)
+        # Use fixed row height for performance (avoid resizeRowsToContents each frame)
+        self._standings_row_height = 26
+        self.standings_table.verticalHeader().setDefaultSectionSize(self._standings_row_height)
+        self.standings_table.verticalHeader().setVisible(False)
+        self._last_standings_row_count = 0
+        right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1 - grows to fill space
 
         # Apply dark Momentum palette for race HUD and visuals (restoring
         # darker theme)
@@ -3568,11 +3559,20 @@ class RaceWindow(QMainWindow):
                     dnf_reason = result.get('dnf_reason')
                     grid_position = result.get('grid_position', position)
                     
+                    # Get team_id from driver's current_team_id
+                    driver = next((d for d in self.drivers if d.id == driver_id), None)
+                    team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
+                    
+                    # Skip saving if team_id is required but missing
+                    if team_id is None:
+                        print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
+                        continue
+                    
                     race_result = RaceResult(
                         id=None,  # Will be auto-generated on insert
                         race_id=self._race_id,
                         driver_id=driver_id,
-                        team_id=None,  # Could be retrieved from driver's team if needed
+                        team_id=team_id,
                         position=position,
                         points=points,
                         fastest_lap=fastest_lap,
@@ -3741,7 +3741,7 @@ class RaceWindow(QMainWindow):
                 from matplotlib.figure import Figure
                 from PyQt6.QtWidgets import QListWidget, QListWidgetItem
                 
-                fig = Figure(figsize=(6, 3))
+                fig = Figure(figsize=(6, 3), dpi=100)
                 canvas = FigureCanvas(fig)
                 ax = fig.add_subplot(111)
                 ax.invert_yaxis()  # position 1 at top
@@ -3749,10 +3749,21 @@ class RaceWindow(QMainWindow):
                 ax.set_xlabel('Distance (m)')
                 ax.set_title('Positions Over Time')
                 left_layout.addWidget(canvas)
+                print("[RACE RESULTS] matplotlib plot initialized successfully")
+            except ImportError as e:
+                use_plot = False
+                print(f"[RACE RESULTS] matplotlib not available: {e}")
+                print("[RACE RESULTS] Install matplotlib for position plots: pip install matplotlib")
+                # Add placeholder message
+                no_plot_label = QLabel("📊 Position plot unavailable\n\nInstall matplotlib to see position changes over time:\npip install matplotlib")
+                no_plot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                no_plot_label.setStyleSheet("color: #999; padding: 40px; font-size: 12px;")
+                left_layout.addWidget(no_plot_label)
             except Exception as e:
                 use_plot = False
-                # Log the error but continue gracefully
-                print(f"[RACE RESULTS] matplotlib unavailable: {e}")
+                print(f"[RACE RESULTS] matplotlib error: {e}")
+                import traceback
+                traceback.print_exc()
 
             if use_plot and canvas and fig and ax:
                 # Filter list to show/hide drivers
@@ -4227,6 +4238,12 @@ class RaceWindow(QMainWindow):
         # Recalculate positions: finished drivers get P1, P2, P3...
         # Lapped drivers go after all finishers with "+X laps" notation
         all_classified = finished_drivers + lapped_drivers + dnf_drivers
+
+        # Resize table row count to match data (only when changed)
+        row_count = len(all_classified)
+        if row_count != getattr(self, '_last_standings_row_count', 0):
+            self.standings_table.setRowCount(row_count)
+            self._last_standings_row_count = row_count
         for row, entry in enumerate(all_classified):
             colour_item = QTableWidgetItem()
             if entry['driver_id'] in self.driver_colours:
@@ -4316,6 +4333,9 @@ class RaceWindow(QMainWindow):
                     lap_deficit = leader_lap - entry['lap']
                     print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
 
+        # Adjust table height to fit all rows (no scrolling)
+        self._resize_standings_height()
+
 
     def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: Optional[int] = None):
         """Set an item in the standings table but respect DNF state.
@@ -4355,6 +4375,21 @@ class RaceWindow(QMainWindow):
                 self.standings_table.setItem(row, col, item)
             except Exception:
                 pass
+
+    def _resize_standings_height(self):
+        """Resize standings table to its contents to avoid scrollbars."""
+        try:
+            rows = self.standings_table.rowCount()
+            header = self.standings_table.horizontalHeader()
+            header_h = header.height() if header else 0
+            row_heights = rows * getattr(self, '_standings_row_height', 26)
+            margins = self.standings_table.contentsMargins()
+            frame = self.standings_table.frameWidth() * 2
+            total = header_h + row_heights + margins.top() + margins.bottom() + frame + 4
+            self.standings_table.setMinimumHeight(total)
+            self.standings_table.setMaximumHeight(total)
+        except Exception:
+            pass
 
     def _on_pace_changed(self, value):
         """Handle pace slider change - update label and colour gradient."""
