@@ -52,9 +52,15 @@ class MainMenuWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Momentum - Main Menu")
-        # Use preferred application dialog size to match the rest of the game
+        # Use screen-relative sizing for responsiveness
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen().geometry()
+        # Use 70% of screen size, but respect preferred minimums
         pref_w, pref_h = get_preferred_window_size()
-        self.setMinimumSize(pref_w, pref_h)
+        window_w = max(pref_w, int(screen.width() * 0.7))
+        window_h = max(pref_h, int(screen.height() * 0.7))
+        self.resize(window_w, window_h)
+        self.setMinimumSize(800, 600)  # Absolute minimum for usability
 
         # Apply a dark Momentum palette consistent with existing branding
         self.setStyleSheet("""
@@ -505,17 +511,13 @@ class QuickRaceSetupWindow(QDialog):
         # positioned independent of the (possibly frameless) main window.
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window)
 
-        # Size dialog slightly smaller than main app window for comfortable padding
-        pref_w, pref_h = get_preferred_window_size()
-        w = int(pref_w * 0.85)
-        h = int(pref_h * 0.85)
-        self.setMinimumSize(w, h)
-        # Also explicitly resize so the window shows at the preferred size
-        # instead of relying only on layout hints.
-        try:
-            self.resize(w, h)
-        except Exception:
-            pass
+        # Size dialog responsively based on screen size
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen().geometry()
+        w = min(int(screen.width() * 0.85), 1400)  # Max 85% of screen or 1400px
+        h = min(int(screen.height() * 0.85), 1000)  # Max 85% of screen or 1000px
+        self.setMinimumSize(800, 600)  # Usable minimum
+        self.resize(w, h)
 
         # Build UI once
         self._setup_ui()
@@ -540,11 +542,20 @@ class QuickRaceSetupWindow(QDialog):
 
         # Left: driver list with compact cards
         driver_group = QGroupBox("Select Your Driver")
-        driver_group.setMinimumWidth(420)
+        # Remove fixed minimum width - let it be flexible
+        from PyQt6.QtWidgets import QSizePolicy
+        driver_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
         driver_layout = QVBoxLayout(driver_group)
 
         self.driver_list = QListWidget()
-        self.driver_list.setMinimumHeight(480)
+        # Remove fixed minimum height - let it expand to fill space
+        self.driver_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
         self.driver_list.setStyleSheet("""
             QListWidget::item:selected { background-color: transparent; color: #353839; font-weight: bold; }
         """)
