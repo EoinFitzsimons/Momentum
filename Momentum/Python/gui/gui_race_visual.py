@@ -689,12 +689,33 @@ class TrackWidget(QWidget):
         self._cached_assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
         self._cached_forest_tile_path = os.path.join(self._cached_assets_dir, 'forest_tile.png')
         self._forest_tile_exists = os.path.exists(self._cached_forest_tile_path)
+        # Cache common disk-backed pixmaps to avoid stat/QPixmap creation each frame
+        self._grass_tile_pixmap: Optional[QPixmap] = None
+        self._grass_tile_mtime: Optional[int] = None
+        try:
+            grass_path = os.path.join(self._cached_assets_dir, 'grass_tile.png')
+            if os.path.exists(grass_path):
+                gp = QPixmap(grass_path)
+                if not gp.isNull():
+                    self._grass_tile_pixmap = gp
+                    try:
+                        self._grass_tile_mtime = int(os.path.getmtime(grass_path))
+                    except Exception:
+                        self._grass_tile_mtime = None
+        except Exception:
+            # Non-fatal: if loading fails, leave caches empty and fallback to on-demand checks
+            self._grass_tile_pixmap = None
+            self._grass_tile_mtime = None
 
         # Animation timer for smooth movement (interval derived from config)
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
         try:
-            interval_ms = max(1, int(1000 / max(1, RENDER_FPS)))
+            # Cap rendering FPS to a sane maximum to avoid runaway CPU usage.
+            # The UI and most displays are happy at 60 FPS; allow higher
+            # values for benchmarking but clamp here to reduce CPU load.
+            effective_fps = max(1, min(RENDER_FPS, 60))
+            interval_ms = max(1, int(1000 / effective_fps))
         except Exception:
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
@@ -1060,7 +1081,7 @@ class TrackWidget(QWidget):
             painter.save()
 
             # Camera transform
-            if self.camera_mode == 'follow' and self.follow_car_id:
+            if self.camera_mode == 'follow' and self.follow_car_id is not None:
                 # Find followed car
                 followed_car = None
                 for car in self.cars:
@@ -1263,36 +1284,34 @@ class TrackWidget(QWidget):
 
             # Tile a subtle grass texture if available to break the flat neon look
             try:
-                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                tile_path = os.path.join(assets_dir, 'grass_tile.png')
-                if os.path.exists(tile_path):
-                    tile_pix = QPixmap(tile_path)
-                    if not tile_pix.isNull():
-                        # tile at native size for crisp low-poly look
-                        p.save()
-                        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-                        p.drawTiledPixmap(0, 0, w, h, tile_pix)
-                        p.restore()
-                        # apply a subtle tint over the tile to match the preset
-                        tint = palette.get('texture_tint')
-                        if tint is not None:
-                            # reduce tint alpha so tile shows through
-                            tint_col = QColor(tint.red(), tint.green(), tint.blue(), 50)
-                            p.fillRect(0, 0, w, h, tint_col)
-                        # apply soft occlusion near track edges by painting a translucent
-                        # radial/linear darkening; use occlusion parameter from preset
-                        occ = float(palette.get('occlusion', 0.08))
-                        if occ > 0:
-                            occ_col = QColor(0, 0, 0, int(occ * 255))
-                            # subtle vignette using gradient
-                            try:
-                                occ_grad = QLinearGradient(w/2, 0, w/2, h)
-                                occ_grad.setColorAt(0.0, QColor(0,0,0,0))
-                                occ_grad.setColorAt(0.5, QColor(0,0,0,int(occ*180)))
-                                occ_grad.setColorAt(1.0, QColor(0,0,0,int(occ*240)))
-                                p.fillRect(0, 0, w, h, occ_grad)
-                            except Exception:
-                                p.fillRect(0, 0, w, h, occ_col)
+                # Use cached pixmap if available to avoid disk I/O each frame
+                tile_pix = self._grass_tile_pixmap
+                if tile_pix is not None and not tile_pix.isNull():
+                    # tile at native size for crisp low-poly look
+                    p.save()
+                    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+                    p.drawTiledPixmap(0, 0, w, h, tile_pix)
+                    p.restore()
+                    # apply a subtle tint over the tile to match the preset
+                    tint = palette.get('texture_tint')
+                    if tint is not None:
+                        # reduce tint alpha so tile shows through
+                        tint_col = QColor(tint.red(), tint.green(), tint.blue(), 50)
+                        p.fillRect(0, 0, w, h, tint_col)
+                    # apply soft occlusion near track edges by painting a translucent
+                    # radial/linear darkening; use occlusion parameter from preset
+                    occ = float(palette.get('occlusion', 0.08))
+                    if occ > 0:
+                        occ_col = QColor(0, 0, 0, int(occ * 255))
+                        # subtle vignette using gradient
+                        try:
+                            occ_grad = QLinearGradient(w/2, 0, w/2, h)
+                            occ_grad.setColorAt(0.0, QColor(0,0,0,0))
+                            occ_grad.setColorAt(0.5, QColor(0,0,0,int(occ*180)))
+                            occ_grad.setColorAt(1.0, QColor(0,0,0,int(occ*240)))
+                            p.fillRect(0, 0, w, h, occ_grad)
+                        except Exception:
+                            p.fillRect(0, 0, w, h, occ_col)
             except Exception:
                 # Non-fatal; fall back to painted base
                 pass
@@ -1741,14 +1760,8 @@ class TrackWidget(QWidget):
                         palette_name = preset.get('name', '')
                     except Exception:
                         palette_name = ''
-                    tile_mtime = None
-                    try:
-                        assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                        tile_path = os.path.join(assets_dir, 'grass_tile.png')
-                        if os.path.exists(tile_path):
-                            tile_mtime = int(os.path.getmtime(tile_path))
-                    except Exception:
-                        tile_mtime = None
+                    # Use cached grass tile mtime (avoid stat() every paint)
+                    tile_mtime = self._grass_tile_mtime
 
                     key = (w, h, seed, palette_name, tile_mtime)
                     pix = self._infield_cache.get(key)
@@ -1818,18 +1831,13 @@ class TrackWidget(QWidget):
                             band_path = band_path.subtracted(inner_path)
                             painter.save()
                             painter.setClipPath(band_path)
-                            # Tile the grass texture into the band when available
+                            # Tile the grass texture into the band when available (use cached pixmap)
                             try:
-                                assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
-                                tile_path = os.path.join(assets_dir, 'grass_tile.png')
-                                if os.path.exists(tile_path):
-                                    tile_pix = QPixmap(tile_path)
-                                    if not tile_pix.isNull():
-                                        # draw a slightly expanded tiled area to cover edges
-                                        painter.drawTiledPixmap(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, tile_pix)
-                                        painter.fillRect(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, QColor(60, 120, 60, 40))
-                                    else:
-                                        painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+                                tile_pix = self._grass_tile_pixmap
+                                if tile_pix is not None and not tile_pix.isNull():
+                                    # draw a slightly expanded tiled area to cover edges
+                                    painter.drawTiledPixmap(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, tile_pix)
+                                    painter.fillRect(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, QColor(60, 120, 60, 40))
                                 else:
                                     painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
                             except Exception:
