@@ -212,7 +212,6 @@ class CreateChampionshipDialog(QDialog):
         self.discipline_combo = QComboBox()
         self.discipline_combo.addItems([
             "SINGLE_SEATER",
-            "RALLY_STAGE",
             "ENDURANCE",
             "PRODUCTION_TOURING",
             "URBAN_STREET",

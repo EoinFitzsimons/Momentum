@@ -1,6 +1,6 @@
 # Track Generation Summary
 
-Generated **7 tracks** for all racing disciplines using procedural generation via `CircuitGenerator`.
+Generated **6 tracks** for all active racing disciplines using procedural generation via `CircuitGenerator`.
 
 ## Generated Tracks
 
@@ -22,16 +22,7 @@ Generated **7 tracks** for all racing disciplines using procedural generation vi
 - **Points**: 4,832 track points (main) + joker alternate route
 - **Instructions**: Compact ~1.2km circuit with tight corners + joker lap alternate route
 
-### 3. Rally Stage (RALLY_STAGE)
-- **File**: `RALLY_STAGE_Momentum_Rally_Stage.png`
-- **Track ID**: 186
-- **Length**: 20.293km  
-- **Country**: Finland
-- **Type**: Point-to-point (is_point_to_point=True)
-- **Points**: 20,294 track points
-- **Instructions**: Long winding stage with varied corners
-
-### 4. Grand Prix Circuit (SINGLE_SEATER)
+### 3. Grand Prix Circuit (SINGLE_SEATER)
 - **File**: `SINGLE_SEATER_Momentum_Grand_Prix_Circuit.png`
 - **Track ID**: 187
 - **Length**: ~4.5km
@@ -39,7 +30,7 @@ Generated **7 tracks** for all racing disciplines using procedural generation vi
 - **Type**: Closed circuit
 - **Instructions**: Standard racing circuit with mixed corners
 
-### 5. Touring Circuit (PRODUCTION_TOURING)
+### 4. Touring Circuit (PRODUCTION_TOURING)
 - **File**: `PRODUCTION_TOURING_Momentum_Touring_Circuit.png`
 - **Track ID**: 188
 - **Length**: ~3.8km
@@ -47,15 +38,15 @@ Generated **7 tracks** for all racing disciplines using procedural generation vi
 - **Type**: Closed circuit  
 - **Instructions**: Standard racing circuit (scaled)
 
-### 6. Street Circuit (URBAN_STREET)
+### 5. Urban Drift Circuit (URBAN_STREET)
 - **File**: `URBAN_STREET_Momentum_Street_Circuit.png`
 - **Track ID**: 189
 - **Length**: ~3.2km
 - **Country**: Singapore
 - **Type**: Closed circuit
-- **Instructions**: Tight 90-degree corners simulating city streets
+- **Instructions**: Tight 90-degree corners simulating drift-friendly city streets
 
-### 7. Endurance Circuit (ENDURANCE)
+### 6. Endurance Circuit (ENDURANCE)
 - **File**: `ENDURANCE_Momentum_Endurance_Circuit.png`
 - **Track ID**: 190
 - **Length**: ~13.6km

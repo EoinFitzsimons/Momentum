@@ -47,7 +47,6 @@ class TeamService:
     DRIVER_SLOTS_PER_DISCIPLINE = {
         "SINGLE_SEATER": 2,
         "PRODUCTION_TOURING": 2,
-        "RALLY_STAGE": 2,
         "URBAN_STREET": 2,
         "DRAG_ACCELERATION": 2,
         "SPRINT_RALLYCROSS": 2,

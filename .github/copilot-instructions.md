@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Momentum is a comprehensive motorsport management simulation spanning **7 racing disciplines** (Single Seater, Production/Touring, Rally/Stage, Urban/Street, Drag/Acceleration, Sprint/Rallycross, Endurance). The architecture consists of a **Python FastAPI backend** providing race simulation and game logic, with **PyQt6 desktop GUI** for user interface. The backend is ~60-70% playable with core simulation working but game loop/progression incomplete.
+Momentum is a comprehensive motorsport management simulation spanning **6 racing disciplines** (Single Seater, Production/Touring, Urban/Street (Drifting), Drag/Acceleration, Sprint/Rallycross, Endurance). The architecture consists of a **Python FastAPI backend** providing race simulation and game logic, with **PyQt6 desktop GUI** for user interface. The backend is ~60-70% playable with core simulation working but game loop/progression incomplete.
 
 ## Architecture
 
@@ -47,11 +47,11 @@ Momentum/Python/           # Primary Python backend codebase
 │   ├── database_factory.py # Database initialization patterns
 │   └── momentum.db        # Main database file
 │
-├── disciplines/           # 7 racing discipline simulators
+├── disciplines/           # 6 racing discipline simulators
 │   ├── base_engine.py     # Abstract base class for all disciplines
 │   ├── multi_discipline_simulator.py # Orchestration layer
 │   ├── race_simulation.py # Core Monte Carlo simulation
-│   └── [discipline]/      # single_seater, rally_stage, endurance, etc.
+│   └── [discipline]/      # single_seater, endurance, etc.
 │
 ├── systems/               # Game systems (currency, staff, world_state, game_loop)
 ├── api/                   # API schemas and request/response models
@@ -73,7 +73,7 @@ Momentum/Python/           # Primary Python backend codebase
 Each discipline inherits from `BaseDisciplineEngine` in `disciplines/base_engine.py`:
 
 - **Performance Weighting**: 40% driver skill, 30% team capability, 20% environmental, 10% randomness
-- **Discipline-Specific Logic**: Each racing type has unique simulation characteristics (e.g., rally uses co-driver attributes, drag uses reaction time, endurance emphasizes reliability)
+- **Discipline-Specific Logic**: Each racing type has unique simulation characteristics (e.g., drag uses reaction time, endurance emphasizes reliability, urban street focuses on drift control)
 - **Context Pattern**: `DisciplineContext` dataclass bundles race, track, drivers, teams, weather, track conditions
 
 ### Multi-Currency System
@@ -159,8 +159,8 @@ CORS configured for `*` (development only) - restrict in production.
 
 ```python
 from disciplines.base_engine import RacingDiscipline
-# Always use: SINGLE_SEATER, PRODUCTION_TOURING, RALLY_STAGE, 
-# URBAN_STREET, DRAG_ACCELERATION, SPRINT_RALLYCROSS, ENDURANCE
+# Always use: SINGLE_SEATER, PRODUCTION_TOURING, URBAN_STREET,
+# DRAG_ACCELERATION, SPRINT_RALLYCROSS, ENDURANCE
 ```
 
 ### Configuration Access
@@ -177,7 +177,7 @@ from config import DATABASE_PATH, DEFAULT_CURRENCY, MONTE_CARLO_ITERATIONS
 Driver skills are 0-100 floats. Key attributes by discipline:
 
 - **Single Seater**: raw_speed, cornering_skill, qualifying_pace, aerodynamics_understanding
-- **Rally**: surface_adaptation, co_driver_communication (note: co-driver is separate entity)
+- **Urban/Street (Drifting)**: drift_control, car_control, consistency, reactions
 - **Endurance**: tire_management, fuel_management, consistency, mechanical_sympathy
 - **Drag**: acceleration_control, reaction_time, starting_skill
 
@@ -199,9 +199,15 @@ Driver skills are 0-100 floats. Key attributes by discipline:
 
 ### ⚠️ Staff Management (Status: 40% complete)
 
-- Staff models fully defined (40+ attributes, 25+ roles)
-- Hiring/firing/contract endpoints not implemented
-- Performance multiplier system designed but not integrated into simulation
+- Staff models defined (role + rating today); impact configuration now lives in `config.STAFF_ROLES_CONFIG`
+- Hiring/firing/contract endpoints implemented for core roles
+- Performance multiplier system defined but not integrated into simulation runtime
+
+## Rally Stage Removal
+
+Rally/Stage (point-to-point ultra-distance) was removed from active disciplines due to the complexity of
+implementing stage routing, pacing, and route validation at scale. All gameplay and UI lists should
+exclude `RALLY_STAGE`, and Urban/Street is **drifting** (not Formula E).
 
 ### ⚠️ PyQt6 GUI (Status: 60% complete)
 
