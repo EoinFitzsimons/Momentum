@@ -1,14 +1,17 @@
 """
 Momentum Motorsport Simulation - Multi-Discipline Models
 
-This module extends the base data models to support all 7 racing disciplines:
+This module extends the base data models to support 6 active racing disciplines:
 - Single Seater: Open-wheel formula racing with aerodynamic focus
 - Production/Touring: Production-based touring car racing
-- Rally/Stage: Point-to-point rally racing on varied surfaces
-- Urban/Street: Street circuits and urban racing environments
+- Urban/Street: Drift-focused urban street racing
 - Drag/Acceleration: Straight-line acceleration racing
 - Sprint/Rallycross: Mixed-surface sprint racing
 - Endurance: Long-distance multi-class racing
+
+Rally/Stage was removed from active disciplines due to the complexity of
+point-to-point stage routing and validation at scale. Legacy fields remain
+for backwards compatibility but are not used by active systems.
 
 Each discipline has unique characteristics, vehicle development paths,
 and specific driver skill requirements.
@@ -27,7 +30,6 @@ class RacingDiscipline(Enum):
     """Supported racing disciplines matching the actual implementation"""
     SINGLE_SEATER = "SINGLE_SEATER"
     PRODUCTION_TOURING = "PRODUCTION_TOURING"
-    RALLY_STAGE = "RALLY_STAGE"
     URBAN_STREET = "URBAN_STREET"
     DRAG_ACCELERATION = "DRAG_ACCELERATION"
     SPRINT_RALLYCROSS = "SPRINT_RALLYCROSS"
@@ -98,16 +100,16 @@ class Vehicle:
     # Close-racing optimization
     touring_car_setup: Optional[float] = None
 
-    # Rally/Stage specific
+    # Rally/Stage specific (legacy - discipline removed)
     # Off-road protection and robustness
     rally_durability: Optional[float] = None
     # Multi-surface performance
     all_terrain_capability: Optional[float] = None
 
-    # Urban/Street specific
-    # Electric efficiency and regeneration
+    # Urban/Street specific (drifting)
+    # Drift power delivery and throttle modulation
     energy_management: Optional[float] = None
-    # City circuit optimization
+    # Drift-focused setup balance
     street_adaptability: Optional[float] = None
 
     # Drag/Acceleration specific
@@ -292,13 +294,12 @@ class MultiDisciplineDriver:
     engine_management: float = 50.0           # Power delivery and engine modes
     data_analysis: float = 50.0               # Interpreting telemetry and feedback
 
-    # ===== DISCIPLINE SPECIALIZATIONS (7 attributes) =====
-    # Natural aptitude for different racing categories - matching our 7
-    # disciplines
+    # ===== DISCIPLINE SPECIALIZATIONS (6 active + legacy fields) =====
+    # Natural aptitude for different racing categories - Rally/Stage is legacy
     # Single Seater (Formula) racing preference
     single_seater_aptitude: float = 50.0
     production_touring_aptitude: float = 50.0  # Production/Touring car racing
-    rally_stage_aptitude: float = 50.0        # Rally/Stage racing and off-road
+    rally_stage_aptitude: float = 50.0        # Legacy: Rally/Stage racing (removed)
     # Urban/Street racing and city circuits
     urban_street_aptitude: float = 50.0
     # Drag/Acceleration racing specialization
@@ -360,7 +361,7 @@ class MultiDisciplineDriver:
     single_seater_wins: int = 0               # Wins in Single Seater categories
     # Wins in Production/Touring car racing
     production_touring_wins: int = 0
-    rally_stage_wins: int = 0                 # Wins in Rally/Stage racing
+    rally_stage_wins: int = 0                 # Legacy: wins in Rally/Stage racing
     urban_street_wins: int = 0                # Wins in Urban/Street racing
     drag_acceleration_wins: int = 0           # Wins in Drag/Acceleration racing
     sprint_rallycross_wins: int = 0           # Wins in Sprint/Rallycross racing
@@ -404,8 +405,8 @@ class MultiDisciplineDriver:
 
         Args:
             discipline: The racing discipline to evaluate
-                      ("SINGLE_SEATER", "PRODUCTION_TOURING", "RALLY_STAGE",
-                       "URBAN_STREET", "DRAG_ACCELERATION", "SPRINT_RALLYCROSS", "ENDURANCE")
+                      ("SINGLE_SEATER", "PRODUCTION_TOURING", "URBAN_STREET",
+                       "DRAG_ACCELERATION", "SPRINT_RALLYCROSS", "ENDURANCE")
 
         Returns:
             Overall performance rating (0-100 scale)
@@ -414,7 +415,6 @@ class MultiDisciplineDriver:
         aptitude_map = {
             "SINGLE_SEATER": self.single_seater_aptitude,
             "PRODUCTION_TOURING": self.production_touring_aptitude,
-            "RALLY_STAGE": self.rally_stage_aptitude,
             "URBAN_STREET": self.urban_street_aptitude,
             "DRAG_ACCELERATION": self.drag_acceleration_aptitude,
             "SPRINT_RALLYCROSS": self.sprint_rallycross_aptitude,
@@ -463,7 +463,6 @@ class MultiDisciplineDriver:
         wins_map = {
             "SINGLE_SEATER": self.single_seater_wins,
             "PRODUCTION_TOURING": self.production_touring_wins,
-            "RALLY_STAGE": self.rally_stage_wins,
             "URBAN_STREET": self.urban_street_wins,
             "DRAG_ACCELERATION": self.drag_acceleration_wins,
             "SPRINT_RALLYCROSS": self.sprint_rallycross_wins,
@@ -573,7 +572,7 @@ class Track:
     length_km: float
 
     # Discipline-specific track types
-    track_type: str  # "circuit", "street", "rally_stage", "oval"
+    track_type: str  # "circuit", "street", "oval"
     surface_type: str = "tarmac"  # "tarmac", "gravel", "snow", "mixed"
 
     # Circuit-specific
@@ -720,18 +719,11 @@ DISCIPLINE_DEVELOPMENT_TREES = {
         "electronics": ["traction_control", "abs_tuning", "data_logging"],
         "safety": ["impact_protection", "fire_suppression"]
     },
-    "RALLY_STAGE": {
-        "chassis": ["suspension_travel", "underbody_protection", "roll_cage"],
-        "engine": ["turbo_anti_lag", "power_delivery", "durability"],
-        "transmission": ["differential_tuning", "gear_ratios"],
-        "safety": ["impact_structures", "navigation_systems"],
-        "durability": ["component_protection", "maintenance_intervals"]
-    },
     "URBAN_STREET": {
-        "electric_powertrain": ["battery_efficiency", "regen_systems", "motor_mapping"],
-        "aerodynamics": ["efficiency_focus", "cooling_optimization"],
-        "chassis": ["weight_optimization", "handling_balance"],
-        "electronics": ["energy_management", "software_systems"],
+        "chassis": ["weight_optimization", "handling_balance", "roll_stiffness"],
+        "suspension": ["drift_geometry", "damping", "toe_setup"],
+        "powertrain": ["throttle_mapping", "torque_delivery", "cooling"],
+        "electronics": ["traction_control", "yaw_control", "telemetry"],
         "safety": ["impact_protection", "visibility_systems"]
     },
     "DRAG_ACCELERATION": {
@@ -791,33 +783,18 @@ DISCIPLINE_SKILL_WEIGHTS = {
         "traffic_management": 0.03, "mechanical_sympathy": 0.03
     },
 
-    "RALLY_STAGE": {
-        # Adaptability and surface skills critical
-        "surface_adaptation": 0.15, "car_adaptation": 0.10, "track_learning": 0.09,
-        "raw_speed": 0.08, "vehicle_control": 0.08, "spatial_awareness": 0.07,
-
-        # Environmental conditions (rally-specific)
-        "wet_weather_skill": 0.06, "temperature_adaptation": 0.05, "concentration": 0.05,
-
-        # Technical knowledge
-        "suspension_feel": 0.06, "setup_knowledge": 0.05, "mechanical_sympathy": 0.05,
-
-        # Mental strength for risk management
-        "mental_resilience": 0.04, "risk_appetite": 0.03, "pressure_handling": 0.04
-    },
-
     "URBAN_STREET": {
-        # Adaptation and energy management for electric/street racing
-        "car_adaptation": 0.10, "track_learning": 0.09, "energy_management": 0.08,
-        "raw_speed": 0.08, "consistency": 0.08, "racecraft": 0.07,
+        # Drift-focused control and precision
+        "vehicle_control": 0.14, "cornering_skill": 0.10, "consistency": 0.09,
+        "raw_speed": 0.08, "racecraft": 0.07, "spatial_awareness": 0.07,
 
-        # Technical knowledge for electric systems
-        "engine_management": 0.07, "data_analysis": 0.06, "setup_knowledge": 0.06,
-        "fuel_management": 0.05,  # (Energy management in electric)
+        # Technical setup for drift balance
+        "setup_knowledge": 0.07, "suspension_feel": 0.06, "data_analysis": 0.05,
+        "engine_management": 0.05,
 
-        # Environmental and strategic
-        "traffic_management": 0.06, "qualifying_optimization": 0.05, "race_strategy": 0.05,
-        "spatial_awareness": 0.05, "pressure_handling": 0.04, "concentration": 0.04
+        # Mental composure and risk management
+        "pressure_handling": 0.05, "concentration": 0.05, "risk_appetite": 0.04,
+        "track_learning": 0.04, "car_adaptation": 0.04
     },
 
     "DRAG_ACCELERATION": {

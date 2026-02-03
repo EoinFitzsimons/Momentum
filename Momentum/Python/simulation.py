@@ -42,6 +42,8 @@ from database.database_manager import DatabaseManager
 from database.models import Championship, Race, RaceResult
 from services.championship_service import ChampionshipService
 from services.team_service import TeamService
+from services.hiring_service import HiringService
+from services.progression_service import ProgressionService
 from api.schemas import (
     ChampionshipCreate,
     ChampionshipResponse,
@@ -62,7 +64,22 @@ from api.schemas import (
     TeamUpdateResponse,
     TeamBudgetResponse,
     BudgetTransactionRequest,
-    BudgetTransactionResponse
+    BudgetTransactionResponse,
+    # Hiring & Contract schemas
+    AvailableDriver,
+    AvailableDriversResponse,
+    AvailableStaff,
+    AvailableStaffResponse,
+    DriverContractRequest,
+    DriverContractResponse,
+    StaffContractRequest,
+    StaffContractResponse,
+    ContractReleaseRequest,
+    ContractReleaseResponse,
+    # Progression schemas
+    SeasonProgressionRequest,
+    SeasonProgressionResponse,
+    DriverProgression
 )
 from config import API_HOST, API_PORT, API_RELOAD
 
@@ -88,6 +105,8 @@ app.add_middleware(
 db_manager = DatabaseManager()
 championship_service = ChampionshipService(db_manager)
 team_service = TeamService(db_manager)
+hiring_service = HiringService()
+progression_service = ProgressionService()
 
 
 # ============================================================================
@@ -974,6 +993,301 @@ def list_championships(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# HIRING & CONTRACT ENDPOINTS (UC-15, UC-16, UC-17, UC-18)
+# ============================================================================
+
+@app.get("/drivers/available", response_model=AvailableDriversResponse, tags=["Hiring"])
+def get_available_drivers(
+    discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
+    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum average skill rating"),
+    max_salary: Optional[float] = Query(None, description="Maximum salary budget"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+):
+    """
+    UC-15: Get Available Drivers for Hire
+    
+    Returns list of drivers available for contract signing. Includes:
+    - Skill ratings and career statistics
+    - Estimated salary based on performance
+    - Pagination support
+    - Discipline and rating filters
+    
+    Market includes:
+    - Drivers without current team contracts
+    - Active career phase drivers
+    - Optional discipline specialization filter
+    """
+    try:
+        drivers, total = hiring_service.get_available_drivers(
+            discipline=discipline,
+            min_rating=min_rating,
+            max_salary=max_salary,
+            page=page,
+            page_size=page_size
+        )
+        
+        total_pages = (total + page_size - 1) // page_size
+        
+        return AvailableDriversResponse(
+            drivers=[AvailableDriver(**d) for d in drivers],
+            count=len(drivers),
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available drivers: {str(e)}")
+
+
+@app.get("/staff/available", response_model=AvailableStaffResponse, tags=["Hiring"])
+def get_available_staff(
+    role: Optional[str] = Query(None, description="Filter by staff role"),
+    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum skill rating"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+):
+    """
+    UC-17: Get Available Staff for Hire
+    
+    Returns list of staff members available for hire. Includes:
+    - Role and skill rating
+    - Estimated salary by role
+    - Pagination support
+    - Role-based filtering
+    
+    Staff roles include:
+    - Team Principal, Technical Director
+    - Race Engineer, Data Analyst
+    - Mechanic, Strategist
+    - Aerodynamicist, Designer
+    """
+    try:
+        staff, total = hiring_service.get_available_staff(
+            role=role,
+            min_rating=min_rating,
+            page=page,
+            page_size=page_size
+        )
+        
+        total_pages = (total + page_size - 1) // page_size
+        
+        return AvailableStaffResponse(
+            staff=[AvailableStaff(**s) for s in staff],
+            count=len(staff),
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available staff: {str(e)}")
+
+
+@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"])
+def sign_driver_contract(request: DriverContractRequest):
+    """
+    UC-16: Sign Driver Contract
+    
+    Create a contract between a team and driver. Process includes:
+    1. Validate driver availability
+    2. Check team budget sufficiency
+    3. Verify salary cap compliance
+    4. Calculate signing bonus (20% of total value)
+    5. Update driver and team records
+    
+    Budget Impact:
+    - Immediate: Signing bonus deducted (20% of total contract)
+    - Annual: Salary counted against salary cap
+    - Reserve: 10% of salary cap required as buffer
+    
+    Validation:
+    - Driver must be available (no current team)
+    - Team budget must cover signing bonus
+    - Salary cap compliance enforced
+    - Contract length: 1-5 seasons
+    """
+    try:
+        success, message, details = hiring_service.sign_driver_contract(
+            team_id=request.team_id,
+            driver_id=request.driver_id,
+            contract_length=request.contract_length,
+            salary=request.salary,
+            performance_bonus=request.performance_bonus
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return DriverContractResponse(
+            driver_id=details['driver_id'],
+            driver_name=details['driver_name'],
+            team_id=details['team_id'],
+            team_name=details['team_name'],
+            contract_length=details['contract_length'],
+            salary=details['salary'],
+            performance_bonus=details['performance_bonus'],
+            total_contract_value=details['total_contract_value'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error signing driver contract: {str(e)}")
+
+
+@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"])
+def sign_staff_contract(request: StaffContractRequest):
+    """
+    UC-18: Sign Staff Contract
+    
+    Create a contract between a team and staff member. Process includes:
+    1. Validate staff availability
+    2. Check team budget sufficiency
+    3. Calculate signing bonus (10% of total value)
+    4. Update staff and team records
+    
+    Budget Impact:
+    - Immediate: Signing bonus deducted (10% of total contract)
+    - Annual: Salary affects team operations budget
+    
+    Validation:
+    - Staff must be available (no current team)
+    - Team budget must cover signing bonus
+    - Contract length: 1-5 seasons
+    """
+    try:
+        success, message, details = hiring_service.sign_staff_contract(
+            team_id=request.team_id,
+            staff_id=request.staff_id,
+            contract_length=request.contract_length,
+            salary=request.salary
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return StaffContractResponse(
+            staff_id=details['staff_id'],
+            staff_name=details['staff_name'],
+            team_id=details['team_id'],
+            team_name=details['team_name'],
+            contract_length=details['contract_length'],
+            salary=details['salary'],
+            total_contract_value=details['total_contract_value'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error signing staff contract: {str(e)}")
+
+
+@app.post("/contracts/release", response_model=ContractReleaseResponse, tags=["Hiring"])
+def release_contract(request: ContractReleaseRequest):
+    """
+    Release Driver or Staff from Contract
+    
+    Terminate a contract with buyout cost. Process includes:
+    1. Validate personnel is contracted to team
+    2. Calculate buyout cost (percentage of remaining value)
+    3. Check team budget sufficiency
+    4. Release personnel to market
+    
+    Buyout Calculation:
+    - Driver: buyout_percentage * (annual_salary * remaining_seasons)
+    - Staff: Fixed 50k EUR fee (simplified)
+    
+    Default buyout percentage: 50%
+    """
+    try:
+        success, message, details = hiring_service.release_personnel_contract(
+            team_id=request.team_id,
+            personnel_id=request.personnel_id,
+            personnel_type=request.personnel_type,
+            buyout_percentage=request.buyout_percentage
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return ContractReleaseResponse(
+            personnel_id=details['personnel_id'],
+            personnel_name=details['personnel_name'],
+            team_id=details['team_id'],
+            buyout_cost=details['buyout_cost'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error releasing contract: {str(e)}")
+
+
+# ============================================================================
+# PROGRESSION ENDPOINTS (UC-19)
+# ============================================================================
+
+@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"])
+def process_season_progression(request: SeasonProgressionRequest):
+    """
+    UC-19: Process Season-End Driver Progression
+    
+    Apply progression to all active drivers at season end. Process includes:
+    1. Calculate skill changes based on age and experience
+    2. Check retirement eligibility
+    3. Retire eligible drivers
+    4. Recycle retired drivers as rookies
+    
+    Progression Factors:
+    - Age-based curves (peak 28-32, decline 35+)
+    - Experience growth (learning rate)
+    - Career achievements
+    - Form trends
+    
+    Retirement Triggers:
+    - Age 45+: Automatic
+    - Age 40-44: 10-30% probability
+    - Age 35-39 with poor performance: 5-15% probability
+    
+    Recycling System:
+    - Retired drivers generate new rookies (18-20 years old)
+    - Reset skills to 35-55 range
+    - Maintains driver pool population
+    """
+    try:
+        results = progression_service.process_season_end_progression(
+            season=request.season,
+            championship_id=request.championship_id
+        )
+        
+        # Convert results to response format
+        progressions = []
+        for prog in results['progressions']:
+            progressions.append(DriverProgression(
+                driver_id=prog['driver_id'],
+                driver_name=prog['driver_name'],
+                age=prog['age'],
+                skill_changes=prog['skill_changes'],
+                retired=prog['retired'],
+                career_phase='retired' if prog['retired'] else 'active'
+            ))
+        
+        return SeasonProgressionResponse(
+            season=results['season'],
+            drivers_processed=results['drivers_processed'],
+            drivers_progressed=progressions,
+            drivers_retired=results['summary']['retired'],
+            drivers_recycled=results['summary']['recycled'],
+            summary=results['summary']
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing season progression: {str(e)}")
 
 
 # ============================================================================

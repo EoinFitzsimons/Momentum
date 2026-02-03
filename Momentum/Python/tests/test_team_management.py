@@ -48,10 +48,10 @@ def test_team_creation():
     print(f"  Message: {result['message']}")
     
     # Test different tiers
-    tier_2_name = generate_team_name("RALLY_STAGE")
+    tier_2_name = generate_team_name("SPRINT_RALLYCROSS")
     team_id_2 = service.create_team(
         name=tier_2_name,
-        discipline="RALLY_STAGE",
+        discipline="SPRINT_RALLYCROSS",
         tier="TIER_2"
     )
     

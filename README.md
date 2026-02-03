@@ -6,14 +6,14 @@
 
 ## Project Overview
 
-Momentum is a comprehensive motorsport management simulation that spans **seven distinct racing disciplines**, featuring detailed team operations, driver development, and strategic management. The system emphasizes realistic simulation depth, emergent narratives, and authentic motorsport operations without any licensed content.
+Momentum is a comprehensive motorsport management simulation that spans **six distinct racing disciplines**, featuring detailed team operations, driver development, and strategic management. The system emphasizes realistic simulation depth, emergent narratives, and authentic motorsport operations without any licensed content.
 
-Players act as team principals, making managerial, financial, and strategic decisions across multiple racing categories—from single-seater championships to rally stages, endurance racing to drag competitions.
+Players act as team principals, making managerial, financial, and strategic decisions across multiple racing categories—from single-seater championships to urban drifting, endurance racing to drag competitions.
 
 ## Core Philosophy
 
 - **Management-Focused Simulation:** Strategic decision-making drives success, not driving mechanics
-- **Multi-Discipline Racing:** Seven complete racing disciplines with unique characteristics and challenges
+- **Multi-Discipline Racing:** Six complete racing disciplines with unique characteristics and challenges
 - **Authentic Operations:** Realistic budgets, staff management, driver development, and team dynamics
 - **Generic Content:** All teams, drivers, series, and personnel are fictional to avoid licensing issues
 - **Emergent Narratives:** Dynamic career progression, rivalries, and historical depth through simulation
@@ -21,7 +21,7 @@ Players act as team principals, making managerial, financial, and strategic deci
 
 ## Racing Disciplines
 
-Momentum features **seven complete racing disciplines**, each with distinct simulation characteristics:
+Momentum features **six complete racing disciplines**, each with distinct simulation characteristics:
 
 ### 1. **Single Seater** (Open-Wheel Racing)
 
@@ -37,35 +37,28 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 - **Leagues:** WTC1 (Premier), WTC2, RTC (Regional), NTC (National), STC (Super), CTC (Club)
 - **Key Factors:** Durability, contact management, overtaking ability
 
-### 3. **Rally/Stage Racing** (Off-Road Navigation)
+### 3. **Urban/Street Racing** (Drifting)
 
-- **Format:** Point-to-point time trials across varied terrain
-- **Grid Size:** 30-60 entries, 1 car per team
-- **Leagues:** WRC1 (Premier), WRC2, WRC3, CWRC (Continental), NRC (National), RRC (Regional)
-- **Key Factors:** Co-driver communication, surface adaptability, pace notes
+- **Format:** Drift-focused urban street racing with judged runs
+- **Grid Size:** 8-16 cars per event
+- **Leagues:** USD1 (Elite), USD2 (Pro), USD3 (Sport), CUSD (Continental), NUSD (National)
+- **Key Factors:** Drift control, line precision, style, consistency
 
-### 4. **Urban/Street Racing** (City Circuits)
-
-- **Format:** Technical street circuit racing in urban environments
-- **Grid Size:** 8 cars per event
-- **Leagues:** USC1 (Elite), USC2 (Pro), USC3 (Sport), CUSC (Continental), NUSC (National)
-- **Key Factors:** Precision, barrier proximity, street surface grip
-
-### 5. **Drag/Acceleration Racing** (Quarter Mile)
+### 4. **Drag/Acceleration Racing** (Quarter Mile)
 
 - **Format:** Straight-line acceleration in knockout tournament format
 - **Grid Size:** 64 cars, knockout elimination
 - **Leagues:** WDC1 (Elite), WDC2 (Pro), WDC3 (Sport), CWDC (Continental), NWDC (National)
 - **Key Factors:** Launch technique, power delivery, reaction time
 
-### 6. **Sprint/Rallycross** (Mixed Surface)
+### 5. **Sprint/Rallycross** (Mixed Surface)
 
 - **Format:** Short circuit races mixing tarmac and gravel with jumps
 - **Grid Size:** 16-24 cars in heat format
 - **Leagues:** WSRC1 (Elite), WSRC2 (Pro), WSRC3 (Sport), CSRC (Continental), NSRC (National)
 - **Key Factors:** Surface transitions, jump navigation, heat consistency
 
-### 7. **Endurance Racing** (Long Distance)
+### 6. **Endurance Racing** (Long Distance)
 
 - **Format:** Extended multi-hour races emphasizing reliability and strategy
 - **Grid Size:** 30-50 cars, 2 per team
@@ -78,7 +71,7 @@ Momentum features **seven complete racing disciplines**, each with distinct simu
 
 **Core Components:**
 
-- **Multi-Discipline Simulator:** Seven complete discipline-specific racing engines with unique simulation logic
+- **Multi-Discipline Simulator:** Six complete discipline-specific racing engines with unique simulation logic
 - **Driver System:** 50+ attributes across 7 categories (technical, mental, physical, racecraft, personality, experience, discipline preferences)
 - **Staff Management:** 40+ attributes, 25+ roles (Technical Director, Race Strategist, Data Analyst, Pit Crew Chief, etc.)
 - **Currency System:** Multi-currency support (EUR, USD, GBP, JPY, CHF) with real-time exchange rates
@@ -176,8 +169,7 @@ Momentum/Python/
 │   ├── base_engine.py          # Base engine interface
 │   ├── single_seater/          # Single seater racing
 │   ├── production_touring/     # Touring car racing
-│   ├── rally_stage/            # Rally racing
-│   ├── urban_street/           # Street racing
+│   ├── urban_street/           # Urban drifting
 │   ├── drag_acceleration/      # Drag racing
 │   ├── sprint_rallycross/      # Rallycross
 │   └── endurance/              # Endurance racing
@@ -219,7 +211,7 @@ Momentum/Python/
 
 ### ✅ Completed Systems
 
-- **Multi-Discipline Racing Framework:** Seven complete discipline engines with unique simulation characteristics
+- **Multi-Discipline Racing Framework:** Six complete discipline engines with unique simulation characteristics
 - **Driver System:** 50+ attributes, cross-discipline compatibility, career progression modeling
 - **Staff Management:** 40+ attributes, 25+ roles, budget-scaled hiring, performance multipliers
 - **Currency System:** Multi-currency support with live exchange rates (EUR, USD, GBP, JPY, CHF)
@@ -248,7 +240,7 @@ Momentum/Python/
 
 All teams, drivers, series, tracks, and personnel are fictional and generated using:
 
-- **Generic League Codes:** GPC1, WTC1, WRC1, etc. (not F1, NASCAR, WRC, etc.)
+- **Generic League Codes:** GPC1, WTC1, USC1, etc. (not F1, NASCAR, WRC, etc.)
 - **Placeholder Names:** Randomly generated from international name databases
 - **Generic Team Names:** Procedurally generated from prefix + suffix combinations
 - **Fictional Suppliers:** PowerTech, VelocityMotors, TurboMax, etc.
@@ -266,7 +258,7 @@ The Python simulation engine is being developed first to ensure:
 
 ### Cross-Discipline Driver System
 
-Drivers can compete in all seven disciplines with varying effectiveness:
+Drivers can compete in all six disciplines with varying effectiveness:
 
 - **Discipline Preferences:** Each driver has aptitudes for different racing types
 - **Attribute-Based Performance:** 50+ attributes determine capability across disciplines
@@ -277,7 +269,7 @@ Drivers can compete in all seven disciplines with varying effectiveness:
 
 The project includes comprehensive test suites:
 
-- **`tests/simple_driver_test.py`:** Basic driver system validation (50+ attributes, 7 disciplines)
+- **`tests/simple_driver_test.py`:** Basic driver system validation (50+ attributes, 6 disciplines)
 - **`tests/test_driver_system.py`:** Advanced driver testing (career progression, specialization)
 - **`tests/test_staff_system.py`:** Staff management validation (hiring, budgets, performance impact)
 

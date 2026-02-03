@@ -60,11 +60,9 @@ _ascii_letter_re = re.compile(r'[A-Za-z]')
 HONORIFIC_PREFIX_RE = re.compile(r'^(Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Miss\.?|Prof\.?|Sir\.?|Dame\.?|Lady\.?)\s+', flags=re.IGNORECASE)
 HONORIFIC_SUFFIX_RE = re.compile(r'\b(MD|M\.D\.|DDS|D\.D\.S\.|PhD|Ph\.D\.|Jr\.|Sr\.|II|III|IV)\b', flags=re.IGNORECASE)
 
-# Use the canonical country list from the project's placeholder names so
-# nationalities cover all nations defined in the repository.
-from data.countries import COUNTRIES
-COUNTRY_CODES = list(COUNTRIES.keys())
-LOCALES = ['en_GB', 'en_US', 'it_IT', 'fr_FR', 'de_DE', 'es_ES', 'ja_JP', 'nl_NL', 'pt_BR', 'pt_PT', 'ru_RU', 'zh_CN', 'ko_KR', 'sv_SE', 'pl_PL', 'fi_FI', 'en_AU', 'en_CA', 'da_DK', 'no_NO']
+# Use the canonical country list from the project and map to locales.
+from tools.locale_mapping import get_all_country_codes, get_locale_for_country
+COUNTRY_CODES = get_all_country_codes()
 
 # Use only full names for seeding so the GUI shows full driver names
 NAME_TYPES = ['full']
@@ -160,23 +158,15 @@ def main():
     drivers_created = []
     with conn:
         cur = conn.cursor()
-        # static mapping to choose sensible Faker locales for many country codes
-        COUNTRY_TO_LOCALE = {
-            'USA': 'en_US', 'CAN': 'en_CA', 'GBR': 'en_GB', 'AUS': 'en_AU', 'NZL': 'en_GB',
-            'FRA': 'fr_FR', 'BEL': 'fr_FR', 'CHE': 'de_DE', 'DEU': 'de_DE', 'GER': 'de_DE', 'AUT': 'de_DE',
-            'ITA': 'it_IT', 'ESP': 'es_ES', 'MEX': 'es_ES', 'ARG': 'es_ES', 'PRT': 'pt_PT', 'BRA': 'pt_BR',
-            'NLD': 'nl_NL', 'SWE': 'sv_SE', 'FIN': 'fi_FI', 'NOR': 'no_NO', 'DNK': 'da_DK', 'POL': 'pl_PL',
-            'RUS': 'ru_RU', 'CHN': 'zh_CN', 'JPN': 'ja_JP', 'KOR': 'ko_KR', 'TUR': 'tr_TR', 'ISR': 'he_IL',
-            'IND': 'en_US', 'PAK': 'en_US', 'IDN': 'en_US', 'PHL': 'en_US'
-        }
 
         for i in range(NUM_DRIVERS):
             nationality = random.choice(COUNTRY_CODES)
-            locale = COUNTRY_TO_LOCALE.get(nationality)
-            if not locale:
-                # fallback: pick a locale that uses Latin script to avoid non-Latin names for many country codes
-                locale = random.choice([l for l in LOCALES if l.startswith('en') or l in ('fr_FR','de_DE','es_ES','it_IT','nl_NL')])
-            fake = Faker(locale)
+            locale = get_locale_for_country(nationality)
+            try:
+                fake = Faker(locale)
+            except Exception:
+                locale = "en_US"
+                fake = Faker(locale)
             name_type = random.choice(NAME_TYPES)
             name = format_name(fake, name_type)
             birth_date = random_birth_date()

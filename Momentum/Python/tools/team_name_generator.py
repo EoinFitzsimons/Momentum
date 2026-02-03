@@ -52,6 +52,9 @@ class TeamNameGenerator:
             '{adjective} {company}',
             '{company} Elite',
             '{place} {adjective}',
+            '{prefix} {company} {suffix}',
+            '{company} {suffix}',
+            '{color} {company} Racing',
         ],
         'PRODUCTION_TOURING': [
             '{company} Touring',
@@ -60,21 +63,19 @@ class TeamNameGenerator:
             '{adjective} {car_brand}',
             '{company} Motorsport',
             '{car_brand} Specialists',
-        ],
-        'RALLY_STAGE': [
-            '{company} Rally Team',
-            '{place} Rally',
-            '{company} Stages',
-            '{adjective} Rally',
-            '{place} {adjective} Rally',
-            '{company} Offroad',
+            '{prefix} {place} {suffix}',
+            '{company} Works',
+            '{adjective} {company} Touring',
         ],
         'URBAN_STREET': [
-            '{place} Street Racing',
-            '{company} Urban',
-            '{place} City Racing',
-            '{adjective} Street',
-            '{company} Street Team',
+            '{place} Drift Team',
+            '{company} Drift',
+            '{place} Drift Racing',
+            '{adjective} Drift',
+            '{company} Drift Squad',
+            '{color} Drift {crew}',
+            '{animal} Drift Team',
+            '{company} Slide Works',
         ],
         'DRAG_ACCELERATION': [
             '{company} Drag',
@@ -82,6 +83,9 @@ class TeamNameGenerator:
             '{company} Speed',
             '{adjective} Acceleration',
             '{place} Dragway',
+            '{animal} Drag',
+            '{company} Launch {crew}',
+            '{color} Speedworks',
         ],
         'SPRINT_RALLYCROSS': [
             '{company} Sprint',
@@ -89,6 +93,8 @@ class TeamNameGenerator:
             '{company} Cross',
             '{adjective} Sprint',
             '{place} Sprint Team',
+            '{company} RX',
+            '{animal} Rallycross',
         ],
         'ENDURANCE': [
             '{company} Endurance',
@@ -97,6 +103,8 @@ class TeamNameGenerator:
             '{place} Long Distance',
             '{adjective} Endurance',
             '{company} Marathon',
+            '{company} {suffix}',
+            '{color} Endurance {crew}',
         ],
     }
     
@@ -104,11 +112,28 @@ class TeamNameGenerator:
     ADJECTIVES = [
         'Apex', 'Precision', 'Thunder', 'Storm', 'Velocity',
         'Nitro', 'Blaze', 'Arctic', 'Crimson', 'Azure',
-        'Apex', 'Elite', 'Prime', 'Peak', 'Dynamic',
-        'Phoenix', 'Quantum', 'Sonic', 'Titan', 'Vortex',
-        'Steel', 'Iron', 'Bolt', 'Arrow', 'Surge',
+        'Elite', 'Prime', 'Peak', 'Dynamic', 'Phoenix',
+        'Quantum', 'Sonic', 'Titan', 'Vortex', 'Steel',
+        'Iron', 'Bolt', 'Arrow', 'Surge', 'Vector',
+        'Pulse', 'Rapid', 'Frontier', 'Neon', 'Shadow',
+        'Glacier', 'Turbo', 'Forge', 'Catalyst'
     ]
-    
+
+    # Prefixes and suffixes to enrich naming variety
+    PREFIXES = [
+        'Team', 'Racing', 'Motorsport', 'Auto', 'Performance',
+        'Speed', 'Works', 'Engineering', 'Dynamics', 'Competition'
+    ]
+    SUFFIXES = [
+        'Racing', 'Motorsport', 'Works', 'GP', 'Performance',
+        'Engineering', 'Competition', 'Factory', 'Dynamics', 'Crew'
+    ]
+
+    # Additional theme pools
+    COLORS = ['Red', 'Blue', 'Black', 'White', 'Silver', 'Gold', 'Crimson', 'Azure']
+    ANIMALS = ['Falcon', 'Viper', 'Wolf', 'Panther', 'Eagle', 'Stallion', 'Lynx', 'Raven']
+    CREW_TERMS = ['Squad', 'Crew', 'Unit', 'Collective', 'Garage']
+
     # Car brands for authenticity
     CAR_BRANDS = [
         'BMW', 'Audi', 'Porsche', 'Lotus', 'McLaren',
@@ -183,7 +208,7 @@ class TeamNameGenerator:
         Generate a unique team name
         
         Args:
-            discipline: Racing discipline (e.g., 'SINGLE_SEATER', 'RALLY_STAGE')
+            discipline: Racing discipline (e.g., 'SINGLE_SEATER', 'URBAN_STREET')
                        If None, chooses random discipline
         
         Returns:
@@ -205,13 +230,23 @@ class TeamNameGenerator:
             place = self._get_place_name()
             adjective = random.choice(self.ADJECTIVES)
             car_brand = random.choice(self.CAR_BRANDS)
+            prefix = random.choice(self.PREFIXES)
+            suffix = random.choice(self.SUFFIXES)
+            color = random.choice(self.COLORS)
+            animal = random.choice(self.ANIMALS)
+            crew = random.choice(self.CREW_TERMS)
             
             # Fill in pattern
             name = pattern.format(
                 company=company,
                 place=place,
                 adjective=adjective,
-                car_brand=car_brand
+                car_brand=car_brand,
+                prefix=prefix,
+                suffix=suffix,
+                color=color,
+                animal=animal,
+                crew=crew
             )
             
             # Check if name is unique and not reserved

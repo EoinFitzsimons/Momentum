@@ -7,18 +7,17 @@
 
 ## 📋 Project Overview
 
-**Momentum** is a comprehensive multi-discipline motorsport management simulation system designed as a final year Computer Science project. The system provides realistic race simulation capabilities across **seven major motorsport disciplines** with advanced team management, driver development, and staff operations.
+**Momentum** is a comprehensive multi-discipline motorsport management simulation system designed as a final year Computer Science project. The system provides realistic race simulation capabilities across **six major motorsport disciplines** with advanced team management, driver development, and staff operations.
 
 The Python backend serves as the core simulation engine, utilizing an agent-based simulation approach to generate authentic race outcomes based on comprehensive driver attributes (50+), team performance, staff capabilities (40+ attributes), budget constraints, and environmental factors.
 
 ### 🎯 Key Features
 
-#### 🏁 **Multi-Discipline Racing System** (7 Complete Engines)
+#### 🏁 **Multi-Discipline Racing System** (6 Complete Engines)
 
 - **Single Seater**: High-speed technical precision racing with open wheels
 - **Production/Touring**: Close-quarters production-based racing with modified road cars
-- **Rally/Stage**: Point-to-point navigation racing across varied surfaces
-- **Urban/Street**: City-based technical racing on closed street circuits
+- **Urban/Street (Drifting)**: Drift-focused urban street racing with judged runs
 - **Drag/Acceleration**: Straight-line acceleration competition over quarter miles
 - **Sprint/Rallycross**: Mixed-surface short-format racing with jumps
 - **Endurance**: Long-distance strategy-focused racing emphasizing reliability
@@ -42,7 +41,7 @@ The Python backend serves as the core simulation engine, utilizing an agent-base
 
 - **Multi-currency support**: EUR (default), USD, GBP, JPY, CHF with real-time exchange rates
 - **Discipline budget caps**: Realistic budget limits scaled by racing discipline complexity
-- **Motorsport budget templates**: Realistic budget breakdowns for all 7 racing disciplines
+- **Motorsport budget templates**: Realistic budget breakdowns for all 6 racing disciplines
 - **Locale-specific formatting**: Proper currency display for international users
 - **Staff salary management**: Multi-currency salary calculations and contract values
 - **Budget scaling**: Staff requirements and quality scale with team budgets (€800K to €12M+)
@@ -64,11 +63,10 @@ Momentum Python Backend
 │   ├── Request/Response Models
 │   └── Error Handling & Validation
 │
-├── 🏁 Multi-Discipline Racing Engines (7 Engines)
+├── 🏁 Multi-Discipline Racing Engines (6 Engines)
 │   ├── engines/single_seater.py       # Formula racing simulation
 │   ├── engines/production_touring.py  # GT and touring car racing
-│   ├── engines/rally_stage.py         # Rally and stage racing
-│   ├── engines/urban_street.py        # Street circuit racing
+│   ├── engines/urban_street.py        # Drift-focused urban racing
 │   ├── engines/drag_acceleration.py   # Drag racing simulation
 │   ├── engines/sprint_rallycross.py   # Rallycross simulation
 │   └── engines/endurance.py          # Long-distance racing
@@ -152,7 +150,6 @@ The modular simulation system features discipline-specific engines with unique c
 ```python
 # Example: Running discipline-specific race simulations
 from engines.single_seater import SingleSeaterEngine
-from engines.rally_stage import RallyStageEngine
 from engines.endurance import EnduranceEngine
 from database.driver_models import Driver
 from database.staff_models import TeamStaffing
@@ -164,14 +161,6 @@ f1_results = f1_engine.simulate_race(
     track_data={'downforce_importance': 0.85, 'power_importance': 0.70},
     weather_conditions={'temperature': 25, 'precipitation': 0.0},
     team_staffing=team_staffing_dict  # Staff performance multipliers
-)
-
-# Rally stage simulation
-rally_engine = RallyStageEngine()
-rally_results = rally_engine.simulate_stage(
-    drivers=driver_list,
-    stage_data={'surface': 'gravel', 'length_km': 15.8, 'elevation_change': 245},
-    weather_conditions={'visibility': 0.9, 'grip_factor': 0.75}
 )
 
 # Endurance race simulation (multi-stint)
@@ -191,8 +180,8 @@ endurance_results = endurance_engine.simulate_race(
 | **Driver Attributes (50+)** | 35-45%       | Technical skills, mental attributes, racecraft, fitness  | Varies by discipline specialization    |
 | **Staff Performance**       | 15-25%       | 6 performance multipliers from team staff quality        | Higher impact in technical disciplines |
 | **Team Resources**          | 10-20%       | Budget tier, equipment quality, operational excellence   | Critical in development-heavy series   |
-| **Environmental**           | 10-25%       | Weather, track surface, visibility, temperature          | Rally/street racing more affected      |
-| **Discipline-Specific**     | 5-15%        | Downforce (F1), navigation (rally), strategy (endurance) | Unique to each racing type             |
+| **Environmental**           | 10-25%       | Weather, track surface, visibility, temperature          | Street and mixed-surface more affected |
+| **Discipline-Specific**     | 5-15%        | Downforce (F1), drift scoring (urban), strategy (endurance) | Unique to each racing type          |
 | **Randomization**           | 5-10%        | Mechanical reliability, incidents, safety cars           | Consistent across all disciplines      |
 
 ### 🗄️ Database Schema
@@ -311,17 +300,16 @@ class Driver:
     adaptability: float           # Adjustment to changes
     leadership: float             # Inspiring team performance
   
-    # Experience & Specialization (7 attributes)
+    # Experience & Specialization (6 attributes)
     years_experience: int         # Total racing career length
     championship_experience: float # High-level competition exposure
     wet_weather_skill: float      # Rain/adverse condition ability
     night_racing_skill: float     # Low visibility racing
   
-    # Discipline Preferences (7 attributes) - Cross-discipline compatibility
+    # Discipline Preferences (6 attributes) - Cross-discipline compatibility
     single_seater_preference: float    # Formula racing affinity
     touring_car_preference: float      # Production car racing
-    rally_preference: float            # Stage rally preference
-    street_racing_preference: float    # Urban circuit preference
+    street_racing_preference: float    # Urban drifting preference
     drag_racing_preference: float      # Acceleration racing
     rallycross_preference: float       # Mixed surface racing
     endurance_preference: float        # Long-distance racing
@@ -357,7 +345,7 @@ class StaffMember:
     # - Management & Leadership (7): team coordination, decision making
     # - Operational Skills (8): pit efficiency, crisis management
     # - Financial & Commercial (5): budget management, negotiations
-    # - Discipline Specializations (7): expertise in each racing type
+    # - Discipline Specializations (6): expertise in each racing type
   
     role: StaffRole              # 25+ roles: Technical Director, Data Analyst, etc.
     tier: StaffTier              # Intern → Junior → Regular → Senior → Expert → Legendary
@@ -365,7 +353,7 @@ class StaffMember:
     effectiveness: float         # Role-specific performance rating
 ```
 
-## � Racing Disciplines (7 Complete Engines)
+## � Racing Disciplines (6 Complete Engines)
 
 ### 1. Single Seater Racing 🏎️
 
@@ -383,30 +371,22 @@ class StaffMember:
 - **Staff Impact**: Race engineers and strategists important
 - **Unique Elements**: Balance of Performance (BoP), contact tolerance
 
-### 3. Rally/Stage Racing 🏔️
+### 3. Urban/Street Racing (Drifting) 🏙️
 
-- **Categories**: WRC, WRC2, Regional Rally Championships
-- **Characteristics**: Point-to-point stages, surface variety, navigation
-- **Key Factors**: Adaptability, bravery, co-driver communication, surface expertise
-- **Staff Impact**: Engineers for surface-specific setups
-- **Unique Elements**: Pacenotes, surface changes, weather impact
+- **Categories**: Pro Drift, Street Drift, Urban Drift Series
+- **Characteristics**: Judged drift runs, controlled slides, technical street layouts
+- **Key Factors**: Drift control, line precision, angle, consistency
+- **Staff Impact**: Drift coach and suspension engineers critical
+- **Unique Elements**: Style scoring, tandem battles, run-by-run judging
 
-### 4. Urban/Street Racing 🏙️
-
-- **Categories**: Formula E, Monaco GP, Street Circuits
-- **Characteristics**: Confined spaces, walls, technical challenges
-- **Key Factors**: Precision, racecraft, adaptability, risk management
-- **Staff Impact**: Data analysts for track evolution
-- **Unique Elements**: Track evolution, wall proximity, limited overtaking
-
-### 5. Drag/Acceleration Racing 🚀
+### 4. Drag/Acceleration Racing 🚀
 
 - **Categories**: Top Fuel, Funny Car, Pro Stock, Pro Mod
 - **Key Factors**: Reaction time, technical precision, power management
 - **Staff Impact**: Engine specialists and data analysts critical
 - **Unique Elements**: Christmas tree starts, terminal speeds, parachute deployment
 
-### 6. Sprint/Rallycross Racing 💨
+### 5. Sprint/Rallycross Racing 💨
 
 - **Categories**: World Rallycross Championship, Americas Rallycross
 - **Characteristics**: Mixed surfaces, short races, jump sections
@@ -414,7 +394,7 @@ class StaffMember:
 - **Staff Impact**: Setup engineers for surface transitions
 - **Unique Elements**: Joker laps, surface transitions, wheel-to-wheel racing
 
-### 7. Endurance Racing ⏱️
+### 6. Endurance Racing ⏱️
 
 - **Categories**: Le Mans 24h, IMSA, WEC, Nürburgring 24h
 - **Characteristics**: Multi-hour races, driver changes, strategic complexity
@@ -479,7 +459,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 
 ### Multi-Engine Simulation Performance
 
-- **7 Racing Engines**: Each optimized for discipline-specific characteristics
+- **6 Racing Engines**: Each optimized for discipline-specific characteristics
 - **Driver System**: 50+ attributes per driver with cross-discipline compatibility
 - **Staff System**: 40+ attributes per staff member with 25+ roles
 - **Simulation Time**: <1 second for 30-car grid across all disciplines
@@ -491,7 +471,7 @@ cursor.execute("SELECT * FROM drivers WHERE id = ?", (driver_id,))
 - **Budget Scaling**: Staff requirements scale from $500K to $10M+ team budgets
 - **Information Fog-of-War**: 10-level data access system based on analyst quality
 - **Performance Multipliers**: 6 distinct team performance areas affected by staff
-- **Cross-Discipline Racing**: Drivers can compete in all 7 disciplines with preferences
+- **Cross-Discipline Racing**: Drivers can compete in all 6 disciplines with preferences
 - **Comprehensive Testing**: 100% test coverage across all major system components
 
 ### Database Performance

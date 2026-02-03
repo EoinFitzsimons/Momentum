@@ -804,9 +804,8 @@ class QuickRaceSetupWindow(QDialog):
         self.disciplines_map = {
             "SINGLE_SEATER": "Single Seater (Default)",
             "DRAG_ACCELERATION": "Drag Acceleration",
-            "RALLY_STAGE": "Rally Stage",
             "PRODUCTION_TOURING": "Production/Touring",
-            "URBAN_STREET": "Urban Street",
+            "URBAN_STREET": "Urban Street (Drifting)",
             "SPRINT_RALLYCROSS": "Sprint/Rallycross",
             "ENDURANCE": "Endurance",
         }

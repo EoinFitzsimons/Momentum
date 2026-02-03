@@ -78,10 +78,9 @@ Each racing discipline has a unique points allocation system:
 | Discipline | System | Winner Points | Point-Scoring Positions |
 |------------|--------|---------------|------------------------|
 | SINGLE_SEATER | F1-style | 25 | Top 10 + FL bonus |
-| RALLY_STAGE | WRC-style | 25 | Top 10 |
 | ENDURANCE | Endurance-style | 25 | Top 15 |
 | PRODUCTION_TOURING | Touring-style | 32 | Top 15 |
-| URBAN_STREET | Formula E-style | 25 | Top 10 + FL bonus |
+| URBAN_STREET | Drift-style | 25 | Top 10 + FL bonus |
 | DRAG_ACCELERATION | Elimination-style | 20 | Top 8 |
 | SPRINT_RALLYCROSS | Rallycross-style | 30 | Top 13 |
 

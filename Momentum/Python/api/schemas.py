@@ -31,7 +31,6 @@ class RaceSimulationRequest(BaseModel):
         description="Racing discipline",
         examples=[
             "SINGLE_SEATER",
-            "RALLY_STAGE",
             "ENDURANCE",
             "PRODUCTION_TOURING"]
     )
@@ -226,7 +225,7 @@ class TeamCreate(BaseModel):
     discipline: str = Field(
         ...,
         description="Racing discipline",
-        examples=["SINGLE_SEATER", "RALLY_STAGE", "ENDURANCE", "PRODUCTION_TOURING"]
+        examples=["SINGLE_SEATER", "ENDURANCE", "PRODUCTION_TOURING", "URBAN_STREET"]
     )
     nationality: str = Field(default="INT")
     tier: str = Field(
@@ -298,6 +297,184 @@ class BudgetTransactionRequest(BaseModel):
     description: Optional[str] = None
 
 
+# ============================================================================
+# HIRING & CONTRACT SCHEMAS (UC-15, UC-16, UC-17, UC-18)
+# ============================================================================
+
+class AvailableDriver(BaseModel):
+    """UC-15: Available driver for hire"""
+    id: int
+    name: str
+    nationality: str
+    age: int
+    
+    # Core skills
+    speed: float = Field(ge=0.0, le=100.0)
+    racecraft: float = Field(ge=0.0, le=100.0)
+    consistency: float = Field(ge=0.0, le=100.0)
+    
+    # Career stats
+    career_points: int = 0
+    career_podiums: int = 0
+    career_starts: int = 0
+    seasons_active: int = 0
+    
+    # Contract info
+    preferred_discipline: str = "SINGLE_SEATER"
+    career_phase: str = "active"  # active, veteran, rookie, declining
+    estimated_salary: float = Field(ge=0.0, description="Annual salary in default currency")
+    contract_status: str = "available"  # available, contracted, retired
+
+
+class AvailableDriversResponse(BaseModel):
+    """UC-15: Response for GET /drivers/available"""
+    drivers: List[AvailableDriver]
+    count: int
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 1
+
+
+class AvailableStaff(BaseModel):
+    """UC-17: Available staff member for hire"""
+    id: int
+    name: str
+    role: str
+    rating: float = Field(ge=0.0, le=100.0)
+    current_team_id: Optional[int] = None
+    estimated_salary: float = Field(ge=0.0, description="Annual salary in default currency")
+    contract_status: str = "available"
+
+
+class AvailableStaffResponse(BaseModel):
+    """UC-17: Response for GET /staff/available"""
+    staff: List[AvailableStaff]
+    count: int
+    page: int = 1
+    page_size: int = 50
+    total_pages: int = 1
+
+
+class DriverContractRequest(BaseModel):
+    """UC-16: Request to sign driver contract"""
+    team_id: int = Field(..., gt=0, description="Team hiring the driver")
+    driver_id: int = Field(..., gt=0, description="Driver being hired")
+    contract_length: int = Field(..., ge=1, le=5, description="Contract duration in seasons")
+    salary: float = Field(..., gt=0, description="Annual salary")
+    performance_bonus: float = Field(default=0.0, ge=0, description="Bonus for podiums/wins")
+
+
+class DriverContractResponse(BaseModel):
+    """UC-16: Response after signing driver contract"""
+    driver_id: int
+    driver_name: str
+    team_id: int
+    team_name: str
+    contract_length: int
+    salary: float
+    performance_bonus: float
+    total_contract_value: float
+    remaining_budget: float
+    message: str
+
+
+class StaffContractRequest(BaseModel):
+    """UC-18: Request to sign staff contract"""
+    team_id: int = Field(..., gt=0, description="Team hiring the staff")
+    staff_id: int = Field(..., gt=0, description="Staff member being hired")
+    contract_length: int = Field(..., ge=1, le=5, description="Contract duration in seasons")
+    salary: float = Field(..., gt=0, description="Annual salary")
+
+
+class StaffContractResponse(BaseModel):
+    """UC-18: Response after signing staff contract"""
+    staff_id: int
+    staff_name: str
+    team_id: int
+    team_name: str
+    contract_length: int
+    salary: float
+    total_contract_value: float
+    remaining_budget: float
+    message: str
+
+
+class ContractReleaseRequest(BaseModel):
+    """Request to release driver/staff from contract"""
+    team_id: int = Field(..., gt=0)
+    personnel_id: int = Field(..., gt=0)
+    personnel_type: str = Field(..., description="driver or staff")
+    buyout_percentage: float = Field(default=0.5, ge=0.0, le=1.0, description="Percentage of remaining contract value")
+
+
+class ContractReleaseResponse(BaseModel):
+    """Response after releasing personnel"""
+    personnel_id: int
+    personnel_name: str
+    team_id: int
+    buyout_cost: float
+    remaining_budget: float
+    message: str
+
+
+# ============================================================================
+# PROGRESSION SYSTEM SCHEMAS (UC-19)
+# ============================================================================
+
+class DriverProgression(BaseModel):
+    """UC-19: Driver skill progression data"""
+    driver_id: int
+    driver_name: str
+    age: int
+    
+    # Progression factors
+    skill_changes: Dict[str, float] = Field(description="Skill attribute changes")
+    experience_gain: int = Field(default=0, description="Career starts added")
+    form_trend: float = Field(ge=-10.0, le=10.0, description="Current form trajectory")
+    
+    # Career events
+    retired: bool = False
+    recycled: bool = False
+    career_phase: str = "active"
+
+
+class SeasonProgressionRequest(BaseModel):
+    """Request to apply season-end progression"""
+    season: int = Field(..., gt=0)
+    championship_id: Optional[int] = Field(None, description="Championship to process, or None for all")
+
+
+class SeasonProgressionResponse(BaseModel):
+    """UC-19: Response after season-end progression"""
+    season: int
+    drivers_processed: int
+    drivers_progressed: List[DriverProgression]
+    drivers_retired: int
+    drivers_recycled: int
+    summary: Dict[str, Any]
+
+
+class RetirementCheck(BaseModel):
+    """Driver retirement eligibility check"""
+    driver_id: int
+    driver_name: str
+    age: int
+    eligible_for_retirement: bool
+    retirement_reason: Optional[str] = None
+    retirement_probability: float = Field(ge=0.0, le=1.0)
+
+
+class RecycledDriver(BaseModel):
+    """Driver recycled as rookie after retirement"""
+    original_id: int
+    original_name: str
+    new_id: int
+    new_name: str
+    age: int
+    skills_reset: Dict[str, float]
+    message: str
+
+
 class BudgetTransactionResponse(BaseModel):
     """Response after budget transaction"""
     success: bool
@@ -343,7 +520,7 @@ class ChampionshipCreate(BaseModel):
     discipline: str = Field(
         ...,
         description="Racing discipline",
-        examples=["SINGLE_SEATER", "RALLY_STAGE", "ENDURANCE"]
+        examples=["SINGLE_SEATER", "ENDURANCE", "URBAN_STREET"]
     )
     season_length: int = Field(ge=1, le=50, default=20)
     points_system: str = Field(default="standard")
