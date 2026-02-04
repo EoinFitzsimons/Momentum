@@ -74,7 +74,6 @@ Momentum features **six complete racing disciplines**, each with distinct simula
 - **Multi-Discipline Simulator:** Six complete discipline-specific racing engines with unique simulation logic
 - **Driver System:** 50+ attributes across 7 categories (technical, mental, physical, racecraft, personality, experience, discipline preferences)
 - **Staff Management:** 40+ attributes, 25+ roles (Technical Director, Race Strategist, Data Analyst, Pit Crew Chief, etc.)
-- **Currency System:** Multi-currency support (EUR, USD, GBP, JPY, CHF) with real-time exchange rates
 - **Financial Management:** Realistic budget caps, salary negotiations, operational costs scaled by discipline
 - **Name Generation:** Intelligent system using Faker library with 24 locales for authentic, culturally-appropriate international names
 - **Supplier System:** Engine, tire, and fuel suppliers with performance characteristics
@@ -132,7 +131,6 @@ Momentum features **six complete racing disciplines**, each with distinct simula
    # Currency System
 
    DEFAULT_CURRENCY=EUR
-   USE_LIVE_EXCHANGE_RATES=true
 
    # Database
 
