@@ -1,0 +1,32 @@
+stateDiagram-v2
+    [*] --> MANAGE: Race Start
+
+    MANAGE --> ATTACK: Gap ahead < 3s<br/>Overtaking opportunity exists
+    ATTACK --> MANAGE: Overtake complete<br/>or gap increases > 3s
+    
+    MANAGE --> DEFEND: Gap behind < 2s<br/>Under pressure
+    DEFEND --> MANAGE: Gap behind > 3s<br/>Pressure relieved
+    
+    ATTACK --> DEFEND: Successfully passed<br/>but now under pressure
+    DEFEND --> ATTACK: Cleared pressure<br/>and new opportunity ahead
+
+    note right of MANAGE
+        Base push intensity
+        Consistent pace
+        Ideal racing line
+        Conservation mode for tires/fuel
+    end note
+
+    note right of ATTACK
+        Push +35% harder
+        Evaluates track section
+        Considers driver attributes
+        Success probability calculated
+    end note
+
+    note right of DEFEND
+        Push +10% harder
+        Defensive racing line
+        Block overtaking attempts
+        Protect position
+    end note

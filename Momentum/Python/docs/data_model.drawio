@@ -1,0 +1,52 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.0.3 Chrome/140.0.7339.249 Electron/38.7.0 Safari/537.36" version="29.0.3">
+  <diagram name="Data Model" id="0">
+    <mxGraphModel dx="2066" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="Driver&#xa;PK driver_id : INTEGER NOT NULL&#xa;name : TEXT NOT NULL&#xa;nationality : TEXT NULL&#xa;birth_date : DATE NULL&#xa;speed : REAL NOT NULL&#xa;racecraft : REAL NOT NULL&#xa;consistency : REAL NOT NULL&#xa;fitness : REAL NOT NULL&#xa;reactions : REAL NOT NULL&#xa;pressure : REAL NOT NULL&#xa;setup_knowledge : REAL NULL&#xa;fuel_management : REAL NULL&#xa;tyre_management : REAL NULL&#xa;career_points : INTEGER NOT NULL DEFAULT 0&#xa;career_podiums : INTEGER NOT NULL DEFAULT 0&#xa;career_starts : INTEGER NOT NULL DEFAULT 0&#xa;career_dnf : INTEGER NOT NULL DEFAULT 0&#xa;seasons_active : INTEGER NOT NULL DEFAULT 0&#xa;single_seater_wins : INTEGER NOT NULL DEFAULT 0&#xa;touring_wins : INTEGER NOT NULL DEFAULT 0&#xa;rally_wins : INTEGER NOT NULL DEFAULT 0&#xa;street_wins : INTEGER NOT NULL DEFAULT 0&#xa;drag_wins : INTEGER NOT NULL DEFAULT 0&#xa;rallycross_wins : INTEGER NOT NULL DEFAULT 0&#xa;endurance_wins : INTEGER NOT NULL DEFAULT 0&#xa;peak_performance_age : INTEGER NULL&#xa;retirement_age : INTEGER NULL&#xa;learning_rate : REAL NULL DEFAULT 1.0&#xa;form_trend : REAL NULL&#xa;biography : TEXT NULL&#xa;career_highlights : TEXT NULL&#xa;preferred_discipline : TEXT NULL&#xa;career_phase : TEXT NULL&#xa;FK current_team_id : INTEGER NULL -&gt; Team.team_id&#xa;previous_teams : TEXT NULL&#xa;contract_length : INTEGER NULL&#xa;salary : REAL NULL&#xa;name_locale : TEXT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="20" y="310" width="360" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="3" value="Team&#xa;PK team_id : INTEGER NOT NULL&#xa;name : TEXT NOT NULL UNIQUE&#xa;nationality : TEXT NULL&#xa;discipline : TEXT NOT NULL&#xa;tier : TEXT NULL&#xa;budget : REAL NOT NULL&#xa;founded_year : INTEGER NULL&#xa;team_principal : TEXT NULL&#xa;history : TEXT NULL&#xa;total_wins : INTEGER NOT NULL DEFAULT 0&#xa;total_podiums : INTEGER NOT NULL DEFAULT 0&#xa;championships : INTEGER NOT NULL DEFAULT 0&#xa;operations_rating : REAL NOT NULL DEFAULT 50.0&#xa;strategy_profile : TEXT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="254" y="1040" width="320" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="4" value="Track&#xa;PK track_id : INTEGER NOT NULL&#xa;name : TEXT NOT NULL&#xa;country : TEXT NULL&#xa;primary_discipline : TEXT NOT NULL&#xa;is_point_to_point : BOOLEAN NULL&#xa;joker_enabled : BOOLEAN NULL&#xa;instructions_json : TEXT NULL&#xa;geometry_json : TEXT NULL&#xa;pit_entry_index : INTEGER NULL&#xa;pit_exit_index : INTEGER NULL&#xa;length_km : REAL NULL&#xa;turns : INTEGER NULL&#xa;avg_speed_kmh : REAL NULL&#xa;top_speed_kmh : REAL NULL&#xa;longest_straight_m : REAL NULL&#xa;shortest_straight_m : REAL NULL&#xa;tightest_corner_radius_m : REAL NULL&#xa;left_turns : INTEGER NULL&#xa;right_turns : INTEGER NULL&#xa;drs_zones : INTEGER NULL&#xa;surface : TEXT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="1040" y="1040" width="320" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="5" value="Championship&#xa;PK championship_id : INTEGER NOT NULL&#xa;name : TEXT NOT NULL UNIQUE&#xa;discipline : TEXT NOT NULL&#xa;season_length : INTEGER NOT NULL&#xa;points_system : TEXT NOT NULL&#xa;current_season : INTEGER NOT NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="610" y="1290" width="360" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="6" value="Race&#xa;PK race_id : INTEGER NOT NULL&#xa;FK championship_id : INTEGER NOT NULL -&gt; Championship.championship_id&#xa;FK track_id : INTEGER NOT NULL -&gt; Track.track_id&#xa;season : INTEGER NOT NULL&#xa;round_number : INTEGER NOT NULL&#xa;race_date : DATE NOT NULL&#xa;weather_conditions : TEXT NULL&#xa;laps : INTEGER NOT NULL&#xa;status : TEXT NOT NULL DEFAULT &#39;scheduled&#39;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="610" y="1040" width="360" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="7" value="RaceResult&#xa;PK race_id : INTEGER NOT NULL&#xa;PK driver_id : INTEGER NOT NULL&#xa;FK team_id : INTEGER NOT NULL -&gt; Team.team_id&#xa;position : INTEGER NULL&#xa;fastest_lap : BOOLEAN NULL&#xa;points : INTEGER NOT NULL DEFAULT 0&#xa;dnf_reason : TEXT NULL&#xa;time_seconds : REAL NULL&#xa;grid_position : INTEGER NULL&#xa;laps_completed : INTEGER NOT NULL DEFAULT 0&#xa;best_lap_time : REAL NULL&#xa;average_lap_time : REAL NULL&#xa;pitstops : INTEGER NOT NULL DEFAULT 0&#xa;tyre_strategy : TEXT NULL&#xa;penalties_seconds : REAL NULL&#xa;penalty_reason : TEXT NULL&#xa;gap_to_winner_seconds : REAL NULL&#xa;status : TEXT NOT NULL DEFAULT &#39;FINISHED&#39;&#xa;recorded_at : DATETIME NULL" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="480" y="310" width="360" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="8" value="StaffMember&#xa;PK staff_id : INTEGER NOT NULL&#xa;name : TEXT NOT NULL&#xa;role : TEXT NOT NULL&#xa;rating : REAL NOT NULL DEFAULT 50.0&#xa;FK current_team_id : INTEGER NULL -&gt; Team.team_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E6E6E6;strokeColor=#000000;align=left;fontSize=12;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=fill;" parent="1" vertex="1">
+          <mxGeometry x="254" y="1310" width="320" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="1 (Team) &#xa;0..N (Driver)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="2" target="3" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="1 (Championship) &#xa;1..N (Race)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="6" target="5" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="1 (Track) &#xa;1..N (Race)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="6" target="4" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="1 (Race) &#xa;0..N (RaceResult)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="7" target="6" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="1 (Driver) &#xa;0..N (RaceResult)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="7" target="2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="1 (Team) &#xa;0..N (RaceResult)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="7" target="3" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="1 (Team) &#xa;0..N (Staff)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;strokeColor=#000000;align=center;verticalAlign=middle;" parent="1" source="8" target="3" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
