@@ -1,0 +1,121 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.0.3 Chrome/140.0.7339.249 Electron/38.7.0 Safari/537.36" version="29.0.3">
+  <diagram id="architecture" name="System Architecture">
+    <mxGraphModel dx="58066" dy="38201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="conn1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="pyqt6_gui" target="api_gateway" edge="1" />
+        <mxCell id="label1" value="HTTP GET/POST&#xa;(localhost:8000)" style="edgeLabel;resizable=0;html=1;align=center;verticalAlign=middle;fontSize=9;" parent="conn1" connectable="0" vertex="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="api_gateway" target="race_logic" edge="1" />
+        <mxCell id="conn3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="api_gateway" target="db_manager" edge="1" />
+        <mxCell id="conn4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="race_logic" target="db_manager" edge="1" />
+        <mxCell id="conn5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;" parent="1" source="db_manager" target="sqlite_db" edge="1" />
+        <mxCell id="conn6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;dashed=1;" parent="1" source="race_logic" target="overtaking" edge="1" />
+        <mxCell id="conn7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;dashed=1;" parent="1" source="overtaking" target="track_physics" edge="1" />
+        <mxCell id="conn8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;dashed=1;" parent="1" source="track_physics" target="weather" edge="1" />
+        <mxCell id="conn9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=2;endArrow=block;startArrow=none;dashed=1;" parent="1" source="config" target="sqlite_db" edge="1" />
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-1" value="Momentum System Architecture" style="text;fontSize=36;fontStyle=1;fontFamily=Inter;fillColor=none;strokeColor=none;fontColor=#B9F2FF" vertex="1" parent="1">
+          <mxGeometry x="-52320" y="-34630" width="700" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-3" target="-UqsOu0gmAH0GCL9QvVL-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-3" value="CLIENT LAYER" style="text;fontSize=28;fontStyle=1;fontFamily=Inter;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34550" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-4" value="PyQt6 Desktop GUI&#xa;(gui_game.py, gui_launcher.py)&#xa;- Main Menu&#xa;- Race Visualization&#xa;- Championship Standings&#xa;- Team Management&#xa;- Staff Hiring" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34500" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-6" target="-UqsOu0gmAH0GCL9QvVL-7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-6" value="REST API (FastAPI)" style="text;fontSize=28;fontStyle=1;fontFamily=Inter;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34330" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-7" value="FastAPI Application Server (uvicorn)&#xa;Port: 8000 (localhost)&#xa;- GET /health&#xa;- GET /drivers&#xa;- GET /teams&#xa;- POST /simulate/race&#xa;- GET /season/standings&#xa;- POST /season/create" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34280" width="300" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-12" target="-UqsOu0gmAH0GCL9QvVL-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-12" target="-UqsOu0gmAH0GCL9QvVL-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-12" target="-UqsOu0gmAH0GCL9QvVL-15">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-12" target="-UqsOu0gmAH0GCL9QvVL-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-12" value="BACKEND SERVICES LAYER" style="text;fontSize=28;fontStyle=1;fontFamily=Inter;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34550" width="350" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-13" value="RaceLogic&#xa;(Real-Time Engine)&#xa;- realtime_race_engine.py&#xa;- 30 FPS loop&#xa;- Driver agents&#xa;- Physics calculations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34500" width="150" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-14" value="Overtaking System&#xa;- Gap evaluation&#xa;- Risk assessment&#xa;- Overtake logic&#xa;- Collision detection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;strokeWidth=2;fontSize=10;align=left;verticalAlign=top;spacing=10;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="-52200" y="-34500" width="150" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-15" value="Track Physics&#xa;- Racing line calc&#xa;- Tire degradation&#xa;- Fuel consumption&#xa;- Grip dynamics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;strokeWidth=2;fontSize=10;align=left;verticalAlign=top;spacing=10;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="-52030" y="-34500" width="150" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-16" value="Weather System&#xa;- Rain impact&#xa;- Wind effect&#xa;- Temperature&#xa;- Grip modifier" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;strokeWidth=2;fontSize=10;align=left;verticalAlign=top;spacing=10;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="-51860" y="-34500" width="140" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-18" target="-UqsOu0gmAH0GCL9QvVL-19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-18" value="7 Discipline Engines (inherit from BaseDisciplineEngine)" style="text;fontSize=11;fontStyle=1;fillColor=#60a917;strokeColor=#2D7600;strokeWidth=2;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34350" width="650" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-19" value="Single Seater | Rally/Stage | Endurance | Drag | Street | Rallycross | Touring&#xa;(Each with AI strategies, performance weighting, vehicle model)" style="rounded=1;whiteSpace=wrap;html=1;strokeWidth=1;fontSize=12;fontFamily=Inter;align=center;verticalAlign=middle;fillColor=#F5F5F5;fontColor=#353839;strokeColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34305" width="650" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-22" target="-UqsOu0gmAH0GCL9QvVL-23">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-22" target="-UqsOu0gmAH0GCL9QvVL-24">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-22" value="SERVICES LAYER" style="text;fontSize=28;fontStyle=1;fontFamily=Inter;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34200" width="350" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-23" value="Database Manager&#xa;- CRUD operations&#xa;- Transaction management&#xa;- Query caching" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34150" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-24" value="API Schemas&#xa;(Pydantic)&#xa;- Request models&#xa;- Response models&#xa;- Validation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52120" y="-34150" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-26" target="-UqsOu0gmAH0GCL9QvVL-27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-26" value="DATABASE LAYER" style="text;fontSize=28;fontStyle=1;fontFamily=Inter;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34110" width="300" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-27" value="SQLite Database&#xa;(momentum.db)&#xa;&#xa;Entities:&#xa;- 1,781 Drivers&#xa;- 1,095 Teams&#xa;- 175 Circuits&#xa;- 57,936 Staff&#xa;- Race Results&#xa;- Championships" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52770" y="-34060" width="300" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-30" target="-UqsOu0gmAH0GCL9QvVL-31">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="-UqsOu0gmAH0GCL9QvVL-30" target="-UqsOu0gmAH0GCL9QvVL-32">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-30" value="DATA FILES" style="text;fontSize=12;fontStyle=1;fillColor=#1ba1e2;strokeColor=#006EAF;strokeWidth=2;fontColor=#ffffff;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-34010" width="250" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-31" value="circuits_database.json (175 tracks)&#xa;currency_cache.json (exchange rates)&#xa;Save files (telemetry CSVs)&#xa;Logs (crash reports)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52370" y="-33965" width="300" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="-UqsOu0gmAH0GCL9QvVL-32" value="Configuration&#xa;(config.py + .env)&#xa;- API keys&#xa;- Paths&#xa;- Settings&#xa;- Localization" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;strokeWidth=2;fontSize=14;fontFamily=Inter;align=left;verticalAlign=top;spacing=10;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-52020" y="-33965" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-box" value="Legend:\n- SURFACE: Panels (SURFACE_COLOUR #F5F5F5)\n- Borders: #353839\n- Positive flow: ACCENT_TEAL #00D1B2\n- Warning: ACCENT_AMBER #FFC857\n- Critical: DANGER_TEXT #DD2D4A\n" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#353839;fontSize=12;fontFamily=Inter;align=left;verticalAlign=top;spacing=8;fontColor=#353839;" vertex="1" parent="1">
+          <mxGeometry x="-51000" y="-33800" width="360" height="120" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

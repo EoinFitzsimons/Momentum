@@ -1,136 +1,173 @@
-# Momentum — Visual Style Guide
 
-This document formalises the Momentum colour palette and provides practical guidance for UI, visual hierarchy, accessibility and implementation (CSS and Unity snippets).
+# Python Game Style Guide
 
----
+## 1. Visual Identity
 
-## Colour Palette (Primary)
+### 1.1 Core Palette
 
-| Name          |         Hex |
-| ------------- | ----------: |
-| Cyan Blue     | `#B9F2FF` |
-| Charcoal Grey | `#353839` |
-| Racing Red    | `#DD2D4A` |
-| Snow White    | `#F5F5F5` |
+* Background Dark: #353839
+* Foreground Dark: #b9f2ff
 
-### Quick tokens
+* Background Light: #F5F5F5
+* Foreground Light: #353839
+### 1.2 Accents
 
-- Background: `--bg: #F5F5F5`
-- Surface / Panel: usually `#FFFFFF` on top of background (use subtle shadows)
-- Primary text: `--text-primary: #353839`
-- Accent / Interactive: `--accent: #B9F2FF`
-- Critical / Error: `--danger: #DD2D4A`
+* Warning: #DD2D4A
+* Blue: #00bfff
+* Grass: #228b22
+* Winner: #daa520  
 
----
+### 1.3 Contrast Rules
 
-## Application Guidelines
+* Minimum text contrast 4.5:1
+* Accent colours restricted to interactive elements
+* Use pattern overlay to avoid flat grey planes
 
-### UI Structure
+## 2. Typography
 
-- Use **Snow White** (`#F5F5F5`) as the canvas and panel base. Keep large areas light to maintain clarity.
-- Use **Charcoal Grey** (`#353839`) for headings, body copy and structural UI elements (sidebars, cards).
-- Use **Cyan Blue** (`#B9F2FF`) for primary interactive elements: active nav, selected rows, hover highlights and small data accents.
-- Reserve **Racing Red** (`#DD2D4A`) for true critical alerts and important attention-grabbing elements. Use sparingly.
+### 2.1 Fonts
 
-### Data Visualisation
+* Primary: Inter
+* Secondary: Roboto Mono
 
-- Positive/Improving values: Cyan Blue (`#B9F2FF`)
-- Negative/Critical: Racing Red (`#DD2D4A`)
-- Neutral or baseline: Charcoal Grey (30–60% opacity for less emphasis)
+### 2.2 Hierarchy
 
-### Discipline theming (recommended)
+* H1: 32 px semi-bold
+* H2: 24 px semi-bold
+* H3: 18 px medium
+* Body: 16 px regular
+* Mono: 16 px regular
 
-- Single-Seater: primary accents in Cyan Blue
-- Production Circuit: Charcoal Grey base with Cyan Blue accents
-- Traverse Stage: Snow White base, Racing Red accents
-- Urban Showcase: Racing Red primary, Cyan Blue highlights
-- Linear Acceleration: Charcoal Grey + Cyan Blue contrast
-- Endurance Campaign: Muted Charcoal and Snow White balance
-- Sprint Circuit: Racing Red + Cyan Blue alternation
+## 3. Layout System
 
----
+### 3.1 Grid
 
-## Accessibility
+* Base unit: 8 px
+* Padding scale: 8, 16, 24, 32 px
 
-- `#353839` on `#F5F5F5` yields very high contrast (~15:1). This comfortably meets WCAG AA and AAA for body and heading text.
-- Use Racing Red only for high-severity information and pair with icons/patterns for colour-blind users.
-- For charts/tables, never rely on colour alone. Use shaped markers or text labels.
+### 3.2 Spacing
 
----
+* Minimum 16 px margin around element clusters
+* Panels use 24 px padding
+* No element touches edges
 
-## Typography (Recommendations)
+## 4. UI Components
 
-- Primary UI font: **Inter** (variable weights). Alternative: **Roboto**.
-- Heading font (optional): **Montserrat** or **Poppins** for a slightly more geometric headline.
+### 4.1 Buttons
 
-Suggested scale (desktop):
+* Radius: 4 px
+* Primary: Ocean Blue with white text
+* Secondary: Emerald Green with white text
+* Disabled: #999999 with #DDDDDD text
 
-- Large heading (H1): 36px / 48px line-height — weight 600–700
-- Heading (H2): 28px / 36px — weight 600
-- Heading (H3): 20px / 28px — weight 600
-- Body: 14px / 20px — weight 400
-- UI small text: 12px / 16px — weight 400
+### 4.2 Panels
 
----
+* Background: Mid Grey
+* Border: Dark Grey at 60 percent opacity
+* Pattern overlay: 4 percent opacity
 
-## Implementation Snippets
+### 4.3 HUD
 
-### CSS variables
+* Monospace font
+* Health: Soft Red
+* Energy: Emerald Green
+* Currency: Amber
 
-```css
-:root {
-  --color-bg: #F5F5F5;
-  --color-surface: #FFFFFF;
-  --color-text: #353839;
-  --color-accent: #B9F2FF;
-  --color-danger: #DD2D4A;
-}
+## 5. Iconography
 
-.button-primary {
-  background: var(--color-accent);
-  color: var(--color-text);
-}
+### 5.1 Style
 
-.alert-danger {
-  background: var(--color-danger);
-  color: #fff;
-}
-```
+* Line thickness: 2 px
+* Colour: Dark Grey
+* Filled for active state
+* Outline for inactive
 
-### Unity (C#) — Color constants and ScriptableObject guidance
+### 5.2 Icons
 
-Create a C# static class for quick access, or better — a ScriptableObject to edit in-Editor.
+* Settings: Cog
+* Inventory: Grid
+* Map: Compass
+* Dialogue: Speech bubble
 
-`ColorPalette.cs` (example static helper):
+## 6. Environment Art Direction
 
-```csharp
-using UnityEngine;
+### 6.1 Surfaces
 
-public static class ColorPalette
-{
-    public static readonly Color CyanBlue = new Color32(0xB9, 0xF2, 0xFF, 0xFF);
-    public static readonly Color CharcoalGrey = new Color32(0x35, 0x38, 0x39, 0xFF);
-    public static readonly Color RacingRed = new Color32(0xDD, 0x2D, 0x4A, 0xFF);
-    public static readonly Color SnowWhite = new Color32(0xF5, 0xF5, 0xF5, 0xFF);
-}
-```
+* Use the grey palette
+* Apply faint embroidered pattern
+* Pattern density below 15 percent
 
-Better: create a `UIStyle` ScriptableObject that exposes these colours and typography tokens in the editor for designers to tweak at runtime.
+### 6.2 Colour Use
 
----
+* Accents used for landmarks, lights, collectibles, signs
+* Accents capped at 20 percent of screen area
 
-## UI Patterns & Layout
+## 7. Animations
 
-### Main Menu (2D)
+### 7.1 Timing
 
-- Left: Vertical navigation with logo at top (use Charcoal for text, Cyan Blue for active indicator)
-- Center: Title/hero area with app title and CTA buttons (Manage Race, Quick Sim)
-- Right: Recent events / quick stats card
+* Standard durations: 120 ms, 240 ms, 360 ms
+* Easing: cubic-in-out
 
-### Race HUD (3D overlay)
+### 7.2 Motion
 
-- Top-left: Mini leaderboard (3–5 drivers)
-- Bottom-left: Player-specific status (lap, tyre, fuel)
-- Bottom-center: Large race timeline / progress bar
-- Top-right: Notifications/alerts (use Racing Red for critical)
-- Use subtle translucent panels with Snow White background and Charcoal text
+* Hover: minor colour shift
+* Press: 95 percent scale then return
+* Panels: fade in at 240 ms
+
+## 8. Sound
+
+### 8.1 Effects
+
+* UI click: soft digital click
+* Error: low-frequency dampened blip
+* Events: light synth tones
+
+### 8.2 Levels
+
+* Peak at -10 dB
+* All effects normalised
+
+## 9. Code Style (Python)
+
+### 9.1 Naming
+
+* snake_case for variables and functions
+* PascalCase for classes
+* UPPER_CASE for constants
+
+### 9.2 Structure
+
+* Prefer one class per file
+* Use pure functions for utilities
+* Comments for intent only
+
+### 9.3 Asset Paths
+
+* /assets/images/
+* /assets/sounds/
+* /assets/fonts/
+
+## 10. Accessibility
+
+### 10.1 Colour Blind Support
+
+* Provide pattern alternatives
+* Avoid red and green exclusivity
+
+### 10.2 Text Size
+
+* Scaling factor 1.0 to 1.6
+
+### 10.3 Input
+
+* Full remapping
+* Configurable hold durations
+
+## 11. Consistency
+
+* Accent colours used sparingly
+* Pattern always subtle
+* Strict adherence to 8 px grid
+* No pure white or pure black
+* Irish English spellings used throughout

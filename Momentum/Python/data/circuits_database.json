@@ -85,7 +85,7 @@
   },
   {
     "circuit_id": 3,
-    "name": "Rosario Racing Center",
+    "name": "Rosario Racing Centre",
     "country": "Singapore",
     "region": "Sentosa",
     "circuit_type": "street",
@@ -799,7 +799,7 @@
   },
   {
     "circuit_id": 20,
-    "name": "National Uzumaki Racing Center",
+    "name": "National Uzumaki Racing Centre",
     "country": "Japan",
     "region": "Kansai",
     "circuit_type": "street",
@@ -1555,7 +1555,7 @@
   },
   {
     "circuit_id": 38,
-    "name": "Castellano Racing Center",
+    "name": "Castellano Racing Centre",
     "country": "Netherlands",
     "region": "Zeeland",
     "circuit_type": "road_course",
@@ -1933,7 +1933,7 @@
   },
   {
     "circuit_id": 47,
-    "name": "Cipher Racing Center",
+    "name": "Cipher Racing Centre",
     "country": "United States",
     "region": "Arizona",
     "circuit_type": "road_course",
@@ -3445,7 +3445,7 @@
   },
   {
     "circuit_id": 83,
-    "name": "Elmwood Racing Center",
+    "name": "Elmwood Racing Centre",
     "country": "China",
     "region": "Guangdong",
     "circuit_type": "permanent",
@@ -3571,7 +3571,7 @@
   },
   {
     "circuit_id": 86,
-    "name": "East Matrix Racing Center",
+    "name": "East Matrix Racing Centre",
     "country": "France",
     "region": "Alsace",
     "circuit_type": "permanent",
@@ -5083,7 +5083,7 @@
   },
   {
     "circuit_id": 122,
-    "name": "Aether International Racing Center",
+    "name": "Aether International Racing Centre",
     "country": "Mexico",
     "region": "Veracruz",
     "circuit_type": "street",
@@ -5377,7 +5377,7 @@
   },
   {
     "circuit_id": 129,
-    "name": "Kinetic Racing Center",
+    "name": "Kinetic Racing Centre",
     "country": "Bahrain",
     "region": "Muharraq",
     "circuit_type": "permanent",
@@ -7267,7 +7267,7 @@
   },
   {
     "circuit_id": 174,
-    "name": "Uzumaki Racing Center",
+    "name": "Uzumaki Racing Centre",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "mixed",

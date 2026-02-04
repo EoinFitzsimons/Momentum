@@ -116,37 +116,10 @@ Race Weekends (10-20 per season) → Championship Resolution → Off-Season → 
 
 ---
 
-### 3.3 RALLY_STAGE (Point-to-Point Rally)
+### 3.3 RALLY_STAGE (REMOVED)
 
-**Real-World Inspiration:** WRC, Rally America, ERC**Core Characteristics:**
-
-- **No wheel-to-wheel racing** - Time trials against the clock
-- Co-driver pace notes system critical
-- Vastly different surface types
-- Multi-day events with service parks
-
-**Event Structure (3-Day Rally):**
-
-- **Day 1:** Shakedown (test stage) → 5 competitive stages → Service
-- **Day 2:** 8 stages (mixed surfaces) → Midday service → Evening stages
-- **Day 3:** 6 stages → Power Stage (bonus points for fastest 5 drivers)
-
-**Vehicle Development Focus:**
-
-- Suspension travel and damping (rough surfaces)
-- Drivetrain durability (AWD systems)
-- Ground clearance and underbody protection
-- Weight distribution for different surfaces
-
-**Key Strategic Elements:**
-
-- Tire choice per stage (gravel/tarmac/snow/wet)
-- Pace note accuracy and recce strategy
-- Service park repair prioritization (limited time)
-- Risk management (stage difficulty vs attack)
-- Weather forecasting for tire strategy
-
-**Staff Specializations:**
+**Status:** Removed from active disciplines due to the complexity of point-to-point stage routing,
+pacing, and route validation at scale. This section is archived for historical design context.
 
 - Co-Driver (paired with driver - chemistry critical)
 - Service Crew Chief
@@ -1230,7 +1203,7 @@ Each circuit requires different setup approach:
 
 **Simulation Engine:**
 
-- Monte Carlo race simulation
+- Agent-based race simulation
 - Multi-discipline support
 - Weather impact modeling
 - Driver skill evaluation

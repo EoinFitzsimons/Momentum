@@ -1,136 +1,157 @@
 """
 Momentum Motorsport Simulation API Server
 
-This is the main entry point for the Momentum multi-discipline motorsport management
-simulation backend. The system provides a comprehensive racing simulation engine that
-supports multiple racing disciplines including Formula Racing, Rally, Endurance, and
-Street Racing.
+Main entry point for the Momentum multi-discipline motorsport management simulation backend.
+Provides comprehensive REST API for championship management, race simulation, and data access.
 
 Key Features:
-- Monte Carlo-based race simulation engine
-- Multi-discipline motorsport support (Formula, Rally, Endurance, Street)
-- RESTful API for frontend integration
-- SQLite database with comprehensive motorsport data models
-- Real-time race outcome prediction based on driver/team attributes
-- Championship management and standings tracking
+- Championship lifecycle management (UC-4 to UC-10)
+- Race simulation and results tracking
+- Championship standings with discipline-specific points
+- Event scheduling and status management
+- Season rollover automation
 
 API Endpoints:
-- GET /: System information and available endpoints
-- GET /health: Health check and system status
-- GET /stats: Database statistics
-- GET /drivers: Retrieve all drivers
-- GET /teams: Retrieve teams (filterable by discipline)
-- POST /simulate/race: Run race simulations
-- POST /season/create: Create new championship season
-- POST /season/next-race: Simulate next race in season
-- GET /season/state: Get current season state
-- GET /season/standings: Get championship standings
+- GET /: System information
+- GET /health: Health check
+- GET /drivers: List all drivers
+- GET /teams: List teams (filterable)
+- POST /championships: Create new championship (UC-10)
+- GET /championships/{id}: Get championship details (UC-5)
+- GET /championships/{id}/results: Get race results (UC-4)
+- GET /championships/{id}/schedule: Get race schedule (UC-8)
+- GET /championships/{id}/standings: Get championship standings
+- POST /championships/{id}/standings/recalculate: Recalculate standings (UC-6)
+- POST /championships/{id}/events: Create race event (UC-7)
+- PATCH /races/{id}/status: Update race status (UC-9)
+- GET /races/{id}/results: Get race classification details
+- POST /simulate/race: Run race simulation
 
 Authors: Final Year Project - Computer Science
-Version: 1.0.0
+Version: 2.0.0 (Championship Management Update)
 Compatible with: Python 3.8+, FastAPI 0.100+
 """
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
+from datetime import datetime
 import uvicorn
 
 from database.database_manager import DatabaseManager
-from database.models import Driver, Team, Track, Championship, Race
-from disciplines.race_simulation import RaceSimulator, SimulationContext
-from systems.game_loop import GameLoop
+from database.models import Championship, Race, RaceResult
+from services.championship_service import ChampionshipService
+from services.team_service import TeamService
+from services.hiring_service import HiringService
+from services.progression_service import ProgressionService
+from api.schemas import (
+    ChampionshipCreate,
+    ChampionshipResponse,
+    ChampionshipDetailsResponse,
+    ChampionshipStandingsResponse,
+    ChampionshipScheduleResponse,
+    RaceEventCreate,
+    RaceEventResponse,
+    RaceStatusUpdate,
+    RaceResultDetailResponse,
+    RecalculateStandingsResponse,
+    HealthCheckResponse,
+    StandingEntry,
+    TeamCreate,
+    TeamCreateResponse,
+    TeamDetails,
+    TeamUpdate,
+    TeamUpdateResponse,
+    TeamBudgetResponse,
+    BudgetTransactionRequest,
+    BudgetTransactionResponse,
+    # Hiring & Contract schemas
+    AvailableDriver,
+    AvailableDriversResponse,
+    AvailableStaff,
+    AvailableStaffResponse,
+    DriverContractRequest,
+    DriverContractResponse,
+    StaffContractRequest,
+    StaffContractResponse,
+    ContractReleaseRequest,
+    ContractReleaseResponse,
+    # Progression schemas
+    SeasonProgressionRequest,
+    SeasonProgressionResponse,
+    DriverProgression
+)
 from config import API_HOST, API_PORT, API_RELOAD
 
+# Initialize FastAPI application
 app = FastAPI(
     title="Momentum Simulation API",
-    description="Multi-discipline Motorsport Management Simulator Backend",
-    version="1.0.0"
+    description="Multi-discipline Motorsport Management Simulator - Championship Management System",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# Enable CORS middleware for cross-origin requests
-# This allows the Unity frontend (or web frontend) to communicate with the API
-# WARNING: allow_origins=["*"] is permissive for development only
-# In production, specify exact origins: ["http://localhost:3000", "https://yourdomain.com"]
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,  # Allow cookies and authentication headers
-    allow_methods=["*"],     # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],     # Allow all headers
+    allow_origins=["*"],  # Configure for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Initialize global application instances
-# These are shared across all requests for efficiency and state management
-db_manager = DatabaseManager()    # Handles all database operations and connections
-race_simulator = RaceSimulator()  # Core Monte Carlo simulation engine
-game_loop = GameLoop(db_manager)  # Championship and season management
+# Initialize services
+db_manager = DatabaseManager()
+championship_service = ChampionshipService(db_manager)
+team_service = TeamService(db_manager)
+hiring_service = HiringService()
+progression_service = ProgressionService()
+
+
+# ============================================================================
+# SYSTEM ENDPOINTS
+# ============================================================================
 
 @app.get("/")
 def root():
     """
-    API Root Endpoint - System Information
+    API Root - System Information
     
-    Provides basic information about the Momentum Simulation API including
-    version, status, and available endpoints. This serves as a health check
-    and documentation entry point for API consumers.
-    
-    Returns:
-        dict: API metadata including:
-            - message: API name and purpose
-            - version: Current API version
-            - status: Current operational status
-            - endpoints: Dictionary of available API endpoints
-    
-    Example Response:
-        {
-            "message": "Momentum Simulation API",
-            "version": "1.0.0", 
-            "status": "running",
-            "endpoints": {...}
-        }
+    Provides basic information about the API including available endpoints.
     """
     return {
         "message": "Momentum Simulation API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "running",
+        "features": [
+            "Championship Management (UC-4 to UC-10)",
+            "Race Simulation",
+            "Multi-discipline Support",
+            "Real-time Standings Calculation"
+        ],
         "endpoints": {
-            "health": "/health",
-            "database_stats": "/stats",
-            "drivers": "/drivers",
-            "teams": "/teams",
-            "simulate_race": "/simulate/race"
+            "health": "GET /health",
+            "drivers": "GET /drivers",
+            "teams": "GET /teams",
+            "championships": "GET /championships",
+            "create_championship": "POST /championships",
+            "championship_details": "GET /championships/{id}",
+            "championship_standings": "GET /championships/{id}/standings",
+            "championship_schedule": "GET /championships/{id}/schedule",
+            "race_results": "GET /races/{id}/results"
         }
     }
 
-@app.get("/health")
+
+@app.get("/health", response_model=HealthCheckResponse)
 def health_check():
     """
-    System Health Check Endpoint
+    Health Check Endpoint
     
-    Performs a comprehensive health check of the simulation system including
-    database connectivity and basic system statistics. Used for monitoring
-    and ensuring the API is operational.
-    
-    Returns:
-        dict: Health status information including:
-            - status: Overall system health ("healthy" or "unhealthy")
-            - database: Database connection status
-            - stats: Current database table counts
-    
-    Raises:
-        HTTPException: 500 status if health check fails
-        
-    Example Response:
-        {
-            "status": "healthy",
-            "database": "connected",
-            "stats": {"drivers": 25, "teams": 12, "races": 100}
-        }
+    Verifies API and database connectivity.
     """
     try:
-        # Attempt to retrieve database statistics as a connectivity test
         stats = db_manager.get_database_stats()
         return {
             "status": "healthy",
@@ -138,739 +159,1150 @@ def health_check():
             "stats": stats
         }
     except Exception as e:
-        # If any error occurs, the system is considered unhealthy
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
-@app.get("/stats")
-def get_database_stats():
-    """
-    Database Statistics Endpoint
-    
-    Retrieves comprehensive statistics about the current state of the
-    simulation database including record counts for all major entities.
-    Useful for system monitoring and data validation.
-    
-    Returns:
-        JSONResponse: Database statistics including:
-            - drivers: Number of driver records
-            - teams: Number of team records  
-            - tracks: Number of track records
-            - championships: Number of championship records
-            - races: Number of race records
-            - race_results: Number of race result records
-    
-    Raises:
-        HTTPException: 500 status if database query fails
-        
-    Example Response:
-        {
-            "database_stats": {
-                "drivers": 50,
-                "teams": 20,
-                "tracks": 15,
-                "championships": 4,
-                "races": 200,
-                "race_results": 1500
-            }
-        }
-    """
-    try:
-        # Query database for comprehensive statistics across all tables
-        stats = db_manager.get_database_stats()
-        return JSONResponse(content={"database_stats": stats})
-    except Exception as e:
-        # Handle any database connection or query errors
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+# ============================================================================
+# DRIVER & TEAM ENDPOINTS
+# ============================================================================
 
 @app.get("/drivers")
-def get_all_drivers():
-    """
-    Get All Drivers Endpoint
-    
-    Retrieves a complete list of all drivers in the simulation database.
-    Each driver record includes comprehensive information about their
-    attributes, career statistics, and current team assignment.
-    
-    Returns:
-        JSONResponse: Complete driver information including:
-            - drivers: Array of driver objects with full attributes
-                * id: Unique driver identifier
-                * name: Driver's full name
-                * nationality: Driver's country of origin
-                * skill, consistency, aggression, racecraft, adaptability: Performance attributes (0.0-1.0)
-                * career_wins, career_podiums, career_points: Career statistics
-                * current_team_id: ID of current team (if assigned)
-                * biography: Driver background information
-            - count: Total number of drivers returned
-    
-    Raises:
-        HTTPException: 500 status if database query fails
-        
-    Example Response:
-        {
-            "drivers": [
-                {
-                    "id": 1,
-                    "name": "Lewis Hamilton",
-                    "nationality": "GBR",
-                    "skill": 0.95,
-                    "consistency": 0.90,
-                    "career_wins": 103,
-                    ...
-                }
-            ],
-            "count": 50
-        }
-    """
+def list_drivers(
+    discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
+    limit: int = Query(100, ge=1, le=1000)
+):
+    """Get list of drivers with optional filtering"""
     try:
-        # Retrieve all driver records from database
         drivers = db_manager.get_all_drivers()
         
-        # Convert driver objects to dictionaries for JSON serialization
-        return JSONResponse(content={
-            "drivers": [driver.__dict__ for driver in drivers],
-            "count": len(drivers)
-        })
+        if discipline:
+            drivers = [d for d in drivers if d.preferred_discipline == discipline]
+        
+        return {
+            "drivers": drivers[:limit],
+            "count": len(drivers[:limit]),
+            "total": len(drivers)
+        }
     except Exception as e:
-        # Handle database errors and provide meaningful error messages
-        raise HTTPException(status_code=500, detail=f"Failed to get drivers: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/teams")
-def get_teams(discipline: Optional[str] = None):
-    """
-    Get Teams Endpoint
-    
-    Retrieves teams from the simulation database, with optional filtering
-    by motorsport discipline. Teams represent the organizational entities
-    that employ drivers and compete in championships.
-    
-    Args:
-        discipline (Optional[str]): Filter teams by racing discipline.
-            Valid values: "formula", "rally", "endurance", "street"
-            If None, returns teams from all disciplines.
-    
-    Returns:
-        JSONResponse: Team information including:
-            - teams: Array of team objects with full attributes
-                * id: Unique team identifier
-                * name: Team name
-                * nationality: Team's country of origin
-                * discipline: Racing discipline (formula/rally/endurance/street)
-                * tier: Performance tier (tier1/tier2/tier3)
-                * budget: Annual budget in millions
-                * headquarters: Team's base location
-                * team_principal: Name of team leader
-                * total_wins, total_podiums, championships: Career statistics
-                * biography: Team background information
-            - count: Number of teams returned
-            - discipline: Applied discipline filter (if any)
-    
-    Raises:
-        HTTPException: 500 status if database query fails
-        
-    Example Response:
-        {
-            "teams": [
-                {
-                    "id": 1,
-                    "name": "Mercedes AMG F1 Team",
-                    "nationality": "GER",
-                    "discipline": "formula",
-                    "tier": "tier1",
-                    "budget": 400.0,
-                    ...
-                }
-            ],
-            "count": 12,
-            "discipline": "formula"
-        }
-    """
+def list_teams(
+    discipline: Optional[str] = Query(None, description="Filter by discipline")
+):
+    """Get list of teams with optional filtering"""
     try:
         if discipline:
-            # Filter teams by specific discipline
             teams = db_manager.get_teams_by_discipline(discipline)
         else:
-            # Get all teams across all disciplines
-            # Note: This requires implementing get_all_teams method in DatabaseManager
-            # For now, we'll get teams from all disciplines
-            all_teams = []
-            disciplines = ["formula", "rally", "endurance", "street"]
-            for disc in disciplines:
-                teams_in_discipline = db_manager.get_teams_by_discipline(disc)
-                all_teams.extend(teams_in_discipline)
-            teams = all_teams
+            teams = db_manager.get_all_teams()
         
-        # Convert team objects to dictionaries for JSON serialization
-        return JSONResponse(content={
-            "teams": [team.__dict__ for team in teams],
-            "count": len(teams),
-            "discipline": discipline
-        })
+        return {
+            "teams": teams,
+            "count": len(teams)
+        }
     except Exception as e:
-        # Handle database errors and provide meaningful error messages
-        raise HTTPException(status_code=500, detail=f"Failed to get teams: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/simulate/race")
-def simulate_race(request: Dict[str, Any]):
+
+# ============================================================================
+# TEAM MANAGEMENT ENDPOINTS (UC-11 to UC-14)
+# ============================================================================
+
+@app.get("/teams/{team_id}", response_model=TeamDetails)
+def get_team_details(team_id: int):
     """
-    Race Simulation Endpoint
+    UC-11: Read Team Details
     
-    Executes Monte Carlo-based race simulations using the core simulation engine.
-    Takes race parameters and generates realistic race outcomes based on driver skills,
-    team performance, track characteristics, and environmental factors.
+    Get full team profile including roster, staff, and financial information.
     
     Args:
-        request (Dict[str, Any]): Race simulation parameters including:
-            - discipline (str, required): Racing discipline 
-              ("SINGLE_SEATER", "PRODUCTION_TOURING", "RALLY_STAGE", etc.)
-            - track_id (int, required): ID of the track/circuit to race on
-            - num_laps (int, optional): Number of laps (default: 50)
-            - weather_conditions (str, optional): Weather conditions 
-              ("dry", "wet", "mixed") (default: "dry")
-    
-    Returns:
-        JSONResponse: Race simulation results including:
-            - track: Track name and information
-            - discipline: Racing discipline
-            - weather: Weather conditions applied
-            - num_laps: Number of laps raced
-            - results: Array of race results ordered by finishing position
-                * driver: Driver name
-                * team: Team name
-                * position: Final race position
-                * points: Championship points awarded
-                * fastest_lap: Boolean indicating fastest lap achievement
-            - simulation_status: Status of simulation
-    
-    Raises:
-        HTTPException: 400 if required parameters missing
-        HTTPException: 404 if track not found or no teams in discipline
-        HTTPException: 500 if simulation fails
+        team_id: Team ID
         
-    Example Request:
-        {
-            "discipline": "SINGLE_SEATER",
-            "track_id": 1,
-            "num_laps": 50,
-            "weather_conditions": "dry"
-        }
+    Returns:
+        Complete team details with roster aggregation
     """
     try:
-        # Extract required parameters
-        discipline = request.get("discipline")
-        track_id = request.get("track_id")
+        team_details = team_service.get_team_details(team_id)
+        if not team_details:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        return team_details
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/teams", response_model=TeamCreateResponse, status_code=201)
+def create_team(request: TeamCreate):
+    """
+    UC-12: Create New Team
+    
+    Create a new team with initial budget allocation and provisioning.
+    Applies tier-based budget caps and staff limits.
+    
+    Args:
+        request: Team creation parameters (name required)
         
-        if not discipline or not track_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing required parameters: discipline and track_id are required"
+    Returns:
+        Created team with initial budget and limits
+    """
+    try:
+        result = team_service.create_team(
+            name=request.name,
+            discipline=request.discipline,
+            nationality=request.nationality,
+            tier=request.tier,
+            team_principal=request.team_principal,
+            headquarters=request.headquarters
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/teams/me")
+def get_player_team():
+    """
+    UC-13: Read Player Team
+    
+    Get the authenticated player's owned team with edit permissions.
+    Requires authentication (not yet implemented).
+    
+    Returns:
+        Player's team with editable flags
+    """
+    # TODO: Implement authentication and player tracking
+    raise HTTPException(status_code=501, detail="Player authentication not yet implemented")
+
+
+@app.patch("/teams/{team_id}", response_model=TeamUpdateResponse)
+def update_team(team_id: int, request: TeamUpdate):
+    """
+    UC-14: Update Team Attributes
+    
+    Update team attributes with audit logging.
+    Prevents modification of budget and tier directly.
+    
+    Args:
+        team_id: Team ID
+        request: Team update parameters
+        
+    Returns:
+        Update confirmation with audit trail
+    """
+    try:
+        result = team_service.update_team(
+            team_id,
+            request.model_dump(exclude_none=True)
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/teams/{team_id}/budget/allocate", response_model=BudgetTransactionResponse)
+def allocate_budget(
+    team_id: int,
+    request: BudgetTransactionRequest
+):
+    """
+    Allocate budget to a specific category.
+    
+    Args:
+        team_id: Team ID
+        request: Budget allocation request
+        
+    Returns:
+        Budget transaction confirmation with remaining balance
+    """
+    try:
+        result = team_service.allocate_budget(
+            team_id,
+            request.category,
+            request.amount,
+            request.description or ""
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/teams/{team_id}/budget", response_model=TeamBudgetResponse)
+def get_team_budget(team_id: int):
+    """
+    Get current budget status and allocation breakdown.
+    
+    Args:
+        team_id: Team ID
+        
+    Returns:
+        Budget summary with category breakdown
+    """
+    try:
+        budget_status = team_service.get_budget_status(team_id)
+        if not budget_status:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        return budget_status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-10: CREATE CHAMPIONSHIP
+# ============================================================================
+
+@app.post("/championships", response_model=ChampionshipResponse, status_code=201)
+def create_championship(request: ChampionshipCreate):
+    """
+    Create New Championship (UC-10)
+    
+    Creates a new championship season with calendar and initial configuration.
+    Supports season rollover automation and rules validation.
+    
+    Args:
+        request: Championship creation parameters
+        
+    Returns:
+        Created championship details
+    """
+    try:
+        # Create championship object
+        championship = Championship(
+            id=0,  # Will be assigned by database
+            name=request.name,
+            discipline=request.discipline,
+            season_length=request.season_length,
+            points_system=request.points_system,
+            current_season=1,
+            tier=request.tier,
+            founded_year=request.founded_year,
+            description=request.description,
+            archived=False
+        )
+        
+        # Set start date
+        if request.start_date:
+            start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
+        else:
+            start_date = datetime.now()
+        
+        # Create championship with calendar
+        if request.track_ids:
+            champ_id, _ = championship_service.create_championship_season(
+                championship,
+                request.track_ids,
+                start_date
             )
+        else:
+            champ_id = db_manager.create_championship(championship)
         
-        # Extract optional parameters
-        num_laps = request.get("num_laps", 50)
-        weather = request.get("weather_conditions", "dry")
+        # Retrieve created championship
+        created_champ = db_manager.get_championship(champ_id)
         
-        # Map weather to factor
-        weather_map = {"dry": 1.0, "wet": 0.7, "mixed": 0.85}
-        weather_factor = weather_map.get(weather.lower(), 1.0)
+        if not created_champ:
+            raise HTTPException(status_code=500, detail="Championship created but not retrievable")
         
-        # Initialize database manager
-        db = DatabaseManager()
+        return ChampionshipResponse(
+            id=created_champ.id,
+            name=created_champ.name,
+            discipline=created_champ.discipline,
+            season_length=created_champ.season_length,
+            points_system=created_champ.points_system,
+            current_season=created_champ.current_season,
+            tier=created_champ.tier,
+            founded_year=created_champ.founded_year,
+            description=created_champ.description,
+            archived=created_champ.archived
+        )
         
-        # Load track
-        track = db.get_track_by_id(track_id)
-        if not track:
-            raise HTTPException(status_code=404, detail=f"Track with ID {track_id} not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create championship: {str(e)}")
+
+
+# ============================================================================
+# UC-5: READ CHAMPIONSHIP DETAILS
+# ============================================================================
+
+@app.get("/championships/{championship_id}", response_model=ChampionshipDetailsResponse)
+def get_championship_details(
+    championship_id: int,
+    season: Optional[int] = Query(None, description="Season number (defaults to current)")
+):
+    """
+    Get Championship Details (UC-5)
+    
+    Returns comprehensive championship information including metadata,
+    current standings, and race calendar. Supports archived championships.
+    
+    Args:
+        championship_id: Championship ID
+        season: Season number (optional, defaults to current season)
         
-        # Load teams for this discipline
-        teams_list = db.get_teams_by_discipline(discipline)
-        if not teams_list:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No teams found for discipline: {discipline}"
-            )
+    Returns:
+        Complete championship details
+    """
+    try:
+        # Get championship
+        championship = db_manager.get_championship(championship_id)
         
-        # Get up to 20 teams for the race
-        selected_teams = teams_list[:20]
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
         
-        # Get drivers for selected teams
-        all_drivers = []
-        teams_dict = {}
+        # Use current season if not specified
+        target_season = season if season is not None else championship.current_season
         
-        for team in selected_teams:
-            teams_dict[team.id] = team
-            # Get drivers for this team
-            drivers = db.get_drivers_by_team(team.id)
-            if drivers:
-                all_drivers.extend(drivers[:2])  # Max 2 drivers per team
+        # Get standings
+        standings = championship_service.recalculate_standings(championship_id, target_season)
         
-        if not all_drivers:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No drivers found for teams in discipline: {discipline}"
-            )
+        # Get calendar
+        calendar = championship_service.get_championship_calendar(championship_id, target_season)
         
-        # Create a Race object for the simulation
+        return ChampionshipDetailsResponse(
+            championship=ChampionshipResponse(
+                id=championship.id,
+                name=championship.name,
+                discipline=championship.discipline,
+                season_length=championship.season_length,
+                points_system=championship.points_system,
+                current_season=championship.current_season,
+                tier=championship.tier,
+                founded_year=championship.founded_year,
+                description=championship.description,
+                archived=championship.archived
+            ),
+            current_standings=[
+                StandingEntry(
+                    position=s.position,
+                    driver_id=s.driver_id,
+                    driver_name=s.driver_name,
+                    team_id=s.team_id,
+                    team_name=s.team_name,
+                    total_points=s.total_points,
+                    wins=s.wins,
+                    podiums=s.podiums,
+                    races_started=s.races_started,
+                    dnf_count=s.dnf_count,
+                    fastest_laps=s.fastest_laps
+                ) for s in standings
+            ],
+            calendar=[
+                RaceEventResponse(
+                    race_id=r["race_id"],
+                    round_number=r["round_number"],
+                    race_date=r["race_date"],
+                    track_id=r["track_id"],
+                    track_name=r["track_name"],
+                    track_country=r["track_country"],
+                    status=r["status"],
+                    weather_conditions=r["weather_conditions"],
+                    laps=r["laps"]
+                ) for r in calendar
+            ]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-6: UPDATE CHAMPIONSHIP STANDINGS
+# ============================================================================
+
+@app.post(
+    "/championships/{championship_id}/standings/recalculate",
+    response_model=RecalculateStandingsResponse
+)
+def recalculate_championship_standings(
+    championship_id: int,
+    season: Optional[int] = Query(None, description="Season to recalculate")
+):
+    """
+    Recalculate Championship Standings (UC-6)
+    
+    Recalculates championship points using discipline-specific points systems
+    and applies tie-breaking rules. Supports async job queue for large datasets.
+    
+    Args:
+        championship_id: Championship ID
+        season: Season number (optional, defaults to current)
+        
+    Returns:
+        Updated standings
+    """
+    try:
+        championship = db_manager.get_championship(championship_id)
+        
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
+        
+        target_season = season if season is not None else championship.current_season
+        
+        # Recalculate standings
+        standings = championship_service.recalculate_standings(championship_id, target_season)
+        
+        return RecalculateStandingsResponse(
+            success=True,
+            championship_id=championship_id,
+            season=target_season,
+            standings=[
+                StandingEntry(
+                    position=s.position,
+                    driver_id=s.driver_id,
+                    driver_name=s.driver_name,
+                    team_id=s.team_id,
+                    team_name=s.team_name,
+                    total_points=s.total_points,
+                    wins=s.wins,
+                    podiums=s.podiums,
+                    races_started=s.races_started,
+                    dnf_count=s.dnf_count,
+                    fastest_laps=s.fastest_laps
+                ) for s in standings
+            ],
+            message=f"Standings recalculated for {len(standings)} drivers"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-7: CREATE RACE EVENT
+# ============================================================================
+
+@app.post(
+    "/championships/{championship_id}/events",
+    response_model=RaceEventResponse,
+    status_code=201
+)
+def create_race_event(championship_id: int, request: RaceEventCreate):
+    """
+    Create Race Event (UC-7)
+    
+    Adds a new race to the championship calendar with validation for
+    date/track conflicts and track availability.
+    
+    Args:
+        championship_id: Championship ID
+        request: Race event parameters
+        
+    Returns:
+        Created race event details
+    """
+    try:
+        championship = db_manager.get_championship(championship_id)
+        
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
+        
+        # Validate event
+        is_valid, error_msg = championship_service.validate_race_event(
+            championship_id,
+            request.track_id,
+            request.race_date,
+            championship.current_season
+        )
+        
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        # Get current round number
+        calendar = championship_service.get_championship_calendar(
+            championship_id,
+            championship.current_season
+        )
+        next_round = len(calendar) + 1
+        
+        # Create race
         race = Race(
-            id=1,
-            name=f"{track.name} Race",
-            track_id=track_id,
-            championship_id=1,
-            discipline=discipline,
-            scheduled_date="2025-10-23",
+            id=0,
+            championship_id=championship_id,
+            track_id=request.track_id,
+            season=championship.current_season,
+            round_number=next_round,
+            race_date=request.race_date,
+            weather_conditions=request.weather_conditions,
+            laps=request.laps,
+            status="scheduled"
+        )
+        
+        race_id = db_manager.create_race(race)
+        
+        if not race_id:
+            raise HTTPException(status_code=500, detail="Failed to create race")
+        
+        # Get track details
+        track = db_manager.get_track(request.track_id)
+        
+        return RaceEventResponse(
+            race_id=race_id,
+            round_number=next_round,
+            race_date=request.race_date,
+            track_id=request.track_id,
+            track_name=track.name if track else "Unknown",
+            track_country=track.country if track else "Unknown",
             status="scheduled",
-            laps=num_laps
+            weather_conditions=request.weather_conditions,
+            laps=request.laps
         )
         
-        # Create simulation context
-        context = SimulationContext(
-            race=race,
-            track=track,
-            drivers=all_drivers,
-            teams=teams_dict,
-            weather_factor=weather_factor
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-8: READ RACE SCHEDULE
+# ============================================================================
+
+@app.get("/championships/{championship_id}/schedule", response_model=ChampionshipScheduleResponse)
+def get_championship_schedule(
+    championship_id: int,
+    season: Optional[int] = Query(None, description="Season number")
+):
+    """
+    Get Race Schedule (UC-8)
+    
+    Returns ordered list of races with date and status flags.
+    
+    Args:
+        championship_id: Championship ID
+        season: Season number (optional)
+        
+    Returns:
+        Championship race schedule
+    """
+    try:
+        championship = db_manager.get_championship(championship_id)
+        
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
+        
+        target_season = season if season is not None else championship.current_season
+        
+        calendar = championship_service.get_championship_calendar(championship_id, target_season)
+        
+        return ChampionshipScheduleResponse(
+            championship_id=championship_id,
+            season=target_season,
+            races=[
+                RaceEventResponse(
+                    race_id=r["race_id"],
+                    round_number=r["round_number"],
+                    race_date=r["race_date"],
+                    track_id=r["track_id"],
+                    track_name=r["track_name"],
+                    track_country=r["track_country"],
+                    status=r["status"],
+                    weather_conditions=r["weather_conditions"],
+                    laps=r["laps"]
+                ) for r in calendar
+            ]
         )
         
-        # Run simulation
-        simulator = RaceSimulator()
-        race_results = simulator.simulate_race(context)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-9: UPDATE RACE STATUS
+# ============================================================================
+
+@app.patch("/races/{race_id}/status")
+def update_race_status(race_id: int, request: RaceStatusUpdate):
+    """
+    Update Race Status (UC-9)
+    
+    Updates race lifecycle state with validation for valid transitions:
+    - scheduled → in-progress
+    - in-progress → completed
+    - scheduled → cancelled
+    
+    Args:
+        race_id: Race ID
+        request: New status
         
-        # Format results for API response
-        formatted_results = []
-        for result in race_results:
-            driver = next((d for d in all_drivers if d.id == result.driver_id), None)
-            team = teams_dict.get(result.team_id)
+    Returns:
+        Success confirmation
+    """
+    try:
+        success, error_msg = championship_service.update_race_lifecycle_status(
+            race_id,
+            request.status
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        return {
+            "success": True,
+            "race_id": race_id,
+            "new_status": request.status,
+            "message": f"Race status updated to {request.status}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# UC-4: READ RACE RESULTS
+# ============================================================================
+
+@app.get("/races/{race_id}/results", response_model=RaceResultDetailResponse)
+def get_race_results(race_id: int):
+    """
+    Get Race Results (UC-4)
+    
+    Returns complete race classification with lap data and provisional/final status.
+    
+    Args:
+        race_id: Race ID
+        
+    Returns:
+        Race classification and results
+    """
+    try:
+        race = db_manager.get_race(race_id)
+        
+        if not race:
+            raise HTTPException(status_code=404, detail=f"Race {race_id} not found")
+        
+        # Get track details
+        track = db_manager.get_track(race.track_id)
+        
+        # Get results
+        results = db_manager.get_race_results(race_id)
+        
+        # Build classification
+        classification = []
+        fastest_lap_info = None
+        
+        for result in results:
+            driver = db_manager.get_driver(result.driver_id)
+            team = db_manager.get_team(result.team_id) if result.team_id else None
             
-            formatted_results.append({
+            entry = {
                 "position": result.position,
-                "driver": f"{driver.first_name} {driver.last_name}" if driver else "Unknown",
-                "team": team.name if team else "Unknown",
                 "driver_id": result.driver_id,
+                "driver_name": driver.name if driver else f"Driver {result.driver_id}",
                 "team_id": result.team_id,
+                "team_name": team.name if team else "No Team",
                 "points": result.points,
                 "fastest_lap": result.fastest_lap,
-                "status": result.status
-            })
+                "dnf_reason": result.dnf_reason,
+                "grid_position": result.grid_position,
+                "time_seconds": result.time_seconds,
+                "status": "DNF" if result.dnf_reason else "Finished"
+            }
+            
+            classification.append(entry)
+            
+            if result.fastest_lap and not fastest_lap_info:
+                fastest_lap_info = {
+                    "driver_name": driver.name if driver else f"Driver {result.driver_id}",
+                    "time": result.time_seconds
+                }
         
-        return JSONResponse(content={
-            "track": track.name,
-            "discipline": discipline,
-            "weather": weather,
-            "num_laps": num_laps,
-            "num_participants": len(all_drivers),
-            "results": formatted_results,
-            "simulation_status": "completed"
-        })
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Handle simulation errors and provide detailed error information
-        import traceback
-        error_detail = f"Simulation failed: {str(e)}\n{traceback.format_exc()}"
-        raise HTTPException(status_code=500, detail=error_detail)
-
-@app.get("/test")
-def test_endpoint():
-    """
-    Legacy Test Endpoint
-    
-    Simple test endpoint for basic API connectivity verification.
-    Returns a success message to confirm the API server is responding
-    to requests. Useful for initial setup testing and debugging.
-    
-    Returns:
-        JSONResponse: Simple success confirmation message
-        
-    Example Response:
-        {
-            "message": "Simulation test successful."
-        }
-    """
-    return JSONResponse(content={"message": "Simulation test successful."})
-
-# =============================================================================
-# GAME LOOP / CHAMPIONSHIP ENDPOINTS
-# =============================================================================
-
-@app.post("/season/create")
-def create_season(request: Dict[str, Any]):
-    """
-    Create New Championship Season
-    
-    Initializes a new championship season for a specified racing discipline.
-    This endpoint creates a race calendar with the specified number of races,
-    selects tracks appropriate for the discipline, and sets up the initial
-    championship standings.
-    
-    Request Body:
-        discipline (str): Racing discipline (e.g., "single_seater", "rally_stage")
-        num_races (int, optional): Number of races in the season (default: 10)
-        season_year (int, optional): Season year (default: 2025)
-    
-    Returns:
-        JSONResponse: Season state including:
-            - season_year: Year of the season
-            - championship_id: Database ID of the championship
-            - championship_name: Name of the championship
-            - discipline: Racing discipline
-            - current_round: Current round number (starts at 1)
-            - total_rounds: Total number of races
-            - races_completed: List of completed race details
-            - races_remaining: List of upcoming race details
-            - driver_standings: Current driver championship standings
-            - team_standings: Current team championship standings
-            - is_season_complete: Whether the season has finished
-    
-    Raises:
-        HTTPException 400: Invalid discipline or parameters
-        HTTPException 500: Database or initialization error
-    
-    Example Request:
-        POST /season/create
-        {
-            "discipline": "single_seater",
-            "num_races": 12,
-            "season_year": 2025
-        }
-    
-    Example Response:
-        {
-            "season_year": 2025,
-            "championship_name": "Single Seater Championship",
-            "discipline": "single_seater",
-            "total_rounds": 12,
-            "races_remaining": [
-                {
-                    "race_id": 1,
-                    "round_number": 1,
-                    "track_name": "Silverstone Circuit",
-                    "race_date": "2025-03-01"
-                },
-                ...
-            ],
-            "driver_standings": [],
-            "team_standings": []
-        }
-    """
-    try:
-        discipline = request.get("discipline")
-        num_races = request.get("num_races", 10)
-        season_year = request.get("season_year", 2025)
-        
-        if not discipline:
-            raise HTTPException(status_code=400, detail="Missing required field: discipline")
-        
-        # Create the new season
-        game_loop.create_season(
-            discipline=discipline,
-            num_races=num_races,
-            season_year=season_year
+        return RaceResultDetailResponse(
+            race_id=race_id,
+            championship_id=race.championship_id,
+            season=race.season,
+            round_number=race.round_number,
+            track_name=track.name if track else "Unknown",
+            race_date=race.race_date,
+            status=race.status,
+            classification=classification,
+            fastest_lap=fastest_lap_info
         )
         
-        # Convert to dictionary for JSON response
-        return JSONResponse(content=game_loop.get_season_state())
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create season: {str(e)}")
-
-@app.post("/season/next-race")
-def simulate_next_race(request: Dict[str, Any]):
-    """
-    Simulate Next Race in Season
-    
-    Simulates the next scheduled race in the current championship season.
-    This runs the full race simulation, stores results in the database,
-    updates driver and team statistics, recalculates championship standings,
-    and checks if the season has been completed.
-    
-    Request Body:
-        weather (str, optional): Weather conditions (default: "dry")
-            Options: "dry", "wet", "mixed"
-        num_laps (int, optional): Number of laps to simulate (default: 50)
-    
-    Returns:
-        JSONResponse: Race results and updated season state including:
-            - race_info: Details about the race that was simulated
-            - results: List of race results (position, driver, team, points)
-            - season_update: Updated season state with new standings
-            - championship_leader: Current championship leader
-            - season_complete: Whether this was the final race
-            - champion: Champion information (if season complete)
-    
-    Raises:
-        HTTPException 400: No active season or season already complete
-        HTTPException 500: Simulation or database error
-    
-    Example Request:
-        POST /season/next-race
-        {
-            "weather": "dry",
-            "num_laps": 55
-        }
-    
-    Example Response:
-        {
-            "race_info": {
-                "race_id": 1,
-                "round_number": 1,
-                "track_name": "Silverstone Circuit",
-                "weather": "dry",
-                "laps": 55
-            },
-            "results": [
-                {
-                    "position": 1,
-                    "driver_name": "Lewis Hamilton",
-                    "team_name": "Mercedes AMG",
-                    "points": 25,
-                    "fastest_lap": "1:27.123"
-                },
-                ...
-            ],
-            "season_update": {
-                "current_round": 2,
-                "total_rounds": 12,
-                "races_completed": 1
-            },
-            "championship_leader": {
-                "driver_name": "Lewis Hamilton",
-                "team_name": "Mercedes AMG",
-                "points": 25
-            },
-            "season_complete": false
-        }
-    """
-    try:
-        weather = request.get("weather", "dry")
-        num_laps = request.get("num_laps", 50)
-        
-        # Check if there's an active season
-        if game_loop.current_season is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No active season. Please create a season first using POST /season/create"
-            )
-        
-        # Check if season is already complete
-        if game_loop.current_season.is_season_complete:
-            raise HTTPException(
-                status_code=400,
-                detail="Season is complete. Create a new season to continue."
-            )
-        
-        # Simulate the next race
-        result = game_loop.simulate_next_race(weather=weather, num_laps=num_laps)
-        
-        return JSONResponse(content=result)
-        
     except HTTPException:
         raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to simulate race: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/season/state")
-def get_season_state():
+
+# ============================================================================
+# RACE COMPLETION & STANDINGS UPDATE
+# ============================================================================
+
+@app.post("/races/{race_id}/complete")
+def complete_race_and_update_standings(race_id: int):
     """
-    Get Current Season State
+    Complete a race and automatically update championship standings.
     
-    Retrieves the complete state of the current championship season including
-    race calendar, standings, and progress information. Returns null if no
-    season is currently active.
+    Updates race status to 'completed' and recalculates standings.
     
+    Args:
+        race_id: Race ID to complete
+        
     Returns:
-        JSONResponse: Complete season state or null if no active season:
-            - season_year: Year of the season
-            - championship_id: Database ID
-            - championship_name: Championship name
-            - discipline: Racing discipline
-            - current_round: Current round number
-            - total_rounds: Total races in season
-            - races_completed: List of finished races with results
-            - races_remaining: List of upcoming races
-            - driver_standings: Top 10 driver standings (or fewer if less than 10)
-            - team_standings: Top 10 team standings (or fewer if less than 10)
-            - is_season_complete: Whether season has finished
-            - champion_driver_id: Champion driver ID (if complete)
-            - champion_team_id: Champion team ID (if complete)
-    
-    Example Response (Active Season):
-        {
-            "season_year": 2025,
-            "championship_name": "Single Seater Championship",
-            "current_round": 5,
-            "total_rounds": 12,
-            "races_completed": [...],
-            "races_remaining": [...],
-            "driver_standings": [
-                {
-                    "position": 1,
-                    "driver_name": "Max Verstappen",
-                    "team_name": "Red Bull Racing",
-                    "points": 110,
-                    "wins": 3,
-                    "podiums": 4,
-                    "races_completed": 4
-                },
-                ...
-            ],
-            "is_season_complete": false
-        }
-    
-    Example Response (No Active Season):
-        {
-            "season": null,
-            "message": "No active season"
-        }
+        Updated standings
     """
     try:
-        if game_loop.current_season is None:
-            return JSONResponse(content={
-                "season": None,
-                "message": "No active season. Create one using POST /season/create"
-            })
+        race = db_manager.get_race(race_id)
         
-        return JSONResponse(content=game_loop.get_season_state())
+        if not race:
+            raise HTTPException(status_code=404, detail=f"Race {race_id} not found")
         
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve season state: {str(e)}")
-
-@app.get("/season/standings")
-def get_standings():
-    """
-    Get Championship Standings
-    
-    Retrieves detailed championship standings for both drivers and teams
-    in the current active season. Returns more detailed information than
-    the standings included in the season state endpoint.
-    
-    Returns:
-        JSONResponse: Championship standings or error if no active season:
-            - driver_standings: Complete driver standings list with:
-                - position: Championship position
-                - driver_id: Database ID
-                - driver_name: Full name
-                - team_id: Team database ID
-                - team_name: Team name
-                - points: Championship points
-                - wins: Number of victories
-                - podiums: Number of podium finishes
-                - races_completed: Races participated in
-                - best_finish: Best finishing position
-            - team_standings: Complete team standings list with similar structure
-            - season_info: Basic season information (year, discipline, progress)
-    
-    Raises:
-        HTTPException 400: No active season
-        HTTPException 500: Database or calculation error
-    
-    Example Response:
-        {
-            "season_info": {
-                "season_year": 2025,
-                "championship_name": "Single Seater Championship",
-                "current_round": 5,
-                "total_rounds": 12
-            },
-            "driver_standings": [
-                {
-                    "position": 1,
-                    "driver_name": "Max Verstappen",
-                    "team_name": "Red Bull Racing",
-                    "points": 110,
-                    "wins": 3,
-                    "podiums": 4,
-                    "races_completed": 4,
-                    "best_finish": 1
-                },
-                ...
-            ],
-            "team_standings": [...]
-        }
-    """
-    try:
-        if game_loop.current_season is None:
-            raise HTTPException(
-                status_code=400,
-                detail="No active season. Create one using POST /season/create"
-            )
+        # Update race status to completed
+        success, error_msg = championship_service.update_race_lifecycle_status(
+            race_id,
+            "completed"
+        )
         
-        season_state = game_loop.current_season
+        if not success:
+            raise HTTPException(status_code=400, detail=error_msg)
         
-        return JSONResponse(content={
-            "season_info": {
-                "season_year": season_state.season_year,
-                "championship_name": season_state.championship_name,
-                "discipline": season_state.discipline,
-                "current_round": season_state.current_round,
-                "total_rounds": season_state.total_rounds,
-                "is_season_complete": season_state.is_season_complete
-            },
-            "driver_standings": [
-                {
-                    "position": idx + 1,
-                    "driver_id": standing.driver_id,
-                    "driver_name": standing.driver_name,
-                    "team_id": standing.team_id,
-                    "team_name": standing.team_name,
-                    "points": standing.points,
-                    "wins": standing.wins,
-                    "podiums": standing.podiums,
-                    "races_completed": standing.races_completed,
-                    "best_finish": standing.best_finish
-                }
-                for idx, standing in enumerate(season_state.driver_standings)
-            ],
-            "team_standings": [
-                {
-                    "position": idx + 1,
-                    "team_id": standing.team_id,
-                    "team_name": standing.team_name,
-                    "points": standing.points,
-                    "wins": standing.wins,
-                    "podiums": standing.podiums,
-                    "races_completed": standing.races_completed,
-                    "best_finish": standing.best_finish
-                }
-                for idx, standing in enumerate(season_state.team_standings)
+        # Recalculate standings
+        standings = championship_service.recalculate_standings(
+            race.championship_id,
+            race.season
+        )
+        
+        # Return updated standings
+        return {
+            "success": True,
+            "race_id": race_id,
+            "standings": [
+                StandingEntry(
+                    driver_id=entry.driver_id,
+                    driver_name=entry.driver_name,
+                    team_id=entry.team_id,
+                    team_name=entry.team_name,
+                    total_points=entry.total_points,
+                    wins=entry.wins,
+                    podiums=entry.podiums,
+                    races_started=entry.races_started,
+                    dnf_count=entry.dnf_count,
+                    fastest_laps=entry.fastest_laps,
+                    position=entry.position
+                ) for entry in standings
             ]
-        })
+        }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve standings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to complete race: {str(e)}")
 
-# Server startup configuration
-# This block only executes when the file is run directly (not imported)
+
+@app.get("/championships/{championship_id}/next-race")
+def get_next_race(championship_id: int):
+    """
+    Get the next scheduled race in a championship.
+    
+    Args:
+        championship_id: Championship ID
+        
+    Returns:
+        Next race details or null if season complete
+    """
+    try:
+        championship = db_manager.get_championship(championship_id)
+        
+        if not championship:
+            raise HTTPException(status_code=404, detail=f"Championship {championship_id} not found")
+        
+        # Get calendar
+        calendar = championship_service.get_championship_calendar(
+            championship_id,
+            championship.current_season
+        )
+        
+        # Find next scheduled race
+        for race in calendar:
+            if race['status'] == 'scheduled':
+                return {
+                    "found": True,
+                    "race_id": race['race_id'],
+                    "round_number": race['round_number'],
+                    "track_name": race['track_name'],
+                    "track_country": race['track_country'],
+                    "race_date": race['race_date'],
+                    "laps": race['laps'],
+                    "weather": race['weather_conditions']
+                }
+        
+        # No scheduled races found
+        return {
+            "found": False,
+            "message": "No scheduled races remaining"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ADDITIONAL ENDPOINTS
+# ============================================================================
+
+@app.get("/championships")
+def list_championships(
+    discipline: Optional[str] = Query(None, description="Filter by discipline"),
+    archived: bool = Query(False, description="Include archived championships")
+):
+    """List all championships with optional filtering"""
+    try:
+        championships = db_manager.get_all_championships()
+        
+        # Apply filters
+        if discipline:
+            championships = [c for c in championships if c.discipline == discipline]
+        
+        if not archived:
+            championships = [c for c in championships if not c.archived]
+        
+        return {
+            "championships": [
+                ChampionshipResponse(
+                    id=c.id,
+                    name=c.name,
+                    discipline=c.discipline,
+                    season_length=c.season_length,
+                    points_system=c.points_system,
+                    current_season=c.current_season,
+                    tier=c.tier,
+                    founded_year=c.founded_year,
+                    description=c.description,
+                    archived=c.archived
+                ) for c in championships
+            ],
+            "count": len(championships)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# HIRING & CONTRACT ENDPOINTS (UC-15, UC-16, UC-17, UC-18)
+# ============================================================================
+
+@app.get("/drivers/available", response_model=AvailableDriversResponse, tags=["Hiring"])
+def get_available_drivers(
+    discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
+    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum average skill rating"),
+    max_salary: Optional[float] = Query(None, description="Maximum salary budget"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+):
+    """
+    UC-15: Get Available Drivers for Hire
+    
+    Returns list of drivers available for contract signing. Includes:
+    - Skill ratings and career statistics
+    - Estimated salary based on performance
+    - Pagination support
+    - Discipline and rating filters
+    
+    Market includes:
+    - Drivers without current team contracts
+    - Active career phase drivers
+    - Optional discipline specialization filter
+    """
+    try:
+        drivers, total = hiring_service.get_available_drivers(
+            discipline=discipline,
+            min_rating=min_rating,
+            max_salary=max_salary,
+            page=page,
+            page_size=page_size
+        )
+        
+        total_pages = (total + page_size - 1) // page_size
+        
+        return AvailableDriversResponse(
+            drivers=[AvailableDriver(**d) for d in drivers],
+            count=len(drivers),
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available drivers: {str(e)}")
+
+
+@app.get("/staff/available", response_model=AvailableStaffResponse, tags=["Hiring"])
+def get_available_staff(
+    role: Optional[str] = Query(None, description="Filter by staff role"),
+    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum skill rating"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+):
+    """
+    UC-17: Get Available Staff for Hire
+    
+    Returns list of staff members available for hire. Includes:
+    - Role and skill rating
+    - Estimated salary by role
+    - Pagination support
+    - Role-based filtering
+    
+    Staff roles include:
+    - Team Principal, Technical Director
+    - Race Engineer, Data Analyst
+    - Mechanic, Strategist
+    - Aerodynamicist, Designer
+    """
+    try:
+        staff, total = hiring_service.get_available_staff(
+            role=role,
+            min_rating=min_rating,
+            page=page,
+            page_size=page_size
+        )
+        
+        total_pages = (total + page_size - 1) // page_size
+        
+        return AvailableStaffResponse(
+            staff=[AvailableStaff(**s) for s in staff],
+            count=len(staff),
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching available staff: {str(e)}")
+
+
+@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"])
+def sign_driver_contract(request: DriverContractRequest):
+    """
+    UC-16: Sign Driver Contract
+    
+    Create a contract between a team and driver. Process includes:
+    1. Validate driver availability
+    2. Check team budget sufficiency
+    3. Verify salary cap compliance
+    4. Calculate signing bonus (20% of total value)
+    5. Update driver and team records
+    
+    Budget Impact:
+    - Immediate: Signing bonus deducted (20% of total contract)
+    - Annual: Salary counted against salary cap
+    - Reserve: 10% of salary cap required as buffer
+    
+    Validation:
+    - Driver must be available (no current team)
+    - Team budget must cover signing bonus
+    - Salary cap compliance enforced
+    - Contract length: 1-5 seasons
+    """
+    try:
+        success, message, details = hiring_service.sign_driver_contract(
+            team_id=request.team_id,
+            driver_id=request.driver_id,
+            contract_length=request.contract_length,
+            salary=request.salary,
+            performance_bonus=request.performance_bonus
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return DriverContractResponse(
+            driver_id=details['driver_id'],
+            driver_name=details['driver_name'],
+            team_id=details['team_id'],
+            team_name=details['team_name'],
+            contract_length=details['contract_length'],
+            salary=details['salary'],
+            performance_bonus=details['performance_bonus'],
+            total_contract_value=details['total_contract_value'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error signing driver contract: {str(e)}")
+
+
+@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"])
+def sign_staff_contract(request: StaffContractRequest):
+    """
+    UC-18: Sign Staff Contract
+    
+    Create a contract between a team and staff member. Process includes:
+    1. Validate staff availability
+    2. Check team budget sufficiency
+    3. Calculate signing bonus (10% of total value)
+    4. Update staff and team records
+    
+    Budget Impact:
+    - Immediate: Signing bonus deducted (10% of total contract)
+    - Annual: Salary affects team operations budget
+    
+    Validation:
+    - Staff must be available (no current team)
+    - Team budget must cover signing bonus
+    - Contract length: 1-5 seasons
+    """
+    try:
+        success, message, details = hiring_service.sign_staff_contract(
+            team_id=request.team_id,
+            staff_id=request.staff_id,
+            contract_length=request.contract_length,
+            salary=request.salary
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return StaffContractResponse(
+            staff_id=details['staff_id'],
+            staff_name=details['staff_name'],
+            team_id=details['team_id'],
+            team_name=details['team_name'],
+            contract_length=details['contract_length'],
+            salary=details['salary'],
+            total_contract_value=details['total_contract_value'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error signing staff contract: {str(e)}")
+
+
+@app.post("/contracts/release", response_model=ContractReleaseResponse, tags=["Hiring"])
+def release_contract(request: ContractReleaseRequest):
+    """
+    Release Driver or Staff from Contract
+    
+    Terminate a contract with buyout cost. Process includes:
+    1. Validate personnel is contracted to team
+    2. Calculate buyout cost (percentage of remaining value)
+    3. Check team budget sufficiency
+    4. Release personnel to market
+    
+    Buyout Calculation:
+    - Driver: buyout_percentage * (annual_salary * remaining_seasons)
+    - Staff: Fixed 50k EUR fee (simplified)
+    
+    Default buyout percentage: 50%
+    """
+    try:
+        success, message, details = hiring_service.release_personnel_contract(
+            team_id=request.team_id,
+            personnel_id=request.personnel_id,
+            personnel_type=request.personnel_type,
+            buyout_percentage=request.buyout_percentage
+        )
+        
+        if not success:
+            raise HTTPException(status_code=400, detail=message)
+        
+        return ContractReleaseResponse(
+            personnel_id=details['personnel_id'],
+            personnel_name=details['personnel_name'],
+            team_id=details['team_id'],
+            buyout_cost=details['buyout_cost'],
+            remaining_budget=details['remaining_budget'],
+            message=message
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error releasing contract: {str(e)}")
+
+
+# ============================================================================
+# PROGRESSION ENDPOINTS (UC-19)
+# ============================================================================
+
+@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"])
+def process_season_progression(request: SeasonProgressionRequest):
+    """
+    UC-19: Process Season-End Driver Progression
+    
+    Apply progression to all active drivers at season end. Process includes:
+    1. Calculate skill changes based on age and experience
+    2. Check retirement eligibility
+    3. Retire eligible drivers
+    4. Recycle retired drivers as rookies
+    
+    Progression Factors:
+    - Age-based curves (peak 28-32, decline 35+)
+    - Experience growth (learning rate)
+    - Career achievements
+    - Form trends
+    
+    Retirement Triggers:
+    - Age 45+: Automatic
+    - Age 40-44: 10-30% probability
+    - Age 35-39 with poor performance: 5-15% probability
+    
+    Recycling System:
+    - Retired drivers generate new rookies (18-20 years old)
+    - Reset skills to 35-55 range
+    - Maintains driver pool population
+    """
+    try:
+        results = progression_service.process_season_end_progression(
+            season=request.season,
+            championship_id=request.championship_id
+        )
+        
+        # Convert results to response format
+        progressions = []
+        for prog in results['progressions']:
+            progressions.append(DriverProgression(
+                driver_id=prog['driver_id'],
+                driver_name=prog['driver_name'],
+                age=prog['age'],
+                skill_changes=prog['skill_changes'],
+                retired=prog['retired'],
+                career_phase='retired' if prog['retired'] else 'active'
+            ))
+        
+        return SeasonProgressionResponse(
+            season=results['season'],
+            drivers_processed=results['drivers_processed'],
+            drivers_progressed=progressions,
+            drivers_retired=results['summary']['retired'],
+            drivers_recycled=results['summary']['recycled'],
+            summary=results['summary']
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing season progression: {str(e)}")
+
+
+# ============================================================================
+# SERVER ENTRY POINT
+# ============================================================================
+
 if __name__ == "__main__":
-    """
-    Main Server Startup
+    print("Starting Momentum Simulation API Server...")
+    print(f"Server: {API_HOST}:{API_PORT}")
+    print(f"Reload: {API_RELOAD}")
+    print(f"Docs: http://{API_HOST}:{API_PORT}/docs")
     
-    Starts the FastAPI server using Uvicorn ASGI server with configuration
-    loaded from config.py. The server supports hot-reloading during development
-    and provides automatic API documentation at /docs and /redoc.
-    
-    Configuration:
-        - host: Server bind address (from config.API_HOST)
-        - port: Server port (from config.API_PORT)  
-        - reload: Auto-reload on file changes (from config.API_RELOAD)
-    
-    Access Points:
-        - API: http://localhost:8000/
-        - Interactive Docs: http://localhost:8000/docs
-        - Alternative Docs: http://localhost:8000/redoc
-    
-    Usage:
-        python simulation.py
-    """
     uvicorn.run(
-        "simulation:app",    # Module:application pattern for Uvicorn
-        host=API_HOST,       # Bind address (typically 127.0.0.1 or 0.0.0.0)
-        port=API_PORT,       # Port number (typically 8000)
-        reload=API_RELOAD    # Enable auto-reload for development
+        "simulation:app",
+        host=API_HOST,
+        port=API_PORT,
+        reload=API_RELOAD
     )

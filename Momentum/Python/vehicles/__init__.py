@@ -1,73 +1,39 @@
 """
-Vehicles Package
+Vehicles Module - Single Seater Focus
 
-Complete vehicle component system for multi-discipline racing simulation.
+Racing vehicle systems including:
+- Single seater (Formula) car rendering with realistic detail
+- Aerodynamic elements (front wing, DRS flap, rear wing)
+- Visible mechanical components (suspension, wheels, cockpit)
+- Livery management (team colors, driver numbers)
+- Vehicle configuration (fuel, tires, brake balance)
+- GUI integration for race visualisation
 
-Authors: Final Year Project - Computer Science
+MVP focuses exclusively on Formula-style open-wheel single seater racing.
 """
 
-from .vehicle import RaceCar
-from .components.enums import (
-    RacingDiscipline,
-    AspirationType,
-    FuelSystem,
-    HybridSystemType,
-    GearboxType,
-    DifferentialType,
-    SuspensionType,
-    TireType,
-    TireCompound,
-    BrakeMaterial,
-    AeroConfiguration,
-    ControlUnitType,
-    SteeringType
+from vehicles.vehicle_appearance import (
+    VehicleType,
+    Livery,
+    VehicleRenderer,
+    VehicleConfiguration,
+    create_team_livery,
 )
-from .components.engine import EngineComponent, HybridPowerUnit
-from .components.drivetrain import Gearbox, Differential, Drivetrain
-from .components.chassis import Suspension, BrakeSystem, Chassis
-from .components.aerodynamics import AerodynamicsPackage, Tire, TireSet
-from .components.electronics import ElectronicControlUnit, SteeringSystem, SafetySystem
+from vehicles.appearance_integration import (
+    VehicleAppearanceManager,
+    get_appearance_manager,
+    initialize_appearance_manager,
+    get_vehicle_type_for_discipline,
+)
 
 __all__ = [
-    # Main vehicle
-    'RaceCar',
-    
-    # Enums
-    'RacingDiscipline',
-    'AspirationType',
-    'FuelSystem',
-    'HybridSystemType',
-    'GearboxType',
-    'DifferentialType',
-    'SuspensionType',
-    'TireType',
-    'TireCompound',
-    'BrakeMaterial',
-    'AeroConfiguration',
-    'ControlUnitType',
-    'SteeringType',
-    
-    # Engine components
-    'EngineComponent',
-    'HybridPowerUnit',
-    
-    # Drivetrain components
-    'Gearbox',
-    'Differential',
-    'Drivetrain',
-    
-    # Chassis components
-    'Suspension',
-    'BrakeSystem',
-    'Chassis',
-    
-    # Aerodynamics components
-    'AerodynamicsPackage',
-    'Tire',
-    'TireSet',
-    
-    # Electronics components
-    'ElectronicControlUnit',
-    'SteeringSystem',
-    'SafetySystem'
+    "VehicleType",
+    "Livery",
+    "VehicleRenderer",
+    "VehicleConfiguration",
+    "create_team_livery",
+    "VehicleAppearanceManager",
+    "get_appearance_manager",
+    "initialize_appearance_manager",
+    "get_vehicle_type_for_discipline",
 ]

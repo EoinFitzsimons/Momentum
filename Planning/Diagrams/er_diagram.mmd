@@ -1,0 +1,80 @@
+erDiagram
+    direction LR
+
+    DRIVERS ||--o{ RACE_RESULTS : "records"
+    RACES ||--o{ RACE_RESULTS : "held at"
+    DRIVERS }o..o{ TEAMS : "contracts (history)"
+    TEAMS ||--o{ RACE_RESULTS : "enters"
+    TEAMS ||--o{ DEVELOPMENTS : "develops"
+    TRACKS ||--o{ RACES : "hosts"
+    CHAMPIONSHIPS ||--o{ RACES : "contains"
+    DRIVERS ||--o{ DRIVER_CAREER_STATS : "has"
+
+    DRIVERS {
+        int id PK
+        string name
+        string nationality
+        date birth_date
+        int age
+        float raw_speed
+        float racecraft
+        float overtaking
+        float vehicle_control
+        float cornering_skill
+        float braking_technique
+        string attributes_extra "JSON (optional)"
+    }
+
+    TEAMS {
+        int id PK
+        string name
+        string nationality
+        int founded_year
+        float budget
+        string headquarters
+    }
+
+    TRACKS {
+        int id PK
+        string name
+        string country
+        float length_km
+        int turns
+        string surface
+    }
+
+    RACES {
+        int id PK
+        int championship_id FK
+        int track_id FK
+        date date
+        string weather
+    }
+
+    RACE_RESULTS {
+        int id PK
+        int race_id FK
+        int driver_id FK
+        int team_id FK
+        int position
+        float time
+        int points
+        bool fastest_lap
+    }
+
+    DRIVER_CAREER_STATS {
+        int id PK
+        int driver_id FK
+        int career_wins
+        int career_podiums
+        int career_points
+        int career_starts
+        int career_dnf
+    }
+
+    DEVELOPMENTS {
+        int id PK
+        int team_id FK
+        string area
+        float progress
+    }
