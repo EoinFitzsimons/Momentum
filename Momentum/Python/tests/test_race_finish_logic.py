@@ -18,6 +18,15 @@ from database.models import Driver, Team, Track
 from config import DATABASE_PATH
 
 
+def _mk_driver(driver_id: int, name: str) -> Driver:
+    return Driver(
+        id=driver_id,
+        name=name,
+        nationality="Test",
+        birth_date="1995-01-01",
+    )
+
+
 def test_race_finish_logic():
     """Test that race ends when leader finishes"""
     print("\n=== Testing Race Finish Logic ===\n")
@@ -27,15 +36,12 @@ def test_race_finish_logic():
     
     # Create mock race state
     race_state = RaceState(
-        drivers=[],
-        teams=[],
         track_length_m=5000,
         total_laps=3,  # 3-lap race
         current_time=0,
         driver_states={},
         lap_times={},
-        collision_log=[],
-        dnf_log=[]
+        collision_log=[]
     )
     
     # Create 3 drivers with different lap progress
@@ -49,6 +55,7 @@ def test_race_finish_logic():
         state = DriverState(
             driver_id=driver_id,
             driver_name=name,
+            driver=_mk_driver(driver_id, name),
             team=Team(id=1, name="Test Team", nationality="Test", discipline="SINGLE_SEATER", tier="TOP_TIER", budget=100000000, operations_rating=50.0),
             position_m=laps * 5000,  # Calculate meters from laps
             lap=laps,
@@ -124,8 +131,6 @@ def test_results_compilation():
     
     # Create race state where leader finished but others didn't
     race_state = RaceState(
-        drivers=[],
-        teams=[],
         track_length_m=5000,
         total_laps=3,
         current_time=3600,  # 1 hour elapsed
@@ -135,8 +140,7 @@ def test_results_compilation():
             2: [95.0, 96.0],         # Mid-field (incomplete)
             3: [100.0, 101.0]        # Backmarker (incomplete)
         },
-        collision_log=[],
-        dnf_log=[]
+        collision_log=[]
     )
     
     # Create drivers
@@ -150,6 +154,7 @@ def test_results_compilation():
         state = DriverState(
             driver_id=driver_id,
             driver_name=name,
+            driver=_mk_driver(driver_id, name),
             team=Team(id=driver_id, name=f"Team {driver_id}", nationality="Test", discipline="SINGLE_SEATER", tier="TOP_TIER", budget=100000000, operations_rating=50.0),
             position_m=laps * 5000,
             lap=laps,

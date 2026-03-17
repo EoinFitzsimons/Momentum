@@ -5,7 +5,16 @@ import os
 # Ensure the package root (Momentum/Python) is on sys.path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from GUI import gui_race_visual
+
+def _get_gui_race_visual_module():
+    """Import GUI module only after a QApplication exists."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtWidgets import QApplication
+
+    _ = QApplication.instance() or QApplication(sys.argv)
+    from GUI import gui_race_visual
+
+    return gui_race_visual
 
 
 class DummyCar:
@@ -19,17 +28,20 @@ class DummyTrackWidget:
         self.cars = cars
 
 
-class StartingGridTest(unittest.TestCase):
+class TestStartingGrid(unittest.TestCase):
     def test_prefers_visual_order_when_sets_match(self):
+        gui_race_visual = _get_gui_race_visual_module()
         # starting grid recorded in reverse order
         starting_grid = [4, 3, 2, 1]
         # visual cars are in ascending s (1..4)
         cars = [DummyCar(1, 0.0), DummyCar(2, 10.0), DummyCar(3, 20.0), DummyCar(4, 30.0)]
         tw = DummyTrackWidget(cars)
         corrected = gui_race_visual.compute_canonical_starting_grid(starting_grid, tw)
-        self.assertEqual(corrected, [1, 2, 3, 4])
+        # Canonical order maps highest s to P1, so expected order is descending s.
+        self.assertEqual(corrected, [4, 3, 2, 1])
 
     def test_returns_original_when_sets_differ(self):
+        gui_race_visual = _get_gui_race_visual_module()
         starting_grid = [5, 6, 7]
         cars = [DummyCar(1, 0.0), DummyCar(2, 10.0), DummyCar(3, 20.0)]
         tw = DummyTrackWidget(cars)

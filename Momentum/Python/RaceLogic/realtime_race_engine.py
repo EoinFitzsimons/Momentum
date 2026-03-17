@@ -145,9 +145,11 @@ class RealtimeRaceEngine:
     their surroundings, attributes, and race situation.
     """
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, db: Optional[Any] = None):
         """Initialise engine with random generator"""
         self.rng = np.random.default_rng(seed)
+        # Kept for backward compatibility with older tests that pass `db=`.
+        self.db = db
 
         # Track-aware racing physics
         self.track_map: Optional[TrackMap] = None
@@ -443,6 +445,49 @@ class RealtimeRaceEngine:
             })
 
         return results
+
+    def simulate_single_race(
+        self,
+        drivers: List[Driver],
+        teams: Dict[int, Team],
+        track: Track,
+        discipline: Optional[str] = None,
+        total_laps: int = 50,
+        seed: Optional[int] = None,
+        verbose: bool = False,
+        iterations: Optional[int] = None,
+        **kwargs: Any,
+    ) -> List[Dict[str, Any]]:
+        """Backward-compatible wrapper for older tests and API adapters."""
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+
+        # Kept for signature compatibility.
+        _ = discipline
+        _ = verbose
+        _ = iterations
+        _ = kwargs
+
+        # Older tests may pass teams as a list/tuple; normalize to {team_id: team}.
+        if not hasattr(teams, 'get'):
+            teams = {
+                int(getattr(team, 'id', idx + 1)): team
+                for idx, team in enumerate(list(teams))
+            }
+
+        # Ensure each driver is assigned to a valid team for race init.
+        team_ids = list(teams.keys())
+        if team_ids:
+            for idx, driver in enumerate(drivers):
+                if getattr(driver, 'current_team_id', None) not in teams:
+                    setattr(driver, 'current_team_id', team_ids[idx % len(team_ids)])
+
+        return self.simulate_race(
+            drivers=drivers,
+            teams=teams,
+            track=track,
+            total_laps=total_laps,
+        )
 
     def _initialize_race(
         self,

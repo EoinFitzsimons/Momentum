@@ -6,6 +6,7 @@ Tests for team CRUD operations, budget management, and permission tracking.
 
 import sys
 from pathlib import Path
+import pytest
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -15,6 +16,13 @@ from database.models import Team, Driver
 from services.team_service import TeamService
 from tools.team_name_generator import generate_team_name
 from datetime import datetime
+
+
+@pytest.fixture(scope="module")
+def team_id():
+    """Create one team for tests that require a team id fixture."""
+    created_ids = test_team_creation()
+    return created_ids[0]
 
 
 def test_team_creation():
