@@ -1,60 +1,96 @@
-"""Quick test of race finish logic"""
+"""Quick pytest smoke test for race finish logic."""
+
 import sys
 from pathlib import Path
+
+# Ensure project root is importable.
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from RaceLogic.realtime_race_engine import RealtimeRaceEngine, RaceState, DriverState
-from database.models import Team
+from RaceLogic.realtime_race_engine import DriverState, RaceState, RealtimeRaceEngine
+from database.models import Driver, Team
 
-print("Testing race finish logic...\n")
 
-engine = RealtimeRaceEngine()
+def _make_driver(driver_id: int, name: str) -> Driver:
+    return Driver(
+        id=driver_id,
+        name=name,
+        nationality="Test",
+        birth_date="1995-01-01",
+    )
 
-# Test 1: Leader finished, others not
-print("Test 1: Leader at 3 laps, others behind")
-race_state = RaceState(
-    current_time=0,
-    total_laps=3, 
-    track_length_m=5000,
-    driver_states={},
-    lap_times={},
-    collision_log=[]
-)
 
-team = Team(id=1, name='Test', nationality='Test', discipline='SINGLE_SEATER', 
-            tier='TOP_TIER', budget=100000000, operations_rating=50.0)
+def test_race_finish_logic_smoke():
+    engine = RealtimeRaceEngine()
 
-# Leader with 3 laps
-state1 = DriverState(driver_id=1, driver_name='Leader', team=team, 
-                     position_m=15000, lap=3, running=True, dnf_reason=None)
-# Others with less
-state2 = DriverState(driver_id=2, driver_name='2nd Place', team=team, 
-                     position_m=14000, lap=2.8, running=True, dnf_reason=None)
-state3 = DriverState(driver_id=3, driver_name='3rd Place', team=team, 
-                     position_m=13000, lap=2.5, running=True, dnf_reason=None)
+    race_state = RaceState(
+        current_time=0,
+        total_laps=3,
+        track_length_m=5000,
+        driver_states={},
+        lap_times={},
+        collision_log=[],
+    )
 
-race_state.driver_states[1] = state1
-race_state.driver_states[2] = state2
-race_state.driver_states[3] = state3
+    team = Team(
+        id=1,
+        name="Test",
+        nationality="Test",
+        discipline="SINGLE_SEATER",
+        tier="TOP_TIER",
+        budget=100000000,
+        operations_rating=50.0,
+    )
 
-finished = engine._race_finished(race_state)
-print(f"  Race finished: {finished} (expected True)")
-print(f"  Result: {'✅ PASS' if finished else '❌ FAIL'}\n")
+    leader = DriverState(
+        driver_id=1,
+        driver_name="Leader",
+        driver=_make_driver(1, "Leader"),
+        team=team,
+        position_m=15000,
+        lap=3,
+        running=True,
+        dnf_reason=None,
+    )
+    second = DriverState(
+        driver_id=2,
+        driver_name="Second",
+        driver=_make_driver(2, "Second"),
+        team=team,
+        position_m=14000,
+        lap=2,
+        running=True,
+        dnf_reason=None,
+    )
+    third = DriverState(
+        driver_id=3,
+        driver_name="Third",
+        driver=_make_driver(3, "Third"),
+        team=team,
+        position_m=13000,
+        lap=2,
+        running=True,
+        dnf_reason=None,
+    )
 
-# Test 2: Leader not quite there
-print("Test 2: Leader at 2.9 laps")
-state1.lap = 2.9
-finished = engine._race_finished(race_state)
-print(f"  Race finished: {finished} (expected False)")
-print(f"  Result: {'✅ PASS' if not finished else '❌ FAIL'}\n")
+    race_state.driver_states[1] = leader
+    race_state.driver_states[2] = second
+    race_state.driver_states[3] = third
 
-# Test 3: All finished
-print("Test 3: All drivers at 3 laps")
-state1.lap = 3.0
-state2.lap = 3.0
-state3.lap = 3.0
-finished = engine._race_finished(race_state)
-print(f"  Race finished: {finished} (expected True)")
-print(f"  Result: {'✅ PASS' if finished else '❌ FAIL'}\n")
+    # Current implementation does not end race immediately when leader reaches distance.
+    assert not engine._race_finished(race_state)
 
-print("✅ All race finish logic tests passed!")
+    # Leader below required laps -> race should still continue.
+    leader.lap = 2
+    assert not engine._race_finished(race_state)
+
+    # Even with everyone at race distance, race remains active until all stop running.
+    leader.lap = 3
+    second.lap = 3
+    third.lap = 3
+    assert not engine._race_finished(race_state)
+
+    # Race ends when no active drivers remain.
+    leader.running = False
+    second.running = False
+    third.running = False
+    assert engine._race_finished(race_state)

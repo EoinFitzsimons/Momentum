@@ -493,5 +493,20 @@ def main():
     sys.exit(0 if success else 1)
 
 
+def test_championship_management_workflow_smoke():
+    """Pytest entrypoint for the script-style championship management suite."""
+    tester = TestChampionshipManagement()
+    try:
+        assert tester.run_all_tests()
+    finally:
+        if hasattr(tester, 'test_db_path') and tester.test_db_path.exists():
+            try:
+                if hasattr(tester, 'db'):
+                    tester.db.get_connection().close()
+                tester.test_db_path.unlink()
+            except Exception:
+                pass
+
+
 if __name__ == "__main__":
     main()

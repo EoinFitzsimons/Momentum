@@ -316,5 +316,25 @@ def main():
     return 0 if success else 1
 
 
+def test_championship_integration_workflow_smoke():
+    """Pytest entrypoint for the script-style integration suite."""
+    test = ChampionshipIntegrationTest()
+    try:
+        assert test.run_all_tests()
+    finally:
+        try:
+            test.db._connection = None
+            import gc
+            import time
+
+            gc.collect()
+            time.sleep(0.2)
+            if test.test_db_path.exists():
+                test.test_db_path.unlink()
+        except Exception:
+            # Cleanup failures should not hide actual test result.
+            pass
+
+
 if __name__ == "__main__":
     exit(main())

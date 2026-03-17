@@ -30,22 +30,18 @@ class TestDriverCRUD:
     def test_create_driver(self, test_db):
         """Test creating a driver"""
         driver = Driver(
+            id=0,
             name="Test Driver",
-            age=28,
             nationality="Test Country",
-            discipline="SINGLE_SEATER",
-            raw_speed=85,
-            cornering_skill=82,
-            qualifying_pace=88,
+            birth_date="1996-01-01",
+            speed=85,
             racecraft=80,
             consistency=75,
-            mental_fortitude=70,
+            pressure=70,
             reactions=88,
             adaptability=72,
-            decision_making=78,
-            physical_fitness=80,
-            confidence=75,
-            motivation=85
+            fitness=80,
+            preferred_discipline="SINGLE_SEATER",
         )
         
         driver_id = test_db.create_driver(driver)
@@ -105,11 +101,13 @@ class TestTeamCRUD:
     def test_create_team(self, test_db):
         """Test creating a team"""
         team = Team(
+            id=0,
             name="Test Team",
-            headquarters="Test City",
-            budget_eur=50000000,
+            nationality="Test Country",
+            discipline="SINGLE_SEATER",
             tier="TIER_1",
-            discipline="SINGLE_SEATER"
+            budget=50000000,
+            headquarters="Test City",
         )
         
         team_id = test_db.create_team(team)
@@ -277,22 +275,18 @@ class TestTransactionRollback:
         """Test that transactions rollback on error"""
         # Create initial driver
         driver1 = Driver(
+            id=0,
             name="Driver 1",
-            age=28,
             nationality="Country 1",
-            discipline="SINGLE_SEATER",
-            raw_speed=85,
-            cornering_skill=82,
-            qualifying_pace=88,
+            birth_date="1996-01-01",
+            speed=85,
             racecraft=80,
             consistency=75,
-            mental_fortitude=70,
+            pressure=70,
             reactions=88,
             adaptability=72,
-            decision_making=78,
-            physical_fitness=80,
-            confidence=75,
-            motivation=85
+            fitness=80,
+            preferred_discipline="SINGLE_SEATER",
         )
         
         id1 = test_db.create_driver(driver1)
@@ -301,22 +295,18 @@ class TestTransactionRollback:
         # Try to create invalid driver (this test just verifies the DB is still functional)
         try:
             driver2 = Driver(
+                id=0,
                 name="Driver 2",
-                age=28,
                 nationality="Country 2",
-                discipline="SINGLE_SEATER",
-                raw_speed=85,
-                cornering_skill=82,
-                qualifying_pace=88,
+                birth_date="1996-01-01",
+                speed=85,
                 racecraft=80,
                 consistency=75,
-                mental_fortitude=70,
+                pressure=70,
                 reactions=88,
                 adaptability=72,
-                decision_making=78,
-                physical_fitness=80,
-                confidence=75,
-                motivation=85
+                fitness=80,
+                preferred_discipline="SINGLE_SEATER",
             )
             id2 = test_db.create_driver(driver2)
         except Exception:

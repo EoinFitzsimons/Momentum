@@ -26,7 +26,7 @@ from database.models import Driver, Team, Track, Championship, Race, RaceResult
 @pytest.fixture(scope="function")
 def test_db():
     """Create temporary test database for isolation"""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         db_path = os.path.join(tmpdir, "test_momentum.db")
         db = DatabaseManager(db_path)
         # init_database is called automatically in __init__
@@ -37,7 +37,37 @@ def test_db():
 @pytest.fixture(scope="function")
 def seeded_db(test_db):
     """Database with sample data"""
-    # Database already has default data from init_database
+    # Populate minimal baseline data expected by integration tests.
+    if len(test_db.get_all_drivers()) == 0:
+        with test_db.get_connection() as conn:
+            for i in range(1, 11):
+                conn.execute(
+                    """
+                    INSERT INTO drivers (name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (f"Seed Driver {i}", "GBR", "1995-01-01", 60 + i, 55 + i, 50 + i, "SINGLE_SEATER"),
+                )
+
+            for i in range(1, 6):
+                conn.execute(
+                    """
+                    INSERT INTO teams (name, nationality, discipline, tier, budget, operations_rating)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (f"Seed Team {i}", "GBR", "SINGLE_SEATER", "TIER_1", 50_000_000.0, 70.0 + i),
+                )
+
+            for i in range(1, 4):
+                conn.execute(
+                    """
+                    INSERT INTO tracks (name, country, primary_discipline, surface, length_km, turns, avg_speed_kmh)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (f"Seed Circuit {i}", "UK", "SINGLE_SEATER", "asphalt", 4.0 + i * 0.2, 10 + i, 170.0),
+                )
+            conn.commit()
+
     return test_db
 
 
@@ -63,22 +93,18 @@ def sample_tracks(seeded_db):
 def test_driver():
     """Create a single test driver"""
     return Driver(
+        id=1,
         name="Test Driver",
-        age=28,
         nationality="Test Country",
-        discipline="SINGLE_SEATER",
-        raw_speed=85,
-        cornering_skill=82,
-        qualifying_pace=88,
+        birth_date="1996-01-01",
+        speed=85,
         racecraft=80,
         consistency=75,
-        mental_fortitude=70,
+        pressure=70,
         reactions=88,
         adaptability=72,
-        decision_making=78,
-        physical_fitness=80,
-        confidence=75,
-        motivation=85
+        fitness=80,
+        preferred_discipline="SINGLE_SEATER",
     )
 
 
@@ -86,11 +112,13 @@ def test_driver():
 def test_team():
     """Create a single test team"""
     return Team(
+        id=1,
+        nationality="Test Country",
+        discipline="SINGLE_SEATER",
+        tier="TIER_1",
+        budget=50000000,
         name="Test Team",
         headquarters="Test City",
-        budget_eur=50000000,
-        tier="TIER_1",
-        discipline="SINGLE_SEATER"
     )
 
 
@@ -98,14 +126,14 @@ def test_team():
 def test_track():
     """Create a single test track"""
     return Track(
+        id=1,
         name="Test Circuit",
         country="Test Country",
+        primary_discipline="SINGLE_SEATER",
         length_km=5.5,
         turns=15,
-        discipline="SINGLE_SEATER",
-        surface_grip=12.0,
+        surface_grip=1.0,
         surface_abrasiveness=8.0,
-        elevation_change_m=25.0
     )
 
 
@@ -116,11 +144,12 @@ def test_championship(seeded_db):
     teams = seeded_db.list_teams()[:10]
     
     championship = Championship(
+        id=0,
         name="Test Championship",
         discipline="SINGLE_SEATER",
-        season=2025,
-        status="ACTIVE",
-        points_system="F1_2024"
+        season_length=10,
+        points_system="standard",
+        current_season=1,
     )
     
     champ_id = seeded_db.create_championship(championship)

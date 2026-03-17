@@ -76,8 +76,7 @@ def create_test_track() -> Track:
         length_km=0.402,  # Quarter mile
         turns=0,  # Straight line
         surface="asphalt",
-        avg_speed_kmh=200.0,
-        top_speed_kmh=300.0
+        avg_speed_kmh=200.0
     )
 
 
