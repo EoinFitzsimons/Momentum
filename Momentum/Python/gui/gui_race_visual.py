@@ -28,6 +28,7 @@ from PyQt6.QtGui import (
     QPixmap,
     QImage,
     QLinearGradient,
+    QPolygonF,
 )
 
 from PyQt6.QtCore import (
@@ -218,7 +219,7 @@ class CircuitGenerator:
         # 'routes' above. This dead code caused undefined-name mypy errors.)
 
     @staticmethod
-    def _process_instructions(instructions, state, routes: Dict[str, Any], is_point_to_point: bool = False):
+    def _process_instructions(instructions: Any, state: Dict[str, Any], routes: Dict[str, Any], is_point_to_point: bool = False):
         start_x, start_y = 0, 0  # Track starts at origin
 
         # Optionally solve closure exactly when requested in options attached
@@ -250,31 +251,36 @@ class CircuitGenerator:
         # Process all instructions
         # If instructions is a dict with control flags, respect them
         solve_requested = False
+        instruction_list: List[Any] = []
         if isinstance(instructions, dict) and instructions.get('solve_closure'):
             # instructions provided as dict wrapper: {'solve_closure': True, 'instructions': [...]}
             wrapper = instructions
-            instructions = wrapper.get('instructions', [])
+            wrapped_instructions = wrapper.get('instructions', [])
+            instruction_list = cast(List[Any], wrapped_instructions) if isinstance(wrapped_instructions, list) else []
             solve_requested = True
         elif isinstance(instructions, list) and len(instructions) > 0:
+            instruction_list = cast(List[Any], instructions)
             # allow options via attached sentinel instruction dict at start
             if isinstance(instructions[0], dict) and instructions[0].get('solve_closure'):
                 solve_requested = True
+        elif isinstance(instructions, list):
+            instruction_list = cast(List[Any], instructions)
 
         closure_solved = False
         # Skip closure solver for point-to-point tracks
         if solve_requested and not is_point_to_point:
             try:
                 # Attempt closure solve; this mutates instruction angles/lengths
-                success, multipliers, diag = closure_solver.solve_closure(instructions)
+                success, multipliers, diag = closure_solver.solve_closure(instruction_list)
                 if success:
-                    closure_solver.apply_multipliers_to_instructions(instructions, multipliers)
+                    closure_solver.apply_multipliers_to_instructions(instruction_list, multipliers)
                     closure_solved = True
                 else:
                     print(f"Closure solver failed: {diag}")
             except Exception as e:
                 print(f"Error running closure solver: {e}")
 
-        for instruction in instructions:
+        for instruction in instruction_list:
             # Normalize instruction forms: allow tuple legacy or dict
             if isinstance(instruction, tuple) or isinstance(instruction, list):
                 # legacy tuple form: ('S', length) or ('C', angle_deg, radius, clothoid_len, k)
@@ -651,7 +657,7 @@ class TrackWidget(QWidget):
 
     def __init__(self, track_points: List[TrackPoint], track_length: float,
                  appearance_manager: VehicleAppearanceManager,
-                 track_surface: str = "asphalt", surface_grip: float = None,
+                 track_surface: str = "asphalt", surface_grip: Optional[float] = None,
                  pit_points: Optional[List[TrackPoint]] = None,
                  joker_points: Optional[List[TrackPoint]] = None):
         super().__init__()
@@ -2562,8 +2568,10 @@ class RaceWindow(QMainWindow):
         self.standings_table.setSizeAdjustPolicy(QTableWidget.SizeAdjustPolicy.AdjustToContents)
         # Use fixed row height for performance (avoid resizeRowsToContents each frame)
         self._standings_row_height = 26
-        self.standings_table.verticalHeader().setDefaultSectionSize(self._standings_row_height)
-        self.standings_table.verticalHeader().setVisible(False)
+        standings_vheader = self.standings_table.verticalHeader()
+        if isinstance(standings_vheader, QHeaderView):
+            standings_vheader.setDefaultSectionSize(self._standings_row_height)
+            standings_vheader.setVisible(False)
         self._last_standings_row_count = 0
         right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1 - grows to fill space
 
@@ -3589,7 +3597,8 @@ class RaceWindow(QMainWindow):
                     )
                     
                     try:
-                        self.db.save_race_result(race_result)
+                        if self.db is not None:
+                            self.db.save_race_result(race_result)
                     except Exception as e:
                         print(f"WARNING: Could not save result for driver {driver_id}: {e}")
                 
@@ -3633,7 +3642,15 @@ class RaceWindow(QMainWindow):
                     try:
                         tw_cars = getattr(self.track_widget, 'cars', None)
                         if tw_cars:
-                            tw_ids = [getattr(c, 'driver_id', None) for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0))]
+                            tw_ids: List[int] = []
+                            for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0)):
+                                did = getattr(c, 'driver_id', None)
+                                if did is None:
+                                    continue
+                                try:
+                                    tw_ids.append(int(did))
+                                except Exception:
+                                    continue
                             # If the sets match but the orders differ, prefer the
                             # visual ordering (P1..PN). This fixes cases where the
                             # recorded grid was reversed relative to the track widget.
@@ -3641,8 +3658,16 @@ class RaceWindow(QMainWindow):
                             # the recorded starting grid, prefer the visual ordering
                             # as the authoritative start positions. This forces the
                             # UI Start column to match the track widget layout.
-                            if set(tw_ids) == set(self._starting_grid):
-                                if tw_ids != self._starting_grid:
+                            starting_grid_ids: List[int] = []
+                            for grid_id in self._starting_grid:
+                                if grid_id is None:
+                                    continue
+                                try:
+                                    starting_grid_ids.append(int(grid_id))
+                                except Exception:
+                                    continue
+                            if set(tw_ids) == set(starting_grid_ids):
+                                if tw_ids != starting_grid_ids:
                                     print("Correcting starting grid order from visual track widget")
                                 else:
                                     print("Using visual track widget ordering as authoritative for starting grid")
@@ -3692,16 +3717,29 @@ class RaceWindow(QMainWindow):
             try:
                 tw_cars = getattr(self.track_widget, 'cars', None)
                 if tw_cars:
-                    tw_ids = [getattr(c, 'driver_id', None) for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)]
-                    result_ids = [res.get('driver_id') for res in results_sorted if res.get('driver_id') is not None]
+                    tw_ids: List[int] = []
+                    for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True):
+                        did = getattr(c, 'driver_id', None)
+                        if did is None:
+                            continue
+                        try:
+                            tw_ids.append(int(did))
+                        except Exception:
+                            continue
+                    result_ids: List[int] = []
+                    for res in results_sorted:
+                        rid = res.get('driver_id')
+                        if rid is None:
+                            continue
+                        try:
+                            result_ids.append(int(rid))
+                        except Exception:
+                            continue
                     if set(tw_ids) == set(result_ids):
                         # Rebuild start_pos using visual ordering (P1..PN)
                         start_pos = {}
                         for idx, did in enumerate(tw_ids):
-                            try:
-                                start_pos[int(did)] = idx + 1
-                            except Exception:
-                                start_pos[did] = idx + 1
+                            start_pos[did] = idx + 1
                         print("[DEBUG] Overrode start_pos with visual track ordering")
             except Exception:
                 pass
@@ -3811,6 +3849,8 @@ class RaceWindow(QMainWindow):
                         # For each selected driver, plot its time-series
                         for idx in range(filter_list.count()):
                             it = filter_list.item(idx)
+                            if it is None:
+                                continue
                             if not it.isSelected():
                                 continue
                             did = it.data(Qt.ItemDataRole.UserRole)
@@ -3877,11 +3917,12 @@ class RaceWindow(QMainWindow):
             try:
                 # Make the Driver column stretch and keep others sized to contents
                 hdr = table.horizontalHeader()
-                hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-                hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-                hdr.setSectionResizeMode(2, QHeaderView.Stretch)
-                hdr.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-                hdr.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+                if isinstance(hdr, QHeaderView):
+                    hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+                    hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+                    hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+                    hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+                    hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
                 table.setAlternatingRowColors(True)
             except Exception:
                 pass
@@ -3891,10 +3932,12 @@ class RaceWindow(QMainWindow):
             # Ensure the plot/filter pane has a usable minimum width so it
             # remains visible when the table is large.
             try:
-                left_widget.setMinimumWidth(360)
+                if left_widget is not None:
+                    left_widget.setMinimumWidth(360)
                 # If canvas exists, ensure a reasonable min size
                 try:
-                    canvas.setMinimumSize(360, 260)
+                    if canvas is not None:
+                        canvas.setMinimumSize(360, 260)
                 except Exception:
                     pass
             except Exception:
