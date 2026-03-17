@@ -1,301 +1,159 @@
-# Momentum - Multi-discipline Motorsport Management Simulator
+# Momentum - Multi-Discipline Motorsport Management Simulator
 
-**Project Type:** Multi-discipline Motorsport Management Simulator
-**Development Scope:** Python back-end simulation engine (primary focus)
-**Status:** Active Development - Backend Systems Implementation Phase
+Project Type: Final Year Computer Science Project
+Primary Focus: Python backend simulation plus desktop GUI
+Current Status: Active development (playable areas, incomplete game loop)
 
-## Project Overview
+## Overview
 
-Momentum is a comprehensive motorsport management simulation that spans **six distinct racing disciplines**, featuring detailed team operations, driver development, and strategic management. The system emphasizes realistic simulation depth, emergent narratives, and authentic motorsport operations without any licensed content.
+Momentum is a motorsport management simulator built around six racing disciplines:
 
-Players act as team principals, making managerial, financial, and strategic decisions across multiple racing categories—from single-seater championships to urban drifting, endurance racing to drag competitions.
+1. Single Seater
+2. Production/Touring
+3. Urban/Street (drifting-focused)
+4. Drag/Acceleration
+5. Sprint/Rallycross
+6. Endurance
 
-## Core Philosophy
+The project currently centers on a Python backend with FastAPI endpoints, SQLite persistence, race/championship logic, and a PyQt6 desktop GUI launcher.
 
-- **Management-Focused Simulation:** Strategic decision-making drives success, not driving mechanics
-- **Multi-Discipline Racing:** Six complete racing disciplines with unique characteristics and challenges
-- **Authentic Operations:** Realistic budgets, staff management, driver development, and team dynamics
-- **Generic Content:** All teams, drivers, series, and personnel are fictional to avoid licensing issues
-- **Emergent Narratives:** Dynamic career progression, rivalries, and historical depth through simulation
-- **Data-Driven Decisions:** Advanced analytics and staff systems provide strategic information layers
+## What Exists Today
 
-## Racing Disciplines
+- FastAPI app in `Momentum/Python/simulation.py`
+- Core data layer in `Momentum/Python/database/`
+- Service layer in `Momentum/Python/services/`
+- API schemas in `Momentum/Python/api/schemas.py`
+- Race logic in `Momentum/Python/RaceLogic/`
+- Desktop GUI entrypoint in `Momentum/Python/GUI/launcher.py`
+- Configuration and environment handling in `Momentum/Python/config.py`
 
-Momentum features **six complete racing disciplines**, each with distinct simulation characteristics:
+## Repository Layout (Current)
 
-### 1. **Single Seater** (Open-Wheel Racing)
-
-- **Format:** Technical precision racing with open wheels and aerodynamic focus
-- **Grid Size:** 20-32 cars, 2 per team
-- **Leagues:** GPC1 (Premier), GPC2, GPC3, GPRC (Regional), GPNC (National), GPJC (Junior)
-- **Key Factors:** Aerodynamics, cornering speed, qualifying precision
-
-### 2. **Production/Touring Cars** (Circuit Racing)
-
-- **Format:** Close-quarters racing with modified production vehicles
-- **Grid Size:** 30-40 cars, 2 per team
-- **Leagues:** WTC1 (Premier), WTC2, RTC (Regional), NTC (National), STC (Super), CTC (Club)
-- **Key Factors:** Durability, contact management, overtaking ability
-
-### 3. **Urban/Street Racing** (Drifting)
-
-- **Format:** Drift-focused urban street racing with judged runs
-- **Grid Size:** 8-16 cars per event
-- **Leagues:** USD1 (Elite), USD2 (Pro), USD3 (Sport), CUSD (Continental), NUSD (National)
-- **Key Factors:** Drift control, line precision, style, consistency
-
-### 4. **Drag/Acceleration Racing** (Quarter Mile)
-
-- **Format:** Straight-line acceleration in knockout tournament format
-- **Grid Size:** 64 cars, knockout elimination
-- **Leagues:** WDC1 (Elite), WDC2 (Pro), WDC3 (Sport), CWDC (Continental), NWDC (National)
-- **Key Factors:** Launch technique, power delivery, reaction time
-
-### 5. **Sprint/Rallycross** (Mixed Surface)
-
-- **Format:** Short circuit races mixing tarmac and gravel with jumps
-- **Grid Size:** 16-24 cars in heat format
-- **Leagues:** WSRC1 (Elite), WSRC2 (Pro), WSRC3 (Sport), CSRC (Continental), NSRC (National)
-- **Key Factors:** Surface transitions, jump navigation, heat consistency
-
-### 6. **Endurance Racing** (Long Distance)
-
-- **Format:** Extended multi-hour races emphasizing reliability and strategy
-- **Grid Size:** 30-50 cars, 2 per team
-- **Leagues:** WEC1 (Premier), WEC2, CWEC (Continental), NWEC (National), RWEC (Regional)
-- **Key Factors:** Fuel strategy, tire management, driver rotation, reliability
-
-## System Architecture
-
-### Python Simulation Engine (`Momentum/Python/`)
-
-**Core Components:**
-
-- **Multi-Discipline Simulator:** Six complete discipline-specific racing engines with unique simulation logic
-- **Driver System:** 50+ attributes across 7 categories (technical, mental, physical, racecraft, personality, experience, discipline preferences)
-- **Staff Management:** 40+ attributes, 25+ roles (Technical Director, Race Strategist, Data Analyst, Pit Crew Chief, etc.)
-- **Financial Management:** Realistic budget caps, salary negotiations, operational costs scaled by discipline
-- **Name Generation:** Intelligent system using Faker library with 24 locales for authentic, culturally-appropriate international names
-- **Supplier System:** Engine, tire, and fuel suppliers with performance characteristics
-- **Agent-based Simulation:** Continuous agent-driven race outcome generation
-- **Database Layer:** SQLite persistence for teams, drivers, staff, races, championships
-
-**Key Features:**
-
-- Cross-discipline driver compatibility with specialization preferences
-- Budget-scaled staff requirements (€800K to €12M+ budgets)
-- Information fog-of-war based on staff quality (better analysts = more data access)
-- Realistic attribute distributions and career progression
-- Generic placeholder content (no licensed series, teams, or drivers)
-
-## Technical Stack
-
-- **Backend:** Python 3.11+
-- **Database:** SQLite 3.7+ with SQLAlchemy ORM
-- **Web Framework:** FastAPI (optional, for future API exposure)
-- **Libraries:** NumPy, Pandas, SciPy (simulation math)
-- **Name Generation:** Faker library with comprehensive locale support (80+ countries, 24 locales)
-- **Currency:** Live exchange rate support via currency API
-- **Tools:** VS Code, GitHub Desktop, SQLite browser
-
-## Setup Instructions
-
-### Prerequisites
-
-- Python 3.11 or higher
-- pip package manager
-- Git (for version control)
-
-### Installation
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/EoinFitzsimons/FinalProject.git
-   cd FinalProject/Momentum/Python
-   ```
-2. **Install dependencies:**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Configure environment variables** (optional):
-   Create a `.env` file in the Python directory:
-
-   ```env
-   # Name Generation API (optional)
-      ```bash
-   # No API keys required - fully offline name generation
-   ```
-
-   # Currency System
-
-   DEFAULT_CURRENCY=EUR
-
-   # Database
-
-   DATABASE_PATH=database/momentum.db
-
-
-   ```
-
-   ```
-4. **Initialize the database:**
-
-   ```bash
-   python -m database.database_manager
-   ```
-5. **Run tests:**
-
-   ```bash
-   python tests/simple_driver_test.py
-   python tests/test_staff_system.py
-   ```
-
-## Project Structure
-
-```
-Momentum/Python/
-├── config.py                    # Configuration settings
-├── simulation.py               # Legacy simulation entry point
-├── enhanced_simulation.py      # Enhanced multi-discipline simulation
-├── requirements.txt            # Python dependencies
-├── .env                        # Environment variables (not in repo)
-│
-├── disciplines/                # Racing discipline engines
-│   ├── multi_discipline_simulator.py  # Main coordinator
-│   ├── base_engine.py          # Base engine interface
-│   ├── single_seater/          # Single seater racing
-│   ├── production_touring/     # Touring car racing
-│   ├── urban_street/           # Urban drifting
-│   ├── drag_acceleration/      # Drag racing
-│   ├── sprint_rallycross/      # Rallycross
-│   └── endurance/              # Endurance racing
-│
-├── database/                   # Data persistence layer
-│   ├── database_manager.py     # Database operations
-│   ├── models.py               # Core entity models
-│   └── models/
-│       ├── multi_discipline_models.py  # Discipline-specific models
-│       ├── staff_models.py     # Staff system models
-│       └── supplier_models.py  # Supplier system models
-│
-├── systems/                    # Core simulation systems
-│   ├── staff_management.py     # Staff hiring & operations
-│   ├── currency_system.py      # Multi-currency support
-│   ├── name_generator.py       # Hybrid name generation
-│   ├── supplier_management.py  # Supplier relationships
-│   ├── championship_manager.py # Championship tracking
-│   └── vehicle_development.py  # R&D systems
-│
-├── data/                       # Static data and generators
-│   ├── placeholder_names.py    # Generic names, teams, leagues
-│   └── used_names.db           # Name uniqueness tracking database
-│
-├── vehicles/                   # Vehicle component systems
-│   ├── vehicle.py              # Vehicle class
-│   └── components/             # Vehicle components
-│
-├── tests/                      # Test suite
-│   ├── simple_driver_test.py   # Basic driver system tests
-│   ├── test_driver_system.py   # Comprehensive driver tests
-│   └── test_staff_system.py    # Staff system tests
-│
-└── docs/                       # Documentation
-    └── driver_system_summary.md
+```text
+FinalProject/
+|- README.md
+|- Momentum/
+|  |- Python/
+|  |  |- simulation.py
+|  |  |- config.py
+|  |  |- requirements.txt
+|  |  |- api/
+|  |  |- database/
+|  |  |- GUI/
+|  |  |- RaceLogic/
+|  |  |- services/
+|  |  |- systems/
+|  |  |- tests/
+|  |  |- scripts/
+|  |  |- docs/
+|  |  |- mvp_tests/
+|- Planning/
+|- Branding/
+|- Reflections/
+|- scripts/
 ```
 
-## Development Status
+## Technology Stack
 
-### ✅ Completed Systems
+- Python
+- FastAPI plus Uvicorn
+- SQLite
+- Pydantic
+- NumPy, Pandas, SciPy
+- PyQt6
+- Faker
+- python-dotenv
 
-- **Multi-Discipline Racing Framework:** Six complete discipline engines with unique simulation characteristics
-- **Driver System:** 50+ attributes, cross-discipline compatibility, career progression modeling
-- **Staff Management:** 40+ attributes, 25+ roles, budget-scaled hiring, performance multipliers
-- **Currency System:** Multi-currency support with live exchange rates (EUR, USD, GBP, JPY, CHF)
-- **Name Generation:** Intelligent system with Faker (guaranteed unique, culturally-appropriate names)
-- **Supplier Management:** Engine, tire, and fuel suppliers with performance characteristics
-- **Database Layer:** SQLite persistence with comprehensive models for all entities
-- **Generic Content:** All placeholder names, teams, leagues, and personnel (no licensed content)
+See `Momentum/Python/requirements.txt` for the active dependency list.
 
-### 🚧 In Progress
+## Setup
 
-- **Championship Management:** Season progression, points systems, standings
-- **Vehicle Development:** R&D systems, component upgrades, performance progression
-- **Financial Simulation:** Detailed budget allocation, sponsorship management, cost modeling
-- **AI Decision Making:** Team strategy, driver selection, pit stop decisions
+### 1. Clone
 
-### 📋 Planned Features
+```bash
+git clone https://github.com/EoinFitzsimons/FinalProject.git
+cd FinalProject/Momentum/Python
+```
 
-- **API Layer:** FastAPI REST endpoints for external integrations
-- **Advanced Analytics:** Telemetry analysis, performance prediction, strategy optimization
-- **Historical Tracking:** Multi-season statistics, career records, team histories
-- **Unity Frontend:** Visualization layer for race outcomes and team management UI
+### 2. Install dependencies
 
-## Key Design Decisions
+```bash
+pip install -r requirements.txt
+```
 
-### No Licensed Content
+### 3. Optional .env
 
-All teams, drivers, series, tracks, and personnel are fictional and generated using:
+Create `Momentum/Python/.env` if you want to override defaults from `config.py`.
 
-- **Generic League Codes:** GPC1, WTC1, USC1, etc. (not F1, NASCAR, WRC, etc.)
-- **Placeholder Names:** Randomly generated from international name databases
-- **Generic Team Names:** Procedurally generated from prefix + suffix combinations
-- **Fictional Suppliers:** PowerTech, VelocityMotors, TurboMax, etc.
+Typical options:
 
-This approach avoids licensing costs and legal complications while maintaining authenticity.
+```env
+API_HOST=127.0.0.1
+API_PORT=8000
+API_RELOAD=true
+DEFAULT_CURRENCY=EUR
+DATABASE_PATH=database/momentum.db
+```
 
-### Backend-First Development
+## Running the Project
 
-The Python simulation engine is being developed first to ensure:
+### Run API server
 
-- Realistic statistical modeling and simulation accuracy
-- Comprehensive data structures and relationships
-- Solid foundation for any frontend implementation
-- Flexibility to add Unity, web, or other frontends later
+From `Momentum/Python`:
 
-### Cross-Discipline Driver System
+```bash
+python simulation.py
+```
 
-Drivers can compete in all six disciplines with varying effectiveness:
+Or explicitly with Uvicorn:
 
-- **Discipline Preferences:** Each driver has aptitudes for different racing types
-- **Attribute-Based Performance:** 50+ attributes determine capability across disciplines
-- **Specialization vs. Versatility:** Trade-offs between mastery and flexibility
-- **Realistic Transitions:** Drivers can move between disciplines with appropriate skill adjustments
+```bash
+uvicorn simulation:app --reload --host 127.0.0.1 --port 8000
+```
+
+### Run desktop GUI
+
+From `Momentum/Python`:
+
+```bash
+python GUI/launcher.py
+```
 
 ## Testing
 
-The project includes comprehensive test suites:
+This repo contains multiple targeted test scripts under `Momentum/Python/tests/` and `Momentum/Python/mvp_tests/`.
 
-- **`tests/simple_driver_test.py`:** Basic driver system validation (50+ attributes, 6 disciplines)
-- **`tests/test_driver_system.py`:** Advanced driver testing (career progression, specialization)
-- **`tests/test_staff_system.py`:** Staff management validation (hiring, budgets, performance impact)
-
-Run all tests:
+Examples:
 
 ```bash
-cd Momentum/Python
-python tests/simple_driver_test.py
-python tests/test_driver_system.py
-python tests/test_staff_system.py
+python tests/test_championship_management.py
+python tests/test_hiring_system.py
+python tests/test_progression_system.py
+python mvp_tests/test_uc01_driver.py
 ```
 
-## Documentation
+Run tests from `Momentum/Python` so relative paths resolve correctly.
 
-Additional documentation available in the repository:
+## API Highlights
 
-- **`Momentum/Python/README.md`:** Detailed Python backend documentation
-- **`Momentum/Python/API_DOCUMENTATION.md`:** API specifications (when implemented)
-- **`Momentum/Python/HYBRID_NAMES_SETUP.md`:** Name generation system guide
-- **`Momentum/Python/SUPPLIER_SYSTEM_OVERVIEW.md`:** Supplier management details
-- **`Momentum/Python/docs/driver_system_summary.md`:** Driver attribute breakdown
+The API includes endpoints for:
 
-## Contributing
+- Health and system checks
+- Driver and team listing/details
+- Team creation and budget operations
+- Championship creation, schedule, standings, and recalculation
+- Race event management and race result retrieval
+- Hiring/contracts for drivers and staff
+- Season progression operations
 
-This is a final year Computer Science project.
+Interactive docs are available at `/docs` when the server is running.
 
-## Requirements
+## Known Gaps
 
-- **Python:** 3.11+
-- **Database:** SQLite (included with Python)
-- **No API Keys Required:** Fully offline operation with Faker-based name generation
+- Some systems are still in progress or partially integrated.
+- Not every folder has complete production-ready coverage.
+- Documentation outside this README may be inconsistent while cleanup is ongoing.
+
+## License and Contribution
+
+Project work for academic submission. Contribution policy and licensing can be added as the repository is finalised.
