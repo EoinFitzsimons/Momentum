@@ -32,7 +32,7 @@ Version: 2.0.0 (Championship Management Update)
 Compatible with: Python 3.8+, FastAPI 0.100+
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from datetime import datetime
@@ -210,6 +210,30 @@ def list_teams(
 # TEAM MANAGEMENT ENDPOINTS (UC-11 to UC-14)
 # ============================================================================
 
+@app.get("/teams/me")
+def get_player_team(x_player_id: Optional[str] = Header(default=None, alias="X-Player-Id")):
+    """
+    UC-13: Read Player Team
+
+    Get the authenticated player's owned team with edit permissions.
+    Uses X-Player-Id as a lightweight auth placeholder.
+
+    Returns:
+        Player's team with editable flags
+    """
+    if not x_player_id:
+        raise HTTPException(status_code=401, detail="Missing X-Player-Id header")
+
+    try:
+        team = team_service.get_player_team(x_player_id)
+        if not team:
+            raise HTTPException(status_code=404, detail="No team owned by this player")
+        return team
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/teams/{team_id}", response_model=TeamDetails)
 def get_team_details(team_id: int):
     """
@@ -228,6 +252,8 @@ def get_team_details(team_id: int):
         if not team_details:
             raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
         return team_details
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -253,32 +279,24 @@ def create_team(request: TeamCreate):
             nationality=request.nationality,
             tier=request.tier,
             team_principal=request.team_principal,
-            headquarters=request.headquarters
+            headquarters=request.headquarters,
+            player_id=request.player_id
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/teams/me")
-def get_player_team():
-    """
-    UC-13: Read Player Team
-    
-    Get the authenticated player's owned team with edit permissions.
-    Requires authentication (not yet implemented).
-    
-    Returns:
-        Player's team with editable flags
-    """
-    # TODO: Implement authentication and player tracking
-    raise HTTPException(status_code=501, detail="Player authentication not yet implemented")
-
-
 @app.patch("/teams/{team_id}", response_model=TeamUpdateResponse)
-def update_team(team_id: int, request: TeamUpdate):
+def update_team(
+    team_id: int,
+    request: TeamUpdate,
+    x_player_id: Optional[str] = Header(default=None, alias="X-Player-Id")
+):
     """
     UC-14: Update Team Attributes
     
@@ -295,11 +313,19 @@ def update_team(team_id: int, request: TeamUpdate):
     try:
         result = team_service.update_team(
             team_id,
-            request.model_dump(exclude_none=True)
+            request.model_dump(exclude_none=True),
+            actor_id=x_player_id
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        detail = str(e)
+        if "permission" in detail.lower():
+            raise HTTPException(status_code=403, detail=detail)
+        if "conflict" in detail.lower():
+            raise HTTPException(status_code=409, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -327,6 +353,8 @@ def allocate_budget(
             request.description or ""
         )
         return result
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -349,6 +377,8 @@ def get_team_budget(team_id: int):
         if not budget_status:
             raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
         return budget_status
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

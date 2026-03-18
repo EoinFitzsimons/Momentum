@@ -207,6 +207,7 @@ class RealtimeRaceEngine:
         # Visual track points for unified position mapping
         track_points: Optional[List[Any]] = None,
         player_driver_id: Optional[int] = None,  # Player-controlled driver ID
+        player_team_driver_ids: Optional[List[int]] = None,  # Player-controlled team car IDs
         # Player's pace and overtake settings
         player_overrides: Optional[Dict[str, float]] = None
     ) -> List[Dict[str, Any]]:
@@ -240,9 +241,12 @@ class RealtimeRaceEngine:
 
         # Store player controls
         self.player_driver_id = player_driver_id
+        self.player_team_driver_ids = {int(x) for x in (player_team_driver_ids or []) if x is not None}
         self.player_overrides = player_overrides or {}
         if player_driver_id:
             print(f"  OK Player driver ID {player_driver_id} with overrides: {self.player_overrides}")
+        if self.player_team_driver_ids:
+            print(f"  OK Player team-controlled drivers: {sorted(self.player_team_driver_ids)}")
 
         # Initialise race state
         track_length_m = track.length_km * 1000.0
@@ -555,9 +559,13 @@ class RealtimeRaceEngine:
         """
         driver = state.driver
 
-        # Check if this is the player-controlled driver
-        if hasattr(
-                self, 'player_driver_id') and self.player_driver_id == state.driver_id:
+        # Check if this is a player-controlled car (selected driver or teammate)
+        controlled_driver = (
+            (hasattr(self, 'player_driver_id') and self.player_driver_id == state.driver_id)
+            or (hasattr(self, 'player_team_driver_ids') and state.driver_id in getattr(self, 'player_team_driver_ids', set()))
+        )
+
+        if controlled_driver:
             # Apply player overrides from UI sliders
             if hasattr(self, 'player_overrides') and self.player_overrides:
                 # Use combined push intensity (average of pace and overtake

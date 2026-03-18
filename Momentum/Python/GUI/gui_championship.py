@@ -744,6 +744,7 @@ class PreRaceSetupDialog(QDialog):
         self.selected_driver = None
         self.selected_team = None
         self.race_config = {}
+        self._syncing_driver_team = False
         
         self.setWindowTitle(f"Pre-Race Setup - {track.name if track else 'Race'}")
         # Responsive sizing
@@ -786,16 +787,9 @@ class PreRaceSetupDialog(QDialog):
         driver_group = QGroupBox("Driver Selection")
         driver_layout = QVBoxLayout(driver_group)
         
-        driver_layout.addWidget(QLabel("Select your driver:"))
+        driver_layout.addWidget(QLabel("Select your driver (locked to selected team):"))
         self.driver_combo = QComboBox()
-        
-        # Populate drivers
-        drivers = self.db.get_all_drivers()
-        if drivers:
-            for driver in drivers:
-                self.driver_combo.addItem(driver.name, driver)
-                self.selected_driver = drivers[0]
-        
+
         self.driver_combo.currentIndexChanged.connect(self.on_driver_selected)
         driver_layout.addWidget(self.driver_combo)
         
@@ -819,7 +813,7 @@ class PreRaceSetupDialog(QDialog):
         if teams:
             for team in teams:
                 self.team_combo.addItem(team.name, team)
-                self.selected_team = teams[0]
+            self.selected_team = teams[0]
         
         self.team_combo.currentIndexChanged.connect(self.on_team_selected)
         team_layout.addWidget(self.team_combo)
@@ -877,9 +871,9 @@ class PreRaceSetupDialog(QDialog):
         # Action buttons
         buttons_layout = QHBoxLayout()
         
-        start_btn = QPushButton("Start Race")
-        start_btn.setMinimumHeight(50)
-        start_btn.setStyleSheet(f"""
+        self.start_btn = QPushButton("Start Race")
+        self.start_btn.setMinimumHeight(50)
+        self.start_btn.setStyleSheet(f"""
             QPushButton {{
                 font-size: 14px;
                 font-weight: bold;
@@ -890,8 +884,8 @@ class PreRaceSetupDialog(QDialog):
             }}
             QPushButton:hover {{ background-color: {COLORS['accent']}; }}
         """)
-        start_btn.clicked.connect(self.accept)
-        buttons_layout.addWidget(start_btn)
+        self.start_btn.clicked.connect(self.accept)
+        buttons_layout.addWidget(self.start_btn)
         
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setMinimumHeight(50)
@@ -910,34 +904,115 @@ class PreRaceSetupDialog(QDialog):
         layout.addLayout(buttons_layout)
         
         # Update display
-        self.on_driver_selected()
+        self._select_first_team_with_drivers()
+        self._refresh_driver_combo_for_selected_team()
         self.on_team_selected()
     
     def on_driver_selected(self):
         """Update display when driver is selected."""
+        if self._syncing_driver_team:
+            return
         if self.driver_combo.currentIndex() >= 0:
             self.selected_driver = self.driver_combo.currentData()
             if self.selected_driver:
                 stats_text = f"Speed: {self.selected_driver.speed:.0f} | Racecraft: {self.selected_driver.racecraft:.0f} | Consistency: {self.selected_driver.consistency:.0f}"
                 self.driver_stats.setText(stats_text)
+
+                # Keep team selection synced to the driver's contracted team.
+                team_id = getattr(self.selected_driver, 'current_team_id', None)
+                if team_id:
+                    self._syncing_driver_team = True
+                    try:
+                        for i in range(self.team_combo.count()):
+                            team = self.team_combo.itemData(i)
+                            if team and getattr(team, 'id', None) == team_id:
+                                self.team_combo.setCurrentIndex(i)
+                                self.selected_team = team
+                                break
+                    finally:
+                        self._syncing_driver_team = False
+            self._update_start_button_state()
+        else:
+            self.driver_stats.setText("No contracted drivers available for this team")
+            self._update_start_button_state()
     
     def on_team_selected(self):
         """Update display when team is selected."""
+        if self._syncing_driver_team:
+            return
         if self.team_combo.currentIndex() >= 0:
             self.selected_team = self.team_combo.currentData()
             if self.selected_team:
                 budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {self.selected_team.tier}"
                 self.team_budget.setText(budget_text)
+                self._refresh_driver_combo_for_selected_team()
+                self._update_start_button_state()
+
+    def _drivers_for_team(self, team_id: int):
+        """Return contracted drivers for a team, ordered by speed."""
+        try:
+            return self.db.get_drivers_by_team(team_id)
+        except Exception:
+            return []
+
+    def _refresh_driver_combo_for_selected_team(self):
+        """Rebuild driver list based on selected team contracts."""
+        self.driver_combo.clear()
+        self.selected_driver = None
+
+        team = self.selected_team
+        if not team:
+            self.driver_stats.setText("No team selected")
+            self._update_start_button_state()
+            return
+
+        team_drivers = self._drivers_for_team(team.id)
+        if not team_drivers:
+            self.driver_stats.setText("No contracted drivers for selected team")
+            self._update_start_button_state()
+            return
+
+        for driver in team_drivers:
+            self.driver_combo.addItem(driver.name, driver)
+
+        self.selected_driver = team_drivers[0]
+        self.driver_combo.setCurrentIndex(0)
+        self.on_driver_selected()
+
+    def _update_start_button_state(self):
+        """Enable Start only when valid team-driver pairing exists."""
+        valid = bool(self.selected_team and self.selected_driver)
+        if valid:
+            valid = getattr(self.selected_driver, 'current_team_id', None) == getattr(self.selected_team, 'id', None)
+        self.start_btn.setEnabled(valid)
+
+    def _select_first_team_with_drivers(self):
+        """Auto-select a team that has at least one contracted driver."""
+        for i in range(self.team_combo.count()):
+            team = self.team_combo.itemData(i)
+            if not team:
+                continue
+            if self._drivers_for_team(team.id):
+                self.team_combo.setCurrentIndex(i)
+                self.selected_team = team
+                return
     
     def get_race_config(self) -> Dict[str, Any]:
         """Return the configured race setup."""
+        # Enforce driver-team lock at config creation time as a final guard.
+        selected_team = self.selected_team
+        if self.selected_driver and getattr(self.selected_driver, 'current_team_id', None):
+            team_from_driver = self.db.get_team(self.selected_driver.current_team_id)
+            if team_from_driver:
+                selected_team = team_from_driver
+
         return {
             "mode": "championship",
             "championship_id": self.championship.id,
             "race_id": self.race.id,
             "track_id": self.race.track_id,
             "driver": self.selected_driver,
-            "team": self.selected_team,
+            "team": selected_team,
             "discipline": self.championship.discipline,
             "weather": self.weather_combo.currentText(),
             "tire_strategy": self.tire_combo.currentText(),

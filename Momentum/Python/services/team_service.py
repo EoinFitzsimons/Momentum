@@ -18,12 +18,10 @@ Notes:
 - Faker-based unique team name generation
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime
 from database.database_manager import DatabaseManager
-from database.models import Team, Driver, StaffMember
-from tools.team_name_generator import generate_team_name, generate_team_names
-import json
+from database.models import Team
 
 
 class TeamService:
@@ -67,7 +65,8 @@ class TeamService:
         nationality: str = "INT",
         tier: str = "TIER_2",
         team_principal: str = "",
-        headquarters: str = ""
+        headquarters: str = "",
+        player_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new team with initial assets and budget allocation.
@@ -93,6 +92,9 @@ class TeamService:
         if not name or not name.strip():
             raise ValueError("Team name is required")
         
+        if discipline not in self.DRIVER_SLOTS_PER_DISCIPLINE:
+            raise ValueError(f"Invalid discipline: {discipline}")
+
         # Get tier configuration
         initial_budget = self.TIER_BUDGETS[tier]
         staff_limit = self.TIER_STAFF_LIMITS[tier]
@@ -113,24 +115,35 @@ class TeamService:
             total_podiums=0,
             championships=0,
             operations_rating=50.0,
-            strategy_profile="standard"
+            strategy_profile="standard",
+            headquarters=headquarters,
+            biography=""
         )
-        
-        # Store additional metadata
-        team_metadata = {
-            "founded_date": datetime.now().isoformat(),
-            "staff_limit": staff_limit,
-            "driver_slots": driver_slots,
-            "headquarters": headquarters,
-            "budget_transactions": [],
-            "player_owned": False
-        }
         
         # Create team in database
         team_id = self.db.create_team(team)
         
         if not team_id:
             raise RuntimeError(f"Failed to create team: {name}")
+
+        if player_id:
+            self.db.assign_team_owner(team_id, str(player_id))
+
+        self._log_team_change(
+            team_id,
+            {
+                "created": {
+                    "name": name,
+                    "discipline": discipline,
+                    "tier": tier,
+                    "initial_budget": initial_budget,
+                    "staff_limit": staff_limit,
+                    "driver_slots": driver_slots,
+                }
+            },
+            actor_id=str(player_id) if player_id else None,
+            action="team_created"
+        )
         
         return {
             "id": team_id,
@@ -201,6 +214,8 @@ class TeamService:
         
         # Estimate annual income from prizes (varies by discipline and performance)
         annual_income = self._estimate_annual_income(team)
+        owner_id = self.db.get_team_owner(team_id)
+        facility_upgrades = self.db.get_facility_upgrades(team_id)
         
         return {
             "id": team.id,
@@ -221,15 +236,21 @@ class TeamService:
             "drivers": driver_entries,
             "staff": staff_entries,
             "staff_count": len(staff_entries),
-            "headquarters": "",  # Could store in database
-            "biography": team.history
+            "headquarters": team.headquarters,
+            "biography": team.biography,
+            "team_version": int(getattr(team, "version", 1) or 1),
+            "staff_limit": self.TIER_STAFF_LIMITS.get(team.tier, 25),
+            "driver_slots": self.DRIVER_SLOTS_PER_DISCIPLINE.get(team.discipline, 2),
+            "facility_upgrades": facility_upgrades,
+            "is_player_owned": owner_id is not None,
+            "editable": False
         }
     
     # ========================================================================
     # UC-13: Read Player Team
     # ========================================================================
     
-    def get_player_team(self, player_id: int) -> Optional[Dict[str, Any]]:
+    def get_player_team(self, player_id: str) -> Optional[Dict[str, Any]]:
         """
         Get the player's owned team with edit permissions.
         
@@ -239,16 +260,34 @@ class TeamService:
         Returns:
             Team details with editable=True flag, or None if player has no team
         """
-        # Query for team owned by player
-        # This would require a player_teams table or similar tracking
-        # For now, return a placeholder implementation
-        
-        # In a full implementation, you would:
-        # 1. Query player_teams table for player_id
-        # 2. Return team details with editable=True
-        # 3. Include permission flags
-        
-        return None  # To be implemented with player system
+        team_id = self.db.get_player_team_id(str(player_id))
+        if not team_id:
+            return None
+
+        details = self.get_team_details(team_id)
+        if not details:
+            return None
+
+        details["is_player_owned"] = True
+        details["editable"] = True
+        details["owner_player_id"] = str(player_id)
+        return details
+
+    def assign_owner(self, team_id: int, player_id: str) -> bool:
+        """Assign ownership of a team to a player."""
+        team = self.db.get_team(team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+        return self.db.assign_team_owner(team_id, str(player_id))
+
+    def can_edit_team(self, team_id: int, player_id: Optional[str]) -> bool:
+        """Permission check for team edit operations."""
+        owner = self.db.get_team_owner(team_id)
+        if owner is None:
+            return True
+        if not player_id:
+            return False
+        return owner == str(player_id)
     
     # ========================================================================
     # UC-14: Update Team Attributes
@@ -257,7 +296,8 @@ class TeamService:
     def update_team(
         self,
         team_id: int,
-        updates: Dict[str, Any]
+        updates: Dict[str, Any],
+        actor_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Update team attributes with audit logging.
@@ -272,6 +312,12 @@ class TeamService:
         team = self.db.get_team(team_id)
         if not team:
             raise ValueError(f"Team {team_id} not found")
+
+        if not self.can_edit_team(team_id, actor_id):
+            raise ValueError("You do not have permission to update this team")
+
+        expected_version = updates.pop("expected_version", None)
+        facility_upgrades = updates.pop("facility_upgrades", None) or []
         
         # Track changes
         changes = {}
@@ -289,29 +335,58 @@ class TeamService:
                         "new": value
                     }
         
+        for facility_name in facility_upgrades:
+            if not isinstance(facility_name, str) or not facility_name.strip():
+                continue
+            facility_cost = self._facility_upgrade_cost(team.tier)
+            if team.budget < facility_cost:
+                raise ValueError(
+                    f"Insufficient budget for facility upgrade '{facility_name}'. "
+                    f"Required: €{facility_cost:,.0f}, Available: €{team.budget:,.0f}"
+                )
+            team.budget -= facility_cost
+            self.db.add_budget_transaction(
+                team_id,
+                "facility_upgrade",
+                facility_cost,
+                f"Facility upgrade: {facility_name.strip()}"
+            )
+            self.db.upsert_facility_upgrade(team_id, facility_name.strip(), facility_cost)
+            changes[f"facility_upgrade::{facility_name.strip()}"] = {
+                "old": "not-upgraded",
+                "new": f"invested €{facility_cost:,.0f}"
+            }
+
         if not changes:
+            refreshed_team = self.db.get_team(team_id)
             return {
                 "id": team_id,
                 "name": team.name,
                 "updated_at": datetime.now().isoformat(),
                 "changes": {},
+                "new_version": int(getattr(refreshed_team, "version", 1) or 1),
                 "message": "No changes were made"
             }
         
         # Update team in database
-        success = self.db.update_team(team_id, team)
+        success = self.db.update_team(team_id, team, expected_version=expected_version)
         
         if not success:
+            if expected_version is not None:
+                raise ValueError("Update conflict detected. Team was modified by another request")
             raise RuntimeError(f"Failed to update team {team_id}")
+
+        refreshed_team = self.db.get_team(team_id)
         
         # Log audit trail
-        self._log_team_change(team_id, changes)
+        self._log_team_change(team_id, changes, actor_id=actor_id, action="team_updated")
         
         return {
             "id": team_id,
             "name": team.name,
             "updated_at": datetime.now().isoformat(),
             "changes": changes,
+            "new_version": int(getattr(refreshed_team, "version", 1) or 1),
             "message": f"Team {team.name} updated successfully"
         }
     
@@ -348,21 +423,16 @@ class TeamService:
         if amount <= 0:
             raise ValueError("Allocation amount must be positive")
         
-        if amount > team.budget:
+        details = self.get_team_details(team_id)
+        available_budget = details["available_budget"] if details else team.budget
+
+        if amount > available_budget:
             raise ValueError(
-                f"Insufficient budget. Requested: €{amount:,.0f}, Available: €{team.budget:,.0f}"
+                f"Insufficient budget. Requested: €{amount:,.0f}, Available: €{available_budget:,.0f}"
             )
         
         # Create budget transaction
-        transaction = {
-            "id": self._generate_transaction_id(),
-            "team_id": team_id,
-            "category": category,
-            "amount": amount,
-            "description": description,
-            "timestamp": datetime.now().isoformat(),
-            "status": "allocated"
-        }
+        transaction_id = self.db.add_budget_transaction(team_id, category, amount, description)
         
         # Update team budget
         team.budget -= amount
@@ -370,12 +440,12 @@ class TeamService:
         
         return {
             "success": True,
-            "transaction_id": transaction["id"],
+            "transaction_id": transaction_id,
             "team_id": team_id,
             "amount": amount,
             "category": category,
             "remaining_budget": team.budget,
-            "timestamp": transaction["timestamp"]
+            "timestamp": datetime.now().isoformat()
         }
     
     def get_budget_status(self, team_id: int) -> Optional[Dict[str, Any]]:
@@ -395,24 +465,27 @@ class TeamService:
         # Get team details for salary calculations
         details = self.get_team_details(team_id)
         
+        transactions = self.db.get_budget_transactions(team_id)
+        category_totals: Dict[str, float] = {}
+        for tx in transactions:
+            tx_category = str(tx.get("category") or "general")
+            category_totals[tx_category] = category_totals.get(tx_category, 0.0) + float(tx.get("amount") or 0.0)
+
+        allocations = [
+            {
+                "category": category,
+                "allocated": amount,
+                "used": amount,
+                "remaining": 0.0
+            }
+            for category, amount in sorted(category_totals.items())
+        ]
+
         return {
             "team_id": team_id,
             "team_name": team.name,
             "total_budget": team.budget + details["total_expenditure"],  # Original + spent
-            "allocated": [
-                {
-                    "category": "driver_salaries",
-                    "allocated": sum(d.get("contract_length", 1) * 2_000_000 for d in details["drivers"]),
-                    "used": sum(d.get("contract_length", 1) * 2_000_000 for d in details["drivers"]),
-                    "remaining": 0
-                },
-                {
-                    "category": "staff",
-                    "allocated": len(details["staff"]) * 800_000,
-                    "used": len(details["staff"]) * 800_000,
-                    "remaining": 0
-                }
-            ],
+            "allocated": allocations,
             "available": team.budget,
             "monthly_income": self._estimate_annual_income(team) / 12,
             "monthly_expenditure": details["total_expenditure"] / 12
@@ -445,20 +518,24 @@ class TeamService:
         
         return tier_income + performance_bonus
     
-    def _log_team_change(self, team_id: int, changes: Dict[str, Any]) -> None:
+    def _log_team_change(
+        self,
+        team_id: int,
+        changes: Dict[str, Any],
+        actor_id: Optional[str] = None,
+        action: str = "team_updated"
+    ) -> None:
         """Log team changes to audit trail"""
-        log_entry = {
-            "team_id": team_id,
-            "timestamp": datetime.now().isoformat(),
-            "changes": changes
+        self.db.add_team_audit_log(team_id, action, changes, actor_id=actor_id)
+
+    def _facility_upgrade_cost(self, tier: str) -> float:
+        """Facility upgrades scale by tier to preserve progression balance."""
+        base = {
+            "TIER_1": 6_000_000,
+            "TIER_2": 3_000_000,
+            "TIER_3": 1_500_000,
         }
-        # In a full implementation, this would write to an audit log table
-        pass
-    
-    def _generate_transaction_id(self) -> int:
-        """Generate unique transaction ID"""
-        import random
-        return random.randint(100000, 999999)
+        return float(base.get(tier, 3_000_000))
 
 
 __all__ = ["TeamService"]

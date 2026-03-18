@@ -257,6 +257,7 @@ CREATE TABLE IF NOT EXISTS teams (
     discipline TEXT NOT NULL,
     tier TEXT NOT NULL,
     budget REAL NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
     founded_year INTEGER DEFAULT NULL,
     team_principal TEXT DEFAULT '',
     history TEXT DEFAULT '',
@@ -266,7 +267,8 @@ CREATE TABLE IF NOT EXISTS teams (
     total_podiums INTEGER DEFAULT 0,
     championships INTEGER DEFAULT 0,
     operations_rating REAL NOT NULL DEFAULT 50.0 CHECK(operations_rating BETWEEN 0.0 AND 100.0),
-    strategy_profile TEXT DEFAULT 'standard'
+    strategy_profile TEXT DEFAULT 'standard',
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS tracks (
@@ -364,7 +366,48 @@ CREATE TABLE IF NOT EXISTS staff_members (
     FOREIGN KEY (current_team_id) REFERENCES teams(id)
 );
 
+CREATE TABLE IF NOT EXISTS team_ownership (
+    team_id INTEGER PRIMARY KEY,
+    player_id TEXT NOT NULL UNIQUE,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_budget_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    category TEXT NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_facility_upgrades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    facility_name TEXT NOT NULL,
+    level INTEGER NOT NULL DEFAULT 1,
+    invested_amount REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(team_id, facility_name),
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    actor_id TEXT,
+    action TEXT NOT NULL,
+    changes_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);
 CREATE INDEX IF NOT EXISTS idx_teams_discipline ON teams(discipline);
 CREATE INDEX IF NOT EXISTS idx_race_results_driver ON race_results(driver_id);
+CREATE INDEX IF NOT EXISTS idx_team_budget_transactions_team_id ON team_budget_transactions(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_audit_log_team_id ON team_audit_log(team_id);
 """

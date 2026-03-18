@@ -161,7 +161,9 @@ class DatabaseManager:
                 # Define columns that should exist in teams table
                 required_columns = {
                     'headquarters': "TEXT DEFAULT ''",
-                    'biography': "TEXT DEFAULT ''"
+                    'biography': "TEXT DEFAULT ''",
+                    'version': 'INTEGER NOT NULL DEFAULT 1',
+                    'updated_at': 'TEXT DEFAULT CURRENT_TIMESTAMP'
                 }
                 
                 # Add missing columns
@@ -175,6 +177,56 @@ class DatabaseManager:
                 conn.commit()
             except Exception:
                 pass  # Table might not exist yet, will be created by SCHEMA_SQL
+
+            # Ensure supporting team management tables exist for ownership,
+            # audit logs, budget transactions, and facility upgrades.
+            try:
+                conn.executescript("""
+                CREATE TABLE IF NOT EXISTS team_ownership (
+                    team_id INTEGER PRIMARY KEY,
+                    player_id TEXT NOT NULL UNIQUE,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (team_id) REFERENCES teams(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS team_budget_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    category TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (team_id) REFERENCES teams(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS team_facility_upgrades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    facility_name TEXT NOT NULL,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    invested_amount REAL NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(team_id, facility_name),
+                    FOREIGN KEY (team_id) REFERENCES teams(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS team_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    team_id INTEGER NOT NULL,
+                    actor_id TEXT,
+                    action TEXT NOT NULL,
+                    changes_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (team_id) REFERENCES teams(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_budget_transactions_team_id ON team_budget_transactions(team_id);
+                CREATE INDEX IF NOT EXISTS idx_team_audit_log_team_id ON team_audit_log(team_id);
+                """)
+                conn.commit()
+            except Exception:
+                pass
             
             # Check if tracks table exists and add missing columns
             try:
@@ -312,9 +364,16 @@ class DatabaseManager:
 
     def _hydrate_team(self, row_dict: Dict[str, Any]) -> Team:
         """Internal: convert a DB row dict into a Team with legacy aliases."""
-        team = Team(**{k: v for k, v in row_dict.items() if k != 'created_at'})
+        team_fields = set(Team.__dataclass_fields__.keys())
+        team_kwargs = {k: v for k, v in row_dict.items() if k in team_fields}
+        team = Team(**team_kwargs)
         try:
             setattr(team, 'budget_eur', float(getattr(team, 'budget', 0.0)))
+        except Exception:
+            pass
+        try:
+            setattr(team, 'version', int(row_dict.get('version', 1) or 1))
+            setattr(team, 'updated_at', str(row_dict.get('updated_at') or ''))
         except Exception:
             pass
         return team
@@ -496,11 +555,21 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.execute("""
                 INSERT INTO teams (name, nationality, founded_year, discipline, tier,
-                                 budget, headquarters, team_principal, biography)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                 budget, headquarters, team_principal, biography, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (team.name, team.nationality, team.founded_year, team.discipline,
                   team.tier, team.budget, team.headquarters, team.team_principal, team.biography))
             return cursor.lastrowid
+
+    def get_staff_by_team(self, team_id: int):
+        """Get all staff members for a specific team."""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM staff_members WHERE current_team_id = ? ORDER BY rating DESC, name ASC",
+                (team_id,)
+            ).fetchall()
+            from database.models import StaffMember
+            return [StaffMember(**dict(row)) for row in rows]
 
     def get_team(self, team_id: int) -> Optional[Team]:
         """Get team by ID"""
@@ -547,17 +616,160 @@ class DatabaseManager:
             rows = conn.execute("SELECT * FROM teams ORDER BY name").fetchall()
             return [self._hydrate_team(dict(row)) for row in rows]
 
-    def update_team(self, team_id: int, team: Team) -> bool:
-        """Update an existing team's attributes"""
+    def update_team(self, team_id: int, team: Team, expected_version: Optional[int] = None) -> bool:
+        """Update an existing team's attributes with optional optimistic locking."""
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                UPDATE teams
-                SET name = ?, nationality = ?, discipline = ?, tier = ?,
-                    budget = ?, headquarters = ?, team_principal = ?, biography = ?
-                WHERE id = ?
-            """, (team.name, team.nationality, team.discipline, team.tier,
-                  team.budget, team.headquarters, team.team_principal, team.biography, team_id))
+            if expected_version is None:
+                cursor = conn.execute("""
+                    UPDATE teams
+                    SET name = ?, nationality = ?, discipline = ?, tier = ?,
+                        budget = ?, headquarters = ?, team_principal = ?, biography = ?,
+                        strategy_profile = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (team.name, team.nationality, team.discipline, team.tier,
+                      team.budget, team.headquarters, team.team_principal, team.biography,
+                      team.strategy_profile, team_id))
+            else:
+                cursor = conn.execute("""
+                    UPDATE teams
+                    SET name = ?, nationality = ?, discipline = ?, tier = ?,
+                        budget = ?, headquarters = ?, team_principal = ?, biography = ?,
+                        strategy_profile = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND version = ?
+                """, (team.name, team.nationality, team.discipline, team.tier,
+                      team.budget, team.headquarters, team.team_principal, team.biography,
+                      team.strategy_profile, team_id, expected_version))
             return cursor.rowcount > 0
+
+    def assign_team_owner(self, team_id: int, player_id: str) -> bool:
+        """Assign or replace the owner of a team."""
+        with self.get_connection() as conn:
+            conn.execute(
+                "UPDATE team_ownership SET is_active = 0 WHERE team_id = ?",
+                (team_id,)
+            )
+            conn.execute(
+                """
+                INSERT INTO team_ownership (team_id, player_id, is_active)
+                VALUES (?, ?, 1)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    team_id = excluded.team_id,
+                    is_active = 1,
+                    acquired_at = CURRENT_TIMESTAMP
+                """,
+                (team_id, player_id)
+            )
+            return True
+
+    def get_player_team_id(self, player_id: str) -> Optional[int]:
+        """Return active owned team id for a player, if any."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT team_id FROM team_ownership WHERE player_id = ? AND is_active = 1",
+                (player_id,)
+            ).fetchone()
+            return int(row[0]) if row else None
+
+    def get_team_owner(self, team_id: int) -> Optional[str]:
+        """Return active owner player id for team, if assigned."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT player_id FROM team_ownership WHERE team_id = ? AND is_active = 1",
+                (team_id,)
+            ).fetchone()
+            return str(row[0]) if row else None
+
+    def add_budget_transaction(self, team_id: int, category: str, amount: float, description: str = "") -> int:
+        """Persist a budget transaction entry and return transaction id."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO team_budget_transactions (team_id, category, amount, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (team_id, category, amount, description)
+            )
+            return int(cursor.lastrowid)
+
+    def get_budget_transactions(self, team_id: int) -> List[Dict[str, Any]]:
+        """Get all persisted budget transactions for a team."""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, team_id, category, amount, description, created_at
+                FROM team_budget_transactions
+                WHERE team_id = ?
+                ORDER BY id DESC
+                """,
+                (team_id,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def upsert_facility_upgrade(self, team_id: int, facility_name: str, invested_amount: float) -> bool:
+        """Track facility upgrades and accumulated investment for the team."""
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO team_facility_upgrades (team_id, facility_name, level, invested_amount, updated_at)
+                VALUES (?, ?, 1, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(team_id, facility_name)
+                DO UPDATE SET
+                    invested_amount = team_facility_upgrades.invested_amount + excluded.invested_amount,
+                    level = team_facility_upgrades.level + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (team_id, facility_name, invested_amount)
+            )
+            return True
+
+    def get_facility_upgrades(self, team_id: int) -> List[Dict[str, Any]]:
+        """Get facility upgrade records for the team."""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT facility_name, level, invested_amount, updated_at
+                FROM team_facility_upgrades
+                WHERE team_id = ?
+                ORDER BY facility_name
+                """,
+                (team_id,)
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def add_team_audit_log(self, team_id: int, action: str, changes: Dict[str, Any], actor_id: Optional[str] = None) -> int:
+        """Persist an audit log entry for team changes."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO team_audit_log (team_id, actor_id, action, changes_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                (team_id, actor_id, action, json.dumps(changes, ensure_ascii=True))
+            )
+            return int(cursor.lastrowid)
+
+    def get_team_audit_logs(self, team_id: int, limit: int = 20) -> List[Dict[str, Any]]:
+        """Get recent team audit logs."""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, team_id, actor_id, action, changes_json, created_at
+                FROM team_audit_log
+                WHERE team_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (team_id, max(1, int(limit)))
+            ).fetchall()
+            parsed = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    item["changes"] = json.loads(item.get("changes_json") or "{}")
+                except Exception:
+                    item["changes"] = {}
+                parsed.append(item)
+            return parsed
 
     # Track operations
     def create_track(self, track: Track) -> Optional[int]:
