@@ -178,6 +178,51 @@ class DatabaseManager:
             except Exception:
                 pass  # Table might not exist yet, will be created by SCHEMA_SQL
 
+            # Ensure drivers table has contract tracking columns used by hiring lifecycle.
+            try:
+                cursor = conn.execute("PRAGMA table_info(drivers)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+
+                required_columns = {
+                    'contract_start_season': 'INTEGER DEFAULT NULL',
+                    'contract_end_season': 'INTEGER DEFAULT NULL',
+                    'performance_bonus': 'REAL DEFAULT 0.0'
+                }
+
+                for column_name, column_def in required_columns.items():
+                    if column_name not in existing_columns:
+                        try:
+                            conn.execute(f"ALTER TABLE drivers ADD COLUMN {column_name} {column_def}")
+                        except sqlite3.OperationalError:
+                            pass
+
+                conn.commit()
+            except Exception:
+                pass
+
+            # Ensure staff table has salary/contract fields for cap checks and expiry.
+            try:
+                cursor = conn.execute("PRAGMA table_info(staff_members)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+
+                required_columns = {
+                    'annual_salary': 'REAL DEFAULT NULL',
+                    'contract_length': 'INTEGER DEFAULT NULL',
+                    'contract_start_season': 'INTEGER DEFAULT NULL',
+                    'contract_end_season': 'INTEGER DEFAULT NULL'
+                }
+
+                for column_name, column_def in required_columns.items():
+                    if column_name not in existing_columns:
+                        try:
+                            conn.execute(f"ALTER TABLE staff_members ADD COLUMN {column_name} {column_def}")
+                        except sqlite3.OperationalError:
+                            pass
+
+                conn.commit()
+            except Exception:
+                pass
+
             # Ensure supporting team management tables exist for ownership,
             # audit logs, budget transactions, and facility upgrades.
             try:

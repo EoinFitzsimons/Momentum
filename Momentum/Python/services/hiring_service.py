@@ -18,6 +18,7 @@ Authors: Final Year Project - Computer Science
 
 import math
 from typing import List, Dict, Optional, Tuple
+from datetime import datetime
 
 # Import database extensions to add hiring methods
 import database.database_extensions  # noqa
@@ -174,13 +175,18 @@ class HiringService:
             if driver.salary:
                 total += driver.salary
         
-        # Staff salaries would be added here if tracked in database
-        # For now, estimate based on operations_rating
-        team = self.db.get_team(team_id)
-        if team:
-            # Estimate staff costs at 30% of driver costs
-            estimated_staff_cost = total * 0.3
-            total += estimated_staff_cost
+        # Add contracted staff salaries where available.
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT COALESCE(SUM(annual_salary), 0) AS staff_salary_total
+                FROM staff_members
+                WHERE current_team_id = ?
+                """,
+                (team_id,)
+            ).fetchone()
+            if row:
+                total += float(row["staff_salary_total"] or 0.0)
         
         return total
     
@@ -263,7 +269,9 @@ class HiringService:
                              min_rating: float = 0.0,
                              max_salary: Optional[float] = None,
                              page: int = 1,
-                             page_size: int = 50) -> Tuple[List[Dict], int]:
+                             page_size: int = 50,
+                             sort_by: str = "rating",
+                             sort_order: str = "desc") -> Tuple[List[Dict], int]:
         """
         UC-15: Get available drivers for hire
         
@@ -282,7 +290,9 @@ class HiringService:
             min_rating=min_rating,
             max_salary=max_salary,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         # Add salary estimates
@@ -302,6 +312,7 @@ class HiringService:
                 'seasons_active': driver.seasons_active,
                 'preferred_discipline': driver.preferred_discipline,
                 'career_phase': driver.career_phase,
+                'contract_end_season': driver.contract_end_season,
                 'estimated_salary': self.estimate_driver_salary(
                     driver, 
                     discipline or driver.preferred_discipline
@@ -314,7 +325,8 @@ class HiringService:
     
     def sign_driver_contract(self, team_id: int, driver_id: int,
                            contract_length: int, salary: float,
-                           performance_bonus: float = 0.0) -> Tuple[bool, str, Dict]:
+                           performance_bonus: float = 0.0,
+                           start_season: Optional[int] = None) -> Tuple[bool, str, Dict]:
         """
         UC-16: Sign driver to contract
         
@@ -353,9 +365,18 @@ class HiringService:
         # Calculate costs
         total_value = salary * contract_length
         signing_bonus = total_value * 0.20
+        contract_start = start_season or datetime.now().year
+        contract_end = contract_start + contract_length - 1
         
         # Sign contract
-        success = self.db.sign_driver_contract(driver_id, team_id, contract_length, salary)
+        success = self.db.sign_driver_contract(
+            driver_id,
+            team_id,
+            contract_length,
+            salary,
+            contract_start,
+            performance_bonus
+        )
         if not success:
             return (False, "Database error during contract signing", {})
         
@@ -371,6 +392,8 @@ class HiringService:
             'contract_length': contract_length,
             'salary': salary,
             'performance_bonus': performance_bonus,
+            'contract_start_season': contract_start,
+            'contract_end_season': contract_end,
             'total_contract_value': total_value,
             'signing_bonus_paid': signing_bonus,
             'remaining_budget': new_budget
@@ -385,7 +408,9 @@ class HiringService:
     def get_available_staff(self, role: Optional[str] = None,
                           min_rating: float = 0.0,
                           page: int = 1,
-                          page_size: int = 50) -> Tuple[List[Dict], int]:
+                          page_size: int = 50,
+                          sort_by: str = "rating",
+                          sort_order: str = "desc") -> Tuple[List[Dict], int]:
         """
         UC-17: Get available staff for hire
         
@@ -402,7 +427,9 @@ class HiringService:
             role=role,
             min_rating=min_rating,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         # Add salary estimates
@@ -414,6 +441,7 @@ class HiringService:
                 'role': staff.role,
                 'rating': staff.rating,
                 'current_team_id': staff.current_team_id,
+                'contract_end_season': staff.contract_end_season,
                 'estimated_salary': self.estimate_staff_salary(staff.role, staff.rating),
                 'contract_status': 'available' if staff.current_team_id is None else 'contracted'
             }
@@ -422,7 +450,8 @@ class HiringService:
         return (result, total)
     
     def sign_staff_contract(self, team_id: int, staff_id: int,
-                          contract_length: int, salary: float) -> Tuple[bool, str, Dict]:
+                          contract_length: int, salary: float,
+                          start_season: Optional[int] = None) -> Tuple[bool, str, Dict]:
         """
         UC-18: Sign staff to contract
         
@@ -462,9 +491,23 @@ class HiringService:
         
         if team.budget < signing_bonus:
             return (False, f"Insufficient budget. Need {signing_bonus:,.0f} EUR", {})
+
+        # Staff salaries count against cap as well.
+        is_compliant, current, cap = self.check_salary_cap_compliance(team_id, salary)
+        if not is_compliant:
+            return (False, f"Salary cap exceeded. Current: {current:,.0f} EUR, Cap: {cap:,.0f} EUR, Additional: {salary:,.0f} EUR", {})
+
+        contract_start = start_season or datetime.now().year
+        contract_end = contract_start + contract_length - 1
         
         # Sign contract
-        success = self.db.sign_staff_contract(staff_id, team_id, contract_length, salary)
+        success = self.db.sign_staff_contract(
+            staff_id,
+            team_id,
+            contract_length,
+            salary,
+            contract_start
+        )
         if not success:
             return (False, "Database error during contract signing", {})
         
@@ -479,6 +522,8 @@ class HiringService:
             'team_name': team.name,
             'contract_length': contract_length,
             'salary': salary,
+            'contract_start_season': contract_start,
+            'contract_end_season': contract_end,
             'total_contract_value': total_value,
             'signing_bonus_paid': signing_bonus,
             'remaining_budget': new_budget
@@ -518,7 +563,11 @@ class HiringService:
                 return (False, "Driver not contracted to this team", {})
             
             # Calculate buyout (remaining contract value * percentage)
-            remaining_value = (driver.salary or 0) * (driver.contract_length or 1)
+            current_season = datetime.now().year
+            remaining_seasons = driver.contract_length or 1
+            if hasattr(driver, 'contract_end_season') and driver.contract_end_season:
+                remaining_seasons = max(1, driver.contract_end_season - current_season + 1)
+            remaining_value = (driver.salary or 0) * remaining_seasons
             buyout_cost = remaining_value * buyout_percentage
             
             # Check budget
