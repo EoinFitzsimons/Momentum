@@ -38,9 +38,152 @@ from PyQt6.QtWidgets import (
 )
 import sys
 import os
-from typing import Optional
+from typing import Optional, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+class DriverCard(QWidget):
+    """Premium driver card widget with team colors and detailed info."""
+    
+    def __init__(self, drv, db=None, parent=None):
+        super().__init__(parent)
+        self.drv = drv
+        self.db = db
+        
+        # Main layout - horizontal for team color bar + content
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        
+        # Team color bar (left edge indicator)
+        team_bar = QWidget()
+        team_bar.setFixedWidth(5)
+        team = None
+        if db and hasattr(drv, 'current_team_id') and drv.current_team_id:
+            try:
+                team = db.get_team(int(drv.current_team_id))
+            except:
+                pass
+        
+        # Get team color - use team primary color or discipline-based color
+        if team and hasattr(team, 'primary_color'):
+            try:
+                team_color = team.primary_color if isinstance(team.primary_color, str) else '#B9F2FF'
+            except:
+                team_color = '#B9F2FF'
+        else:
+            # Default to discipline color or cyan
+            team_color = '#B9F2FF'
+        
+        team_bar.setStyleSheet(f'background-color: {team_color};')
+        h.addWidget(team_bar)
+        
+        # Main card content
+        card_content = QWidget()
+        card_layout = QVBoxLayout(card_content)
+        card_layout.setContentsMargins(12, 8, 12, 8)
+        card_layout.setSpacing(4)
+        
+        # Top row: Initials + Name + Team
+        top_row = QHBoxLayout()
+        top_row.setSpacing(12)
+        
+        # Initials box
+        display_name = get_display_name(drv)
+        initials_text = (display_name[:3].upper() if display_name and display_name != 'Unknown' else '---')
+        initials = QLabel(initials_text)
+        initials.setFixedSize(42, 42)
+        initials.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        initials.setStyleSheet(f'background-color: {team_color}; color: #1A1A1A; border-radius:4px; font-weight:700; font-size:13px;')
+        top_row.addWidget(initials)
+        
+        # Name + Team info
+        name_team_layout = QVBoxLayout()
+        name_team_layout.setSpacing(2)
+        
+        # Driver name
+        name_label = QLabel(display_name)
+        name_label.setStyleSheet('font-weight:700; color:#B9F2FF; font-size:13px;')
+        name_team_layout.addWidget(name_label)
+        
+        # Team name
+        team_name_text = ''
+        if team:
+            team_name_text = getattr(team, 'name', 'Unknown Team')
+        name_team_layout.addWidget(QLabel(team_name_text))
+        
+        top_row.addLayout(name_team_layout)
+        top_row.addStretch()
+        
+        # Age (computed_age property)
+        try:
+            age = drv.computed_age if hasattr(drv, 'computed_age') else 0
+        except:
+            age = 0
+        age_label = QLabel(f"{age}y")
+        age_label.setStyleSheet('color:#999; font-size:11px; font-weight:600;')
+        age_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        top_row.addWidget(age_label)
+        
+        card_layout.addLayout(top_row)
+        
+        # Bottom row: Nationality, Rating, Discipline
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(16)
+        
+        # Nationality with flag emoji
+        nat = get_display_nationality(drv)
+        nat_label = QLabel(nat)
+        nat_label.setStyleSheet('color:#888; font-size:10px;')
+        bottom_row.addWidget(nat_label)
+        
+        # Overall rating (scale 0-100)
+        rating = get_driver_skill_int(drv)
+        rating_label = QLabel(f"Rating: {rating}")
+        rating_label.setStyleSheet('color:#B9F2FF; font-size:11px; font-weight:600;')
+        bottom_row.addWidget(rating_label)
+        
+        # Preferred discipline (shortened)
+        discipline = getattr(drv, 'preferred_discipline', 'SINGLE_SEATER')
+        if discipline:
+            disc_short = discipline.split('_')[0][:3]  # "SINGLE_SEATER" -> "SIN"
+            disc_label = QLabel(disc_short)
+            disc_label.setStyleSheet('color:#666; font-size:10px;')
+            bottom_row.addWidget(disc_label)
+        
+        bottom_row.addStretch()
+        card_layout.addLayout(bottom_row)
+        
+        # Card styling
+        self.setStyleSheet(f'''
+            DriverCard {{
+                background-color: #2E2E2E;
+                border: 1px solid #444;
+                border-radius: 6px;
+            }}
+        ''')
+        
+        h.addWidget(card_content)
+
+    def set_selected(self, selected: bool):
+        """Update card appearance for selection."""
+        if selected:
+            self.setStyleSheet('''
+                DriverCard {
+                    background-color: #3A3A3A;
+                    border: 2px solid #FFB000;
+                    border-radius: 6px;
+                }
+            ''')
+        else:
+            self.setStyleSheet('''
+                DriverCard {
+                    background-color: #2E2E2E;
+                    border: 1px solid #444;
+                    border-radius: 6px;
+                }
+            ''')
 
 
 class MainMenuWindow(QMainWindow):
@@ -499,8 +642,10 @@ class QuickRaceSetupWindow(QDialog):
         super().__init__(parent)
         self.parent_window = parent
         self.drivers = drivers
+        self.db = getattr(parent, "db", None)
         self.display_mode = display_mode
         self.selected_driver = None
+        self.selected_team = None
 
         self.setWindowTitle("Quick Race Setup")
         # Use application-modal dialog with window flags so it appears as a
@@ -557,52 +702,15 @@ class QuickRaceSetupWindow(QDialog):
             QSizePolicy.Policy.Expanding
         )
         self.driver_list.setStyleSheet("""
-            QListWidget::item:selected { background-color: transparent; color: #353839; font-weight: bold; }
+            QListWidget { background-color: #1A1A1A; }
+            QListWidget::item:selected { background-color: transparent; }
         """)
 
         # Use SingleSelection so keyboard up/down arrows change the current
         # item; the stylesheet prevents the native selection background so
         # our DriverCard draws the visible selection instead.
         self.driver_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
-
-        # Small DriverCard widget for visual entries
-        class DriverCard(QWidget):
-            def __init__(self, drv, parent=None):
-                super().__init__(parent)
-                self.drv = drv
-                h = QHBoxLayout(self)
-                # Small internal padding, the card will draw its own background
-                h.setContentsMargins(6, 6, 6, 6)
-                h.setSpacing(8)
-                # Base card appearance
-                self._base_style = (
-                    'background:#2E2E2E; color:#B9F2FF; border-radius:8px; padding:6px;'
-                )
-                self._selected_style = (
-                    'background:#2E2E2E; color:#1A1A1A; border:3px solid #FFB000; border-radius:8px; padding:6px;'
-                )
-                self.setStyleSheet(self._base_style)
-
-                # Use display name helper for robust name access
-                display_name = get_display_name(drv)
-                initials_text = (display_name[:3].upper() if display_name and display_name != 'Unknown' else '---')
-                initials = QLabel(initials_text)
-                initials.setFixedSize(48, 48)
-                initials.setStyleSheet('background:transparent; color:#B9F2FF; border-radius:6px; font-weight:700; font-size:14px;')
-                initials.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                h.addWidget(initials)
-
-                v = QVBoxLayout()
-                title = QLabel(display_name)
-                title.setStyleSheet('font-weight:700; color:#B9F2FF; background: transparent;')
-                v.addWidget(title)
-
-                nat = get_display_nationality(drv)
-                sub = QLabel(f"{nat} • Skill: {get_driver_skill_int(drv)}")
-                sub.setStyleSheet('color:#999; font-size:11px; background: transparent;')
-                v.addWidget(sub)
-
-                h.addLayout(v)
+        self.driver_list.setSpacing(4)  # Compact spacing between cards
 
         # Populate with DriverCard widgets (selection pool defined in config)
         for driver in self.drivers[:QUICK_RACE_LIST_SIZE]:
@@ -613,7 +721,7 @@ class QuickRaceSetupWindow(QDialog):
             # Create a small visual card. We avoid setting the item's text
             # because the custom widget draws the name; setting text causes
             # duplicate name rendering in some Qt themes.
-            card = DriverCard(driver)
+            card = DriverCard(driver, self.db)
             # Ensure the item has enough height to show the widget
             item.setSizeHint(card.sizeHint())
 
@@ -640,6 +748,9 @@ class QuickRaceSetupWindow(QDialog):
 
         self.profile_skill = QLabel("Skill: -")
         profile_layout.addWidget(self.profile_skill)
+
+        self.profile_team = QLabel("Team: -")
+        profile_layout.addWidget(self.profile_team)
 
         # RadarWidget placeholder - draws a 6-axis polygon visualisation
         from PyQt6.QtWidgets import QSizePolicy
@@ -843,6 +954,18 @@ class QuickRaceSetupWindow(QDialog):
         discipline_layout.addWidget(self.discipline_combo)
         layout.addWidget(discipline_group)
 
+        # Tier selection (discipline first, then tier, then driver)
+        tier_group = QGroupBox("Team Tier")
+        tier_layout = QVBoxLayout(tier_group)
+        tier_label = QLabel("Choose Tier:")
+        tier_layout.addWidget(tier_label)
+
+        self.tier_combo = QComboBox()
+        self.tier_combo.setStyleSheet(self.discipline_combo.styleSheet())
+        self.tier_combo.currentIndexChanged.connect(self._on_tier_changed)
+        tier_layout.addWidget(self.tier_combo)
+        layout.addWidget(tier_group)
+
         # Track selection (populates based on selected discipline)
         track_group = QGroupBox("Track Selection")
         track_layout = QVBoxLayout(track_group)
@@ -880,7 +1003,9 @@ class QuickRaceSetupWindow(QDialog):
         layout.addWidget(track_group)
 
         # Populate tracks for initial discipline
+        self._update_tiers_for_selected_discipline()
         self._update_tracks_for_discipline()
+        self._refresh_driver_list_for_selected_discipline()
 
         # Connect selection updates
         # Manage selection both for mouse and keyboard changes
@@ -906,8 +1031,41 @@ class QuickRaceSetupWindow(QDialog):
         # Get selected tuning preset
         selected_preset = self.preset_combo.currentData()
 
-        # Get selected discipline
+        # Get selected discipline and tier
         selected_discipline = self.discipline_combo.currentData()
+        selected_tier = self.tier_combo.currentData() if hasattr(self, "tier_combo") else "TIER_2"
+
+        # Enforce valid driver-team contract for the chosen discipline.
+        selected_team = self._resolve_driver_team(self.selected_driver)
+        if selected_team is None:
+            QMessageBox.warning(
+                self,
+                "No Team Contract",
+                "Selected driver is not contracted to a team and cannot start a race."
+            )
+            return
+
+        team_disc = self._normalize_discipline(getattr(selected_team, "discipline", ""))
+        wanted_disc = self._normalize_discipline(selected_discipline)
+        if team_disc != wanted_disc:
+            QMessageBox.warning(
+                self,
+                "Discipline Mismatch",
+                "Selected driver's contracted team is not in the chosen discipline."
+            )
+            return
+
+        team_tier = self._normalize_tier(getattr(selected_team, "tier", ""))
+        wanted_tier = self._normalize_tier(selected_tier)
+        if wanted_tier and team_tier != wanted_tier:
+            QMessageBox.warning(
+                self,
+                "Tier Mismatch",
+                "Selected driver's contracted team is not in the chosen tier."
+            )
+            return
+
+        self.selected_team = selected_team
 
         # Build config (pace and overtake will be controlled during race)
         # Determine selected track id (None -> default)
@@ -920,10 +1078,12 @@ class QuickRaceSetupWindow(QDialog):
 
         config = {
             "driver": self.selected_driver,
+            "team": self.selected_team,
             "display_mode": self.display_mode,
             "tuning_preset": selected_preset,
             "track_id": track_id,
-            "discipline": selected_discipline
+            "discipline": selected_discipline,
+            "tier": self._canonical_tier(selected_tier)
         }
 
         driver_name = get_display_name(self.selected_driver)
@@ -934,7 +1094,235 @@ class QuickRaceSetupWindow(QDialog):
 
     def _on_discipline_changed(self):
         """Handle discipline selection change."""
+        self._update_tiers_for_selected_discipline()
         self._update_tracks_for_discipline()
+        self._refresh_driver_list_for_selected_discipline()
+
+    def _on_tier_changed(self):
+        """Handle tier selection change."""
+        self._refresh_driver_list_for_selected_discipline()
+
+    def _update_tiers_for_selected_discipline(self):
+        """Populate available tiers for the selected discipline."""
+        if not hasattr(self, "tier_combo"):
+            return
+
+        selected_discipline = self.discipline_combo.currentData()
+        previous_tier = self.tier_combo.currentData()
+        found_tiers = []
+
+        if self.db is not None and selected_discipline:
+            norm_disc = self._normalize_discipline(selected_discipline).lower()
+            with self.db.get_connection() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT DISTINCT tier
+                    FROM teams
+                    WHERE LOWER(REPLACE(discipline, ' ', '_')) = ?
+                    ORDER BY tier ASC
+                    """,
+                    (norm_disc,)
+                ).fetchall()
+                found_tiers = [self._canonical_tier(r[0]) for r in rows if r and r[0]]
+
+        if not found_tiers:
+            found_tiers = ["TIER_1", "TIER_2", "TIER_3"]
+
+        self.tier_combo.blockSignals(True)
+        self.tier_combo.clear()
+        for tier in found_tiers:
+            if tier.endswith("_1"):
+                display = "Tier 1"
+            elif tier.endswith("_2"):
+                display = "Tier 2"
+            elif tier.endswith("_3"):
+                display = "Tier 3"
+            else:
+                display = tier.replace("_", " ").title()
+            self.tier_combo.addItem(display, tier)
+
+        target = self._canonical_tier(previous_tier)
+        idx = self.tier_combo.findData(target)
+        self.tier_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.tier_combo.blockSignals(False)
+
+    @staticmethod
+    def _normalize_discipline(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        return str(value).strip().upper().replace(" ", "_")
+
+    @staticmethod
+    def _normalize_tier(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        return str(value).strip().lower().replace("_", "")
+
+    def _canonical_tier(self, value: Optional[str]) -> str:
+        norm = self._normalize_tier(value)
+        mapping = {
+            "tier1": "TIER_1",
+            "tier2": "TIER_2",
+            "tier3": "TIER_3",
+        }
+        return mapping.get(norm, str(value).strip().upper() if value else "TIER_2")
+
+    def _resolve_driver_team(self, driver):
+        """Resolve the contracted team object for a driver when available."""
+        if driver is None or self.db is None:
+            return None
+        team_id = getattr(driver, "current_team_id", None)
+        if not team_id:
+            return None
+        try:
+            return self.db.get_team(int(team_id))
+        except Exception:
+            return None
+
+    def _get_contracted_drivers_for_discipline(self, discipline: str, tier: Optional[str] = None) -> List[object]:
+        """Return drivers with valid team contracts matching the selected discipline."""
+        wanted = self._normalize_discipline(discipline)
+        wanted_tier = self._normalize_tier(tier)
+        if not wanted or self.db is None:
+            return []
+
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT d.id
+                FROM drivers d
+                JOIN teams t ON t.id = d.current_team_id
+                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                  AND LOWER(REPLACE(t.tier, '_', '')) = ?
+                ORDER BY d.speed DESC, d.id ASC
+                LIMIT ?
+                """,
+                (wanted.lower(), wanted_tier, int(QUICK_RACE_LIST_SIZE))
+            ).fetchall()
+
+        selected: List[object] = []
+        for row in rows:
+            driver = self.db.get_driver(int(row[0]))
+            if driver is not None:
+                selected.append(driver)
+        return selected
+
+    def _ensure_contracted_pool_for_discipline(self, discipline: str, tier: Optional[str] = None):
+        """Assign uncontracted drivers to discipline teams to keep quick race playable."""
+        wanted = self._normalize_discipline(discipline)
+        wanted_tier = self._normalize_tier(tier)
+        if not wanted or self.db is None:
+            return
+
+        with self.db.get_connection() as conn:
+            assigned_count = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM drivers d
+                JOIN teams t ON t.id = d.current_team_id
+                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                                    AND LOWER(REPLACE(t.tier, '_', '')) = ?
+                """,
+                                (wanted.lower(), wanted_tier)
+            ).fetchone()[0]
+
+            target = int(QUICK_RACE_LIST_SIZE)
+            needed = max(0, target - int(assigned_count))
+            if needed <= 0:
+                return
+
+            team_rows = conn.execute(
+                """
+                SELECT id
+                FROM teams
+                WHERE LOWER(REPLACE(discipline, ' ', '_')) = ?
+                                    AND LOWER(REPLACE(tier, '_', '')) = ?
+                ORDER BY operations_rating DESC, id ASC
+                """,
+                                (wanted.lower(), wanted_tier)
+            ).fetchall()
+            team_ids = [int(r[0]) for r in team_rows]
+            if not team_ids:
+                return
+
+            preferred = conn.execute(
+                """
+                SELECT id
+                FROM drivers
+                WHERE current_team_id IS NULL
+                  AND LOWER(REPLACE(preferred_discipline, ' ', '_')) = ?
+                ORDER BY speed DESC, id ASC
+                LIMIT ?
+                """,
+                (wanted.lower(), needed)
+            ).fetchall()
+            driver_ids = [int(r[0]) for r in preferred]
+
+            if len(driver_ids) < needed:
+                fallback = conn.execute(
+                    """
+                    SELECT id
+                    FROM drivers
+                    WHERE current_team_id IS NULL
+                    ORDER BY speed DESC, id ASC
+                    LIMIT ?
+                    """,
+                    (needed - len(driver_ids),)
+                ).fetchall()
+                driver_ids.extend(int(r[0]) for r in fallback)
+
+            for idx, driver_id in enumerate(driver_ids):
+                team_id = team_ids[idx % len(team_ids)]
+                conn.execute(
+                    """
+                    UPDATE drivers
+                    SET current_team_id = ?,
+                        contract_length = COALESCE(contract_length, 2),
+                        salary = COALESCE(salary, 800000)
+                    WHERE id = ?
+                    """,
+                    (team_id, driver_id)
+                )
+
+            if driver_ids:
+                conn.commit()
+                print(
+                    f"[QUICK RACE GRID FIX] Assigned {len(driver_ids)} drivers to {wanted} {self._canonical_tier(tier)} teams"
+                )
+
+    def _refresh_driver_list_for_selected_discipline(self):
+        """Rebuild quick-race driver list using contracted drivers in current discipline."""
+        if not hasattr(self, "driver_list") or not hasattr(self, "discipline_combo"):
+            return
+
+        selected_discipline = self.discipline_combo.currentData()
+        selected_tier = self.tier_combo.currentData() if hasattr(self, "tier_combo") else "TIER_2"
+        self._ensure_contracted_pool_for_discipline(selected_discipline, selected_tier)
+        contracted = self._get_contracted_drivers_for_discipline(selected_discipline, selected_tier)
+        if not contracted:
+            self.driver_list.clear()
+            self.selected_driver = None
+            self.selected_team = None
+            self.profile_name.setText("Name: No contracted drivers available")
+            self.profile_nationality.setText("Nationality: -")
+            self.profile_skill.setText("Skill: -")
+            self.profile_team.setText("Team: -")
+            return
+
+        self.driver_list.clear()
+        for driver in contracted[:QUICK_RACE_LIST_SIZE]:
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, driver)
+            
+            # Create a visual card using the new DriverCard design
+            card = DriverCard(driver, self.db)
+            item.setSizeHint(card.sizeHint())
+            
+            self.driver_list.addItem(item)
+            self.driver_list.setItemWidget(item, card)
+
+        self.driver_list.setCurrentRow(0)
+        self._on_driver_selected(self.driver_list.currentItem(), None)
 
     def _update_tracks_for_discipline(self):
         """Populate track list based on selected discipline."""
@@ -982,6 +1370,15 @@ class QuickRaceSetupWindow(QDialog):
         self.profile_name.setText(name)
         self.profile_nationality.setText(f"Nationality: {nationality}")
         self.profile_skill.setText(f"Skill: {skill}")
+
+        team = self._resolve_driver_team(driver)
+        self.selected_team = team
+        if team is not None:
+            team_name = getattr(team, "name", "Unknown Team")
+            team_tier = getattr(team, "tier", "N/A")
+            self.profile_team.setText(f"Team: {team_name} ({team_tier})")
+        else:
+            self.profile_team.setText("Team: Unassigned")
 
         # Update radar widget with canonical 6-axis values
         try:

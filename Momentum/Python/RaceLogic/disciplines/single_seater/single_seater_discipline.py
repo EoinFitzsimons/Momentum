@@ -188,6 +188,17 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         player_driver_id: Optional[int] = int(pdid) if isinstance(pdid, int) or (
             isinstance(pdid, float) and pdid.is_integer()) else None
 
+        ptids = tc.get('player_team_driver_ids')
+        player_team_driver_ids: Optional[list[int]] = None
+        if isinstance(ptids, list):
+            parsed_ids = []
+            for item in ptids:
+                try:
+                    parsed_ids.append(int(item))
+                except Exception:
+                    continue
+            player_team_driver_ids = parsed_ids
+
         po = tc.get('player_overrides')
         player_overrides: Optional[Dict[str, float]
                                    ] = po if isinstance(po, dict) else None
@@ -208,6 +219,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             realtime_speed=realtime_speed,
             track_points=tc.get('track_points'),
             player_driver_id=player_driver_id,
+            player_team_driver_ids=player_team_driver_ids,
             player_overrides=player_overrides
         )
 

@@ -217,6 +217,12 @@ class TeamDetails(BaseModel):
     # Metadata
     headquarters: str = ""
     biography: str = ""
+    team_version: int = 1
+    staff_limit: int = 0
+    driver_slots: int = 2
+    facility_upgrades: List[Dict[str, Any]] = Field(default_factory=list)
+    is_player_owned: bool = False
+    editable: bool = False
 
 
 class TeamCreate(BaseModel):
@@ -235,6 +241,10 @@ class TeamCreate(BaseModel):
     )
     team_principal: str = Field(default="")
     headquarters: str = Field(default="")
+    player_id: Optional[str] = Field(
+        default=None,
+        description="Optional player id to set initial ownership"
+    )
 
 
 class TeamCreateResponse(BaseModel):
@@ -256,6 +266,15 @@ class TeamUpdate(BaseModel):
     headquarters: Optional[str] = None
     biography: Optional[str] = None
     strategy_profile: Optional[str] = Field(None, examples=["aggressive", "defensive", "standard"])
+    expected_version: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optimistic locking version; reject if stale"
+    )
+    facility_upgrades: Optional[List[str]] = Field(
+        default=None,
+        description="Facility upgrades to apply, each consumes budget"
+    )
 
 
 class TeamUpdateResponse(BaseModel):
@@ -264,6 +283,7 @@ class TeamUpdateResponse(BaseModel):
     name: str
     updated_at: str
     changes: Dict[str, Any]
+    new_version: int = 1
     message: str
 
 
