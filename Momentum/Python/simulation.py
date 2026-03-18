@@ -1034,6 +1034,8 @@ def get_available_drivers(
     discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
     min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum average skill rating"),
     max_salary: Optional[float] = Query(None, description="Maximum salary budget"),
+    sort_by: str = Query("rating", description="Sort field: rating, name, age, salary, career_points"),
+    sort_order: str = Query("desc", description="Sort direction: asc or desc"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Results per page")
 ):
@@ -1057,7 +1059,9 @@ def get_available_drivers(
             min_rating=min_rating,
             max_salary=max_salary,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         total_pages = (total + page_size - 1) // page_size
@@ -1077,6 +1081,8 @@ def get_available_drivers(
 def get_available_staff(
     role: Optional[str] = Query(None, description="Filter by staff role"),
     min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum skill rating"),
+    sort_by: str = Query("rating", description="Sort field: rating, name, role, salary"),
+    sort_order: str = Query("desc", description="Sort direction: asc or desc"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Results per page")
 ):
@@ -1100,7 +1106,9 @@ def get_available_staff(
             role=role,
             min_rating=min_rating,
             page=page,
-            page_size=page_size
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order
         )
         
         total_pages = (total + page_size - 1) // page_size
@@ -1145,7 +1153,8 @@ def sign_driver_contract(request: DriverContractRequest):
             driver_id=request.driver_id,
             contract_length=request.contract_length,
             salary=request.salary,
-            performance_bonus=request.performance_bonus
+            performance_bonus=request.performance_bonus,
+            start_season=request.start_season
         )
         
         if not success:
@@ -1157,6 +1166,8 @@ def sign_driver_contract(request: DriverContractRequest):
             team_id=details['team_id'],
             team_name=details['team_name'],
             contract_length=details['contract_length'],
+            contract_start_season=details.get('contract_start_season'),
+            contract_end_season=details.get('contract_end_season'),
             salary=details['salary'],
             performance_bonus=details['performance_bonus'],
             total_contract_value=details['total_contract_value'],
@@ -1194,7 +1205,8 @@ def sign_staff_contract(request: StaffContractRequest):
             team_id=request.team_id,
             staff_id=request.staff_id,
             contract_length=request.contract_length,
-            salary=request.salary
+            salary=request.salary,
+            start_season=request.start_season
         )
         
         if not success:
@@ -1206,6 +1218,8 @@ def sign_staff_contract(request: StaffContractRequest):
             team_id=details['team_id'],
             team_name=details['team_name'],
             contract_length=details['contract_length'],
+            contract_start_season=details.get('contract_start_season'),
+            contract_end_season=details.get('contract_end_season'),
             salary=details['salary'],
             total_contract_value=details['total_contract_value'],
             remaining_budget=details['remaining_budget'],
