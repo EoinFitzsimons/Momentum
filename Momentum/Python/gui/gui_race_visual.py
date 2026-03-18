@@ -763,14 +763,13 @@ class TrackWidget(QWidget):
         self.camera_mode = mode
         if mode == 'follow' and follow_car_id is not None:
             self.follow_car_id = int(follow_car_id)
-            print(f"[CAMERA] Set follow_car_id to {self.follow_car_id}")
+            self.camera_zoom = 3.0  # 3x zoom for follow camera
+            print(f"[CAMERA] Set follow_car_id to {self.follow_car_id} (zoom: 3.0x)")
         else:
             self.follow_car_id = None
             if mode == 'full':
                 self.camera_zoom = 1.0
                 self.camera_rotation = 0
-            else:
-                self.camera_zoom = 3.0
         self.update()
 
     def _point_at_s(self, s: float) -> Optional[TrackPoint]:
