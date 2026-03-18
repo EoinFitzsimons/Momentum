@@ -15,9 +15,21 @@ from datetime import datetime, timedelta
 def get_available_drivers(self, discipline: Optional[str] = None,
                          min_rating: float = 0.0,
                          max_salary: Optional[float] = None,
-                         page: int = 1, page_size: int = 50):
+                         page: int = 1, page_size: int = 50,
+                         sort_by: str = "rating",
+                         sort_order: str = "desc"):
     """UC-15: Get available drivers for hire"""
     from database.models import Driver
+
+    sort_map = {
+        "rating": "((speed + racecraft + consistency) / 3.0)",
+        "name": "name",
+        "age": "birth_date",
+        "salary": "salary",
+        "career_points": "career_points"
+    }
+    sort_expr = sort_map.get((sort_by or "rating").lower(), sort_map["rating"])
+    direction = "DESC" if (sort_order or "desc").lower() != "asc" else "ASC"
     
     with self.get_connection() as conn:
         where_clauses = ["current_team_id IS NULL", "career_phase = 'active'"]
@@ -44,7 +56,7 @@ def get_available_drivers(self, discipline: Optional[str] = None,
         query_sql = f"""
             SELECT * FROM drivers 
             WHERE {where_sql}
-            ORDER BY (speed + racecraft + consistency) DESC
+            ORDER BY {sort_expr} {direction}, id ASC
             LIMIT ? OFFSET ?
         """
         params.extend([page_size, offset])
@@ -56,8 +68,19 @@ def get_available_drivers(self, discipline: Optional[str] = None,
 
 def get_available_staff(self, role: Optional[str] = None,
                        min_rating: float = 0.0,
-                       page: int = 1, page_size: int = 50):
+                       page: int = 1, page_size: int = 50,
+                       sort_by: str = "rating",
+                       sort_order: str = "desc"):
     """UC-17: Get available staff for hire"""
+    sort_map = {
+        "rating": "rating",
+        "name": "name",
+        "role": "role",
+        "salary": "annual_salary"
+    }
+    sort_expr = sort_map.get((sort_by or "rating").lower(), sort_map["rating"])
+    direction = "DESC" if (sort_order or "desc").lower() != "asc" else "ASC"
+
     with self.get_connection() as conn:
         where_clauses = ["current_team_id IS NULL"]
         params = []
@@ -79,7 +102,7 @@ def get_available_staff(self, role: Optional[str] = None,
         query_sql = f"""
             SELECT * FROM staff_members 
             WHERE {where_sql}
-            ORDER BY rating DESC
+            ORDER BY {sort_expr} {direction}, id ASC
             LIMIT ? OFFSET ?
         """
         params.extend([page_size, offset])
@@ -91,28 +114,61 @@ def get_available_staff(self, role: Optional[str] = None,
 
 
 def sign_driver_contract(self, driver_id: int, team_id: int,
-                       contract_length: int, salary: float) -> bool:
+                       contract_length: int, salary: float,
+                       contract_start_season: Optional[int] = None,
+                       performance_bonus: float = 0.0) -> bool:
     """UC-16: Sign driver to team contract"""
+    if contract_start_season is None:
+        contract_start_season = datetime.now().year
+    contract_end_season = contract_start_season + max(1, contract_length) - 1
+
     with self.get_connection() as conn:
         conn.execute("""
             UPDATE drivers
             SET current_team_id = ?,
                 contract_length = ?,
-                salary = ?
+                salary = ?,
+                contract_start_season = ?,
+                contract_end_season = ?,
+                performance_bonus = ?
             WHERE id = ?
-        """, (team_id, contract_length, salary, driver_id))
+        """, (
+            team_id,
+            contract_length,
+            salary,
+            contract_start_season,
+            contract_end_season,
+            performance_bonus,
+            driver_id
+        ))
         return True
 
 
 def sign_staff_contract(self, staff_id: int, team_id: int,
-                      contract_length: int, salary: float) -> bool:
+                      contract_length: int, salary: float,
+                      contract_start_season: Optional[int] = None) -> bool:
     """UC-18: Sign staff to team contract"""
+    if contract_start_season is None:
+        contract_start_season = datetime.now().year
+    contract_end_season = contract_start_season + max(1, contract_length) - 1
+
     with self.get_connection() as conn:
         conn.execute("""
             UPDATE staff_members
-            SET current_team_id = ?
+            SET current_team_id = ?,
+                annual_salary = ?,
+                contract_length = ?,
+                contract_start_season = ?,
+                contract_end_season = ?
             WHERE id = ?
-        """, (team_id, staff_id))
+        """, (
+            team_id,
+            salary,
+            contract_length,
+            contract_start_season,
+            contract_end_season,
+            staff_id
+        ))
         return True
 
 
@@ -122,7 +178,10 @@ def release_driver(self, driver_id: int) -> bool:
         conn.execute("""
             UPDATE drivers
             SET current_team_id = NULL,
-                contract_length = NULL
+                contract_length = NULL,
+                contract_start_season = NULL,
+                contract_end_season = NULL,
+                performance_bonus = 0.0
             WHERE id = ?
         """, (driver_id,))
         return True
@@ -133,10 +192,71 @@ def release_staff(self, staff_id: int) -> bool:
     with self.get_connection() as conn:
         conn.execute("""
             UPDATE staff_members
-            SET current_team_id = NULL
+            SET current_team_id = NULL,
+                annual_salary = NULL,
+                contract_length = NULL,
+                contract_start_season = NULL,
+                contract_end_season = NULL
             WHERE id = ?
         """, (staff_id,))
         return True
+
+
+def expire_contracts_for_season(self, season: int) -> Dict[str, int]:
+    """Release personnel whose contracts expired before the target season starts."""
+    with self.get_connection() as conn:
+        driver_rows = conn.execute(
+            """
+            SELECT id FROM drivers
+            WHERE current_team_id IS NOT NULL
+              AND contract_end_season IS NOT NULL
+              AND contract_end_season < ?
+            """,
+            (season,)
+        ).fetchall()
+
+        staff_rows = conn.execute(
+            """
+            SELECT id FROM staff_members
+            WHERE current_team_id IS NOT NULL
+              AND contract_end_season IS NOT NULL
+              AND contract_end_season < ?
+            """,
+            (season,)
+        ).fetchall()
+
+        for row in driver_rows:
+            conn.execute(
+                """
+                UPDATE drivers
+                SET current_team_id = NULL,
+                    contract_length = NULL,
+                    contract_start_season = NULL,
+                    contract_end_season = NULL,
+                    performance_bonus = 0.0
+                WHERE id = ?
+                """,
+                (row["id"],)
+            )
+
+        for row in staff_rows:
+            conn.execute(
+                """
+                UPDATE staff_members
+                SET current_team_id = NULL,
+                    annual_salary = NULL,
+                    contract_length = NULL,
+                    contract_start_season = NULL,
+                    contract_end_season = NULL
+                WHERE id = ?
+                """,
+                (row["id"],)
+            )
+
+        return {
+            "drivers_released": len(driver_rows),
+            "staff_released": len(staff_rows)
+        }
 
 
 def update_team_budget(self, team_id: int, amount: float) -> float:
@@ -290,6 +410,7 @@ def patch_database_manager():
     DatabaseManager.recycle_driver = recycle_driver
     DatabaseManager.get_drivers_for_progression = get_drivers_for_progression
     DatabaseManager.increment_driver_experience = increment_driver_experience
+    DatabaseManager.expire_contracts_for_season = expire_contracts_for_season
 
 
 # Auto-patch on import
