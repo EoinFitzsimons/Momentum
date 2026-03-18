@@ -342,6 +342,7 @@ class AvailableDriver(BaseModel):
     # Contract info
     preferred_discipline: str = "SINGLE_SEATER"
     career_phase: str = "active"  # active, veteran, rookie, declining
+    contract_end_season: Optional[int] = None
     estimated_salary: float = Field(ge=0.0, description="Annual salary in default currency")
     contract_status: str = "available"  # available, contracted, retired
 
@@ -362,6 +363,7 @@ class AvailableStaff(BaseModel):
     role: str
     rating: float = Field(ge=0.0, le=100.0)
     current_team_id: Optional[int] = None
+    contract_end_season: Optional[int] = None
     estimated_salary: float = Field(ge=0.0, description="Annual salary in default currency")
     contract_status: str = "available"
 
@@ -382,6 +384,7 @@ class DriverContractRequest(BaseModel):
     contract_length: int = Field(..., ge=1, le=5, description="Contract duration in seasons")
     salary: float = Field(..., gt=0, description="Annual salary")
     performance_bonus: float = Field(default=0.0, ge=0, description="Bonus for podiums/wins")
+    start_season: Optional[int] = Field(default=None, ge=1900, le=2500, description="First season covered by contract")
 
 
 class DriverContractResponse(BaseModel):
@@ -391,6 +394,8 @@ class DriverContractResponse(BaseModel):
     team_id: int
     team_name: str
     contract_length: int
+    contract_start_season: Optional[int] = None
+    contract_end_season: Optional[int] = None
     salary: float
     performance_bonus: float
     total_contract_value: float
@@ -404,6 +409,7 @@ class StaffContractRequest(BaseModel):
     staff_id: int = Field(..., gt=0, description="Staff member being hired")
     contract_length: int = Field(..., ge=1, le=5, description="Contract duration in seasons")
     salary: float = Field(..., gt=0, description="Annual salary")
+    start_season: Optional[int] = Field(default=None, ge=1900, le=2500, description="First season covered by contract")
 
 
 class StaffContractResponse(BaseModel):
@@ -413,6 +419,8 @@ class StaffContractResponse(BaseModel):
     team_id: int
     team_name: str
     contract_length: int
+    contract_start_season: Optional[int] = None
+    contract_end_season: Optional[int] = None
     salary: float
     total_contract_value: float
     remaining_budget: float
@@ -450,7 +458,7 @@ class DriverProgression(BaseModel):
     # Progression factors
     skill_changes: Dict[str, float] = Field(description="Skill attribute changes")
     experience_gain: int = Field(default=0, description="Career starts added")
-    form_trend: float = Field(ge=-10.0, le=10.0, description="Current form trajectory")
+    form_trend: float = Field(default=0.0, ge=-10.0, le=10.0, description="Current form trajectory")
     
     # Career events
     retired: bool = False

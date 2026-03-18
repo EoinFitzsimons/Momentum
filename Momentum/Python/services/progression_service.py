@@ -318,9 +318,16 @@ class ProgressionService:
                 'improved': 0,
                 'declined': 0,
                 'retired': 0,
-                'recycled': 0
+                'recycled': 0,
+                'contracts_expired_drivers': 0,
+                'contracts_expired_staff': 0
             }
         }
+
+        # Release personnel with expired contracts as the new season opens.
+        expired = self.db.expire_contracts_for_season(season)
+        results['summary']['contracts_expired_drivers'] = expired.get('drivers_released', 0)
+        results['summary']['contracts_expired_staff'] = expired.get('staff_released', 0)
         
         for driver in drivers:
             # Apply progression

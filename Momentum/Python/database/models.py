@@ -65,6 +65,9 @@ class Driver:
     previous_teams: str = "[]"  # JSON list stored as text
     contract_length: Optional[int] = None
     salary: Optional[float] = None
+    contract_start_season: Optional[int] = None
+    contract_end_season: Optional[int] = None
+    performance_bonus: float = 0.0
     name_locale: Optional[str] = None
     
     # Legacy/extra data
@@ -196,6 +199,10 @@ class StaffMember:
     role: str
     rating: float
     current_team_id: Optional[int] = None
+    annual_salary: Optional[float] = None
+    contract_length: Optional[int] = None
+    contract_start_season: Optional[int] = None
+    contract_end_season: Optional[int] = None
 
 
 #  SCHEMA_SQL kept for tooling that needs the minimal 7-table schema
@@ -246,6 +253,9 @@ CREATE TABLE IF NOT EXISTS drivers (
     previous_teams TEXT DEFAULT '[]',
     contract_length INTEGER DEFAULT NULL,
     salary REAL DEFAULT NULL,
+    contract_start_season INTEGER DEFAULT NULL,
+    contract_end_season INTEGER DEFAULT NULL,
+    performance_bonus REAL DEFAULT 0.0,
     name_locale TEXT DEFAULT NULL,
     FOREIGN KEY (current_team_id) REFERENCES teams(id)
 );
@@ -363,6 +373,10 @@ CREATE TABLE IF NOT EXISTS staff_members (
     role TEXT NOT NULL,
     rating REAL NOT NULL DEFAULT 50.0,
     current_team_id INTEGER,
+    annual_salary REAL DEFAULT NULL,
+    contract_length INTEGER DEFAULT NULL,
+    contract_start_season INTEGER DEFAULT NULL,
+    contract_end_season INTEGER DEFAULT NULL,
     FOREIGN KEY (current_team_id) REFERENCES teams(id)
 );
 
