@@ -138,6 +138,21 @@ TIER_DISTRIBUTION = {
     "tier3": 0.55   # Remaining 55%
 }
 
+# Common Faker locales for staff name generation
+COMMON_LOCALES = [
+    'en_US', 'en_GB', 'de_DE', 'fr_FR', 'it_IT', 'es_ES', 
+    'pt_BR', 'ja_JP', 'zh_CN', 'ru_RU', 'ko_KR', 'nl_NL'
+]
+
+DRIVER_SLOTS_PER_DISCIPLINE = {
+    "SINGLE_SEATER": 2,
+    "PRODUCTION_TOURING": 2,
+    "URBAN_STREET": 2,
+    "DRAG_ACCELERATION": 2,
+    "SPRINT_RALLYCROSS": 2,
+    "ENDURANCE": 4,
+}
+
 # Locale mapping is provided by tools.locale_mapping (best-effort per country)
 
 
@@ -335,14 +350,27 @@ def generate_team_name(fake: Faker, discipline: str, existing_names: set) -> Opt
         company = fake.company().split()[0]  # Take first word only
         surname = fake.last_name()
         city = fake.city()
+        place = fake.city()
+        adjective = random.choice([
+            "Velocity", "Titan", "Apex", "Rapid", "Vanguard", "Prime", "Vertex"
+        ])
         
         # Clean company name (remove Inc, Ltd, etc.)
         company = re.sub(r'\b(Inc|Ltd|LLC|Corp|Group|Holdings)\b\.?', '', company, flags=re.IGNORECASE).strip()
         company = to_latin(company)
         surname = to_latin(surname)
         city = to_latin(city)
+        place = to_latin(place)
+        adjective = to_latin(adjective)
         
-        name = pattern.format(company=company, surname=surname, city=city)
+        values = {
+            "company": company,
+            "surname": surname,
+            "city": city,
+            "place": place,
+            "adjective": adjective,
+        }
+        name = pattern.format_map(values)
         name = clean_name(name)
         
         if name and re.search(r'[A-Za-z]', name) and name not in existing_names:
@@ -414,7 +442,12 @@ def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list
             for i in range(teams_per_discipline):
                 nationality = random.choice(country_codes)
                 locale = get_locale_for_nationality(nationality)
-                fake = Faker(locale)
+                try:
+                    fake = Faker(locale)
+                except Exception:
+                    # Fall back to en_US if locale is invalid
+                    fake = Faker("en_US")
+                    locale = "en_US"
                 
                 # Determine tier based on distribution
                 rand = random.random()
@@ -496,8 +529,11 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
         
         for i in range(count):
             # Random locale for name
-            locale = random.choice(LOCALES)
-            fake = Faker(locale)
+            locale = random.choice(COMMON_LOCALES)
+            try:
+                fake = Faker(locale)
+            except Exception:
+                fake = Faker('en_US')
             
             # Select role based on weights
             role = random.choice(role_pool)
@@ -525,6 +561,211 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
     
     print(f"✓ Created {staff_created} staff members")
     return staff_created
+
+
+def assign_driver_contracts(db: DatabaseManager, disciplines: list) -> int:
+    """Assign drivers to teams by discipline to create playable rosters."""
+    print("\n=== Assigning Driver Contracts to Teams ===")
+    assignments = 0
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+
+        for discipline in disciplines:
+            slots = DRIVER_SLOTS_PER_DISCIPLINE.get(discipline, 2)
+
+            team_rows = cursor.execute(
+                """
+                SELECT id
+                FROM teams
+                WHERE discipline = ?
+                ORDER BY operations_rating DESC, id ASC
+                """,
+                (discipline,)
+            ).fetchall()
+            team_ids = [row[0] for row in team_rows]
+            if not team_ids:
+                continue
+
+            driver_rows = cursor.execute(
+                """
+                SELECT id
+                FROM drivers
+                WHERE current_team_id IS NULL
+                  AND preferred_discipline = ?
+                ORDER BY speed DESC, racecraft DESC, consistency DESC, id ASC
+                """,
+                (discipline,)
+            ).fetchall()
+            driver_ids = [row[0] for row in driver_rows]
+
+            if not driver_ids:
+                continue
+
+            team_slot_targets = [(team_id, slot) for team_id in team_ids for slot in range(slots)]
+            pair_count = min(len(driver_ids), len(team_slot_targets))
+
+            for idx in range(pair_count):
+                team_id = team_slot_targets[idx][0]
+                driver_id = driver_ids[idx]
+                contract_length = random.randint(1, 3)
+                salary = round(random.uniform(600_000, 4_000_000), 2)
+                cursor.execute(
+                    """
+                    UPDATE drivers
+                    SET current_team_id = ?,
+                        contract_length = ?,
+                        salary = ?
+                    WHERE id = ?
+                    """,
+                    (team_id, contract_length, salary, driver_id)
+                )
+                assignments += 1
+
+            print(
+                f"  ✓ {discipline}: assigned {pair_count} drivers across "
+                f"{len(team_ids)} teams ({slots} slots/team target)"
+            )
+
+        conn.commit()
+
+    print(f"✓ Total driver contracts assigned: {assignments}")
+    return assignments
+
+
+def adjust_drivers_by_tier(db: DatabaseManager) -> int:
+    """Adjust driver attributes and ages based on their team's tier.
+    
+    Tier weighting:
+    - TIER_1: High skill (70-95+), experienced drivers (28-45 mostly)
+    - TIER_2: Mid skill (55-80), mixed ages (20-40)
+    - TIER_3: Lower skill (40-70 mostly), young drivers (18-32) with occasional veterans
+    """
+    print("\n=== Adjusting Driver Attributes by Team Tier ===")
+    
+    adjusted_count = 0
+    tier_adjustments = {}
+    
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Get all drivers who are assigned to teams (current_team_id IS NOT NULL)
+        driver_rows = cursor.execute("""
+            SELECT d.id, d.birth_date, d.speed, d.racecraft, d.consistency, 
+                   d.fitness, d.reactions, d.pressure, d.setup_knowledge,
+                   d.fuel_management, d.tyre_management, d.feedback, d.adaptability,
+                   t.tier
+            FROM drivers d
+            JOIN teams t ON d.current_team_id = t.id
+            ORDER BY t.tier, d.id
+        """).fetchall()
+        
+        for row in driver_rows:
+            driver_id = row[0]
+            birth_date_str = row[1]
+            tier = row[13]
+            
+            if tier not in tier_adjustments:
+                tier_adjustments[tier] = 0
+            
+            # Calculate current age
+            try:
+                birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+                current_age = (datetime.utcnow().date() - birth_date).days // 365
+            except:
+                current_age = 25
+            
+            # Determine new age and skill adjustments based on tier
+            if tier.lower() in ('tier1', 'tier_1', '1'):
+                # TIER 1: Experienced drivers, high skill
+                # 80% should be 28-45 years old (peak/veteran)
+                rand = random.random()
+                if rand < 0.80:
+                    new_age = random.randint(28, 45)
+                else:
+                    new_age = random.randint(22, 27)  # Occasional rising star
+                
+                # High skill distribution for tier 1
+                skill_mean = 78.0
+                skill_std = 10.0
+                
+            elif tier.lower() in ('tier2', 'tier_2', '2'):
+                # TIER 2: Mid-range drivers, balanced ages
+                # Mix of young drivers (22-30) and experienced (30-38)
+                new_age = random.choice(
+                    [random.randint(22, 30)] * 6 +  # 60% younger
+                    [random.randint(30, 38)] * 4     # 40% more experienced
+                )
+                
+                # Mid-range skill distribution for tier 2
+                skill_mean = 62.0
+                skill_std = 12.0
+                
+            else:  # TIER 3
+                # TIER 3: Young drivers mostly, lower skill
+                # 85% young (18-32), 15% veterans (35+)
+                rand = random.random()
+                if rand < 0.85:
+                    new_age = random.randint(18, 32)  # Young pool
+                else:
+                    new_age = random.randint(35, 45)  # Occasional veteran
+                
+                # Lower skill distribution for tier 3, but still varied
+                skill_mean = 55.0
+                skill_std = 13.0
+            
+            # Calculate new birth date from age
+            new_birth_date = (datetime.utcnow().date() - timedelta(days=365 * new_age)).strftime('%Y-%m-%d')
+            
+            # Generate tier-appropriate skill attributes
+            speed = skill_distribution(skill_mean, skill_std)
+            racecraft = skill_distribution(skill_mean - 3, skill_std)
+            consistency = skill_distribution(skill_mean - 5, skill_std)
+            fitness = skill_distribution(60.0, 10.0)  # Relatively consistent across tiers
+            reactions = skill_distribution(skill_mean, skill_std)
+            pressure = skill_distribution(skill_mean - 5, skill_std)
+            setup_knowledge = skill_distribution(skill_mean - 10, skill_std)
+            fuel_management = skill_distribution(55.0, 12.0)  # Less tier-dependent
+            tyre_management = skill_distribution(55.0, 12.0)  # Less tier-dependent
+            feedback = skill_distribution(55.0, 10.0)
+            adaptability = skill_distribution(55.0, 12.0)
+            
+            # Update driver with new attributes
+            cursor.execute("""
+                UPDATE drivers
+                SET birth_date = ?,
+                    speed = ?,
+                    racecraft = ?,
+                    consistency = ?,
+                    fitness = ?,
+                    reactions = ?,
+                    pressure = ?,
+                    setup_knowledge = ?,
+                    fuel_management = ?,
+                    tyre_management = ?,
+                    feedback = ?,
+                    adaptability = ?
+                WHERE id = ?
+            """, (
+                new_birth_date,
+                speed, racecraft, consistency, fitness, reactions, pressure,
+                setup_knowledge, fuel_management, tyre_management, feedback,
+                adaptability, driver_id
+            ))
+            
+            adjusted_count += 1
+            tier_adjustments[tier] += 1
+        
+        conn.commit()
+    
+    # Print summary
+    for tier in sorted(tier_adjustments.keys()):
+        count = tier_adjustments[tier]
+        tier_label = tier.replace('_', ' ').title()
+        print(f"  ✓ {tier_label}: Adjusted {count} drivers")
+    
+    print(f"✓ Total drivers adjusted: {adjusted_count}")
+    return adjusted_count
 
 
 # ============================================================================
@@ -577,6 +818,8 @@ def main():
         drivers_created = seed_drivers(db, args.drivers, disciplines)
         teams_created = seed_teams(db, args.teams_per_discipline, disciplines)
         staff_created = seed_staff(db, args.staff)
+        contracts_assigned = assign_driver_contracts(db, disciplines)
+        drivers_adjusted = adjust_drivers_by_tier(db)
         
         # Show final stats
         final_stats = db.get_database_stats()
@@ -591,6 +834,8 @@ def main():
         print(f"  Drivers: {drivers_created}")
         print(f"  Teams: {teams_created}")
         print(f"  Staff: {staff_created}")
+        print(f"  Driver contracts: {contracts_assigned}")
+        print(f"  Drivers adjusted by tier: {drivers_adjusted}")
         
         # Sample some entries
         print("\n" + "=" * 70)

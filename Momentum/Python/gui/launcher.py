@@ -104,6 +104,11 @@ class MomentumLauncher:
         if player_driver:
             self.race_window.set_player_driver(player_driver)
 
+        # Set player team so race controls can apply to all team cars.
+        player_team = config.get('team')
+        if player_team and hasattr(self.race_window, 'set_player_team'):
+            self.race_window.set_player_team(player_team)
+
         # Set tuning preset
         tuning_preset = config.get('tuning_preset', 'balanced')
         self.race_window.set_tuning_preset(tuning_preset)

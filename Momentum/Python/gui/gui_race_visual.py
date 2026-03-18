@@ -58,6 +58,7 @@ from PyQt6.QtWidgets import QHeaderView, QSizePolicy
 import sys
 import os
 import math
+import re
 import time
 import threading
 import traceback as _traceback
@@ -753,14 +754,22 @@ class TrackWidget(QWidget):
         self._telemetry_jumps: Dict[int, List[tuple]] = {}
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
-        """Set camera mode and target car."""
+        """Set camera mode and target car.
+        
+        Args:
+            mode: 'full' for full track view or 'follow' for car-follow view
+            follow_car_id: Driver ID to follow (only used when mode='follow')
+        """
         self.camera_mode = mode
-        self.follow_car_id = follow_car_id
-        if mode == 'full':
-            self.camera_zoom = 1.0
-            self.camera_rotation = 0
+        if mode == 'follow' and follow_car_id is not None:
+            self.follow_car_id = int(follow_car_id)
+            self.camera_zoom = 3.0  # 3x zoom for follow camera
+            print(f"[CAMERA] Set follow_car_id to {self.follow_car_id} (zoom: 3.0x)")
         else:
-            self.camera_zoom = 3.0
+            self.follow_car_id = None
+            if mode == 'full':
+                self.camera_zoom = 1.0
+                self.camera_rotation = 0
         self.update()
 
     def _point_at_s(self, s: float) -> Optional[TrackPoint]:
@@ -1095,28 +1104,37 @@ class TrackWidget(QWidget):
                         followed_car = car
                         break
 
-                if followed_car and len(self.track_points) > 0:
-                    # Get car position - use binary search like _draw_cars does
-                    normalized_s = followed_car.s % self.track_length
-                    pt = self._point_at_s(normalized_s)
-                    if pt is None:
-                        pt = self.track_points[0]
+                if followed_car and len(self.track_points) > 0 and self.track_length > 0:
+                    try:
+                        # Get car position - use binary search like _draw_cars does
+                        normalized_s = float(followed_car.s) % float(self.track_length)
+                        pt = self._point_at_s(normalized_s)
+                        if pt is None:
+                            pt = self.track_points[0]
 
-                    # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
-                    # 1. Translate viewport centre to canvas origin
-                    # 2. Rotate based on car heading direction (track angle)
-                    # 3. Scale (flip Y for screen coords)
-                    # 4. Translate world so car is at origin
-                    painter.translate(center_x, center_y)
-                    # Rotate track ahead to "up" on screen
-                    painter.rotate(math.degrees(pt.theta))
-                    painter.scale(
-                        self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
-                    painter.translate(-pt.x, -pt.y)  # Centre on car position
+                        # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
+                        # 1. Translate viewport centre to canvas origin
+                        # 2. Rotate based on car heading direction (track angle)
+                        # 3. Scale (flip Y for screen coords)
+                        # 4. Translate world so car is at origin
+                        painter.translate(center_x, center_y)
+                        # Rotate track ahead to "up" on screen
+                        painter.rotate(math.degrees(pt.theta))
+                        painter.scale(
+                            self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
+                        painter.translate(-pt.x, -pt.y)  # Centre on car position
+                    except Exception as e:
+                        print(f"[CAMERA] Follow camera error: {e} - falling back to full view")
+                        painter.translate(center_x, center_y)
+                        painter.scale(1, -1)
+                        self.camera_mode = 'full'
                 else:
-                    # Fallback to full view
+                    # Fallback to full view if car not found or no track data
+                    if self.follow_car_id is not None:
+                        print(f"[CAMERA] Followed car {self.follow_car_id} not found or no track data - falling back to full view")
                     painter.translate(center_x, center_y)
                     painter.scale(1, -1)
+                    self.camera_mode = 'full'
             else:
                 # Full track view with responsive zoom based on viewport size
                 painter.translate(center_x, center_y)
@@ -2236,6 +2254,8 @@ class RaceWindow(QMainWindow):
 
             # Player control
             self.player_driver_id: Optional[int] = None
+            self.player_team_id: Optional[int] = None
+            self.player_team_driver_ids: List[int] = []
             self.player_overrides: Dict[str, float] = {
                 'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
             self.tuning_preset: str = 'balanced'  # Simulation tuning preset
@@ -2621,16 +2641,16 @@ class RaceWindow(QMainWindow):
 
             # Load drivers
             try:
-                all_drivers = self.db.get_all_drivers()
-                if not all_drivers:
+                loaded_drivers = self._load_race_drivers()
+                if not loaded_drivers:
                     self.info_label.setText("Error: No drivers in database")
                     self.start_btn.setEnabled(False)
                     print("ERROR: No drivers found in database")
                     return
 
-                # Use configured number of drivers (ordered by id from DB)
-                self.drivers = all_drivers[:RACE_GRID_SIZE] if len(
-                    all_drivers) >= RACE_GRID_SIZE else all_drivers
+                # Use configured number of drivers for race grid.
+                self.drivers = loaded_drivers[:RACE_GRID_SIZE] if len(
+                    loaded_drivers) >= RACE_GRID_SIZE else loaded_drivers
 
                 print(f"Loaded {len(self.drivers)} drivers")
                 if self.drivers:
@@ -2638,6 +2658,16 @@ class RaceWindow(QMainWindow):
                         f"First driver: id={
                             self.drivers[0].id}, name={
                             self.drivers[0].name}")
+
+                placeholder_count = sum(
+                    1 for d in self.drivers
+                    if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
+                )
+                if placeholder_count > 0:
+                    print(
+                        f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
+                        "Run scripts/seed_career_mode.py for realistic Faker data."
+                    )
 
                 # Prepare deterministic driver colours (shared between cars, standings, livery)
                 # Extended palette for up to 16 drivers
@@ -2988,6 +3018,131 @@ class RaceWindow(QMainWindow):
 
     # _auto_start_race method removed: user must click Start Race manually
 
+    def _load_race_drivers(self):
+        """Load race entrants with championship discipline/team constraints."""
+        if self.db is None:
+            return []
+
+        # Force entrants to come from contracted drivers in teams of the
+        # active discipline for both championship and quick-race modes.
+        self._ensure_contracted_grid_for_discipline(self._initial_discipline, RACE_GRID_SIZE)
+        contracted = self._get_contracted_discipline_drivers(self._initial_discipline, RACE_GRID_SIZE)
+        if contracted:
+            return contracted
+
+        # Last-resort fallback if discipline data is unavailable.
+        all_drivers = self.db.get_all_drivers()
+        return all_drivers[:RACE_GRID_SIZE] if len(all_drivers) >= RACE_GRID_SIZE else all_drivers
+
+    def _get_contracted_discipline_drivers(self, discipline: str, limit: int):
+        """Return contracted drivers for teams in selected discipline."""
+        if self.db is None:
+            return []
+
+        norm = (discipline or "").lower().replace(" ", "_")
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT d.id
+                FROM drivers d
+                JOIN teams t ON t.id = d.current_team_id
+                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                ORDER BY d.speed DESC, d.id ASC
+                LIMIT ?
+                """,
+                (norm, int(limit))
+            ).fetchall()
+
+        out = []
+        for row in rows:
+            drv = self.db.get_driver(int(row[0]))
+            if drv:
+                out.append(drv)
+        return out
+
+    def _ensure_contracted_grid_for_discipline(self, discipline: str, target_grid_size: int):
+        """Assign available drivers to discipline teams so race grid is playable."""
+        if self.db is None:
+            return
+
+        norm = (discipline or "").lower().replace(" ", "_")
+        with self.db.get_connection() as conn:
+            team_rows = conn.execute(
+                """
+                SELECT id
+                FROM teams
+                WHERE LOWER(REPLACE(discipline, ' ', '_')) = ?
+                ORDER BY operations_rating DESC, id ASC
+                """,
+                (norm,)
+            ).fetchall()
+            team_ids = [int(r[0]) for r in team_rows]
+            if not team_ids:
+                return
+
+            assigned_count = conn.execute(
+                """
+                SELECT COUNT(*)
+                FROM drivers d
+                JOIN teams t ON t.id = d.current_team_id
+                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                """,
+                (norm,)
+            ).fetchone()[0]
+
+            needed = max(0, int(target_grid_size) - int(assigned_count))
+            if needed == 0:
+                return
+
+            preferred_pool = conn.execute(
+                """
+                SELECT id
+                FROM drivers
+                WHERE current_team_id IS NULL
+                  AND LOWER(REPLACE(preferred_discipline, ' ', '_')) = ?
+                ORDER BY speed DESC, id ASC
+                LIMIT ?
+                """,
+                (norm, needed)
+            ).fetchall()
+            selected_ids = [int(r[0]) for r in preferred_pool]
+
+            if len(selected_ids) < needed:
+                remaining = needed - len(selected_ids)
+                fallback_pool = conn.execute(
+                    """
+                    SELECT id
+                    FROM drivers
+                    WHERE current_team_id IS NULL
+                    ORDER BY speed DESC, id ASC
+                    LIMIT ?
+                    """,
+                    (remaining,)
+                ).fetchall()
+                selected_ids.extend(int(r[0]) for r in fallback_pool)
+
+            if not selected_ids:
+                return
+
+            for idx, driver_id in enumerate(selected_ids):
+                team_id = team_ids[idx % len(team_ids)]
+                conn.execute(
+                    """
+                    UPDATE drivers
+                    SET current_team_id = ?,
+                        contract_length = COALESCE(contract_length, 2),
+                        salary = COALESCE(salary, 800000)
+                    WHERE id = ?
+                    """,
+                    (team_id, driver_id)
+                )
+            conn.commit()
+
+            print(
+                f"[GRID FIX] Assigned {len(selected_ids)} drivers to {discipline} teams "
+                f"to reach a playable grid"
+            )
+
     def _start_race(self):
         """Start the race simulation."""
         if not self.drivers or not self.track:
@@ -3193,11 +3348,14 @@ class RaceWindow(QMainWindow):
                             except Exception:
                                 pass
 
-                            # Request GUI thread to show player RETIRED and
-                            # disable controls
+                            # Request GUI thread to handle DNF for any player-controlled
+                            # car (selected driver or teammate in player team).
                             try:
-                                if driver_id == getattr(
-                                        self, 'player_driver_id', None):
+                                controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
+                                player_id = getattr(self, 'player_driver_id', None)
+                                if player_id is not None:
+                                    controlled_ids.add(player_id)
+                                if driver_id in controlled_ids:
                                     self.emitter.event_signal.emit(
                                         f"player_dnf|{driver_id}|{lap}|{reason}")
                             except Exception:
@@ -3306,6 +3464,7 @@ class RaceWindow(QMainWindow):
                 # Populate track_conditions keys expected by SingleSeaterEngine
                 tc = context.track_conditions
                 tc['player_driver_id'] = self.player_driver_id
+                tc['player_team_driver_ids'] = list(self.player_team_driver_ids)
                 tc['player_overrides'] = self.player_overrides
                 tc['track_points'] = track_pts
                 tc['realtime_speed'] = 5.0
@@ -4111,37 +4270,29 @@ class RaceWindow(QMainWindow):
                 pass
             return
 
-        # Handle player DNF UI request (show RETIRED and disable controls)
+        # Handle player/team DNF UI request.
         if message.startswith("player_dnf|"):
             try:
                 parts = message.split("|")
                 if len(parts) >= 2:
                     did = int(parts[1])
-                    # Only act if it's the player's driver
-                    if did == getattr(self, 'player_driver_id', None):
-                        print(f"[GUI EVENT] Received player_dnf for player driver {did}")
+                    controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
+                    player_id = getattr(self, 'player_driver_id', None)
+                    if player_id is not None:
+                        controlled_ids.add(player_id)
+
+                    if did in controlled_ids:
+                        print(f"[GUI EVENT] Received player_dnf for controlled driver {did}")
                         try:
                             if hasattr(self, 'player_status_label'):
-                                self.player_status_label.setText("RETIRED")
+                                if did == player_id:
+                                    self.player_status_label.setText("PRIMARY CAR RETIRED")
+                                else:
+                                    self.player_status_label.setText("TEAM CAR RETIRED")
                                 self.player_status_label.show()
                         except Exception:
                             pass
-                        # Disable a set of interactive widgets so the player
-                        # cannot change strategy
-                        try:
-                            if hasattr(self, 'pace_slider'):
-                                self.pace_slider.setEnabled(False)
-                            if hasattr(self, 'overtake_slider'):
-                                self.overtake_slider.setEnabled(False)
-                            if hasattr(self, 'camera_full_btn'):
-                                self.camera_full_btn.setEnabled(False)
-                            if hasattr(self, 'camera_follow_btn'):
-                                self.camera_follow_btn.setEnabled(False)
-                            if hasattr(self, 'push_gauge'):
-                                self.push_gauge.setEnabled(False)
-                        except Exception:
-                            pass
-                        # Also ensure internal race state marks this driver as DNF
+
                         try:
                             if not hasattr(self, '_race_state'):
                                 self._race_state = {}
@@ -4160,6 +4311,34 @@ class RaceWindow(QMainWindow):
                                     'dnf': True,
                                     'total_progress': 0.0
                                 }
+
+                            active_controlled = False
+                            for cid in controlled_ids:
+                                c_entry = self._race_state.get(cid)
+                                if c_entry is None:
+                                    active_controlled = True
+                                    break
+                                if not bool(c_entry.get('dnf', False)):
+                                    active_controlled = True
+                                    break
+
+                            if not active_controlled:
+                                try:
+                                    if hasattr(self, 'player_status_label'):
+                                        self.player_status_label.setText("TEAM RETIRED")
+                                    if hasattr(self, 'pace_slider'):
+                                        self.pace_slider.setEnabled(False)
+                                    if hasattr(self, 'overtake_slider'):
+                                        self.overtake_slider.setEnabled(False)
+                                    if hasattr(self, 'camera_full_btn'):
+                                        self.camera_full_btn.setEnabled(False)
+                                    if hasattr(self, 'camera_follow_btn'):
+                                        self.camera_follow_btn.setEnabled(False)
+                                    if hasattr(self, 'push_gauge'):
+                                        self.push_gauge.setEnabled(False)
+                                except Exception:
+                                    pass
+
                             try:
                                 self._rebuild_standings_table()
                             except Exception:
@@ -4169,7 +4348,6 @@ class RaceWindow(QMainWindow):
             except Exception:
                 pass
             return
-
         # Check if this is a standings update
         if message.startswith("standings_update|"):
             try:
@@ -4541,6 +4719,9 @@ class RaceWindow(QMainWindow):
         """Set the player-controlled driver."""
         if driver:
             self.player_driver_id = driver.id
+            inferred_team_id = getattr(driver, 'current_team_id', None)
+            if inferred_team_id:
+                self.player_team_id = int(inferred_team_id)
             print(
                 f"[RACE WINDOW] Player driver set: {
                     driver.name} (ID: {
@@ -4612,6 +4793,93 @@ class RaceWindow(QMainWindow):
             # Non-fatal: log and continue
             print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
 
+        # Refresh team-controlled driver ids after driver assignment.
+        try:
+            self._rebuild_player_team_driver_ids()
+        except Exception:
+            pass
+
+    def set_player_team(self, team):
+        """Set the player team so strategy controls apply to all team cars."""
+        if team is None:
+            self.player_team_id = None
+            self.player_team_driver_ids = []
+            return
+
+        try:
+            self.player_team_id = int(getattr(team, 'id'))
+            print(f"[RACE WINDOW] Player team set: {getattr(team, 'name', 'Unknown Team')} (ID: {self.player_team_id})")
+        except Exception:
+            self.player_team_id = None
+
+        # Ensure all cars from the selected team are present on the race grid.
+        try:
+            if self.player_team_id is not None and self.db is not None and getattr(self, 'drivers', None) is not None:
+                team_drivers = self.db.get_drivers_by_team(self.player_team_id)
+                present_ids = {int(getattr(d, 'id')) for d in self.drivers if getattr(d, 'id', None) is not None}
+                changed = False
+                replace_idx = max(0, len(self.drivers) - 1)
+                for team_driver in team_drivers:
+                    td_id = getattr(team_driver, 'id', None)
+                    if td_id is None or int(td_id) in present_ids:
+                        continue
+                    if len(self.drivers) < RACE_GRID_SIZE:
+                        self.drivers.append(team_driver)
+                    else:
+                        self.drivers[replace_idx] = team_driver
+                        replace_idx = max(0, replace_idx - 1)
+                    present_ids.add(int(td_id))
+                    changed = True
+
+                if changed and getattr(self, 'track_widget', None) is not None:
+                    cars = []
+                    for i, drv in enumerate(self.drivers):
+                        row = i // 2
+                        grid_spacing = 15.0
+                        start_position = row * grid_spacing
+                        drv_id_raw = getattr(drv, 'id', 0)
+                        try:
+                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
+                        except Exception:
+                            drv_id = 0
+                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
+                        cars.append(Car(
+                            driver_id=drv_id,
+                            driver_name=getattr(drv, 'name', ''),
+                            s=start_position,
+                            colour=car_colour,
+                            total_time=0.0,
+                            avg_lap_time=60.0,
+                            last_lap=0
+                        ))
+                    self.track_widget.set_cars(cars)
+                    self.standings_table.setRowCount(len(self.drivers))
+                    for i, drv in enumerate(self.drivers):
+                        self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
+                    print("[RACE WINDOW] Rebuilt grid to include all team cars")
+        except Exception:
+            print("[RACE WINDOW] Warning: couldn't ensure team cars in driver list")
+
+        self._rebuild_player_team_driver_ids()
+
+    def _rebuild_player_team_driver_ids(self):
+        """Recompute controlled team-car IDs from current entrants."""
+        controlled = set()
+        for drv in getattr(self, 'drivers', []) or []:
+            did = getattr(drv, 'id', None)
+            if did is None:
+                continue
+            team_id = getattr(drv, 'current_team_id', None)
+            if self.player_team_id is not None and team_id is not None and int(team_id) == int(self.player_team_id):
+                controlled.add(int(did))
+
+        if self.player_driver_id is not None:
+            controlled.add(int(self.player_driver_id))
+
+        self.player_team_driver_ids = sorted(controlled)
+        if self.player_team_driver_ids:
+            print(f"[RACE WINDOW] Team-control drivers: {self.player_team_driver_ids}")
+
     def set_tuning_preset(self, preset: str):
         """Set the simulation tuning preset."""
         self.tuning_preset = preset or 'balanced'
@@ -4621,7 +4889,20 @@ class RaceWindow(QMainWindow):
         """Set camera mode: 'full' or 'follow'."""
         self.camera_mode = mode
         if self.track_widget:
-            self.track_widget.set_camera_mode(mode, self.player_driver_id)
+            # Determine which car to follow
+            follow_id = None
+            if mode == 'follow':
+                # Prefer selected player driver, fallback to any controlled team car
+                if hasattr(self, 'player_driver_id') and self.player_driver_id is not None:
+                    follow_id = self.player_driver_id
+                elif hasattr(self, 'player_team_driver_ids') and self.player_team_driver_ids:
+                    follow_id = self.player_team_driver_ids[0]
+                else:
+                    print("[CAMERA] No player driver set - cannot follow")
+                    self.camera_mode = 'full'
+                    follow_id = None
+            
+            self.track_widget.set_camera_mode(mode, follow_id)
 
         # Update button styles
         if mode == 'full':
@@ -4633,7 +4914,7 @@ class RaceWindow(QMainWindow):
                 "background-color: #B9F2FF; color: #353839;")
             self.camera_full_btn.setStyleSheet("")
 
-        print(f"[CAMERA] Switched to {mode} mode")
+        print(f"[CAMERA] Switched to {mode} mode (follow_id: {follow_id})")
 
     def set_display_mode(self, mode: str):
         """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
