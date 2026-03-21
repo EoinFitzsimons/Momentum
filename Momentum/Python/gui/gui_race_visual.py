@@ -3133,309 +3133,271 @@ class RaceWindow(QMainWindow):
     def _launch_race_thread(self) -> None:
         """Launch simulation thread and attach event callback bridge."""
 
-        def race_runner():
-            try:
-                self.stop_event = threading.Event()
-                print("Race thread started")
-
-                def event_callback(event: dict):
-                    try:
-                        event_type = event.get("type")
-
-                        if event_type == "position_update":
-                            # === AUTO-START ANIMATION ON FIRST DATA ===
-                            # Prevents freeze where animation waits for data
-                            if not self._animation_started:
-                                # Request animation start on the GUI thread via
-                                # event_signal
-                                print(
-                                    "[ANIMATION] First position data received - requesting animation start on main thread")
-                                try:
-                                    # Emit a simple string command handled by
-                                    # _on_event
-                                    self.emitter.event_signal.emit(
-                                        "start_animation")
-                                except Exception as e:
-                                    print(
-                                        f"[ERROR] Failed to request animation start: {e}")
-                                self._animation_started = True
-                                self.info_label.setText("Race in progress...")
-
-                            # Real-time position updates at 30 FPS
-                            frame = event.get("frame", 0)
-                            race_time = event.get("time", 0.0)
-                            positions = event.get("positions", [])
-
-                            # Print status every 30 frames (once per second)
-                            if frame % 30 == 0 and positions:
-                                print(f"[{race_time:.1f}s] ", end="")
-                                for p in positions[:3]:  # Top 3
-                                    print(
-                                        f"P{
-                                            p['position']}: {
-                                            p['driver_name']} (L{
-                                            p['lap']}, {
-                                            p['racing_mode']}) ",
-                                        end="")
-                                print()
-
-                            # Update all car positions on track AND standings
-                            # table
-                            for pos_data in positions:
-                                driver_id = pos_data.get("driver_id") if isinstance(
-                                    pos_data, dict) else None
-                                try:
-                                    if driver_id is None:
-                                        continue
-
-                                    # Update player telemetry if this is the
-                                    # player's driver
-                                    if driver_id == self.player_driver_id:
-                                        velocity_mps = pos_data.get(
-                                            "velocity_mps", 0.0)
-                                        push_intensity = pos_data.get(
-                                            "push_intensity", 0.7)
-                                        push_fatigue = pos_data.get(
-                                            "push_fatigue", 0.0)
-                                        tire_condition = pos_data.get(
-                                            "tire_condition", 1.0)
-
-                                        self.player_telemetry['speed_kph'] = velocity_mps * 3.6
-                                        self.player_telemetry['push_intensity'] = push_intensity
-                                        self.player_telemetry['push_fatigue'] = push_fatigue
-                                        self.player_telemetry['tire_condition'] = tire_condition
-
-                                        # Update telemetry display (thread-safe
-                                        # via signal)
-                                        self.emitter.event_signal.emit(
-                                            f"telemetry_update|{
-                                                velocity_mps *
-                                                3.6:.1f}|{
-                                                push_intensity:.2f}|{
-                                                push_fatigue:.2f}|{
-                                                tire_condition:.2f}")
-
-                                    # Update track widget with position
-                                    if self.track_widget and pos_data.get(
-                                            "running", True):
-                                        # position_m from engine is already lap-relative (0 to track_length)
-                                        # DO NOT subtract lap * track_length
-                                        # (causes negative positions!)
-                                        position_m = pos_data.get(
-                                            "position_m", 0.0)
-                                        lap = pos_data.get("lap", 0)
-                                        velocity_mps = pos_data.get(
-                                            "velocity_mps", 0.0)
-
-                                        # Update car position
-                                        if hasattr(self.track_widget,
-                                                   'update_car_realtime'):
-                                            self.track_widget.update_car_realtime(
-                                                driver_id=driver_id,
-                                                position_m=position_m,
-                                                lap=lap,
-                                                velocity_mps=velocity_mps
-                                            )
-                                        else:
-                                            # Fallback to old method
-                                            self.track_widget.update_car_position(
-                                                driver_id=driver_id,
-                                                lap=lap,
-                                                position=pos_data.get(
-                                                    "position", 1),
-                                                total_time=race_time
-                                            )
-
-                                    # Update standings table via signal
-                                    # (thread-safe)
-                                    position = pos_data.get("position", 0)
-                                    lap = pos_data.get("lap", 0)
-                                    push_intensity = pos_data.get(
-                                        "push_intensity", 0.7)
-                                    gap_ahead = pos_data.get("gap_ahead", 0.0)
-                                    position_m = pos_data.get(
-                                        "position_m", 0.0)
-                                    if frame % 30 == 0:  # Update table once per second
-                                        # Include timing + position for live
-                                        # gaps and ordering
-                                        self.emitter.event_signal.emit(
-                                            f"standings_update|{driver_id}|{position}|{lap}|{
-                                                push_intensity:.2f}|{
-                                                gap_ahead:.2f}|{
-                                                position_m:.2f}|{
-                                                race_time:.2f}"
-                                        )
-
-                                except Exception as e:
-                                    print(
-                                        f"ERROR updating position for driver {driver_id}: {e}")
-
-                        elif event_type == "dnf":
-                            driver_id = event.get("driver_id")
-                            driver_name = event.get(
-                                "driver_name", f"Driver {driver_id}")
-                            reason = event.get("reason", "unknown")
-                            laps_completed = int(event.get("lap", 0))
-                            # Convert to 1-based display lap
-                            lap = max(1, laps_completed + 1)
-                            print(
-                                f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
-
-                            # Ask GUI thread to mark DNF (avoid touching
-                            # widgets from race thread)
-                            try:
-                                if driver_id is not None:
-                                    self.emitter.event_signal.emit(
-                                        f"mark_dnf|{driver_id}")
-                            except Exception:
-                                pass
-
-                            # Request GUI thread to handle DNF for any player-controlled
-                            # car (selected driver or teammate in player team).
-                            try:
-                                controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
-                                player_id = getattr(self, 'player_driver_id', None)
-                                if player_id is not None:
-                                    controlled_ids.add(player_id)
-                                if driver_id in controlled_ids:
-                                    self.emitter.event_signal.emit(
-                                        f"player_dnf|{driver_id}|{lap}|{reason}")
-                            except Exception:
-                                pass
-                            # Mark in standings and rebuild table so DNF
-                            # appears immediately
-                            if driver_id is not None:
-                                existing = self._race_state.get(driver_id, {
-                                    'name': driver_name,
-                                    'position': event.get('position', 0),
-                                    'lap': lap,
-                                    'time': event.get('race_time', 0.0),
-                                    'distance': 0.0,
-                                    'gap_ahead': 0.0
-                                })
-                                existing['dnf'] = True
-                                existing['lap'] = lap
-                                self._race_state[driver_id] = existing
-                                self._rebuild_standings_table()
-
-                        elif event_type == "race_finished":
-                            total_laps = event.get("total_laps", 0)
-                            race_time = event.get("race_time", 0.0)
-                            print(
-                                f"\nRace finished! {total_laps} laps in {
-                                    race_time:.1f}s")
-
-                            # Store collision log for display
-                            collision_log = event.get('collision_log', [])
-                            self._collision_log = collision_log
-                            if collision_log:
-                                print(
-                                    f"Race simulation complete, {
-                                        len(
-                                            event.get(
-                                                'results',
-                                                []))} results, {
-                                        len(collision_log)} collisions")
-                            else:
-                                print(
-                                    f"Race simulation complete, {len(event.get('results', []))} results")
-
-                            # Emit actual results to the GUI reliably.
-                            # Ensure we always emit a (possibly empty) results list
-                            # so the GUI can build final standings and show the
-                            # Start→Finish summary dialog.
-                            try:
-                                results_payload = event.get('results', []) if isinstance(event, dict) else []
-                                # Emit on GUI thread via signal
-                                try:
-                                    self.emitter.race_finished.emit(results_payload)
-                                except Exception as ex:
-                                    print(f"ERROR: failed to emit race_finished: {ex}")
-                                    try:
-                                        _traceback.print_exc()
-                                    except Exception:
-                                        pass
-                                    # Best-effort fallback: emit empty list
-                                    try:
-                                        self.emitter.race_finished.emit([])
-                                    except Exception:
-                                        pass
-                            except Exception as e:
-                                print(f"ERROR preparing results payload for emit: {e}")
-                                try:
-                                    _traceback.print_exc()
-                                except Exception:
-                                    pass
-
-                    except Exception as e:
-                        print(f"ERROR in event_callback: {e}")
-                        _traceback.print_exc()
-
-                print(
-                    "Starting simulate_race with comprehensive engine via RaceContext...")
-                # Get track_points safely
-                track_pts = getattr(self, 'track_points', None)
-
-                # Build a minimal teams dictionary if possible (empty dict is
-                # acceptable)
-                teams = {}
-                try:
-                    db_any = cast(Any, self.db)
-                    get_team_fn = getattr(db_any, 'get_team', None)
-                    if callable(get_team_fn):
-                        team_ids = {
-                            d.current_team_id for d in self.drivers if d.current_team_id}
-                        for team_id in team_ids:
-                            team = get_team_fn(team_id)
-                            if team:
-                                teams[team_id] = team
-                except Exception:
-                    teams = {}
-
-                # Create RaceContext and populate track_conditions for
-                # discipline adapter
-                context = RaceContext(
-                    discipline=RacingDiscipline[self._initial_discipline],
-                    track=self.track,
-                    drivers=self.drivers,
-                    teams=teams,
-                    total_laps=3,
-                    event_callback=event_callback
-                )
-
-                # Populate track_conditions keys expected by SingleSeaterEngine
-                tc = context.track_conditions
-                tc['player_driver_id'] = self.player_driver_id
-                tc['player_team_driver_ids'] = list(self.player_team_driver_ids)
-                tc['player_overrides'] = self.player_overrides
-                tc['track_points'] = track_pts
-                tc['realtime_speed'] = 5.0
-                tc['stop_event'] = self.stop_event
-                tc['tuning_preset'] = self.tuning_preset
-
-                results = simulate_race(
-                    context=context, verbose=True, db=cast(
-                        Any, self.db))
-
-                print(
-                    f"Race simulation complete, {
-                        len(results) if results else 0} results")
-
-                # Don't save from race thread - database is in main thread
-                # Results will be saved via race_finished event if needed
-
-            except Exception as e:
-                error_msg = f"Race error: {e}"
-                print(f"ERROR in race_runner: {e}")
-                _traceback.print_exc()
-                try:
-                    self.emitter.event_signal.emit(error_msg)
-                except Exception:
-                    pass
-
-        self.race_thread = threading.Thread(target=race_runner, daemon=True)
+        self.race_thread = threading.Thread(target=self._race_runner, daemon=True)
         self.race_thread.start()
         print("Race thread launched")
+
+    def _race_runner(self) -> None:
+        """Worker-thread entrypoint for race simulation."""
+        try:
+            self.stop_event = threading.Event()
+            print("Race thread started")
+            self._run_simulation_with_callback()
+        except Exception as e:
+            error_msg = f"Race error: {e}"
+            print(f"ERROR in race_runner: {e}")
+            _traceback.print_exc()
+            try:
+                self.emitter.event_signal.emit(error_msg)
+            except Exception:
+                pass
+
+    def _run_simulation_with_callback(self) -> None:
+        """Build context and execute simulation using thread event bridge."""
+        print("Starting simulate_race with comprehensive engine via RaceContext...")
+        track_pts = getattr(self, 'track_points', None)
+        teams = self._build_race_teams_map()
+        context = self._build_race_context(self._event_callback_from_race_thread, track_pts, teams)
+        results = simulate_race(context=context, verbose=True, db=cast(Any, self.db))
+        print(f"Race simulation complete, {len(results) if results else 0} results")
+
+    def _build_race_teams_map(self) -> Dict[int, Any]:
+        """Resolve team objects for current race entrants."""
+        teams: Dict[int, Any] = {}
+        try:
+            db_any = cast(Any, self.db)
+            get_team_fn = getattr(db_any, 'get_team', None)
+            if not callable(get_team_fn):
+                return teams
+            team_ids = {d.current_team_id for d in self.drivers if d.current_team_id}
+            for team_id in team_ids:
+                team = get_team_fn(team_id)
+                if team:
+                    teams[team_id] = team
+        except Exception:
+            return {}
+        return teams
+
+    def _build_race_context(self, event_callback: Any, track_pts: Any, teams: Dict[int, Any]) -> RaceContext:
+        """Construct race context and populate adapter-specific conditions."""
+        context = RaceContext(
+            discipline=RacingDiscipline[self._initial_discipline],
+            track=self.track,
+            drivers=self.drivers,
+            teams=teams,
+            total_laps=3,
+            event_callback=event_callback,
+        )
+        tc = context.track_conditions
+        tc['player_driver_id'] = self.player_driver_id
+        tc['player_team_driver_ids'] = list(self.player_team_driver_ids)
+        tc['player_overrides'] = self.player_overrides
+        tc['track_points'] = track_pts
+        tc['realtime_speed'] = 5.0
+        tc['stop_event'] = self.stop_event
+        tc['tuning_preset'] = self.tuning_preset
+        return context
+
+    def _event_callback_from_race_thread(self, event: dict) -> None:
+        """Bridge simulation events to GUI-thread-safe signals."""
+        try:
+            event_type = event.get("type")
+            if event_type == "position_update":
+                self._handle_thread_position_update_event(event)
+                return
+            if event_type == "dnf":
+                self._handle_thread_dnf_event(event)
+                return
+            if event_type == "race_finished":
+                self._handle_thread_race_finished_event(event)
+                return
+        except Exception as e:
+            print(f"ERROR in event_callback: {e}")
+            _traceback.print_exc()
+
+    def _handle_thread_position_update_event(self, event: dict) -> None:
+        """Process realtime position payload in worker thread."""
+        self._maybe_start_animation_from_thread()
+        frame = int(event.get("frame", 0))
+        race_time = float(event.get("time", 0.0))
+        positions = event.get("positions", [])
+        self._log_position_frame_snapshot(frame, race_time, positions)
+        for pos_data in positions:
+            self._process_single_thread_position_update(pos_data, frame, race_time)
+
+    def _maybe_start_animation_from_thread(self) -> None:
+        """Request animation start once, when first position packet arrives."""
+        if self._animation_started:
+            return
+        print("[ANIMATION] First position data received - requesting animation start on main thread")
+        try:
+            self.emitter.event_signal.emit("start_animation")
+            self.emitter.event_signal.emit("Race in progress...")
+        except Exception as e:
+            print(f"[ERROR] Failed to request animation start: {e}")
+        self._animation_started = True
+
+    def _log_position_frame_snapshot(self, frame: int, race_time: float, positions: Any) -> None:
+        """Log top-3 snapshot once per second for runtime visibility."""
+        if frame % 30 != 0 or not positions:
+            return
+        print(f"[{race_time:.1f}s] ", end="")
+        for p in positions[:3]:
+            print(
+                f"P{p['position']}: {p['driver_name']} (L{p['lap']}, {p['racing_mode']}) ",
+                end="",
+            )
+        print()
+
+    def _process_single_thread_position_update(self, pos_data: Any, frame: int, race_time: float) -> None:
+        """Apply one driver's realtime update and emit table/telemetry signals."""
+        if not isinstance(pos_data, dict):
+            return
+        driver_id = pos_data.get("driver_id")
+        if driver_id is None:
+            return
+        try:
+            self._emit_player_telemetry_if_needed(driver_id, pos_data)
+            self._update_track_widget_realtime(driver_id, pos_data, race_time)
+            self._emit_standings_update_if_due(driver_id, pos_data, frame, race_time)
+        except Exception as e:
+            print(f"ERROR updating position for driver {driver_id}: {e}")
+
+    def _emit_player_telemetry_if_needed(self, driver_id: int, pos_data: Dict[str, Any]) -> None:
+        """Store player telemetry and emit formatted telemetry update signal."""
+        if driver_id != self.player_driver_id:
+            return
+        velocity_mps = float(pos_data.get("velocity_mps", 0.0))
+        push_intensity = float(pos_data.get("push_intensity", 0.7))
+        push_fatigue = float(pos_data.get("push_fatigue", 0.0))
+        tire_condition = float(pos_data.get("tire_condition", 1.0))
+        self.player_telemetry['speed_kph'] = velocity_mps * 3.6
+        self.player_telemetry['push_intensity'] = push_intensity
+        self.player_telemetry['push_fatigue'] = push_fatigue
+        self.player_telemetry['tire_condition'] = tire_condition
+        self.emitter.event_signal.emit(
+            f"telemetry_update|{velocity_mps * 3.6:.1f}|{push_intensity:.2f}|{push_fatigue:.2f}|{tire_condition:.2f}"
+        )
+
+    def _update_track_widget_realtime(self, driver_id: int, pos_data: Dict[str, Any], race_time: float) -> None:
+        """Update track widget position for a running car."""
+        if not self.track_widget or not pos_data.get("running", True):
+            return
+        position_m = float(pos_data.get("position_m", 0.0))
+        lap = int(pos_data.get("lap", 0))
+        velocity_mps = float(pos_data.get("velocity_mps", 0.0))
+        if hasattr(self.track_widget, 'update_car_realtime'):
+            self.track_widget.update_car_realtime(
+                driver_id=driver_id,
+                position_m=position_m,
+                lap=lap,
+                velocity_mps=velocity_mps,
+            )
+            return
+        self.track_widget.update_car_position(
+            driver_id=driver_id,
+            lap=lap,
+            position=pos_data.get("position", 1),
+            total_time=race_time,
+        )
+
+    def _emit_standings_update_if_due(self, driver_id: int, pos_data: Dict[str, Any], frame: int, race_time: float) -> None:
+        """Emit live standings payload at 1Hz to reduce GUI churn."""
+        if frame % 30 != 0:
+            return
+        position = int(pos_data.get("position", 0))
+        lap = int(pos_data.get("lap", 0))
+        push_intensity = float(pos_data.get("push_intensity", 0.7))
+        gap_ahead = float(pos_data.get("gap_ahead", 0.0))
+        position_m = float(pos_data.get("position_m", 0.0))
+        self.emitter.event_signal.emit(
+            f"standings_update|{driver_id}|{position}|{lap}|{push_intensity:.2f}|{gap_ahead:.2f}|{position_m:.2f}|{race_time:.2f}"
+        )
+
+    def _handle_thread_dnf_event(self, event: dict) -> None:
+        """Handle DNF updates from simulation worker thread."""
+        driver_id = event.get("driver_id")
+        driver_name = event.get("driver_name", f"Driver {driver_id}")
+        reason = event.get("reason", "unknown")
+        laps_completed = int(event.get("lap", 0))
+        lap = max(1, laps_completed + 1)
+        print(f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
+        self._emit_mark_dnf_signal(driver_id)
+        self._emit_player_dnf_if_controlled(driver_id, lap, reason)
+        self._update_race_state_dnf_snapshot(driver_id, driver_name, lap, event)
+
+    def _emit_mark_dnf_signal(self, driver_id: Any) -> None:
+        """Signal GUI thread to mark DNF on track/standings."""
+        try:
+            if driver_id is not None:
+                self.emitter.event_signal.emit(f"mark_dnf|{driver_id}")
+        except Exception:
+            pass
+
+    def _emit_player_dnf_if_controlled(self, driver_id: Any, lap: int, reason: str) -> None:
+        """Emit player_dnf event for selected driver or teammate control group."""
+        try:
+            controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
+            player_id = getattr(self, 'player_driver_id', None)
+            if player_id is not None:
+                controlled_ids.add(player_id)
+            if driver_id in controlled_ids:
+                self.emitter.event_signal.emit(f"player_dnf|{driver_id}|{lap}|{reason}")
+        except Exception:
+            pass
+
+    def _update_race_state_dnf_snapshot(self, driver_id: Any, driver_name: str, lap: int, event: dict) -> None:
+        """Keep race-state DNF flag in sync for subsequent table rebuilds."""
+        if driver_id is None:
+            return
+        existing = self._race_state.get(driver_id, {
+            'name': driver_name,
+            'position': event.get('position', 0),
+            'lap': lap,
+            'time': event.get('race_time', 0.0),
+            'distance': 0.0,
+            'gap_ahead': 0.0,
+        })
+        existing['dnf'] = True
+        existing['lap'] = lap
+        self._race_state[driver_id] = existing
+
+    def _handle_thread_race_finished_event(self, event: dict) -> None:
+        """Store completion diagnostics and emit race-finished payload."""
+        total_laps = int(event.get("total_laps", 0))
+        race_time = float(event.get("race_time", 0.0))
+        print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
+        collision_log = event.get('collision_log', [])
+        self._collision_log = collision_log
+        result_count = len(event.get('results', []))
+        if collision_log:
+            print(f"Race simulation complete, {result_count} results, {len(collision_log)} collisions")
+        else:
+            print(f"Race simulation complete, {result_count} results")
+        self._emit_race_finished_results(event)
+
+    def _emit_race_finished_results(self, event: dict) -> None:
+        """Emit race_finished signal with robust fallback behavior."""
+        try:
+            results_payload = event.get('results', []) if isinstance(event, dict) else []
+            try:
+                self.emitter.race_finished.emit(results_payload)
+            except Exception as ex:
+                print(f"ERROR: failed to emit race_finished: {ex}")
+                try:
+                    _traceback.print_exc()
+                except Exception:
+                    pass
+                try:
+                    self.emitter.race_finished.emit([])
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"ERROR preparing results payload for emit: {e}")
+            try:
+                _traceback.print_exc()
+            except Exception:
+                pass
 
     def _stop_race(self):
         """Stop the race simulation."""
@@ -3503,221 +3465,231 @@ class RaceWindow(QMainWindow):
 
     def _on_position_update(self, data: dict):
         """Handle position update from simulation."""
-        
-
         try:
             if not self.track_widget:
                 return
-
-            self.track_widget.update_car_position(
-                data['driver_id'],
-                data['lap'],
-                data['position'],
-                data['total_time']
-            )
-
-            # Update standings table: find row by driver id
-            for row in range(self.standings_table.rowCount()):
-                name_item = self.standings_table.item(row, 1)
-                if not name_item:
-                    continue
-                driver_name = name_item.text()
-                driver = next(
-                    (d for d in self.drivers if d.name == driver_name), None)
-                if driver and driver.id == data['driver_id']:
-                    # If this driver was marked DNF, avoid overwriting the
-                    # standings row and explicitly show 'DNF' as the gap.
-                    race_entry = self._race_state.get(driver.id, {})
-                    if race_entry.get('dnf', False):
-                        try:
-                            # Position / lap become dashes; gap shows DNF
-                            self._set_standings_item(row, 0, QTableWidgetItem("-"), driver.id)
-                            self._set_standings_item(row, 2, QTableWidgetItem("-"), driver.id)
-                            self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver.id)
-                        except Exception:
-                            pass
-                        break
-
-                    # Column 0 = position
-                    self._set_standings_item(
-                        row, 0, QTableWidgetItem(str(data['position'])), driver.id)
-                    # Column 2 = lap
-                    self._set_standings_item(
-                        row, 2, QTableWidgetItem(str(data['lap'])), driver.id)
-
-                    # Highlight player-controlled driver cell background (guard
-                    # against missing item)
-                    name_cell = self.standings_table.item(row, 1)
-                    if name_cell is not None:
-                        if driver.id == self.player_driver_id:
-                            name_cell.setBackground(
-                                QColor(255, 215, 0))  # Gold
-                            name_cell.setForeground(
-                                QColor(0, 0, 0))  # Dark text on gold
-                        else:
-                            # normal background (dark)
-                            name_cell.setBackground(QColor(37, 38, 39))
-                    break
+            self._apply_track_widget_position_update(data)
+            self._apply_standings_position_update(data)
         except Exception as e:
             print(f"ERROR in _on_position_update: {e}")
 
+    def _apply_track_widget_position_update(self, data: dict) -> None:
+        """Apply one position update to track widget."""
+        tw = self.track_widget
+        if tw is None:
+            return
+        tw.update_car_position(
+            data['driver_id'],
+            data['lap'],
+            data['position'],
+            data['total_time'],
+        )
+
+    def _find_standings_row_for_driver(self, driver_id: int) -> Optional[int]:
+        """Find standings row index that corresponds to driver id."""
+        for row in range(self.standings_table.rowCount()):
+            name_item = self.standings_table.item(row, 1)
+            if not name_item:
+                continue
+            driver_name = name_item.text()
+            driver = next((d for d in self.drivers if d.name == driver_name), None)
+            if driver and driver.id == driver_id:
+                return row
+        return None
+
+    def _apply_dnf_row_state(self, row: int, driver_id: int) -> None:
+        """Set standings cells for a retired driver."""
+        try:
+            self._set_standings_item(row, 0, QTableWidgetItem("-"), driver_id)
+            self._set_standings_item(row, 2, QTableWidgetItem("-"), driver_id)
+            self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver_id)
+        except Exception:
+            pass
+
+    def _style_standings_name_cell(self, row: int, driver_id: int) -> None:
+        """Apply player/highlight styling for standings name cell."""
+        name_cell = self.standings_table.item(row, 1)
+        if name_cell is None:
+            return
+        if driver_id == self.player_driver_id:
+            name_cell.setBackground(QColor(255, 215, 0))
+            name_cell.setForeground(QColor(0, 0, 0))
+            return
+        name_cell.setBackground(QColor(37, 38, 39))
+
+    def _apply_standings_position_update(self, data: dict) -> None:
+        """Update standings row for a single realtime position update."""
+        driver_id = data['driver_id']
+        row = self._find_standings_row_for_driver(driver_id)
+        if row is None:
+            return
+
+        race_entry = self._race_state.get(driver_id, {})
+        if race_entry.get('dnf', False):
+            self._apply_dnf_row_state(row, driver_id)
+            return
+
+        self._set_standings_item(row, 0, QTableWidgetItem(str(data['position'])), driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem(str(data['lap'])), driver_id)
+        self._style_standings_name_cell(row, driver_id)
+
     def _on_race_finished(self, results: list):
         """Handle race finish."""
-        # Ensure results_sorted is always defined for downstream reporting
         results_sorted: list = []
         try:
             print(f"Race finished event received with {len(results)} results")
-
-            # Display collision summary if available
-            if hasattr(self, '_collision_log') and self._collision_log:
-                print(
-                    f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
-                for i, collision in enumerate(self._collision_log, 1):
-                    print(
-                        f"  {i}. Lap {
-                            collision.get(
-                                'lap',
-                                '?')}: {
-                            collision.get(
-                                'description',
-                                'Unknown incident')}")
-                print("")
-
-            self.info_label.setText("Race finished!")
-            self.start_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
-            try:
-                if hasattr(self, 'player_status_label'):
-                    self.player_status_label.hide()
-                    # Re-enable player controls on race finish
-                    try:
-                        if hasattr(self, 'pace_slider'):
-                            self.pace_slider.setEnabled(True)
-                        if hasattr(self, 'overtake_slider'):
-                            self.overtake_slider.setEnabled(True)
-                        if hasattr(self, 'camera_full_btn'):
-                            self.camera_full_btn.setEnabled(True)
-                        if hasattr(self, 'camera_follow_btn'):
-                            self.camera_follow_btn.setEnabled(True)
-                        if hasattr(self, 'push_gauge'):
-                            self.push_gauge.setEnabled(True)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # Stop animation
-            if self.track_widget:
-                self.track_widget.stop_animation()
-
-            # Update final standings
+            self._log_collision_summary_if_available()
+            self._reset_ui_for_race_finished()
             if not results:
                 print("WARNING: No results to display")
                 return
-
-            results_sorted = sorted(
-                results, key=lambda r: r.get(
-                    'position', 999))
-            leader_time = results_sorted[0].get(
-                'time_seconds', 0) if results_sorted else 0
-
-            for i, result in enumerate(results_sorted):
-                try:
-                    driver_id = result.get('driver_id')
-                    driver = next(
-                        (d for d in self.drivers if d.id == driver_id), None)
-                    if driver:
-                        time_seconds = result.get('time_seconds', 0)
-                        gap = time_seconds - leader_time if i > 0 else 0
-
-                        self._set_standings_item(
-                            i, 0, QTableWidgetItem(str(i + 1)), driver.id)
-                        self._set_standings_item(
-                            i, 1, QTableWidgetItem(driver.name), driver.id)
-
-                        # Show leader's total time, gaps for everyone else
-                        if i == 0:
-                            # Format leader time as MM:SS.ms
-                            minutes = int(leader_time // 60)
-                            seconds = leader_time % 60
-                            time_display = f"{minutes}:{seconds:06.3f}"
-                            self._set_standings_item(i, 3, QTableWidgetItem(time_display), driver.id)
-                        else:
-                            self._set_standings_item(i, 3, QTableWidgetItem(
-                                f"+{gap:.2f}s" if gap > 0 else "-"), driver.id)
-
-                        # Highlight player-controlled driver in leaderboard
-                        # (guard against missing item)
-                        name_cell = self.standings_table.item(i, 1)
-                        if name_cell is not None:
-                            if driver.id == self.player_driver_id:
-                                name_cell.setBackground(
-                                    QColor(255, 215, 0))  # Gold
-                                name_cell.setForeground(
-                                    QColor(0, 0, 0))  # Dark text on gold
-                            else:
-                                name_cell.setBackground(QColor(37, 38, 39))
-                except Exception as e:
-                    print(f"ERROR updating standings row {i}: {e}")
-
+            results_sorted = self._sorted_results_by_position(results)
+            self._render_final_standings(results_sorted)
         except Exception as e:
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
 
-        # Save race results to database if in championship mode
+        self._save_race_results_if_needed(results_sorted)
+        self._show_position_change_summary_safe(results_sorted)
+        self._enable_next_race_if_championship_mode()
+
+    def _log_collision_summary_if_available(self) -> None:
+        """Print collision summary block when incidents were recorded."""
+        if not hasattr(self, '_collision_log') or not self._collision_log:
+            return
+        print(f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
+        for i, collision in enumerate(self._collision_log, 1):
+            lap = collision.get('lap', '?')
+            description = collision.get('description', 'Unknown incident')
+            print(f"  {i}. Lap {lap}: {description}")
+        print("")
+
+    def _reset_ui_for_race_finished(self) -> None:
+        """Reset race controls and stop animation once race completes."""
+        self.info_label.setText("Race finished!")
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         try:
-            if self._championship_id and self._race_id and results_sorted:
-                from database.models import RaceResult
-                
-                for result in results_sorted:
-                    driver_id = result.get('driver_id')
-                    position = result.get('position')
-                    points = result.get('points', 0)
-                    fastest_lap = result.get('fastest_lap', False)
-                    dnf_reason = result.get('dnf_reason')
-                    grid_position = result.get('grid_position', position)
-                    
-                    # Get team_id from driver's current_team_id
-                    driver = next((d for d in self.drivers if d.id == driver_id), None)
-                    team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
-                    
-                    # Skip saving if team_id is required but missing
-                    if team_id is None:
-                        print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
-                        continue
-                    
-                    race_result = RaceResult(
-                        id=None,  # Will be auto-generated on insert
-                        race_id=self._race_id,
-                        driver_id=driver_id,
-                        team_id=team_id,
-                        position=position,
-                        points=points,
-                        fastest_lap=fastest_lap,
-                        dnf_reason=dnf_reason,
-                        grid_position=grid_position
-                    )
-                    
-                    try:
-                        if self.db is not None:
-                            self.db.save_race_result(race_result)
-                    except Exception as e:
-                        print(f"WARNING: Could not save result for driver {driver_id}: {e}")
-                
-                print(f"[RACE FINISHED] Saved {len(results_sorted)} race results to database")
+            if hasattr(self, 'player_status_label'):
+                self.player_status_label.hide()
+        except Exception:
+            pass
+        self._set_player_controls_enabled(True)
+        if self.track_widget:
+            self.track_widget.stop_animation()
+
+    def _set_player_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable player interaction controls as a group."""
+        try:
+            if hasattr(self, 'pace_slider'):
+                self.pace_slider.setEnabled(enabled)
+            if hasattr(self, 'overtake_slider'):
+                self.overtake_slider.setEnabled(enabled)
+            if hasattr(self, 'camera_full_btn'):
+                self.camera_full_btn.setEnabled(enabled)
+            if hasattr(self, 'camera_follow_btn'):
+                self.camera_follow_btn.setEnabled(enabled)
+            if hasattr(self, 'push_gauge'):
+                self.push_gauge.setEnabled(enabled)
+        except Exception:
+            pass
+
+    def _sorted_results_by_position(self, results: list) -> list:
+        """Return race results sorted by finishing position."""
+        return sorted(results, key=lambda r: r.get('position', 999))
+
+    def _render_final_standings(self, results_sorted: list) -> None:
+        """Render final leaderboard rows and timing/gap values."""
+        leader_time = results_sorted[0].get('time_seconds', 0) if results_sorted else 0
+        for i, result in enumerate(results_sorted):
+            self._render_final_standings_row(i, result, leader_time)
+
+    def _render_final_standings_row(self, row_index: int, result: dict, leader_time: float) -> None:
+        """Render one final standings row with player highlighting."""
+        try:
+            driver_id = result.get('driver_id')
+            driver = next((d for d in self.drivers if d.id == driver_id), None)
+            if not driver:
+                return
+
+            self._set_standings_item(row_index, 0, QTableWidgetItem(str(row_index + 1)), driver.id)
+            self._set_standings_item(row_index, 1, QTableWidgetItem(driver.name), driver.id)
+            self._set_standings_item(
+                row_index,
+                3,
+                QTableWidgetItem(self._build_final_time_display(row_index, result, leader_time)),
+                driver.id,
+            )
+            self._style_standings_name_cell(row_index, driver.id)
+        except Exception as e:
+            print(f"ERROR updating standings row {row_index}: {e}")
+
+    def _build_final_time_display(self, row_index: int, result: dict, leader_time: float) -> str:
+        """Format leader total time or follower gap display string."""
+        if row_index == 0:
+            minutes = int(leader_time // 60)
+            seconds = leader_time % 60
+            return f"{minutes}:{seconds:06.3f}"
+        time_seconds = result.get('time_seconds', 0)
+        gap = time_seconds - leader_time
+        return f"+{gap:.2f}s" if gap > 0 else "-"
+
+    def _save_race_results_if_needed(self, results_sorted: list) -> None:
+        """Persist race results in championship mode."""
+        if not (self._championship_id and self._race_id and results_sorted):
+            return
+        try:
+            saved_count = 0
+            for result in results_sorted:
+                if self._save_single_race_result(result):
+                    saved_count += 1
+            print(f"[RACE FINISHED] Saved {saved_count} race results to database")
         except Exception as e:
             print(f"WARNING: Error saving race results: {e}")
 
-        # Show a post-race position change summary including DNFs
+    def _save_single_race_result(self, result: dict) -> bool:
+        """Save one race result record; return True on success."""
+        from database.models import RaceResult
+
+        driver_id = result.get('driver_id')
+        driver = next((d for d in self.drivers if d.id == driver_id), None)
+        team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
+        if team_id is None:
+            print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
+            return False
+
+        race_result = RaceResult(
+            id=None,
+            race_id=self._race_id,
+            driver_id=driver_id,
+            team_id=team_id,
+            position=result.get('position'),
+            points=result.get('points', 0),
+            fastest_lap=result.get('fastest_lap', False),
+            dnf_reason=result.get('dnf_reason'),
+            grid_position=result.get('grid_position', result.get('position')),
+        )
+        try:
+            if self.db is not None:
+                self.db.save_race_result(race_result)
+                return True
+        except Exception as e:
+            print(f"WARNING: Could not save result for driver {driver_id}: {e}")
+        return False
+
+    def _show_position_change_summary_safe(self, results_sorted: list) -> None:
+        """Display post-race position summary while keeping flow fail-safe."""
         try:
             self._show_position_change_summary(results_sorted)
         except Exception as e:
             print(f"ERROR showing position change summary: {e}")
-        
-        # Enable "Next Race" button if in championship mode
-        if self._championship_id:
-            self.next_race_btn.setEnabled(True)
-            print("[RACE FINISHED] Next Race button enabled (championship mode)")
+
+    def _enable_next_race_if_championship_mode(self) -> None:
+        """Enable next-race navigation in championship mode."""
+        if not self._championship_id:
+            return
+        self.next_race_btn.setEnabled(True)
+        print("[RACE FINISHED] Next Race button enabled (championship mode)")
 
     def _show_position_change_summary(self, results_sorted: list):
         """Display a post-race start-vs-finish summary dialog."""
