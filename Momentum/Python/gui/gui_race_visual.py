@@ -648,73 +648,71 @@ class TrackWidget(QWidget):
         self.camera_x = 0
         self.camera_y = 0
         self.camera_rotation = 0
-        
-        # Cache track bounds to avoid recalculating every frame
+        self._init_visual_caches()
+        self._init_grass_tile_cache()
+        self._init_animation_timer()
+        # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
+        self._infield_cache: Dict[tuple, QPixmap] = {}
+        # Cache for placed props keyed by same key as pixmap
+        self._infield_props_cache: Dict[tuple, list] = {}
+        self._normalize_track_arc_lengths()
+        # Diagnostic: recent large-jump history per car (time, prev_display, normalized_pos, delta)
+        self._telemetry_jumps: Dict[int, List[tuple]] = {}
+
+    def _init_visual_caches(self) -> None:
+        """Initialize cached rendering resources and asset paths."""
         self._cached_track_bounds = None
         self._cached_track_zoom = 1.0
-        
-        # Cache expensive visual elements
         self._cached_forest_pixmap = None
         self._cached_inner_infield_polygon = None
         self._cached_assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
         self._cached_forest_tile_path = os.path.join(self._cached_assets_dir, 'forest_tile.png')
         self._forest_tile_exists = os.path.exists(self._cached_forest_tile_path)
-        # Cache common disk-backed pixmaps to avoid stat/QPixmap creation each frame
         self._grass_tile_pixmap: Optional[QPixmap] = None
         self._grass_tile_mtime: Optional[int] = None
+
+    def _init_grass_tile_cache(self) -> None:
+        """Load optional grass tile texture and mtime metadata."""
         try:
             grass_path = os.path.join(self._cached_assets_dir, 'grass_tile.png')
-            if os.path.exists(grass_path):
-                gp = QPixmap(grass_path)
-                if not gp.isNull():
-                    self._grass_tile_pixmap = gp
-                    try:
-                        self._grass_tile_mtime = int(os.path.getmtime(grass_path))
-                    except Exception:
-                        self._grass_tile_mtime = None
+            if not os.path.exists(grass_path):
+                return
+            gp = QPixmap(grass_path)
+            if gp.isNull():
+                return
+            self._grass_tile_pixmap = gp
+            try:
+                self._grass_tile_mtime = int(os.path.getmtime(grass_path))
+            except Exception:
+                self._grass_tile_mtime = None
         except Exception:
-            # Non-fatal: if loading fails, leave caches empty and fallback to on-demand checks
             self._grass_tile_pixmap = None
             self._grass_tile_mtime = None
 
-        # Animation timer for smooth movement (interval derived from config)
+    def _init_animation_timer(self) -> None:
+        """Create animation timer with capped render frequency."""
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
         try:
-            # Cap rendering FPS to a sane maximum to avoid runaway CPU usage.
-            # The UI and most displays are happy at 60 FPS; allow higher
-            # values for benchmarking but clamp here to reduce CPU load.
             effective_fps = max(1, min(RENDER_FPS, 60))
             interval_ms = max(1, int(1000 / effective_fps))
         except Exception:
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
-        # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
-        self._infield_cache: Dict[tuple, QPixmap] = {}
-        # Cache for placed props keyed by same key as pixmap
-        self._infield_props_cache: Dict[tuple, list] = {}
-        # Ensure track_points' arc-lengths match provided track_length.
-        # Some generators produce a track whose last point's `s` differs
-        # slightly from the authoritative database length. If so,
-        # scale the `s` values so visual mapping (engine position -> s)
-        # aligns correctly with the provided `track_length` used by
-        # the physics engine. This prevents mismatches that can skip
-        # short segments when mapping positions to track points.
+
+    def _normalize_track_arc_lengths(self) -> None:
+        """Rescale generated arc-length coordinates to authoritative track length."""
         try:
-            if self.track_points and self.track_length and len(self.track_points) > 1:
-                gen_length = float(self.track_points[-1].s)
-                if gen_length > 0.0:
-                    # If generator length and DB length differ by more than 1 metre,
-                    # rescale the s-values proportionally.
-                    if abs(gen_length - float(self.track_length)) > 1.0:
-                        scale = float(self.track_length) / gen_length
-                        for pt in self.track_points:
-                            pt.s = float(pt.s) * scale
+            if not (self.track_points and self.track_length and len(self.track_points) > 1):
+                return
+            gen_length = float(self.track_points[-1].s)
+            if gen_length <= 0.0 or abs(gen_length - float(self.track_length)) <= 1.0:
+                return
+            scale = float(self.track_length) / gen_length
+            for pt in self.track_points:
+                pt.s = float(pt.s) * scale
         except Exception:
-            # Non-fatal: if scaling fails, fall back to original values
             pass
-        # Diagnostic: recent large-jump history per car (time, prev_display, normalized_pos, delta)
-        self._telemetry_jumps: Dict[int, List[tuple]] = {}
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
         """Set camera mode and target car.
@@ -970,37 +968,45 @@ class TrackWidget(QWidget):
         if not self.race_active:
             return
         now = time.time()
-        # Interpolate display_s for each car between prev and target positions
         for car in self.cars:
-            try:
-                if car.target_update_time and car.prev_update_time and car.target_update_time > car.prev_update_time:
-                    span = car.target_update_time - car.prev_update_time
-                    if span <= 0:
-                        t = 1.0
-                    else:
-                        t = min(1.0, max(0.0, (now - car.prev_update_time) / span))
-
-                    prev = car.prev_s if car.prev_s is not None else car.s
-                    target = car.target_s if car.target_s is not None else car.s
-                    # Shortest circular interpolation around track length
-                    if self.track_length and self.track_length > 0:
-                        delta = target - prev
-                        if delta > self.track_length / 2:
-                            delta -= self.track_length
-                        elif delta < -self.track_length / 2:
-                            delta += self.track_length
-                        disp = prev + delta * t
-                        # Normalize
-                        car.display_s = disp % self.track_length
-                    else:
-                        car.display_s = prev + (target - prev) * t
-                else:
-                    # No interpolation data; snap to authoritative position
-                    car.display_s = car.s
-            except Exception:
-                car.display_s = car.s
+            car.display_s = self._interpolate_display_s(car, now)
 
         self.update()
+
+    def _interpolate_display_s(self, car: Car, now: float) -> float:
+        """Compute displayed position using shortest-path interpolation on looped track."""
+        try:
+            if not self._has_interpolation_window(car):
+                return car.s
+            t = self._compute_interpolation_factor(car, now)
+            prev = car.prev_s if car.prev_s is not None else car.s
+            target = car.target_s if car.target_s is not None else car.s
+            if self.track_length and self.track_length > 0:
+                return self._interpolate_circular(prev, target, t)
+            return prev + (target - prev) * t
+        except Exception:
+            return car.s
+
+    def _has_interpolation_window(self, car: Car) -> bool:
+        return bool(
+            car.target_update_time
+            and car.prev_update_time
+            and car.target_update_time > car.prev_update_time
+        )
+
+    def _compute_interpolation_factor(self, car: Car, now: float) -> float:
+        span = car.target_update_time - car.prev_update_time
+        if span <= 0:
+            return 1.0
+        return min(1.0, max(0.0, (now - car.prev_update_time) / span))
+
+    def _interpolate_circular(self, prev: float, target: float, t: float) -> float:
+        delta = target - prev
+        if delta > self.track_length / 2:
+            delta -= self.track_length
+        elif delta < -self.track_length / 2:
+            delta += self.track_length
+        return (prev + delta * t) % self.track_length
 
     def mark_dnf(self, driver_id: int):
         """Mark car as DNF."""
@@ -1019,137 +1025,12 @@ class TrackWidget(QWidget):
         try:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-            # Background fill for areas outside the track
             painter.fillRect(self.rect(), QColor(28, 90, 36))
-
-            # (Forest layer will be drawn after camera/world transform so
-            # it correctly aligns with world coordinates.)
-
-            # Centre point for transformations
             center_x = self.width() // 2
             center_y = self.height() // 2
-
-            # Save painter state
             painter.save()
-
-            # Camera transform
-            if self.camera_mode == 'follow' and self.follow_car_id is not None:
-                # Find followed car
-                followed_car = None
-                for car in self.cars:
-                    if car.driver_id == self.follow_car_id:
-                        followed_car = car
-                        break
-
-                if followed_car and len(self.track_points) > 0 and self.track_length > 0:
-                    try:
-                        # Get car position - use binary search like _draw_cars does
-                        normalized_s = float(followed_car.s) % float(self.track_length)
-                        pt = self._point_at_s(normalized_s)
-                        if pt is None:
-                            pt = self.track_points[0]
-
-                        # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
-                        # 1. Translate viewport centre to canvas origin
-                        # 2. Rotate based on car heading direction (track angle)
-                        # 3. Scale (flip Y for screen coords)
-                        # 4. Translate world so car is at origin
-                        painter.translate(center_x, center_y)
-                        # Rotate track ahead to "up" on screen
-                        painter.rotate(math.degrees(pt.theta))
-                        painter.scale(
-                            self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
-                        painter.translate(-pt.x, -pt.y)  # Centre on car position
-                    except Exception as e:
-                        print(f"[CAMERA] Follow camera error: {e} - falling back to full view")
-                        painter.translate(center_x, center_y)
-                        painter.scale(1, -1)
-                        self.camera_mode = 'full'
-                else:
-                    # Fallback to full view if car not found or no track data
-                    if self.follow_car_id is not None:
-                        print(f"[CAMERA] Followed car {self.follow_car_id} not found or no track data - falling back to full view")
-                    painter.translate(center_x, center_y)
-                    painter.scale(1, -1)
-                    self.camera_mode = 'full'
-            else:
-                # Full track view with responsive zoom based on viewport size
-                painter.translate(center_x, center_y)
-                
-                # Use cached zoom calculation (only recalculate if track changes)
-                if self._cached_track_bounds is None and self.track_points:
-                    track_min_x = min(pt.x for pt in self.track_points)
-                    track_max_x = max(pt.x for pt in self.track_points)
-                    track_min_y = min(pt.y for pt in self.track_points)
-                    track_max_y = max(pt.y for pt in self.track_points)
-                    
-                    track_width = track_max_x - track_min_x
-                    track_height = track_max_y - track_min_y
-                    
-                    # Cache bounds for reuse
-                    self._cached_track_bounds = (track_width, track_height)
-                
-                # Calculate zoom using cached bounds
-                if self._cached_track_bounds:
-                    track_width, track_height = self._cached_track_bounds
-                    
-                    # Calculate zoom to fit track with padding
-                    padding_factor = 1.15  # 15% padding around track
-                    zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
-                    zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
-                    
-                    # Use the smaller zoom to ensure everything fits
-                    base_zoom = min(zoom_x, zoom_y)
-                    
-                    # Apply reasonable limits to zoom
-                    base_zoom = max(0.5, min(base_zoom, 2.5))
-                else:
-                    # Fallback if no track points or bounds
-                    base_zoom = 1.0
-                
-                painter.scale(base_zoom, -base_zoom)
-
-            # OPTIMIZED: Draw full-canvas forest (cached)
-            try:
-                painter.save()
-                if self._forest_tile_exists:
-                    ft_pix = QPixmap(self._cached_forest_tile_path)
-                    if not ft_pix.isNull():
-                        painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
-                # Skip random forest generation - too expensive for real-time rendering
-                painter.restore()
-            except Exception:
-                pass
-
-            # OPTIMIZED: Draw forest in inner infield (cached polygon)
-            try:
-                # Build inner infield polygon once and cache it
-                if self._cached_inner_infield_polygon is None and self.track_points:
-                    TRACK_WIDTH = 14
-                    inner_infield_points = []
-                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                    for pt in self.track_points:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                        inner_infield_points.append(QPointF(iix, iiy))
-                    if inner_infield_points:
-                        self._cached_inner_infield_polygon = QPolygonF(inner_infield_points)
-                
-                if self._cached_inner_infield_polygon:
-                    band_path = QPainterPath()
-                    band_path.addPolygon(self._cached_inner_infield_polygon)
-                    painter.save()
-                    painter.setClipPath(band_path)
-                    if self._forest_tile_exists:
-                        ft_pix = QPixmap(self._cached_forest_tile_path)
-                        if not ft_pix.isNull():
-                            painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
-                    painter.restore()
-            except Exception:
-                pass
+            self._apply_camera_transform(painter, center_x, center_y)
+            self._draw_world_forest_layers(painter)
 
             self._draw_runoff_areas(painter)  # Layer 2
             self._draw_grandstands(painter)    # Layer 3
@@ -1165,6 +1046,107 @@ class TrackWidget(QWidget):
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
             _traceback.print_exc()
+
+    def _apply_camera_transform(self, painter, center_x: int, center_y: int) -> None:
+        """Apply follow/full camera transform before world-space drawing."""
+        if self.camera_mode == 'follow' and self.follow_car_id is not None:
+            if self._try_apply_follow_camera(painter, center_x, center_y):
+                return
+            self._apply_full_view_fallback(painter, center_x, center_y)
+            return
+        self._apply_full_track_camera(painter, center_x, center_y)
+
+    def _try_apply_follow_camera(self, painter, center_x: int, center_y: int) -> bool:
+        followed_car = next((car for car in self.cars if car.driver_id == self.follow_car_id), None)
+        if followed_car is None or len(self.track_points) <= 0 or self.track_length <= 0:
+            if self.follow_car_id is not None:
+                print(f"[CAMERA] Followed car {self.follow_car_id} not found or no track data - falling back to full view")
+            return False
+        try:
+            normalized_s = float(followed_car.s) % float(self.track_length)
+            pt = self._point_at_s(normalized_s) or self.track_points[0]
+            painter.translate(center_x, center_y)
+            painter.rotate(math.degrees(pt.theta))
+            painter.scale(self.camera_zoom, -self.camera_zoom)
+            painter.translate(-pt.x, -pt.y)
+            return True
+        except Exception as e:
+            print(f"[CAMERA] Follow camera error: {e} - falling back to full view")
+            return False
+
+    def _apply_full_view_fallback(self, painter, center_x: int, center_y: int) -> None:
+        painter.translate(center_x, center_y)
+        painter.scale(1, -1)
+        self.camera_mode = 'full'
+
+    def _apply_full_track_camera(self, painter, center_x: int, center_y: int) -> None:
+        painter.translate(center_x, center_y)
+        base_zoom = self._compute_full_view_zoom()
+        painter.scale(base_zoom, -base_zoom)
+
+    def _compute_full_view_zoom(self) -> float:
+        """Compute fit-to-viewport zoom for full-track mode."""
+        if self._cached_track_bounds is None and self.track_points:
+            track_min_x = min(pt.x for pt in self.track_points)
+            track_max_x = max(pt.x for pt in self.track_points)
+            track_min_y = min(pt.y for pt in self.track_points)
+            track_max_y = max(pt.y for pt in self.track_points)
+            self._cached_track_bounds = (track_max_x - track_min_x, track_max_y - track_min_y)
+
+        if not self._cached_track_bounds:
+            return 1.0
+
+        track_width, track_height = self._cached_track_bounds
+        padding_factor = 1.15
+        zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
+        zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
+        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
+
+    def _draw_world_forest_layers(self, painter) -> None:
+        """Draw cached large forest and infield forest overlays in world space."""
+        self._draw_world_forest_tile(painter)
+        self._draw_world_inner_forest_band(painter)
+
+    def _draw_world_forest_tile(self, painter) -> None:
+        try:
+            painter.save()
+            if self._forest_tile_exists:
+                ft_pix = QPixmap(self._cached_forest_tile_path)
+                if not ft_pix.isNull():
+                    painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
+            painter.restore()
+        except Exception:
+            pass
+
+    def _draw_world_inner_forest_band(self, painter) -> None:
+        try:
+            if self._cached_inner_infield_polygon is None and self.track_points:
+                track_width = 14
+                inner_infield_points = []
+                inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                for pt in self.track_points:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    iix = pt.x - normal_x * (track_width - 2 + inner_shrink)
+                    iiy = pt.y - normal_y * (track_width - 2 + inner_shrink)
+                    inner_infield_points.append(QPointF(iix, iiy))
+                if inner_infield_points:
+                    self._cached_inner_infield_polygon = QPolygonF(inner_infield_points)
+
+            if not self._cached_inner_infield_polygon:
+                return
+
+            band_path = QPainterPath()
+            band_path.addPolygon(self._cached_inner_infield_polygon)
+            painter.save()
+            painter.setClipPath(band_path)
+            if self._forest_tile_exists:
+                ft_pix = QPixmap(self._cached_forest_tile_path)
+                if not ft_pix.isNull():
+                    painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width() * 4), int(self.height() * 4), ft_pix)
+            painter.restore()
+        except Exception:
+            pass
 
     def _draw_runoff_areas(self, painter):
         """Draw red asphalt runoff zones on outside of fast corners."""
@@ -1222,141 +1204,17 @@ class TrackWidget(QWidget):
             p = QPainter(pix)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            # Choose palette based on current track properties
             palette = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
-            base = palette.get('base', QColor(80, 160, 70))
-            # Slightly mute the base colour to remove neon appearance
-            try:
-                # stronger mute to avoid neon greens
-                muted_base = QColor(max(0, int(base.red() * 0.45)), max(0, int(base.green() * 0.5)), max(0, int(base.blue() * 0.45)))
-            except Exception:
-                muted_base = base
+            muted_base = self._compute_muted_base_color(palette)
             highlight = palette.get('highlight', QColor(95, 180, 85))
-            mole_col = palette.get('mole', QColor(40, 100, 30))
-            streak_col = palette.get('streak', QColor(70, 50, 30, 100))
-
-            # Use muted base fill to lower overall vibrancy
-            p.fillRect(0, 0, w, h, muted_base)
-
-            # Soft vertical gradient to add variation
-            grad = QLinearGradient(0, 0, 0, h)
-            grad.setColorAt(0.0, QColor(80, 150, 70, 70))
-            grad.setColorAt(1.0, QColor(55, 120, 50, 70))
-            p.fillRect(0, 0, w, h, grad)
-
-            # Tile a subtle grass texture if available to break the flat neon look
-            try:
-                # Use cached pixmap if available to avoid disk I/O each frame
-                tile_pix = self._grass_tile_pixmap
-                if tile_pix is not None and not tile_pix.isNull():
-                    # tile at native size for crisp low-poly look
-                    p.save()
-                    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-                    p.drawTiledPixmap(0, 0, w, h, tile_pix)
-                    p.restore()
-                    # apply a subtle tint over the tile to match the preset
-                    tint = palette.get('texture_tint')
-                    if tint is not None:
-                        # reduce tint alpha so tile shows through
-                        tint_col = QColor(tint.red(), tint.green(), tint.blue(), 50)
-                        p.fillRect(0, 0, w, h, tint_col)
-                    # apply soft occlusion near track edges by painting a translucent
-                    # radial/linear darkening; use occlusion parameter from preset
-                    occ = float(palette.get('occlusion', 0.08))
-                    if occ > 0:
-                        occ_col = QColor(0, 0, 0, int(occ * 255))
-                        # subtle vignette using gradient
-                        try:
-                            occ_grad = QLinearGradient(w/2, 0, w/2, h)
-                            occ_grad.setColorAt(0.0, QColor(0,0,0,0))
-                            occ_grad.setColorAt(0.5, QColor(0,0,0,int(occ*180)))
-                            occ_grad.setColorAt(1.0, QColor(0,0,0,int(occ*240)))
-                            p.fillRect(0, 0, w, h, occ_grad)
-                        except Exception:
-                            p.fillRect(0, 0, w, h, occ_col)
-            except Exception:
-                # Non-fatal; fall back to painted base
-                pass
-
             rnd = random.Random(seed)
 
-            # Layered translucent ellipses to create perceptual noise. Density
-            # scales with preset.
-            base_count = int(max(40, (w * h) // 8000))
-            count = int(base_count * max(0.6, palette.get('density_mult', 1.0)))
-            for i in range(count):
-                cx = rnd.uniform(0, w)
-                cy = rnd.uniform(0, h)
-                rw = rnd.uniform(w * 0.02, w * 0.12)
-                rh = rnd.uniform(h * 0.02, h * 0.12)
-                shade = rnd.randint(-20, 20)
-                # Use muted_base for noise so overall tone stays desaturated
-                r = max(30, min(255, muted_base.red() + shade))
-                g = max(30, min(255, muted_base.green() + shade))
-                b = max(30, min(255, muted_base.blue() + shade))
-                alpha = rnd.randint(18, 48)
-                col = QColor(r, g, b, alpha)
-                p.setBrush(QBrush(col))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
-
-            # Add small darker 'molehills' with higher contrast
-            mole_count = int(max(30, (w * h) // 20000) * palette.get('molehills_mult', 1.0))
-            for i in range(mole_count):
-                cx = rnd.uniform(0, w)
-                cy = rnd.uniform(0, h)
-                r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
-                col = mole_col if mole_col is not None else QColor(max(0, muted_base.red()-40), max(0, muted_base.green()-60), max(0, muted_base.blue()-40), rnd.randint(80, 160))
-                p.setBrush(QBrush(col))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
-
-            # Gentle dirt streaks (random thin lines) using preset streak color
-            p.setPen(QPen(streak_col, 1))
-            streak_count = int(max(20, (w * h) // 25000) * max(0.5, palette.get('density_mult', 1.0)))
-            for i in range(streak_count):
-                x1 = rnd.uniform(0, w)
-                y1 = rnd.uniform(0, h)
-                x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
-                y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
-                p.drawLine(int(x1), int(y1), int(x2), int(y2))
-
-            # Add visible mowing stripes (diagonal bands) to make infield read at-a-glance
-            try:
-                stripe_w = max(8, int(min(w, h) * 0.08))
-                stripe_alpha = 40 if palette.get('name') != 'dry' else 35
-                stripe_col_light = QColor(min(255, highlight.red()), min(255, highlight.green()), min(255, highlight.blue()), stripe_alpha)
-                stripe_col_dark = QColor(max(0, muted_base.red() - 18), max(0, muted_base.green() - 18), max(0, muted_base.blue() - 18), stripe_alpha)
-                # diagonal angle
-                angle = -18 * math.pi / 180
-                dx = math.cos(angle) * stripe_w * 0.6
-                dy = math.sin(angle) * stripe_w * 0.6
-                i = -w
-                toggle = True
-                while i < w * 2:
-                    col = stripe_col_light if toggle else stripe_col_dark
-                    p.setBrush(QBrush(col))
-                    # draw band as rectangle long enough
-                    p.setPen(Qt.PenStyle.NoPen)
-                    # compute polygon for band
-                    x0 = i
-                    y0 = 0
-                    band = [
-                        QPointF(x0, y0),
-                        QPointF(x0 + dx * 200, y0 + dy * 200),
-                        QPointF(x0 + dx * 200 + stripe_w * -math.sin(angle), y0 + dy * 200 + stripe_w * math.cos(angle)),
-                        QPointF(x0 + stripe_w * -math.sin(angle), y0 + stripe_w * math.cos(angle))
-                    ]
-                    path = QPainterPath()
-                    path.moveTo(band[0])
-                    for bp in band[1:]:
-                        path.lineTo(bp)
-                    path.closeSubpath()
-                    p.drawPath(path)
-                    toggle = not toggle
-                    i += stripe_w * 0.7
-            except Exception:
-                pass
+            self._paint_infield_base_layers(p, w, h, muted_base)
+            self._paint_infield_texture_overlay(p, w, h, palette)
+            self._paint_infield_noise(p, rnd, w, h, muted_base, palette)
+            self._paint_infield_molehills(p, rnd, w, h, muted_base, palette)
+            self._paint_infield_streaks(p, rnd, w, h, palette)
+            self._paint_infield_mowing_stripes(p, w, h, muted_base, highlight, palette)
 
             p.end()
             return pix
@@ -1365,6 +1223,156 @@ class TrackWidget(QWidget):
             p = QPixmap(max(2, w), max(2, h))
             p.fill(QColor(34, 139, 34))
             return p
+
+    def _compute_muted_base_color(self, palette: Dict[str, Any]) -> QColor:
+        """Return desaturated base color for infield painting."""
+        base = palette.get('base', QColor(80, 160, 70))
+        try:
+            return QColor(
+                max(0, int(base.red() * 0.45)),
+                max(0, int(base.green() * 0.5)),
+                max(0, int(base.blue() * 0.45)),
+            )
+        except Exception:
+            return base
+
+    def _paint_infield_base_layers(self, painter: QPainter, w: int, h: int, muted_base: QColor) -> None:
+        """Paint solid base and soft vertical gradient."""
+        painter.fillRect(0, 0, w, h, muted_base)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.0, QColor(80, 150, 70, 70))
+        grad.setColorAt(1.0, QColor(55, 120, 50, 70))
+        painter.fillRect(0, 0, w, h, grad)
+
+    def _paint_infield_texture_overlay(self, painter: QPainter, w: int, h: int, palette: Dict[str, Any]) -> None:
+        """Overlay grass tile and tint/occlusion when texture exists."""
+        try:
+            tile_pix = self._grass_tile_pixmap
+            if tile_pix is None or tile_pix.isNull():
+                return
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+            painter.drawTiledPixmap(0, 0, w, h, tile_pix)
+            painter.restore()
+
+            tint = palette.get('texture_tint')
+            if tint is not None:
+                painter.fillRect(0, 0, w, h, QColor(tint.red(), tint.green(), tint.blue(), 50))
+
+            occ = float(palette.get('occlusion', 0.08))
+            if occ <= 0:
+                return
+            try:
+                occ_grad = QLinearGradient(w / 2, 0, w / 2, h)
+                occ_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
+                occ_grad.setColorAt(0.5, QColor(0, 0, 0, int(occ * 180)))
+                occ_grad.setColorAt(1.0, QColor(0, 0, 0, int(occ * 240)))
+                painter.fillRect(0, 0, w, h, occ_grad)
+            except Exception:
+                painter.fillRect(0, 0, w, h, QColor(0, 0, 0, int(occ * 255)))
+        except Exception:
+            pass
+
+    def _paint_infield_noise(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
+        """Paint translucent ellipse noise layer for turf variation."""
+        base_count = int(max(40, (w * h) // 8000))
+        count = int(base_count * max(0.6, palette.get('density_mult', 1.0)))
+        for _ in range(count):
+            cx = rnd.uniform(0, w)
+            cy = rnd.uniform(0, h)
+            rw = rnd.uniform(w * 0.02, w * 0.12)
+            rh = rnd.uniform(h * 0.02, h * 0.12)
+            shade = rnd.randint(-20, 20)
+            col = QColor(
+                max(30, min(255, muted_base.red() + shade)),
+                max(30, min(255, muted_base.green() + shade)),
+                max(30, min(255, muted_base.blue() + shade)),
+                rnd.randint(18, 48),
+            )
+            painter.setBrush(QBrush(col))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
+
+    def _paint_infield_molehills(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
+        """Paint darker speckle dots/molehills."""
+        mole_col = palette.get('mole', QColor(40, 100, 30))
+        mole_count = int(max(30, (w * h) // 20000) * palette.get('molehills_mult', 1.0))
+        for _ in range(mole_count):
+            cx = rnd.uniform(0, w)
+            cy = rnd.uniform(0, h)
+            r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
+            col = mole_col if mole_col is not None else QColor(
+                max(0, muted_base.red() - 40),
+                max(0, muted_base.green() - 60),
+                max(0, muted_base.blue() - 40),
+                rnd.randint(80, 160),
+            )
+            painter.setBrush(QBrush(col))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
+
+    def _paint_infield_streaks(self, painter: QPainter, rnd: random.Random, w: int, h: int, palette: Dict[str, Any]) -> None:
+        """Paint thin random dirt streaks."""
+        streak_col = palette.get('streak', QColor(70, 50, 30, 100))
+        painter.setPen(QPen(streak_col, 1))
+        streak_count = int(max(20, (w * h) // 25000) * max(0.5, palette.get('density_mult', 1.0)))
+        for _ in range(streak_count):
+            x1 = rnd.uniform(0, w)
+            y1 = rnd.uniform(0, h)
+            x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
+            y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
+            painter.drawLine(int(x1), int(y1), int(x2), int(y2))
+
+    def _paint_infield_mowing_stripes(
+        self,
+        painter: QPainter,
+        w: int,
+        h: int,
+        muted_base: QColor,
+        highlight: QColor,
+        palette: Dict[str, Any],
+    ) -> None:
+        """Paint diagonal mowing stripes for readability at race zoom."""
+        try:
+            stripe_w = max(8, int(min(w, h) * 0.08))
+            stripe_alpha = 40 if palette.get('name') != 'dry' else 35
+            stripe_col_light = QColor(
+                min(255, highlight.red()),
+                min(255, highlight.green()),
+                min(255, highlight.blue()),
+                stripe_alpha,
+            )
+            stripe_col_dark = QColor(
+                max(0, muted_base.red() - 18),
+                max(0, muted_base.green() - 18),
+                max(0, muted_base.blue() - 18),
+                stripe_alpha,
+            )
+            angle = -18 * math.pi / 180
+            dx = math.cos(angle) * stripe_w * 0.6
+            dy = math.sin(angle) * stripe_w * 0.6
+            x0 = -w
+            toggle = True
+            while x0 < w * 2:
+                col = stripe_col_light if toggle else stripe_col_dark
+                painter.setBrush(QBrush(col))
+                painter.setPen(Qt.PenStyle.NoPen)
+                band = [
+                    QPointF(x0, 0),
+                    QPointF(x0 + dx * 200, dy * 200),
+                    QPointF(x0 + dx * 200 + stripe_w * -math.sin(angle), dy * 200 + stripe_w * math.cos(angle)),
+                    QPointF(x0 + stripe_w * -math.sin(angle), stripe_w * math.cos(angle)),
+                ]
+                path = QPainterPath()
+                path.moveTo(band[0])
+                for bp in band[1:]:
+                    path.lineTo(bp)
+                path.closeSubpath()
+                painter.drawPath(path)
+                toggle = not toggle
+                x0 += stripe_w * 0.7
+        except Exception:
+            pass
 
     def _draw_joker(self, painter):
         """Draw an alternate 'joker' route if provided by the track data."""
@@ -1389,618 +1397,594 @@ class TrackWidget(QWidget):
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
         try:
-            # Use explicit pit geometry if provided, else fallback to main track_points
             points = self.pit_points if getattr(self, 'pit_points', None) else self.track_points
             if not points:
                 return
-
-            from PyQt6.QtGui import QPolygonF
-
-            # Build pit lane as filled polygon (s=0 to 300m)
-            pit_inner_points = []  # 22m offset from centerline
-            pit_outer_points = []  # 40m offset (18m wide pit lane)
-
-            for pt in points:
-                # pit geometry may be provided with its own s coordinates; draw full lane
-                normal_x = -math.sin(pt.theta)
-                normal_y = math.cos(pt.theta)
-
-                inner_x = pt.x + normal_x * 22
-                inner_y = pt.y + normal_y * 22
-                outer_x = pt.x + normal_x * 40
-                outer_y = pt.y + normal_y * 40
-
-                pit_inner_points.append((inner_x, inner_y))
-                pit_outer_points.append((outer_x, outer_y))
-
-            # Draw filled polygon
-            polygon = QPolygonF()
-            for pt in pit_inner_points:
-                polygon.append(QPointF(pt[0], pt[1]))
-            for pt in reversed(pit_outer_points):
-                polygon.append(QPointF(pt[0], pt[1]))
-
-            painter.setBrush(QBrush(QColor(110, 110, 110)))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawPolygon(polygon)
-
-            # Pit wall (inner edge)
-            painter.setPen(QPen(QColor(80, 80, 80), 2))
-            for i in range(len(pit_inner_points) - 1):
-                painter.drawLine(
-                    int(pit_inner_points[i][0]), int(pit_inner_points[i][1]),
-                    int(pit_inner_points[i + 1][0]
-                        ), int(pit_inner_points[i + 1][1])
-                )
-
-            # Pit boxes (10 boxes, 20m each, s=50 to 250)
-            painter.setPen(QPen(QColor(255, 255, 255), 2))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-
-            for box_idx in range(10):
-                box_s = 50 + box_idx * 20
-                # Find points at box start and end
-                for i, pt in enumerate(self.track_points):
-                    if abs(pt.s - box_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        # Draw box rectangle rotated to track angle
-                        painter.save()
-                        painter.translate(
-                            pt.x + normal_x * 31, pt.y + normal_y * 31)
-                        painter.rotate(math.degrees(pt.theta))
-                        painter.drawRect(-10, -8, 20, 16)
-                        painter.restore()
-                        break
-
-            # Pit entry chevrons (s=250-270)
-            painter.setPen(QPen(QColor(255, 255, 255), 3))
-            for stripe_idx in range(8):
-                stripe_s = 250 + stripe_idx * 2.5
-                for pt in self.track_points:
-                    if abs(pt.s - stripe_s) < 1:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        # Diagonal stripe from track edge to pit lane
-                        painter.drawLine(
-                            int(pt.x + normal_x * 14), int(pt.y + normal_y * 14),
-                            int(pt.x + normal_x * 26), int(pt.y + normal_y * 26)
-                        )
-                        break
-
-            # Pit exit green light marker (s=285)
-            # If pit_points provided they may have their own exit marker; otherwise leave as-is
-            if not getattr(self, 'pit_points', None):
-                for pt in self.track_points:
-                    if abs(pt.s - 285) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        painter.save()
-                        painter.setBrush(QBrush(QColor(0, 255, 0)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawEllipse(
-                            QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
-                        painter.restore()
-                        break
+            pit_inner_points, pit_outer_points = self._build_pit_lane_offsets(points)
+            self._draw_pit_lane_polygon(painter, pit_inner_points, pit_outer_points)
+            self._draw_pit_wall(painter, pit_inner_points)
+            self._draw_pit_boxes(painter)
+            self._draw_pit_entry_chevrons(painter)
+            self._draw_pit_exit_marker(painter)
 
         except Exception:
             pass
+
+    def _build_pit_lane_offsets(self, points: List[TrackPoint]) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
+        pit_inner_points: List[Tuple[float, float]] = []
+        pit_outer_points: List[Tuple[float, float]] = []
+        for pt in points:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            pit_inner_points.append((pt.x + normal_x * 22, pt.y + normal_y * 22))
+            pit_outer_points.append((pt.x + normal_x * 40, pt.y + normal_y * 40))
+        return pit_inner_points, pit_outer_points
+
+    def _draw_pit_lane_polygon(self, painter, pit_inner_points: List[Tuple[float, float]], pit_outer_points: List[Tuple[float, float]]) -> None:
+        polygon = QPolygonF()
+        for x, y in pit_inner_points:
+            polygon.append(QPointF(x, y))
+        for x, y in reversed(pit_outer_points):
+            polygon.append(QPointF(x, y))
+        painter.setBrush(QBrush(QColor(110, 110, 110)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(polygon)
+
+    def _draw_pit_wall(self, painter, pit_inner_points: List[Tuple[float, float]]) -> None:
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        for i in range(len(pit_inner_points) - 1):
+            painter.drawLine(
+                int(pit_inner_points[i][0]),
+                int(pit_inner_points[i][1]),
+                int(pit_inner_points[i + 1][0]),
+                int(pit_inner_points[i + 1][1]),
+            )
+
+    def _draw_pit_boxes(self, painter) -> None:
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for box_idx in range(10):
+            box_s = 50 + box_idx * 20
+            pt = self._find_track_point_near_s(box_s, tolerance=2)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.save()
+            painter.translate(pt.x + normal_x * 31, pt.y + normal_y * 31)
+            painter.rotate(math.degrees(pt.theta))
+            painter.drawRect(-10, -8, 20, 16)
+            painter.restore()
+
+    def _draw_pit_entry_chevrons(self, painter) -> None:
+        painter.setPen(QPen(QColor(255, 255, 255), 3))
+        for stripe_idx in range(8):
+            stripe_s = 250 + stripe_idx * 2.5
+            pt = self._find_track_point_near_s(stripe_s, tolerance=1)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.drawLine(
+                int(pt.x + normal_x * 14),
+                int(pt.y + normal_y * 14),
+                int(pt.x + normal_x * 26),
+                int(pt.y + normal_y * 26),
+            )
+
+    def _draw_pit_exit_marker(self, painter) -> None:
+        if getattr(self, 'pit_points', None):
+            return
+        pt = self._find_track_point_near_s(285, tolerance=2)
+        if pt is None:
+            return
+        normal_x = -math.sin(pt.theta)
+        normal_y = math.cos(pt.theta)
+        painter.save()
+        painter.setBrush(QBrush(QColor(0, 255, 0)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
+        painter.restore()
+
+    def _find_track_point_near_s(self, s_value: float, tolerance: float) -> Optional[TrackPoint]:
+        if not self.track_points:
+            return None
+        for pt in self.track_points:
+            if abs(pt.s - s_value) < tolerance:
+                return pt
+        return None
 
     def _draw_grandstands(self, painter):
         """Draw professional 3D grandstands facing the track."""
         try:
             if not self.track_points:
                 return
-
-            # Main straight grandstands (s=320, 380, 440 - left side)
-            grandstand_positions = [320, 380, 440]
-
-            for gs_s in grandstand_positions:
-                for pt in self.track_points:
-                    if abs(pt.s - gs_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        gs_x = pt.x - normal_x * 40  # LEFT side of track
-                        gs_y = pt.y - normal_y * 40
-
-                        painter.save()
-                        painter.translate(gs_x, gs_y)
-                        painter.rotate(
-                            math.degrees(
-                                pt.theta) +
-                            90)  # Face track
-
-                        # Tier 1: Ground level (concrete base)
-                        painter.setBrush(QBrush(QColor(100, 100, 100)))
-                        painter.setPen(QPen(QColor(80, 80, 80), 1))
-                        painter.drawRect(-20, 0, 40, 10)
-
-                        # Tier 2: Lower seating (blue)
-                        painter.setBrush(QBrush(QColor(60, 100, 180)))
-                        painter.setPen(QPen(QColor(50, 80, 150), 1))
-                        painter.drawRect(-19, -5, 38, 8)
-
-                        # Tier 3: Middle seating (lighter blue)
-                        painter.setBrush(QBrush(QColor(80, 120, 200)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawRect(-18, -10, 36, 8)
-
-                        # Tier 4: Upper seating (lightest blue)
-                        painter.setBrush(QBrush(QColor(100, 140, 220)))
-                        painter.drawRect(-17, -15, 34, 6)
-
-                        # Roof structure (overhangs)
-                        painter.setBrush(QBrush(QColor(200, 200, 200)))
-                        painter.setPen(QPen(QColor(180, 180, 180), 1))
-                        painter.drawRect(-22, -20, 44, 3)
-
-                        # Support columns (4 pillars)
-                        painter.setPen(QPen(QColor(90, 90, 90), 3))
-                        for pillar_x in [-18, -6, 6, 18]:
-                            painter.drawLine(pillar_x, -17, pillar_x, 10)
-
-                        # Seating rows (horizontal detail lines)
-                        painter.setPen(QPen(QColor(40, 70, 140), 1))
-                        for row_offset in [-13, -11, -9, -7, -3, -1, 1, 3]:
-                            painter.drawLine(-18, row_offset, 18, row_offset)
-
-                        painter.restore()
-                        break
-
-            # Corner grandstands (smaller, at high curvature points)
-            for i, pt in enumerate(self.track_points):
-                if abs(pt.curvature) > 0.006 and i % 50 == 0:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    # Position on inside of corner
-                    if pt.curvature > 0:
-                        gs_x = pt.x - normal_x * 35
-                        gs_y = pt.y - normal_y * 35
-                    else:
-                        gs_x = pt.x + normal_x * 35
-                        gs_y = pt.y + normal_y * 35
-
-                    painter.save()
-                    painter.translate(gs_x, gs_y)
-                    painter.rotate(math.degrees(pt.theta) + 90)
-
-                    # Smaller 3-tier grandstand
-                    painter.setBrush(QBrush(QColor(100, 100, 100)))
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawRect(-12, 0, 24, 8)
-
-                    painter.setBrush(QBrush(QColor(70, 110, 190)))
-                    painter.drawRect(-11, -4, 22, 6)
-
-                    painter.setBrush(QBrush(QColor(90, 130, 210)))
-                    painter.drawRect(-10, -8, 20, 6)
-
-                    painter.setBrush(QBrush(QColor(190, 190, 190)))
-                    painter.drawRect(-13, -11, 26, 2)
-
-                    painter.restore()
+            self._draw_main_straight_grandstands(painter)
+            self._draw_corner_grandstands(painter)
 
         except Exception:
             pass
+
+    def _draw_main_straight_grandstands(self, painter) -> None:
+        for gs_s in [320, 380, 440]:
+            pt = self._find_track_point_near_s(gs_s, tolerance=2)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            self._draw_main_grandstand_block(painter, pt.x - normal_x * 40, pt.y - normal_y * 40, pt.theta)
+
+    def _draw_main_grandstand_block(self, painter, gs_x: float, gs_y: float, theta: float) -> None:
+        painter.save()
+        painter.translate(gs_x, gs_y)
+        painter.rotate(math.degrees(theta) + 90)
+
+        painter.setBrush(QBrush(QColor(100, 100, 100)))
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        painter.drawRect(-20, 0, 40, 10)
+
+        painter.setBrush(QBrush(QColor(60, 100, 180)))
+        painter.setPen(QPen(QColor(50, 80, 150), 1))
+        painter.drawRect(-19, -5, 38, 8)
+
+        painter.setBrush(QBrush(QColor(80, 120, 200)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-18, -10, 36, 8)
+
+        painter.setBrush(QBrush(QColor(100, 140, 220)))
+        painter.drawRect(-17, -15, 34, 6)
+
+        painter.setBrush(QBrush(QColor(200, 200, 200)))
+        painter.setPen(QPen(QColor(180, 180, 180), 1))
+        painter.drawRect(-22, -20, 44, 3)
+
+        painter.setPen(QPen(QColor(90, 90, 90), 3))
+        for pillar_x in [-18, -6, 6, 18]:
+            painter.drawLine(pillar_x, -17, pillar_x, 10)
+
+        painter.setPen(QPen(QColor(40, 70, 140), 1))
+        for row_offset in [-13, -11, -9, -7, -3, -1, 1, 3]:
+            painter.drawLine(-18, row_offset, 18, row_offset)
+
+        painter.restore()
+
+    def _draw_corner_grandstands(self, painter) -> None:
+        for i, pt in enumerate(self.track_points):
+            if abs(pt.curvature) <= 0.006 or i % 50 != 0:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            if pt.curvature > 0:
+                gs_x = pt.x - normal_x * 35
+                gs_y = pt.y - normal_y * 35
+            else:
+                gs_x = pt.x + normal_x * 35
+                gs_y = pt.y + normal_y * 35
+            self._draw_corner_grandstand_block(painter, gs_x, gs_y, pt.theta)
+
+    def _draw_corner_grandstand_block(self, painter, gs_x: float, gs_y: float, theta: float) -> None:
+        painter.save()
+        painter.translate(gs_x, gs_y)
+        painter.rotate(math.degrees(theta) + 90)
+
+        painter.setBrush(QBrush(QColor(100, 100, 100)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-12, 0, 24, 8)
+
+        painter.setBrush(QBrush(QColor(70, 110, 190)))
+        painter.drawRect(-11, -4, 22, 6)
+
+        painter.setBrush(QBrush(QColor(90, 130, 210)))
+        painter.drawRect(-10, -8, 20, 6)
+
+        painter.setBrush(QBrush(QColor(190, 190, 190)))
+        painter.drawRect(-13, -11, 26, 2)
+        painter.restore()
 
     def _draw_garages(self, painter):
         """Draw continuous professional paddock garage building."""
         try:
             if not self.track_points:
                 return
-
-            # Continuous building structure (s=10 to 280m)
-            # Layer 1: Building base segments
-            painter.setBrush(QBrush(QColor(140, 140, 140)))
-            painter.setPen(QPen(QColor(120, 120, 120), 1))
-
-            for i, pt in enumerate(self.track_points):
-                if 10 < pt.s < 280 and i % 3 == 0:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    painter.save()
-                    painter.translate(
-                        pt.x + normal_x * 50, pt.y + normal_y * 50)
-                    painter.rotate(math.degrees(pt.theta))
-                    painter.drawRect(-6, 0, 12, 25)
-                    painter.restore()
-
-            # Layer 2: Team garage bays (10 bays)
-            team_colors = [
-                QColor(6, 0, 239),    # Blue
-                QColor(0, 210, 190),  # Teal
-                QColor(220, 0, 0),    # Red
-                QColor(245, 150, 0),  # Orange
-                QColor(0, 144, 255),  # Light Blue
-                QColor(182, 186, 189),  # Silver
-                QColor(53, 140, 117),  # Green
-                QColor(201, 45, 75),  # Pink
-                QColor(255, 220, 0),  # Yellow
-                QColor(100, 100, 100)  # Grey
-            ]
-
-            for bay_idx in range(10):
-                bay_s = 20 + bay_idx * 26
-                for pt in self.track_points:
-                    if abs(pt.s - bay_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        painter.save()
-                        painter.translate(
-                            pt.x + normal_x * 50, pt.y + normal_y * 50)
-                        painter.rotate(math.degrees(pt.theta))
-
-                        # Roof (light grey overhang)
-                        painter.setBrush(QBrush(QColor(180, 180, 180)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawRect(-15, -2, 30, 29)
-
-                        # Three garage door openings
-                        painter.setBrush(QBrush(QColor(40, 40, 40)))
-                        for door in range(3):
-                            painter.drawRect(-11 + door * 7, 5, 6, 18)
-
-                        # Team colour panel above doors
-                        painter.setBrush(QBrush(team_colors[bay_idx]))
-                        painter.drawRect(-12, 1, 24, 3)
-
-                        painter.restore()
-                        break
+            self._draw_garage_base_segments(painter)
+            self._draw_garage_bays(painter)
 
         except Exception:
             pass
 
+    def _draw_garage_base_segments(self, painter) -> None:
+        painter.setBrush(QBrush(QColor(140, 140, 140)))
+        painter.setPen(QPen(QColor(120, 120, 120), 1))
+        for i, pt in enumerate(self.track_points):
+            if not (10 < pt.s < 280 and i % 3 == 0):
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.save()
+            painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+            painter.rotate(math.degrees(pt.theta))
+            painter.drawRect(-6, 0, 12, 25)
+            painter.restore()
+
+    def _draw_garage_bays(self, painter) -> None:
+        team_colors = [
+            QColor(6, 0, 239),
+            QColor(0, 210, 190),
+            QColor(220, 0, 0),
+            QColor(245, 150, 0),
+            QColor(0, 144, 255),
+            QColor(182, 186, 189),
+            QColor(53, 140, 117),
+            QColor(201, 45, 75),
+            QColor(255, 220, 0),
+            QColor(100, 100, 100),
+        ]
+        for bay_idx in range(10):
+            pt = self._find_track_point_near_s(20 + bay_idx * 26, tolerance=2)
+            if pt is None:
+                continue
+            self._draw_single_garage_bay(painter, pt, team_colors[bay_idx])
+
+    def _draw_single_garage_bay(self, painter, pt: TrackPoint, team_color: QColor) -> None:
+        normal_x = -math.sin(pt.theta)
+        normal_y = math.cos(pt.theta)
+
+        painter.save()
+        painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+        painter.rotate(math.degrees(pt.theta))
+
+        painter.setBrush(QBrush(QColor(180, 180, 180)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-15, -2, 30, 29)
+
+        painter.setBrush(QBrush(QColor(40, 40, 40)))
+        for door in range(3):
+            painter.drawRect(-11 + door * 7, 5, 6, 18)
+
+        painter.setBrush(QBrush(team_color))
+        painter.drawRect(-12, 1, 24, 3)
+        painter.restore()
+
     def _draw_track(self, painter):
         """Draw track with professional surface, smooth kerbs, checkered start/finish."""
         try:
-            if not self.track_points or len(self.track_points) < 2:
+            centerline = self._build_centerline_path()
+            if centerline is None:
                 return
 
-            TRACK_WIDTH = 14  # Half-width of track surface
-
-            # Build centerline path
-            centerline = QPainterPath()
-            centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
-
-            for i in range(1, len(self.track_points)):
-                pt = self.track_points[i]
-                centerline.lineTo(pt.x, pt.y)
-
-            centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
-
-            # === Infield fill: procedural blended turf with pixmap + props ===
-            try:
-                from PyQt6.QtGui import QPolygonF
-                # Build two polygons: the visible infield (slightly shrunk) which
-                # will receive the turf pixmap and props, and an outer polygon
-                # (expanded) used for the forest/vegetation band.
-                infield_points = []
-                inner_infield_points = []
-                outer_pts = []
-                # Increase inner shrink proportional to viewport so the
-                # generated infield pixmap stays well inside the outer band.
-                try:
-                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                    for pt in self.track_points:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        # visible infield edge (just inside track edge)
-                        ix = pt.x - normal_x * (TRACK_WIDTH - 2)
-                        iy = pt.y - normal_y * (TRACK_WIDTH - 2)
-                        infield_points.append(QPointF(ix, iy))
-                        # inner shrink to ensure the turf pixmap doesn't overlap outer band
-                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                        inner_infield_points.append(QPointF(iix, iiy))
-                        # outer band edge (outside track)
-                        forest_margin = max(20, int(min(self.width(), self.height()) * 0.06))
-                        ox = pt.x + normal_x * (TRACK_WIDTH + forest_margin)
-                        oy = pt.y + normal_y * (TRACK_WIDTH + forest_margin)
-                        outer_pts.append(QPointF(ox, oy))
-                except Exception:
-                    pass
-
-                if infield_points:
-                    inner_poly = QPolygonF(inner_infield_points)
-                    outer_poly = QPolygonF(outer_pts) if outer_pts else None
-                    # Use inner_poly's bbox for the generated pixmap so it won't
-                    # cover the outer band we draw later.
-                    bbox = inner_poly.boundingRect()
-                    w = max(2, int(math.ceil(bbox.width())))
-                    h = max(2, int(math.ceil(bbox.height())))
-                    seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
-
-                    # include preset name and grass tile mtime so cache invalidates
-                    try:
-                        preset = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
-                        palette_name = preset.get('name', '')
-                    except Exception:
-                        palette_name = ''
-                    # Use cached grass tile mtime (avoid stat() every paint)
-                    tile_mtime = self._grass_tile_mtime
-
-                    key = (w, h, seed, palette_name, tile_mtime)
-                    pix = self._infield_cache.get(key)
-                    if pix is None:
-                        try:
-                            pix = self._generate_infield_pixmap(bbox, w, h, seed)
-                        except Exception:
-                            pix = QPixmap(max(1, w), max(1, h))
-                            pix.fill(QColor(100, 160, 100))
-                        self._infield_cache[key] = pix
-
-                        # Place props deterministically and cache them using inner polygon
-                        try:
-                            world_pts = [(pt.x(), pt.y()) for pt in inner_infield_points]
-                            props = place_props(world_pts, seed=seed, density=0.00035)
-                        except Exception:
-                            props = []
-                        self._infield_props_cache[key] = props
-
-                    # Draw the pixmap clipped to the infield polygon
-                    painter.save()
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    # Translate to bbox origin, then unflip Y and position pixmap
-                    painter.translate(bbox.x(), bbox.y())
-                    # Because the main painter has Y flipped (scale(..., -...)),
-                    # draw the pixmap in local top-left coords by flipping back
-                    # and translating by -h so the pixmap's top aligns correctly.
-                    painter.save()
-                    painter.scale(1, -1)
-                    painter.translate(0, -h)
-                    local_poly = QPolygonF()
-                    for p in inner_infield_points:
-                        local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
-                    clip_path = QPainterPath()
-                    clip_path.addPolygon(local_poly)
-                    painter.setClipPath(clip_path)
-                    # We intentionally do not draw the turf pixmap here so the
-                    # previously-rendered forest (bottom layer) shows through.
-                    # Leave area transparent; draw props on top.
-                    # Draw placed props in the same unflipped local space
-                    try:
-                        props = self._infield_props_cache.get(key, [])
-                        if props:
-                            try:
-                                draw_props(painter, props, offset_x=bbox.x(), offset_y=bbox.y())
-                            except Exception:
-                                for prop in props:
-                                    x = prop.get('x', 0) - bbox.x()
-                                    y = prop.get('y', 0) - bbox.y()
-                                    s = prop.get('size', 8.0)
-                                    painter.setPen(Qt.PenStyle.NoPen)
-                                    painter.setBrush(QBrush(QColor(34, 120, 34)))
-                                    painter.drawEllipse(int(x - s/2), int(y - s/2), int(s), int(s))
-                    except Exception:
-                        pass
-                    painter.restore()
-                    painter.restore()
-
-                    # Draw an outer forest band if we were able to compute it.
-                    try:
-                        if outer_poly is not None:
-                            band_path = QPainterPath()
-                            band_path.addPolygon(outer_poly)
-                            inner_path = QPainterPath()
-                            inner_path.addPolygon(inner_poly)
-                            band_path = band_path.subtracted(inner_path)
-                            painter.save()
-                            painter.setClipPath(band_path)
-                            # Tile the grass texture into the band when available (use cached pixmap)
-                            try:
-                                tile_pix = self._grass_tile_pixmap
-                                if tile_pix is not None and not tile_pix.isNull():
-                                    # draw a slightly expanded tiled area to cover edges
-                                    painter.drawTiledPixmap(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, tile_pix)
-                                    painter.fillRect(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, QColor(60, 120, 60, 40))
-                                else:
-                                    painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
-                            except Exception:
-                                painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
-                            painter.restore()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # REMOVED: Duplicate forest rendering (already drawn earlier, this was causing massive lag)
-            # The inner infield forest is already rendered in the optimized section above
-            
-            surface = getattr(self, 'track_surface', '') or ''
-            base_colors = {
-                'asphalt': (85, 85, 85),
-                'tarmac': (85, 85, 85),
-                'concrete': (100, 100, 100),
-                'gravel': (120, 90, 50),
-                'mixed': (80, 75, 70),
-                'dirt': (110, 80, 45)
-            }
-            r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
-            grip_val = getattr(self, 'surface_grip', None)
-            try:
-                if grip_val is not None:
-                    gv = float(grip_val)
-                    if gv > 1.0:
-                        gv = min(1.0, gv / 20.0)
-                    # adjust brightness slightly based on grip (higher grip -> lighter)
-                    factor = 0.75 + 0.25 * gv
-                    r = int(max(0, min(255, r * factor)))
-                    g = int(max(0, min(255, g * factor)))
-                    b = int(max(0, min(255, b * factor)))
-            except Exception:
-                pass
-            painter.setPen(
-                QPen(
-                    QColor(r, g, b),
-                    TRACK_WIDTH * 2,
-                    Qt.PenStyle.SolidLine,
-                    Qt.PenCapStyle.RoundCap,
-                    Qt.PenJoinStyle.RoundJoin))
-            painter.drawPath(centerline)
-
-            # LAYER 7: Racing line (darker worn surface)
-            painter.setPen(
-                QPen(
-                    QColor(
-                        45,
-                        45,
-                        45),
-                    TRACK_WIDTH * 1.2,
-                    Qt.PenStyle.SolidLine,
-                    Qt.PenCapStyle.RoundCap,
-                    Qt.PenJoinStyle.RoundJoin))
-            painter.drawPath(centerline)
-
-            # LAYER 9: Track edges (clean white lines)
-            painter.setPen(QPen(QColor(240, 240, 240), 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            for i in range(0, len(self.track_points) - 1):
-                pt = self.track_points[i]
-                next_pt = self.track_points[i + 1]
-                normal_x = -math.sin(pt.theta)
-                normal_y = math.cos(pt.theta)
-                next_normal_x = -math.sin(next_pt.theta)
-                next_normal_y = math.cos(next_pt.theta)
-                # Left edge
-                painter.drawLine(
-                    int(pt.x -
-                        normal_x *
-                        TRACK_WIDTH), int(pt.y -
-                                          normal_y *
-                                          TRACK_WIDTH),
-                    int(next_pt.x -
-                        next_normal_x *
-                        TRACK_WIDTH), int(next_pt.y -
-                                          next_normal_y *
-                                          TRACK_WIDTH)
-                )
-                # Right edge
-                painter.drawLine(
-                    int(pt.x +
-                        normal_x *
-                        TRACK_WIDTH), int(pt.y +
-                                          normal_y *
-                                          TRACK_WIDTH),
-                    int(next_pt.x +
-                        next_normal_x *
-                        TRACK_WIDTH), int(next_pt.y +
-                                          next_normal_y *
-                                          TRACK_WIDTH)
-                )
-
-            # LAYER 10: SMOOTH STRIPED KERBS on INSIDE (apex)
-            # Build continuous kerb paths for each corner
-            current_corner = []
-            in_corner = False
-
-            for i, pt in enumerate(self.track_points):
-                if abs(pt.curvature) > 0.003:
-                    current_corner.append(pt)
-                    in_corner = True
-                elif in_corner and len(current_corner) > 5:
-                    # Draw smooth kerb for this corner
-                    first_curv = current_corner[0].curvature
-                    kerb_offset = 12  # Inside edge
-
-                    segment_length = 0
-                    stripe_toggle = True
-
-                    for j in range(len(current_corner) - 1):
-                        pt = current_corner[j]
-                        next_pt = current_corner[j + 1]
-
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        next_normal_x = -math.sin(next_pt.theta)
-                        next_normal_y = math.cos(next_pt.theta)
-
-                        # Calculate segment distance
-                        dx = next_pt.x - pt.x
-                        dy = next_pt.y - pt.y
-                        dist = math.sqrt(dx * dx + dy * dy)
-                        segment_length += dist
-
-                        # Toggle stripe every 5m
-                        if segment_length > 5:
-                            stripe_toggle = not stripe_toggle
-                            segment_length = 0
-
-                        colour = QColor(
-                            221, 45, 74) if stripe_toggle else QColor(
-                            255, 255, 255)
-                        painter.setPen(QPen(colour, 4))
-
-                        if first_curv > 0:  # Left turn - kerb on LEFT
-                            painter.drawLine(
-                                int(pt.x - normal_x * kerb_offset),
-                                int(pt.y - normal_y * kerb_offset),
-                                int(next_pt.x - next_normal_x * kerb_offset),
-                                int(next_pt.y - next_normal_y * kerb_offset)
-                            )
-                        else:  # Right turn - kerb on RIGHT
-                            painter.drawLine(
-                                int(pt.x + normal_x * kerb_offset),
-                                int(pt.y + normal_y * kerb_offset),
-                                int(next_pt.x + next_normal_x * kerb_offset),
-                                int(next_pt.y + next_normal_y * kerb_offset)
-                            )
-
-                    current_corner = []
-                    in_corner = False
-
-            # LAYER 11: Centerline (subtle dashed)
-            painter.setPen(
-                QPen(
-                    QColor(
-                        200,
-                        200,
-                        200),
-                    0.5,
-                    Qt.PenStyle.DashLine))
-            painter.drawPath(centerline)
-
-            # LAYER 12: START/FINISH LINE at s=0 (proper checkered flag)
-            for pt in self.track_points:
-                if pt.s < 5:  # At start of lap
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    painter.save()
-                    # Move the finish line to the right of the screen (world +X) by 200 units
-                    # and rotate it 90 degrees relative to the track heading so
-                    # it appears perpendicular
-                    painter.translate(pt.x + 200, pt.y)
-                    painter.rotate(math.degrees(pt.theta) + 90)
-                    painter.setPen(Qt.PenStyle.NoPen)
-
-                    # Bold checkered pattern - 8 squares across track width
-                    square_size = 3.5
-                    for col in range(8):
-                        if col % 2 == 0:
-                            painter.setBrush(QBrush(QColor(255, 255, 255)))
-                        else:
-                            painter.setBrush(QBrush(QColor(0, 0, 0)))
-                        painter.drawRect(
-                            int(col * square_size - TRACK_WIDTH),
-                            int(-square_size),
-                            int(square_size),
-                            int(square_size * 2)
-                        )
-
-                    painter.restore()
-                    break
+            track_width = 14
+            self._draw_track_infield(painter, track_width)
+            self._draw_track_surface_and_racing_line(painter, centerline, track_width)
+            self._draw_track_edges(painter, track_width)
+            self._draw_corner_kerbs(painter)
+            self._draw_track_centerline_overlay(painter, centerline)
+            self._draw_start_finish_line(painter, track_width)
 
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
 
         # Cached props are already drawn within the infield pixmap block
         # to ensure correct orientation and clipping. Avoid duplicate drawing here.
+
+    def _build_centerline_path(self) -> Optional[QPainterPath]:
+        """Return closed centerline path for the current track."""
+        if not self.track_points or len(self.track_points) < 2:
+            return None
+        centerline = QPainterPath()
+        centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
+        for pt in self.track_points[1:]:
+            centerline.lineTo(pt.x, pt.y)
+        centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+        return centerline
+
+    def _build_infield_points(self, track_width: int) -> Tuple[List[QPointF], List[QPointF], List[QPointF]]:
+        """Build visible infield, inner infield and outer band point lists."""
+        infield_points: List[QPointF] = []
+        inner_infield_points: List[QPointF] = []
+        outer_points: List[QPointF] = []
+
+        inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+        forest_margin = max(20, int(min(self.width(), self.height()) * 0.06))
+        for pt in self.track_points:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            infield_points.append(QPointF(pt.x - normal_x * (track_width - 2), pt.y - normal_y * (track_width - 2)))
+            inner_infield_points.append(
+                QPointF(
+                    pt.x - normal_x * (track_width - 2 + inner_shrink),
+                    pt.y - normal_y * (track_width - 2 + inner_shrink),
+                )
+            )
+            outer_points.append(
+                QPointF(
+                    pt.x + normal_x * (track_width + forest_margin),
+                    pt.y + normal_y * (track_width + forest_margin),
+                )
+            )
+        return infield_points, inner_infield_points, outer_points
+
+    def _build_infield_cache_key(self, w: int, h: int, seed: int) -> Tuple[Any, ...]:
+        """Return infield cache key including palette and texture revision."""
+        try:
+            preset = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
+            palette_name = preset.get('name', '')
+        except Exception:
+            palette_name = ''
+        tile_mtime = self._grass_tile_mtime
+        return (w, h, seed, palette_name, tile_mtime)
+
+    def _ensure_infield_assets(self, key: Tuple[Any, ...], bbox: Any, w: int, h: int, seed: int, inner_infield_points: List[QPointF]) -> None:
+        """Populate cached infield pixmap and props for a cache key."""
+        if self._infield_cache.get(key) is None:
+            try:
+                pix = self._generate_infield_pixmap(bbox, w, h, seed)
+            except Exception:
+                pix = QPixmap(max(1, w), max(1, h))
+                pix.fill(QColor(100, 160, 100))
+            self._infield_cache[key] = pix
+
+        if self._infield_props_cache.get(key) is None:
+            try:
+                world_pts = [(pt.x(), pt.y()) for pt in inner_infield_points]
+                props = place_props(world_pts, seed=seed, density=0.00035)
+            except Exception:
+                props = []
+            self._infield_props_cache[key] = props
+
+    def _draw_infield_props_clipped(
+        self,
+        painter,
+        bbox: Any,
+        h: int,
+        inner_infield_points: List[QPointF],
+        key: Tuple[Any, ...],
+    ) -> None:
+        """Draw cached infield props clipped to the inner infield polygon."""
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.translate(bbox.x(), bbox.y())
+        painter.save()
+        painter.scale(1, -1)
+        painter.translate(0, -h)
+
+        local_poly = QPolygonF()
+        for p in inner_infield_points:
+            local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
+        clip_path = QPainterPath()
+        clip_path.addPolygon(local_poly)
+        painter.setClipPath(clip_path)
+
+        props = self._infield_props_cache.get(key, [])
+        if props:
+            try:
+                draw_props(painter, props, offset_x=bbox.x(), offset_y=bbox.y())
+            except Exception:
+                self._draw_fallback_props(painter, props, bbox)
+
+        painter.restore()
+        painter.restore()
+
+    def _draw_fallback_props(self, painter, props: List[Dict[str, Any]], bbox: Any) -> None:
+        """Fallback prop renderer if shared prop drawing fails."""
+        for prop in props:
+            x = prop.get('x', 0) - bbox.x()
+            y = prop.get('y', 0) - bbox.y()
+            s = prop.get('size', 8.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(34, 120, 34)))
+            painter.drawEllipse(int(x - s / 2), int(y - s / 2), int(s), int(s))
+
+    def _draw_outer_forest_band(self, painter, outer_poly: Optional[QPolygonF], inner_poly: QPolygonF, bbox: Any, w: int, h: int) -> None:
+        """Draw outer vegetation band between outer and inner polygons."""
+        if outer_poly is None:
+            return
+
+        band_path = QPainterPath()
+        band_path.addPolygon(outer_poly)
+        inner_path = QPainterPath()
+        inner_path.addPolygon(inner_poly)
+        band_path = band_path.subtracted(inner_path)
+
+        painter.save()
+        painter.setClipPath(band_path)
+        try:
+            tile_pix = self._grass_tile_pixmap
+            if tile_pix is not None and not tile_pix.isNull():
+                painter.drawTiledPixmap(
+                    int(bbox.x()) - w,
+                    int(bbox.y()) - h,
+                    int(bbox.width()) + w * 2,
+                    int(bbox.height()) + h * 2,
+                    tile_pix,
+                )
+                painter.fillRect(
+                    int(bbox.x()) - w,
+                    int(bbox.y()) - h,
+                    int(bbox.width()) + w * 2,
+                    int(bbox.height()) + h * 2,
+                    QColor(60, 120, 60, 40),
+                )
+            else:
+                painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+        except Exception:
+            painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+        painter.restore()
+
+    def _draw_track_infield(self, painter, track_width: int) -> None:
+        """Render infield props and outer vegetation band."""
+        try:
+            infield_points, inner_infield_points, outer_points = self._build_infield_points(track_width)
+            if not infield_points:
+                return
+
+            inner_poly = QPolygonF(inner_infield_points)
+            outer_poly = QPolygonF(outer_points) if outer_points else None
+            bbox = inner_poly.boundingRect()
+            w = max(2, int(math.ceil(bbox.width())))
+            h = max(2, int(math.ceil(bbox.height())))
+            seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
+            key = self._build_infield_cache_key(w, h, seed)
+
+            self._ensure_infield_assets(key, bbox, w, h, seed, inner_infield_points)
+            self._draw_infield_props_clipped(painter, bbox, h, inner_infield_points, key)
+            self._draw_outer_forest_band(painter, outer_poly, inner_poly, bbox, w, h)
+        except Exception:
+            pass
+
+    def _resolve_track_surface_color(self) -> Tuple[int, int, int]:
+        """Resolve track base color, adjusted by grip where available."""
+        surface = getattr(self, 'track_surface', '') or ''
+        base_colors = {
+            'asphalt': (85, 85, 85),
+            'tarmac': (85, 85, 85),
+            'concrete': (100, 100, 100),
+            'gravel': (120, 90, 50),
+            'mixed': (80, 75, 70),
+            'dirt': (110, 80, 45),
+        }
+        r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
+        grip_val = getattr(self, 'surface_grip', None)
+        try:
+            if grip_val is not None:
+                gv = float(grip_val)
+                if gv > 1.0:
+                    gv = min(1.0, gv / 20.0)
+                factor = 0.75 + 0.25 * gv
+                r = int(max(0, min(255, r * factor)))
+                g = int(max(0, min(255, g * factor)))
+                b = int(max(0, min(255, b * factor)))
+        except Exception:
+            pass
+        return r, g, b
+
+    def _draw_track_surface_and_racing_line(self, painter, centerline: QPainterPath, track_width: int) -> None:
+        """Draw surface base and darker racing line."""
+        r, g, b = self._resolve_track_surface_color()
+        painter.setPen(
+            QPen(
+                QColor(r, g, b),
+                track_width * 2,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.drawPath(centerline)
+
+        painter.setPen(
+            QPen(
+                QColor(45, 45, 45),
+                track_width * 1.2,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.drawPath(centerline)
+
+    def _draw_track_edges(self, painter, track_width: int) -> None:
+        """Draw left and right white edge lines."""
+        painter.setPen(QPen(QColor(240, 240, 240), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for i in range(0, len(self.track_points) - 1):
+            pt = self.track_points[i]
+            next_pt = self.track_points[i + 1]
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            next_normal_x = -math.sin(next_pt.theta)
+            next_normal_y = math.cos(next_pt.theta)
+            painter.drawLine(
+                int(pt.x - normal_x * track_width),
+                int(pt.y - normal_y * track_width),
+                int(next_pt.x - next_normal_x * track_width),
+                int(next_pt.y - next_normal_y * track_width),
+            )
+            painter.drawLine(
+                int(pt.x + normal_x * track_width),
+                int(pt.y + normal_y * track_width),
+                int(next_pt.x + next_normal_x * track_width),
+                int(next_pt.y + next_normal_y * track_width),
+            )
+
+    def _draw_single_corner_kerb(self, painter, corner_points: List[TrackPoint], kerb_offset: int) -> None:
+        """Draw striped kerb for one detected corner segment."""
+        first_curv = corner_points[0].curvature
+        segment_length = 0.0
+        stripe_toggle = True
+
+        for j in range(len(corner_points) - 1):
+            pt = corner_points[j]
+            next_pt = corner_points[j + 1]
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            next_normal_x = -math.sin(next_pt.theta)
+            next_normal_y = math.cos(next_pt.theta)
+
+            dist = math.sqrt((next_pt.x - pt.x) ** 2 + (next_pt.y - pt.y) ** 2)
+            segment_length += dist
+            if segment_length > 5:
+                stripe_toggle = not stripe_toggle
+                segment_length = 0.0
+
+            colour = QColor(221, 45, 74) if stripe_toggle else QColor(255, 255, 255)
+            painter.setPen(QPen(colour, 4))
+
+            if first_curv > 0:
+                painter.drawLine(
+                    int(pt.x - normal_x * kerb_offset),
+                    int(pt.y - normal_y * kerb_offset),
+                    int(next_pt.x - next_normal_x * kerb_offset),
+                    int(next_pt.y - next_normal_y * kerb_offset),
+                )
+            else:
+                painter.drawLine(
+                    int(pt.x + normal_x * kerb_offset),
+                    int(pt.y + normal_y * kerb_offset),
+                    int(next_pt.x + next_normal_x * kerb_offset),
+                    int(next_pt.y + next_normal_y * kerb_offset),
+                )
+
+    def _draw_corner_kerbs(self, painter) -> None:
+        """Detect corner runs and draw inside apex kerbs."""
+        current_corner: List[TrackPoint] = []
+        kerb_offset = 12
+        for pt in self.track_points:
+            if abs(pt.curvature) > 0.003:
+                current_corner.append(pt)
+                continue
+            if len(current_corner) > 5:
+                self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
+            current_corner = []
+
+        if len(current_corner) > 5:
+            self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
+
+    def _draw_track_centerline_overlay(self, painter, centerline: QPainterPath) -> None:
+        """Draw subtle dashed centerline overlay."""
+        painter.setPen(QPen(QColor(200, 200, 200), 0.5, Qt.PenStyle.DashLine))
+        painter.drawPath(centerline)
+
+    def _draw_start_finish_line(self, painter, track_width: int) -> None:
+        """Draw checkered start/finish marker near s=0."""
+        for pt in self.track_points:
+            if pt.s >= 5:
+                continue
+            painter.save()
+            painter.translate(pt.x + 200, pt.y)
+            painter.rotate(math.degrees(pt.theta) + 90)
+            painter.setPen(Qt.PenStyle.NoPen)
+            square_size = 3.5
+            for col in range(8):
+                painter.setBrush(QBrush(QColor(255, 255, 255) if col % 2 == 0 else QColor(0, 0, 0)))
+                painter.drawRect(
+                    int(col * square_size - track_width),
+                    int(-square_size),
+                    int(square_size),
+                    int(square_size * 2),
+                )
+            painter.restore()
+            break
 
     def _draw_cars(self, painter):
         """Draw cars at current positions."""
@@ -2013,108 +1997,7 @@ class TrackWidget(QWidget):
                 try:
                     if car.dnf:
                         continue
-
-                    # Find track point at car's arc-length
-                    if self.track_length > 0 and len(self.track_points) > 0:
-                        # === STEP 1: MODULO WRAPPING ===
-                        # This is CRITICAL for preventing teleportation!
-                        # When car.s exceeds track_length, it wraps back to 0
-                        # Example: If track is 6000m and car.s = 6100m,
-                        # normalized_s = 100m
-                        # Use interpolated display position if present
-                        display_pos = getattr(car, 'display_s', None)
-                        normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
-
-                        # === STEP 2: FIND MATCHING TRACK POINT ===
-                        # CRITICAL FIX: Track points were rescaled, so their .s values
-                        # don't match array indices. Must search for closest .s value!
-                        # Binary search for the track point with .s closest to
-                        # normalized_s
-                        pt = self._point_at_s(normalized_s)
-                        if pt is None:
-                            continue
-
-                        # === STEP 3: LATERAL POSITIONING (SIDE-BY-SIDE RACING) ===
-                        # Spread cars across track width to simulate racing lines
-                        # Grid position determines if car is on left or right
-                        # side of track
-
-                        # Base offset: Grid position (odd = left, even = right)
-                        # This creates pairs of cars side-by-side at the start
-                        grid_position = car.driver_id % 2  # 0 or 1
-                        base_offset = (grid_position - 0.5) * \
-                            6  # -3 or +3 pixels
-
-                        # Dynamic offset: Small variation during racing
-                        # Much smaller than before to keep cars ON the track
-                        lap_progress = (normalized_s / self.track_length)
-                        dynamic_offset = math.sin(
-                            lap_progress * 6 * math.pi + car.driver_id * 0.7) * 2
-
-                        total_lateral_offset = base_offset + dynamic_offset
-
-                        # === STEP 4: CALCULATE PERPENDICULAR OFFSET ===
-                        # Track angle (theta) points along the track direction
-                        # To move sideways, we rotate 90 degrees (pi/2 radians)
-                        track_angle = pt.theta
-                        offset_x = pt.x + total_lateral_offset * \
-                            math.cos(track_angle + math.pi / 2)
-                        offset_y = pt.y + total_lateral_offset * \
-                            math.sin(track_angle + math.pi / 2)
-
-                        # === STEP 5: DRAW CAR (actual 5m length) ===
-                        # Calculate rotation based on ACTUAL MOVEMENT, not just
-                        # track angle
-                        if hasattr(car, 'movement_direction') and abs(
-                                car.movement_direction) > 0.1:
-                            # Car is moving - use direction of motion
-                            # Positive movement = forward, negative = backward
-                            # (shouldn't happen)
-                            movement_angle = track_angle if car.movement_direction > 0 else track_angle + math.pi
-                        else:
-                            # Car stationary - use track direction
-                            movement_angle = track_angle
-
-                        # Draw detailed single seater car using appearance manager
-                        painter.save()
-                        painter.translate(offset_x, offset_y)
-                        # Rotate car to face track direction; base sprite points along +X
-                        painter.rotate(math.degrees(movement_angle) + 90)
-
-                        # Get livery for this driver (fallback: build from driver colour)
-                        livery = self.appearance_manager.get_livery(car.driver_id)
-                        if not livery:
-                            primary = car.colour
-                            secondary = QColor(min(255, primary.red() + 30),
-                                               min(255, primary.green() + 30),
-                                               min(255, primary.blue() + 30))
-                            trim = QColor(255, 255, 255)
-                            livery = Livery(primary, secondary, trim, f"Driver {car.driver_id}", car.driver_id)
-
-                        # Calculate steering angle based on lateral offset change (simulates cornering)
-                        # Scale the dynamic offset to a reasonable steering angle (-15 to +15 degrees)
-                        steering_angle = dynamic_offset * 2.5  # amplify the sine wave motion
-
-                        # Render detailed Formula car with slimmer scale and steering
-                        VehicleRenderer.render_single_seater_car(
-                            painter, livery, scale=1.5, steering_angle=steering_angle
-                        )
-
-                        painter.restore()
-                        # Highlight player's car with a subtle halo
-                        try:
-                            if getattr(self, 'player_driver_id', None) is not None and car.driver_id == getattr(self, 'player_driver_id', None):
-                                painter.save()
-                                halo_pen = QPen(QColor(255, 215, 0, 200))
-                                halo_pen.setWidth(4)
-                                painter.setPen(halo_pen)
-                                painter.setBrush(Qt.BrushStyle.NoBrush)
-                                # Draw a circular halo around the car position
-                                painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
-                                painter.restore()
-                        except Exception:
-                            # Non-fatal: highlighting should not break rendering
-                            pass
+                    if self._draw_single_car(painter, car):
                         cars_drawn += 1
                 except Exception as e:
                     print(
@@ -2129,6 +2012,79 @@ class TrackWidget(QWidget):
                     f"WARNING: Only drew {cars_drawn}/{active_cars} active cars")
         except Exception as e:
             print(f"ERROR in _draw_cars: {e}")
+
+    def _draw_single_car(self, painter, car: Car) -> bool:
+        """Draw one active car and return whether it was rendered."""
+        state = self._resolve_car_draw_state(car)
+        if state is None:
+            return False
+        offset_x, offset_y, movement_angle, steering_angle = state
+
+        painter.save()
+        painter.translate(offset_x, offset_y)
+        painter.rotate(math.degrees(movement_angle) + 90)
+        livery = self._resolve_car_livery(car)
+        VehicleRenderer.render_single_seater_car(painter, livery, scale=1.5, steering_angle=steering_angle)
+        painter.restore()
+        self._draw_player_halo_if_needed(painter, car, offset_x, offset_y)
+        return True
+
+    def _resolve_car_draw_state(self, car: Car) -> Optional[Tuple[float, float, float, float]]:
+        """Resolve world-space draw coordinates and orientation for a car."""
+        display_pos = getattr(car, 'display_s', None)
+        normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
+        pt = self._point_at_s(normalized_s)
+        if pt is None:
+            return None
+
+        grid_position = car.driver_id % 2
+        base_offset = (grid_position - 0.5) * 6
+        lap_progress = normalized_s / self.track_length
+        dynamic_offset = math.sin(lap_progress * 6 * math.pi + car.driver_id * 0.7) * 2
+        total_lateral_offset = base_offset + dynamic_offset
+
+        track_angle = pt.theta
+        offset_x = pt.x + total_lateral_offset * math.cos(track_angle + math.pi / 2)
+        offset_y = pt.y + total_lateral_offset * math.sin(track_angle + math.pi / 2)
+        movement_angle = self._resolve_car_movement_angle(car, track_angle)
+        steering_angle = dynamic_offset * 2.5
+        return offset_x, offset_y, movement_angle, steering_angle
+
+    def _resolve_car_movement_angle(self, car: Car, track_angle: float) -> float:
+        """Use movement direction when available to orient rendered car."""
+        if hasattr(car, 'movement_direction') and abs(car.movement_direction) > 0.1:
+            return track_angle if car.movement_direction > 0 else track_angle + math.pi
+        return track_angle
+
+    def _resolve_car_livery(self, car: Car) -> Livery:
+        """Return cached livery or build a simple fallback from driver color."""
+        livery = self.appearance_manager.get_livery(car.driver_id)
+        if livery:
+            return livery
+        primary = car.colour
+        secondary = QColor(
+            min(255, primary.red() + 30),
+            min(255, primary.green() + 30),
+            min(255, primary.blue() + 30),
+        )
+        return Livery(primary, secondary, QColor(255, 255, 255), f"Driver {car.driver_id}", car.driver_id)
+
+    def _draw_player_halo_if_needed(self, painter, car: Car, offset_x: float, offset_y: float) -> None:
+        """Highlight the player-controlled car with a halo ring."""
+        try:
+            if getattr(self, 'player_driver_id', None) is None:
+                return
+            if car.driver_id != getattr(self, 'player_driver_id', None):
+                return
+            painter.save()
+            halo_pen = QPen(QColor(255, 215, 0, 200))
+            halo_pen.setWidth(4)
+            painter.setPen(halo_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
+            painter.restore()
+        except Exception:
+            pass
 
 
 class RaceWindow(QMainWindow):
