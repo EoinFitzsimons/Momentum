@@ -62,7 +62,7 @@ import re
 import time
 import threading
 import traceback as _traceback
-from typing import Any, List, Dict, Optional, cast
+from typing import Any, List, Dict, Optional, Tuple, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
@@ -71,6 +71,8 @@ from .props_placer import place_props, draw_props
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+CONTROL_LABEL_STYLE = "font-size: 16px; font-weight: bold; color: #FFFFFF;"
 
 
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
@@ -220,320 +222,281 @@ class CircuitGenerator:
         # 'routes' above. This dead code caused undefined-name mypy errors.)
 
     @staticmethod
-    def _process_instructions(instructions: Any, state: Dict[str, Any], routes: Dict[str, Any], is_point_to_point: bool = False):
-        start_x, start_y = 0, 0  # Track starts at origin
+    def _process_subinstructions(sub_instructions: List[Any]) -> List[TrackPoint]:
+        """Process nested route instructions (e.g., pit/joker) into standalone segments."""
+        sub_segments: List[TrackPoint] = []
+        sub_state = {
+            'segments': sub_segments,
+            'current_s': 0,
+            'current_x': 0,
+            'current_y': 0,
+            'current_theta': 0,
+            'total_angle': 0,
+            'target_length_m': None,
+        }
+        for instr in sub_instructions:
+            CircuitGenerator._process_instructions(
+                [instr],
+                sub_state,
+                {'main': sub_segments, 'joker': None, 'pit': None},
+                False,
+            )
+        if sub_segments:
+            CircuitGenerator._finalize_circuit(sub_segments)
+        return sub_segments
 
-        # Optionally solve closure exactly when requested in options attached
-        # to the instruction block: if the top-level 'solve_closure' key is
-        # present and true, we will attempt to adjust primitive multipliers
-        # so the composed sequence closes precisely. The caller may pass
-        # this flag via the `options` argument to `generate_with_routes`.
-        from RaceLogic import closure_solver
-
-        # helper to process a sub-instruction list into a fresh segments list
-        def process_subinstructions(sub_instructions):
-            sub_segments: List[TrackPoint] = []
-            sub_state = {
-                'segments': sub_segments,
-                'current_s': 0,
-                'current_x': 0,
-                'current_y': 0,
-                'current_theta': 0,
-                'total_angle': 0,
-                'target_length_m': None
-            }
-            for instr in sub_instructions:
-                CircuitGenerator._process_instructions([instr], sub_state, {'main': sub_segments, 'joker': None, 'pit': None})
-            # finalize subroute (do not rescale - keep generated geometry as-is)
-            if sub_segments:
-                CircuitGenerator._finalize_circuit(sub_segments)
-            return sub_segments
-
-        # Process all instructions
-        # If instructions is a dict with control flags, respect them
+    @staticmethod
+    def _extract_instruction_list(instructions: Any) -> Tuple[List[Any], bool]:
+        """Normalize instruction container and extract optional solve-closure flag."""
         solve_requested = False
         instruction_list: List[Any] = []
+
         if isinstance(instructions, dict) and instructions.get('solve_closure'):
-            # instructions provided as dict wrapper: {'solve_closure': True, 'instructions': [...]}
-            wrapper = instructions
-            wrapped_instructions = wrapper.get('instructions', [])
+            wrapped_instructions = instructions.get('instructions', [])
             instruction_list = cast(List[Any], wrapped_instructions) if isinstance(wrapped_instructions, list) else []
             solve_requested = True
         elif isinstance(instructions, list) and len(instructions) > 0:
             instruction_list = cast(List[Any], instructions)
-            # allow options via attached sentinel instruction dict at start
             if isinstance(instructions[0], dict) and instructions[0].get('solve_closure'):
                 solve_requested = True
         elif isinstance(instructions, list):
             instruction_list = cast(List[Any], instructions)
 
-        closure_solved = False
-        # Skip closure solver for point-to-point tracks
-        if solve_requested and not is_point_to_point:
-            try:
-                # Attempt closure solve; this mutates instruction angles/lengths
-                success, multipliers, diag = closure_solver.solve_closure(instruction_list)
-                if success:
-                    closure_solver.apply_multipliers_to_instructions(instruction_list, multipliers)
-                    closure_solved = True
-                else:
-                    print(f"Closure solver failed: {diag}")
-            except Exception as e:
-                print(f"Error running closure solver: {e}")
+        return instruction_list, solve_requested
 
-        for instruction in instruction_list:
-            # Normalize instruction forms: allow tuple legacy or dict
-            if isinstance(instruction, tuple) or isinstance(instruction, list):
-                # legacy tuple form: ('S', length) or ('C', angle_deg, radius, clothoid_len, k)
-                if instruction[0] == 'S':
-                    CircuitGenerator._add_straight(instruction[1], state)
-                elif instruction[0] == 'C':
-                    angle_deg, radius, clothoid_len, k = instruction[1:5]
-                    CircuitGenerator._add_corner(
-                        angle_deg * math.pi / 180, radius, clothoid_len, k, state)
-                else:
-                    # unknown tuple type - ignore
-                    continue
-            elif isinstance(instruction, dict):
-                typ = instruction.get('type')
-                if not typ:
-                    continue
-                typ = typ.upper()
-                if typ == 'S':
-                    CircuitGenerator._add_straight(int(instruction.get('length_m', 50)), state)
-                elif typ == 'C':
-                    angle = float(instruction.get('angle_deg', 45))
-                    radius = float(instruction.get('radius_m', 80))
-                    clothoid = int(instruction.get('clothoid_len', 50))
-                    k = float(instruction.get('k', 0.00009))
-                    CircuitGenerator._add_corner(angle * math.pi / 180, radius, clothoid, k, state)
-                elif typ in ('PIT', 'PIT_ENTRY', 'PIT_EXIT'):
-                    # PIT block: may contain nested instructions for pit lane geometry
-                    pit_instr = instruction.get('instructions')
-                    if pit_instr:
-                        pit_segments = process_subinstructions(pit_instr)
-                        routes['pit'] = pit_segments
-                    else:
-                        # fallback: simple straight pit lane
-                        pit_len = int(instruction.get('length_m', 60))
-                        pit_state = {'segments': [], 'current_s': 0, 'current_x': 0, 'current_y': 0, 'current_theta': state['current_theta'], 'total_angle': 0, 'target_length_m': None}
-                        CircuitGenerator._add_straight(pit_len, pit_state)
-                        routes['pit'] = pit_state['segments']
-                elif typ == 'JOKER':
-                    joker_instr = instruction.get('instructions')
-                    if joker_instr:
-                        joker_segments = process_subinstructions(joker_instr)
-                        routes['joker'] = joker_segments
-                    else:
-                        # nothing to do
-                        pass
-                else:
-                    # unknown dict type - ignore
-                    continue
+    @staticmethod
+    def _maybe_solve_closure(instruction_list: List[Any], solve_requested: bool, is_point_to_point: bool) -> bool:
+        """Run analytic closure solver when requested for circuit-style tracks."""
+        if not solve_requested or is_point_to_point:
+            return False
+
+        from RaceLogic import closure_solver
+
+        try:
+            success, multipliers, diag = closure_solver.solve_closure(instruction_list)
+            if success:
+                closure_solver.apply_multipliers_to_instructions(instruction_list, multipliers)
+                return True
+            print(f"Closure solver failed: {diag}")
+        except Exception as e:
+            print(f"Error running closure solver: {e}")
+        return False
+
+    @staticmethod
+    def _process_instruction_item(instruction: Any, state: Dict[str, Any], routes: Dict[str, Any]) -> None:
+        """Dispatch one normalized instruction item."""
+        if isinstance(instruction, tuple) or isinstance(instruction, list):
+            CircuitGenerator._process_legacy_instruction(instruction, state)
+            return
+        if isinstance(instruction, dict):
+            CircuitGenerator._process_dict_instruction(instruction, state, routes)
+
+    @staticmethod
+    def _process_legacy_instruction(instruction: Any, state: Dict[str, Any]) -> None:
+        """Handle legacy tuple/list instructions."""
+        if not instruction:
+            return
+        if instruction[0] == 'S':
+            CircuitGenerator._add_straight(instruction[1], state)
+            return
+        if instruction[0] == 'C':
+            angle_deg, radius, clothoid_len, k = instruction[1:5]
+            CircuitGenerator._add_corner(angle_deg * math.pi / 180, radius, clothoid_len, k, state)
+
+    @staticmethod
+    def _process_dict_instruction(instruction: Dict[str, Any], state: Dict[str, Any], routes: Dict[str, Any]) -> None:
+        """Handle dict-based instructions including nested route blocks."""
+        typ = instruction.get('type')
+        if not typ:
+            return
+        typ = str(typ).upper()
+
+        if typ == 'S':
+            CircuitGenerator._add_straight(int(instruction.get('length_m', 50)), state)
+            return
+        if typ == 'C':
+            angle = float(instruction.get('angle_deg', 45))
+            radius = float(instruction.get('radius_m', 80))
+            clothoid = int(instruction.get('clothoid_len', 50))
+            k = float(instruction.get('k', 0.00009))
+            CircuitGenerator._add_corner(angle * math.pi / 180, radius, clothoid, k, state)
+            return
+        if typ in ('PIT', 'PIT_ENTRY', 'PIT_EXIT'):
+            pit_instr = instruction.get('instructions')
+            if pit_instr:
+                routes['pit'] = CircuitGenerator._process_subinstructions(cast(List[Any], pit_instr))
             else:
-                # unsupported instruction format - ignore
-                continue
+                pit_len = int(instruction.get('length_m', 60))
+                pit_state = {
+                    'segments': [],
+                    'current_s': 0,
+                    'current_x': 0,
+                    'current_y': 0,
+                    'current_theta': state['current_theta'],
+                    'total_angle': 0,
+                    'target_length_m': None,
+                }
+                CircuitGenerator._add_straight(pit_len, pit_state)
+                routes['pit'] = pit_state['segments']
+            return
+        if typ == 'JOKER':
+            joker_instr = instruction.get('instructions')
+            if joker_instr:
+                routes['joker'] = CircuitGenerator._process_subinstructions(cast(List[Any], joker_instr))
 
-        # NOW: Calculate what we need to close the loop
-        # If closure solver already produced a closed sequence, skip heuristic
-        if closure_solved:
-            # compute gap for logging but skip adding corrective segments
-            dx = start_x - state['current_x']
-            dy = start_y - state['current_y']
-            distance_to_start = math.hypot(dx, dy)
-            angle_to_start = math.atan2(dy, dx)
+    @staticmethod
+    def _normalize_angle(angle: float) -> float:
+        """Normalize radians to [-pi, pi] for stable closure math."""
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        return angle
 
-            heading_error = angle_to_start - state['current_theta']
-            while heading_error > math.pi:
-                heading_error -= 2 * math.pi
-            while heading_error < -math.pi:
-                heading_error += 2 * math.pi
-
-            angle_deficit = 2 * math.pi - state['total_angle']
-
-            print(
-                f"  [CLOSURE solver] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
-        else:
-            dx = start_x - state['current_x']
-            dy = start_y - state['current_y']
-            distance_to_start = math.hypot(dx, dy)
-            angle_to_start = math.atan2(dy, dx)
+    @staticmethod
+    def _compute_closure_metrics(state: Dict[str, Any], start_x: float, start_y: float) -> Tuple[float, float, float]:
+        """Return (distance_to_start, heading_error, angle_deficit)."""
         dx = start_x - state['current_x']
         dy = start_y - state['current_y']
         distance_to_start = math.hypot(dx, dy)
         angle_to_start = math.atan2(dy, dx)
-
-        # Calculate heading error
-        heading_error = angle_to_start - state['current_theta']
-        while heading_error > math.pi:
-            heading_error -= 2 * math.pi
-        while heading_error < -math.pi:
-            heading_error += 2 * math.pi
-
-        # Calculate angle deficit (how much we need to turn to complete 360
-        # degrees)
+        heading_error = CircuitGenerator._normalize_angle(angle_to_start - state['current_theta'])
         angle_deficit = 2 * math.pi - state['total_angle']
+        return distance_to_start, heading_error, angle_deficit
 
-        # Skip closure calculation/printing for point-to-point tracks
+    @staticmethod
+    def _add_initial_closure_shape(state: Dict[str, Any], distance_to_start: float, angle_deficit: float) -> None:
+        """Add a coarse closure shape before iterative refinement."""
+        if abs(angle_deficit) > math.radians(120):
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.35, 110, 50, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * -0.15, 120, 52, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.80, 100, 48, 0.00009, state)
+            return
+        if abs(angle_deficit) > math.radians(60):
+            CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.6, 115, 52, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.4, 125, 54, 0.00009, state)
+            return
+        CircuitGenerator._add_straight(int(distance_to_start * 0.3), state)
+        CircuitGenerator._add_corner(angle_deficit, 130, 55, 0.00008, state)
+
+    @staticmethod
+    def _closure_iteration_metrics(state: Dict[str, Any], start_x: float, start_y: float) -> Tuple[float, float, float]:
+        """Return per-iteration closure metrics (gap distance, heading error rad/deg)."""
+        gap_dx = start_x - state['current_x']
+        gap_dy = start_y - state['current_y']
+        gap_dist = math.hypot(gap_dx, gap_dy)
+        gap_angle = math.atan2(gap_dy, gap_dx)
+        gap_heading_error = CircuitGenerator._normalize_angle(gap_angle - state['current_theta'])
+        heading_error_deg = abs(math.degrees(gap_heading_error))
+        return gap_dist, gap_heading_error, heading_error_deg
+
+    @staticmethod
+    def _should_stop_closure_iteration(iteration: int, gap_dist: float, prev_gap: float, heading_error_deg: float) -> bool:
+        """Return True if closure iteration should stop due to divergence or convergence."""
+        if gap_dist > prev_gap * 1.2:
+            print(
+                f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {prev_gap:.1f}m to {gap_dist:.1f}m)")
+            return True
+
+        if gap_dist < 100 and heading_error_deg < 20:
+            print(
+                f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+            return True
+
+        if gap_dist < 200 and heading_error_deg < 25:
+            print(
+                f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+            return True
+
+        return False
+
+    @staticmethod
+    def _closure_correction_factor(gap_dist: float, heading_error_deg: float) -> float:
+        """Compute proportional closure correction factor from distance and heading quality."""
+        if gap_dist > 300:
+            base_factor = 0.6
+        elif gap_dist > 150:
+            base_factor = 0.45
+        elif gap_dist > 75:
+            base_factor = 0.3
+        else:
+            base_factor = 0.2
+
+        if heading_error_deg < 5:
+            return base_factor * 0.3
+        if heading_error_deg < 15:
+            return base_factor * 0.5
+        if heading_error_deg < 30:
+            return base_factor * 0.7
+        return base_factor
+
+    @staticmethod
+    def _iterative_closure_refinement(state: Dict[str, Any], start_x: float, start_y: float) -> None:
+        """Refine closure with small heading corrections while avoiding divergence."""
+        prev_gap = float('inf')
+        for iteration in range(12):
+            gap_dist, gap_heading_error, heading_error_deg = CircuitGenerator._closure_iteration_metrics(
+                state,
+                start_x,
+                start_y,
+            )
+
+            print(
+                f"  [CLOSURE ITER {iteration}] Gap: {gap_dist:.1f}m, Heading error: {math.degrees(gap_heading_error):.1f}deg")
+
+            if CircuitGenerator._should_stop_closure_iteration(iteration, gap_dist, prev_gap, heading_error_deg):
+                break
+
+            correction_factor = CircuitGenerator._closure_correction_factor(gap_dist, heading_error_deg)
+
+            if abs(gap_heading_error) > math.radians(1):
+                CircuitGenerator._add_corner(gap_heading_error * correction_factor, 180, 60, 0.00006, state)
+
+            prev_gap = gap_dist
+
+    @staticmethod
+    def _apply_heuristic_closure(state: Dict[str, Any], start_x: float, start_y: float, distance_to_start: float, angle_deficit: float) -> None:
+        """Apply non-analytic closure correction for looped circuits."""
+        if abs(angle_deficit) <= 0.1 and distance_to_start <= 50:
+            return
+
+        CircuitGenerator._add_initial_closure_shape(state, distance_to_start, angle_deficit)
+        CircuitGenerator._iterative_closure_refinement(state, start_x, start_y)
+
+        final_gap_dist = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
+        print(f"  [CLOSURE FINAL] Gap before final straight: {final_gap_dist:.1f}m")
+        if final_gap_dist > 2:
+            CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
+
+    @staticmethod
+    def _process_instructions(instructions: Any, state: Dict[str, Any], routes: Dict[str, Any], is_point_to_point: bool = False):
+        start_x, start_y = 0, 0
+        instruction_list, solve_requested = CircuitGenerator._extract_instruction_list(instructions)
+        closure_solved = CircuitGenerator._maybe_solve_closure(instruction_list, solve_requested, is_point_to_point)
+
+        for instruction in instruction_list:
+            CircuitGenerator._process_instruction_item(instruction, state, routes)
+
+        distance_to_start, heading_error, angle_deficit = CircuitGenerator._compute_closure_metrics(state, start_x, start_y)
+
+        if closure_solved:
+            print(
+                f"  [CLOSURE solver] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
+
         if not is_point_to_point:
             print(
-                f"  [CLOSURE] Distance to start: {
-                    distance_to_start:.1f}m, Heading error: {
-                    math.degrees(heading_error):.1f}deg, Angle deficit: {
-                    math.degrees(angle_deficit):.1f}deg")
+                f"  [CLOSURE] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
 
-        # Strategy: Add corners and straights to navigate back to start
-        # We need to balance: 1) Turn to complete 360 degrees, 2) Turn to point
-        # at start, 3) Cover remaining distance
-
-        # If closure was solved analytically, skip heuristic corrections
-        # Also skip for point-to-point tracks
         if not closure_solved and not is_point_to_point:
-            if abs(angle_deficit) > 0.1 or distance_to_start > 50:
-                # Split the angular deficit into interesting corners
-                if abs(angle_deficit) > math.radians(120):
-                    # Large angle: Create S-bend with 3 alternating corners
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.35, 110, 50, 0.00009, state)
+            CircuitGenerator._apply_heuristic_closure(state, start_x, start_y, distance_to_start, angle_deficit)
 
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * -0.15, 120, 52, 0.00009, state)
-
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.80, 100, 48, 0.00009, state)
-                elif abs(angle_deficit) > math.radians(60):
-                    # Medium angle: 2-corner S-bend
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.2), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.6, 115, 52, 0.00009, state)
-
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.2), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.4, 125, 54, 0.00009, state)
-                else:
-                    # Small angle: Single corner
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.3), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit, 130, 55, 0.00008, state)
-
-                # Recalculate position after closure corners
-                final_dx = start_x - state['current_x']
-                final_dy = start_y - state['current_y']
-                final_angle = math.atan2(final_dy, final_dx)
-                final_heading_error = final_angle - state['current_theta']
-
-                while final_heading_error > math.pi:
-                    final_heading_error -= 2 * math.pi
-                while final_heading_error < -math.pi:
-                    final_heading_error += 2 * math.pi
-
-                # Iteratively refine closure - CORNERS ONLY to avoid overshooting
-                # Stop if gap starts increasing (diverging)
-                max_iterations = 12
-                prev_gap = float('inf')
-                for iteration in range(max_iterations):
-                    # Recalculate where we are relative to start
-                    gap_dx = start_x - state['current_x']
-                    gap_dy = start_y - state['current_y']
-                    gap_dist = math.hypot(gap_dx, gap_dy)
-                    gap_angle = math.atan2(gap_dy, gap_dx)
-                    gap_heading_error = gap_angle - state['current_theta']
-
-                    while gap_heading_error > math.pi:
-                        gap_heading_error -= 2 * math.pi
-                    while gap_heading_error < -math.pi:
-                        gap_heading_error += 2 * math.pi
-
-                    print(
-                        f"  [CLOSURE ITER {iteration}] Gap: {
-                            gap_dist:.1f}m, Heading error: {
-                            math.degrees(gap_heading_error):.1f}deg")
-
-                    # STOP if gap is increasing (diverging)
-                    if gap_dist > prev_gap * 1.2:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {
-                                prev_gap:.1f}m to {
-                                gap_dist:.1f}m)")
-                        break
-
-                    # Convergence check: if gap is small AND heading is reasonable, stop
-                    # Combined condition prevents risky corrections that could flip heading
-                    # Tighter thresholds when gap is very small to avoid heading
-                    # flips
-                    heading_error_deg = abs(math.degrees(gap_heading_error))
-                    if gap_dist < 100 and heading_error_deg < 20:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                                gap_dist:.1f}m, heading={
-                                heading_error_deg:.1f}deg - final straight will handle it")
-                        break
-                    if gap_dist < 200 and heading_error_deg < 25:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                                gap_dist:.1f}m, heading={
-                                heading_error_deg:.1f}deg - final straight will handle it")
-                        break
-
-                    # PROPORTIONAL CORRECTION based on BOTH gap distance AND heading error
-                    # Key insight: if heading is already good, be MORE conservative
-                    # with corrections
-
-                    # Base correction factor on gap distance
-                    if gap_dist > 300:
-                        base_factor = 0.6
-                    elif gap_dist > 150:
-                        base_factor = 0.45
-                    elif gap_dist > 75:
-                        base_factor = 0.3
-                    else:
-                        base_factor = 0.2
-
-                    # REDUCE correction if heading error is small (already pointing
-                    # the right way)
-                    if heading_error_deg < 5:
-                        correction_factor = base_factor * 0.3  # Very gentle - heading is good
-                    elif heading_error_deg < 15:
-                        correction_factor = base_factor * 0.5  # Gentle - heading is decent
-                    elif heading_error_deg < 30:
-                        correction_factor = base_factor * 0.7  # Moderate
-                    else:
-                        correction_factor = base_factor  # Full correction - heading is bad
-
-                    # Add corner to correct heading
-                    if abs(gap_heading_error) > math.radians(1):
-                        CircuitGenerator._add_corner(
-                            gap_heading_error * correction_factor, 180, 60, 0.00006, state)
-
-                    prev_gap = gap_dist
-
-                # Final straight to close remaining gap (ONLY for circuits)
-                if not is_point_to_point:
-                    final_gap_dist = math.hypot(
-                        start_x - state['current_x'],
-                        start_y - state['current_y'])
-                    print(
-                        f"  [CLOSURE FINAL] Gap before final straight: {
-                            final_gap_dist:.1f}m")
-
-                    if final_gap_dist > 2:
-                        # Add slightly more than the gap to ensure closure
-                        CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
-
-        # Skip final closure report for point-to-point tracks
         if not is_point_to_point:
-            final_gap = math.hypot(
-                start_x - state['current_x'],
-                start_y - state['current_y'])
+            final_gap = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
             print(f"  [CLOSURE] Final gap after closure: {final_gap:.1f}m")
 
     @staticmethod
@@ -917,115 +880,90 @@ class TrackWidget(QWidget):
         - Must be thread-safe (check widget validity before accessing)
         - Uses Qt signals to ensure thread safety
         """
-        # === SAFETY CHECK 1: Widget may have been deleted/closed ===
-        try:
-            if not self.isVisible():
-                return  # Window was closed, stop updating
-        except RuntimeError:
-            # Widget has been deleted from memory
+        if not self._can_accept_realtime_updates():
             return
 
-        # === DEBUG: Track zero velocity (cars stopping) ===
         if velocity_mps < 0.1:
             print(
                 f"WARNING: Car {driver_id} has near-zero velocity: {
                     velocity_mps:.2f} m/s at pos={
                     position_m:.1f}m, lap={lap}")
 
-        # === SAFETY CHECK 2: Required attributes exist ===
-        if not hasattr(self, 'cars') or not self.cars or not hasattr(
-                self, 'track_points'):
+        car = self._find_car_by_driver_id(driver_id)
+        if car is None:
+            print(f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
+            self.update()
             return
 
-        # === FIND AND UPDATE THE MATCHING CAR ===
-        car_found = False
-        for car in self.cars:
-            if car.driver_id == driver_id:
-                car_found = True
-
-                # === POSITION MAPPING: Engine -> Visual Track ===
-                # The engine uses absolute position (meters from race start)
-                # The visual track is circular (0 to track_length)
-                # Arc-length directly maps to track point index (1m = 1 point)
-                if self.track_length > 0 and len(self.track_points) > 0:
-                    # Wrap position to track length (NO TELEPORTATION)
-                    normalized_pos = position_m % self.track_length
-
-                    # Direct arc-length to index mapping
-                    idx = int(normalized_pos)
-                    idx = max(0, min(idx, len(self.track_points) - 1))
-
-                    # Store previous position if missing
-                    if not hasattr(car, 'prev_s') or car.prev_s is None:
-                        car.prev_s = normalized_pos
-
-                    # Update position (store authoritative simulation position)
-                    # and set interpolation targets for smooth rendering on every update.
-                    prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
-                    # Set interpolation targets using previous displayed position
-                    # Do NOT overwrite `car.prev_s` with the new target here —
-                    # `_animate_cars` expects `car.prev_s` to hold the prior
-                    # position at `car.prev_update_time` so it can interpolate
-                    # smoothly to `car.target_s` over the span.
-                    try:
-                        # Capture previous displayed position for interpolation
-                        last = prev_display if prev_display is not None else normalized_pos
-                        raw_delta = abs(normalized_pos - last)
-                        if self.track_length and self.track_length > 0 and raw_delta > (self.track_length / 2):
-                            delta = self.track_length - raw_delta
-                        else:
-                            delta = raw_delta
-                        # (No logging here) - avoid noisy telemetry prints
-                    except Exception:
-                        delta = 0.0
-
-                    # Shift previous -> target timestamps and set targets
-                    # Preserve existing `car.prev_s` as the previous displayed
-                    # position so interpolation can occur on the GUI timer.
-                    car.prev_s = prev_display
-                    car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
-                    car.target_s = normalized_pos
-                    car.target_update_time = time.time()
-                    # Keep authoritative last-known position
-                    car.s = normalized_pos
-
-                    # Track movement direction for rotation (based on latest sim pos and previous display)
-                    prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
-                    car.movement_direction = normalized_pos - prev_s_val
-                    # Handle wrap-around
-                    if self.track_length and car.movement_direction < -self.track_length / 2:
-                        car.movement_direction += self.track_length
-                    elif self.track_length and car.movement_direction > self.track_length / 2:
-                        car.movement_direction -= self.track_length
-                else:
-                    # Fallback if track not loaded
-                    car.s = position_m
-
-                # Update car state
-                # Engine reports laps completed (0 = none). Convert to
-                # 1-based current lap for UI (current lap = laps_completed + 1)
-                car.lap = max(1, int(lap) + 1)
-                car.velocity_mps = velocity_mps
-
-                # === DEBUG TRACKING: Monitor which cars are updating ===
-                if not hasattr(self, '_update_count'):
-                    self._update_count: Dict[int, int] = {}
-                self._update_count[driver_id] = self._update_count.get(
-                    driver_id, 0) + 1
-
-                # Log every 60 frames (2 seconds at 30 FPS)
-                if self._update_count[driver_id] % 60 == 0:
-                    print(f"  [CAR UPDATE] {car.driver_name} (ID:{driver_id}): "
-                          f"{self._update_count[driver_id]} updates received, "
-                          f"position={car.s:.1f}m, lap={lap}")
-                break
-
-        if not car_found:
-            print(
-                f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
+        self._apply_realtime_position(car, position_m)
+        self._update_realtime_car_state(car, lap, velocity_mps)
+        self._record_realtime_update(driver_id, car, lap)
 
         # Trigger repaint
         self.update()
+
+    def _can_accept_realtime_updates(self) -> bool:
+        """Return whether this widget is still valid/visible for realtime updates."""
+        try:
+            if not self.isVisible():
+                return False
+        except RuntimeError:
+            return False
+
+        if not hasattr(self, 'cars') or not self.cars or not hasattr(self, 'track_points'):
+            return False
+        return True
+
+    def _find_car_by_driver_id(self, driver_id: int) -> Optional[Car]:
+        """Find a car by driver id from the active grid list."""
+        for car in self.cars:
+            if car.driver_id == driver_id:
+                return car
+        return None
+
+    def _apply_realtime_position(self, car: Car, position_m: float) -> None:
+        """Map engine position to visual track position and update interpolation state."""
+        if self.track_length <= 0 or len(self.track_points) <= 0:
+            car.s = position_m
+            return
+
+        normalized_pos = position_m % self.track_length
+        if not hasattr(car, 'prev_s') or car.prev_s is None:
+            car.prev_s = normalized_pos
+
+        prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
+
+        # Preserve previous display position; animation timer interpolates from prev -> target.
+        car.prev_s = prev_display
+        car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
+        car.target_s = normalized_pos
+        car.target_update_time = time.time()
+        car.s = normalized_pos
+
+        # Keep heading smooth when crossing lap boundary by applying shortest wrap delta.
+        prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
+        movement = normalized_pos - prev_s_val
+        if self.track_length and movement < -self.track_length / 2:
+            movement += self.track_length
+        elif self.track_length and movement > self.track_length / 2:
+            movement -= self.track_length
+        car.movement_direction = movement
+
+    def _update_realtime_car_state(self, car: Car, lap: int, velocity_mps: float) -> None:
+        """Update non-positional realtime fields from the race engine."""
+        car.lap = max(1, int(lap) + 1)
+        car.velocity_mps = velocity_mps
+
+    def _record_realtime_update(self, driver_id: int, car: Car, lap: int) -> None:
+        """Track update frequency for coarse diagnostics without flooding logs."""
+        if not hasattr(self, '_update_count'):
+            self._update_count: Dict[int, int] = {}
+        self._update_count[driver_id] = self._update_count.get(driver_id, 0) + 1
+
+        if self._update_count[driver_id] % 60 == 0:
+            print(f"  [CAR UPDATE] {car.driver_name} (ID:{driver_id}): "
+                  f"{self._update_count[driver_id]} updates received, "
+                  f"position={car.s:.1f}m, lap={lap}")
 
     def _animate_cars(self):
         """Smoothly update car positions based on simulation time - just trigger repaint."""
@@ -1768,7 +1706,6 @@ class TrackWidget(QWidget):
                     pass
 
                 if infield_points:
-                    poly = QPolygonF(infield_points)
                     inner_poly = QPolygonF(inner_infield_points)
                     outer_poly = QPolygonF(outer_pts) if outer_pts else None
                     # Use inner_poly's bbox for the generated pixmap so it won't
@@ -2366,8 +2303,7 @@ class RaceWindow(QMainWindow):
 
         # Pace control
         pace_label_top = QLabel("Race Pace: Balanced (50%)")
-        pace_label_top.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        pace_label_top.setStyleSheet(CONTROL_LABEL_STYLE)
         pace_label_top.setMinimumHeight(22)
         self.pace_value_label = pace_label_top
         player_layout.addWidget(pace_label_top)
@@ -2391,8 +2327,7 @@ class RaceWindow(QMainWindow):
 
         # Overtake aggressiveness
         overtake_label_top = QLabel("Overtaking: Moderate (50%)")
-        overtake_label_top.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        overtake_label_top.setStyleSheet(CONTROL_LABEL_STYLE)
         overtake_label_top.setMinimumHeight(22)
         self.overtake_value_label = overtake_label_top
         player_layout.addWidget(overtake_label_top)
@@ -4156,261 +4091,286 @@ class RaceWindow(QMainWindow):
         Means: Driver 5 is P1, lap 3, push 0.72, 0.45s gap to car ahead,
         at position 19,234.5m and race time 185.4s.
         """
-        # Handle explicit GUI commands first
         if message == "start_animation":
-            try:
-                if self.track_widget:
-                    self.track_widget.start_animation()
-                    print("[ANIMATION] Animation timer started (main thread)")
-            except Exception as e:
-                print(f"ERROR starting animation in GUI thread: {e}")
+            self._handle_start_animation_event()
             return
 
-        # Handle telemetry update
         if message.startswith("telemetry_update|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 5:
-                    speed_kph = float(parts[1])
-                    push_intensity = float(parts[2])
-                    push_fatigue = float(parts[3])
-                    tire_condition = float(parts[4])
-
-                    # Update speed label
-                    self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
-
-                    # Update push gauge
-                    push_percent = int(push_intensity * 100)
-                    self.push_gauge.setValue(push_percent)
-
-                    # Update fatigue label with colour warning
-                    fatigue_percent = int(push_fatigue * 100)
-                    self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
-                    if push_fatigue > 0.7:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: bold;")
-                    elif push_fatigue > 0.4:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: normal;")
-                    else:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #B9F2FF;")
-
-                    # Update tire label with colour coding
-                    tire_percent = int(tire_condition * 100)
-                    self.tire_label.setText(f"Tire: {tire_percent}%")
-                    if tire_condition < 0.3:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: bold;")
-                    elif tire_condition < 0.6:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A;")
-                    else:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #B9F2FF;")
-
-            except Exception as e:
-                print(f"Error updating telemetry display: {e}")
-                _traceback.print_exc()
+            self._handle_telemetry_event(message)
             return
 
-        # Handle mark_dnf command emitted from simulation thread (run on GUI
-        # thread)
         if message.startswith("mark_dnf|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 2:
-                    did = int(parts[1])
-                    tw = getattr(self, 'track_widget', None)
-                    if tw is not None and hasattr(tw, 'mark_dnf'):
-                        try:
-                            print(f"[GUI EVENT] Received mark_dnf for driver {did}")
-                            tw.mark_dnf(did)
-                            # If the followed car crashed while in follow mode,
-                            # switch to full track view so user can watch the rest
-                            # of the race instead of a broken follow camera.
-                            try:
-                                if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
-                                    tw.set_camera_mode('full')
-                                    print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
-                            except Exception:
-                                pass
-
-                            # Update internal race state so the standings show DNF
-                            try:
-                                if not hasattr(self, '_race_state'):
-                                    self._race_state = {}
-                                entry = self._race_state.get(did)
-                                if entry is not None:
-                                    entry['dnf'] = True
-                                else:
-                                    # Create minimal entry so standings can display DNF
-                                    name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
-                                    self._race_state[did] = {
-                                        'name': name,
-                                        'position': None,
-                                        'lap': None,
-                                        'time': 0.0,
-                                        'distance': 0.0,
-                                        'gap_ahead': 0.0,
-                                        'dnf': True,
-                                        'total_progress': 0.0
-                                    }
-                                # Rebuild the standings table immediately
-                                try:
-                                    self._rebuild_standings_table()
-                                except Exception:
-                                    pass
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            self._handle_mark_dnf_event(message)
             return
 
-        # Handle player/team DNF UI request.
         if message.startswith("player_dnf|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 2:
-                    did = int(parts[1])
-                    controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
-                    player_id = getattr(self, 'player_driver_id', None)
-                    if player_id is not None:
-                        controlled_ids.add(player_id)
-
-                    if did in controlled_ids:
-                        print(f"[GUI EVENT] Received player_dnf for controlled driver {did}")
-                        try:
-                            if hasattr(self, 'player_status_label'):
-                                if did == player_id:
-                                    self.player_status_label.setText("PRIMARY CAR RETIRED")
-                                else:
-                                    self.player_status_label.setText("TEAM CAR RETIRED")
-                                self.player_status_label.show()
-                        except Exception:
-                            pass
-
-                        try:
-                            if not hasattr(self, '_race_state'):
-                                self._race_state = {}
-                            entry = self._race_state.get(did)
-                            if entry is not None:
-                                entry['dnf'] = True
-                            else:
-                                name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
-                                self._race_state[did] = {
-                                    'name': name,
-                                    'position': None,
-                                    'lap': None,
-                                    'time': 0.0,
-                                    'distance': 0.0,
-                                    'gap_ahead': 0.0,
-                                    'dnf': True,
-                                    'total_progress': 0.0
-                                }
-
-                            active_controlled = False
-                            for cid in controlled_ids:
-                                c_entry = self._race_state.get(cid)
-                                if c_entry is None:
-                                    active_controlled = True
-                                    break
-                                if not bool(c_entry.get('dnf', False)):
-                                    active_controlled = True
-                                    break
-
-                            if not active_controlled:
-                                try:
-                                    if hasattr(self, 'player_status_label'):
-                                        self.player_status_label.setText("TEAM RETIRED")
-                                    if hasattr(self, 'pace_slider'):
-                                        self.pace_slider.setEnabled(False)
-                                    if hasattr(self, 'overtake_slider'):
-                                        self.overtake_slider.setEnabled(False)
-                                    if hasattr(self, 'camera_full_btn'):
-                                        self.camera_full_btn.setEnabled(False)
-                                    if hasattr(self, 'camera_follow_btn'):
-                                        self.camera_follow_btn.setEnabled(False)
-                                    if hasattr(self, 'push_gauge'):
-                                        self.push_gauge.setEnabled(False)
-                                except Exception:
-                                    pass
-
-                            try:
-                                self._rebuild_standings_table()
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            self._handle_player_dnf_event(message)
             return
-        # Check if this is a standings update
+
         if message.startswith("standings_update|"):
+            self._handle_standings_update_event(message)
+            return
+
+        self.info_label.setText(message)
+
+    def _handle_start_animation_event(self) -> None:
+        """Start track animation when first simulation data is ready."""
+        try:
+            if self.track_widget:
+                self.track_widget.start_animation()
+                print("[ANIMATION] Animation timer started (main thread)")
+        except Exception as e:
+            print(f"ERROR starting animation in GUI thread: {e}")
+
+    def _set_fatigue_label_style(self, push_fatigue: float) -> None:
+        """Apply fatigue color/warning style by fatigue threshold."""
+        if push_fatigue > 0.7:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+        elif push_fatigue > 0.4:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: normal;")
+        else:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+
+    def _set_tire_label_style(self, tire_condition: float) -> None:
+        """Apply tire condition style by wear threshold."""
+        if tire_condition < 0.3:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+        elif tire_condition < 0.6:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A;")
+        else:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+
+    def _handle_telemetry_event(self, message: str) -> None:
+        """Update player telemetry panel from event payload."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 5:
+                return
+
+            speed_kph = float(parts[1])
+            push_intensity = float(parts[2])
+            push_fatigue = float(parts[3])
+            tire_condition = float(parts[4])
+
+            self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
+            self.push_gauge.setValue(int(push_intensity * 100))
+
+            fatigue_percent = int(push_fatigue * 100)
+            self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
+            self._set_fatigue_label_style(push_fatigue)
+
+            tire_percent = int(tire_condition * 100)
+            self.tire_label.setText(f"Tire: {tire_percent}%")
+            self._set_tire_label_style(tire_condition)
+        except Exception as e:
+            print(f"Error updating telemetry display: {e}")
+            _traceback.print_exc()
+
+    def _ensure_race_state(self) -> None:
+        """Ensure race-state container exists before state updates."""
+        if not hasattr(self, '_race_state'):
+            self._race_state = {}
+
+    def _driver_name_by_id(self, driver_id: int) -> str:
+        """Resolve driver display name from current race entrants."""
+        return next((d.name for d in self.drivers if getattr(d, 'id', None) == driver_id), f"Driver {driver_id}")
+
+    def _mark_driver_dnf_in_state(self, driver_id: int) -> None:
+        """Mark a driver as DNF in race state, creating minimal row when missing."""
+        self._ensure_race_state()
+        entry = self._race_state.get(driver_id)
+        if entry is not None:
+            entry['dnf'] = True
+            return
+
+        self._race_state[driver_id] = {
+            'name': self._driver_name_by_id(driver_id),
+            'position': None,
+            'lap': None,
+            'time': 0.0,
+            'distance': 0.0,
+            'gap_ahead': 0.0,
+            'dnf': True,
+            'total_progress': 0.0,
+        }
+
+    def _refresh_standings_safe(self) -> None:
+        """Rebuild standings while keeping event handlers fail-safe."""
+        try:
+            self._rebuild_standings_table()
+        except Exception:
+            pass
+
+    def _handle_mark_dnf_event(self, message: str) -> None:
+        """Process generic DNF command emitted from simulation thread."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 2:
+                return
+            did = int(parts[1])
+            tw = getattr(self, 'track_widget', None)
+            if tw is None or not hasattr(tw, 'mark_dnf'):
+                return
+
+            print(f"[GUI EVENT] Received mark_dnf for driver {did}")
+            tw.mark_dnf(did)
             try:
-                parts = message.split("|")
-                driver_id = int(parts[1])
-                race_position = int(parts[2])
-                # Normalize engine-reported laps-completed to 1-based
-                # current lap for display (current lap = laps_completed + 1)
-                lap = max(1, int(parts[3]) + 1)
-                push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
-                gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
-                position_m = float(parts[6]) if len(parts) > 6 else 0.0
-                race_time = float(parts[7]) if len(parts) > 7 else 0.0
-
-                if not hasattr(self, '_driver_push_intensity'):
-                    self._driver_push_intensity = {}
-
-                driver = next(
-                    (d for d in self.drivers if d.id == driver_id), None)
-                if driver:
-                    # Preserve any existing DNF flag - do not clear it here
-                    existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
-                    dnf_flag = existing.get('dnf', False)
-                    self._race_state[driver_id] = {
-                        'name': driver.name,
-                        'position': race_position,
-                        'lap': lap,
-                        'time': race_time,
-                        'distance': position_m,
-                        'gap_ahead': gap_ahead,
-                        'dnf': dnf_flag
-                    }
-                    self._driver_push_intensity[driver_id] = push_intensity
-
-                # Record time-series for position plotting (used in post-race
-                # position-over-time chart). Use a simple list of (time, pos).
-                try:
-                    if not hasattr(self, '_position_history'):
-                        self._position_history = {}
-                    hist = self._position_history.get(driver_id)
-                    if hist is None:
-                        hist = []
-                        self._position_history[driver_id] = hist
-                    # Append tuple of (total_distance_m, race_position)
-                    try:
-                        track_obj = getattr(self, 'track', None)
-                        track_length_m = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
-                    except Exception:
-                        track_length_m = 6350.0
-                    try:
-                        total_distance = (max(1, int(lap)) - 1) * track_length_m + position_m
-                    except Exception:
-                        # Fallback to race_time if distance unavailable
-                        total_distance = race_time
-                    hist.append((total_distance, race_position))
-                except Exception:
-                    pass
-
-                self._rebuild_standings_table()
-
+                if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
+                    tw.set_camera_mode('full')
+                    print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
             except Exception:
                 pass
-        else:
-            self.info_label.setText(message)
+
+            self._mark_driver_dnf_in_state(did)
+            self._refresh_standings_safe()
+        except Exception:
+            pass
+
+    def _controlled_driver_ids(self) -> set:
+        """Return the set of drivers controlled by player team/selection."""
+        controlled = set(getattr(self, 'player_team_driver_ids', []) or [])
+        player_id = getattr(self, 'player_driver_id', None)
+        if player_id is not None:
+            controlled.add(player_id)
+        return controlled
+
+    def _has_active_controlled_driver(self, controlled_ids: set) -> bool:
+        """Return True if at least one controlled driver is still not DNF."""
+        self._ensure_race_state()
+        for cid in controlled_ids:
+            c_entry = self._race_state.get(cid)
+            if c_entry is None:
+                return True
+            if not bool(c_entry.get('dnf', False)):
+                return True
+        return False
+
+    def _disable_player_controls(self) -> None:
+        """Disable player-control widgets once whole controlled team retires."""
+        try:
+            if hasattr(self, 'player_status_label'):
+                self.player_status_label.setText("TEAM RETIRED")
+            if hasattr(self, 'pace_slider'):
+                self.pace_slider.setEnabled(False)
+            if hasattr(self, 'overtake_slider'):
+                self.overtake_slider.setEnabled(False)
+            if hasattr(self, 'camera_full_btn'):
+                self.camera_full_btn.setEnabled(False)
+            if hasattr(self, 'camera_follow_btn'):
+                self.camera_follow_btn.setEnabled(False)
+            if hasattr(self, 'push_gauge'):
+                self.push_gauge.setEnabled(False)
+        except Exception:
+            pass
+
+    def _handle_player_dnf_event(self, message: str) -> None:
+        """Process DNF updates for controlled cars and reflect UI state."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 2:
+                return
+            did = int(parts[1])
+            controlled_ids = self._controlled_driver_ids()
+            player_id = getattr(self, 'player_driver_id', None)
+            if did not in controlled_ids:
+                return
+
+            print(f"[GUI EVENT] Received player_dnf for controlled driver {did}")
+            try:
+                if hasattr(self, 'player_status_label'):
+                    self.player_status_label.setText("PRIMARY CAR RETIRED" if did == player_id else "TEAM CAR RETIRED")
+                    self.player_status_label.show()
+            except Exception:
+                pass
+
+            self._mark_driver_dnf_in_state(did)
+            if not self._has_active_controlled_driver(controlled_ids):
+                self._disable_player_controls()
+            self._refresh_standings_safe()
+        except Exception:
+            pass
+
+    def _update_race_state_from_standings(
+        self,
+        driver_id: int,
+        race_position: int,
+        lap: int,
+        race_time: float,
+        position_m: float,
+        gap_ahead: float,
+        push_intensity: float,
+    ) -> None:
+        """Merge standings payload into race state and push-intensity cache."""
+        if not hasattr(self, '_driver_push_intensity'):
+            self._driver_push_intensity = {}
+
+        driver = next((d for d in self.drivers if d.id == driver_id), None)
+        if not driver:
+            return
+
+        existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
+        dnf_flag = existing.get('dnf', False)
+        self._ensure_race_state()
+        self._race_state[driver_id] = {
+            'name': driver.name,
+            'position': race_position,
+            'lap': lap,
+            'time': race_time,
+            'distance': position_m,
+            'gap_ahead': gap_ahead,
+            'dnf': dnf_flag,
+        }
+        self._driver_push_intensity[driver_id] = push_intensity
+
+    def _record_position_history(self, driver_id: int, lap: int, position_m: float, race_position: int, race_time: float) -> None:
+        """Append race position history for post-race plotting."""
+        try:
+            if not hasattr(self, '_position_history'):
+                self._position_history = {}
+            hist = self._position_history.get(driver_id)
+            if hist is None:
+                hist = []
+                self._position_history[driver_id] = hist
+
+            try:
+                track_obj = getattr(self, 'track', None)
+                track_length_m = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+            except Exception:
+                track_length_m = 6350.0
+
+            try:
+                total_distance = (max(1, int(lap)) - 1) * track_length_m + position_m
+            except Exception:
+                total_distance = race_time
+            hist.append((total_distance, race_position))
+        except Exception:
+            pass
+
+    def _handle_standings_update_event(self, message: str) -> None:
+        """Process live standings payload and refresh table."""
+        try:
+            parts = message.split("|")
+            driver_id = int(parts[1])
+            race_position = int(parts[2])
+            lap = max(1, int(parts[3]) + 1)
+            push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
+            gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
+            position_m = float(parts[6]) if len(parts) > 6 else 0.0
+            race_time = float(parts[7]) if len(parts) > 7 else 0.0
+
+            self._update_race_state_from_standings(
+                driver_id,
+                race_position,
+                lap,
+                race_time,
+                position_m,
+                gap_ahead,
+                push_intensity,
+            )
+            self._record_position_history(driver_id, lap, position_m, race_position, race_time)
+            self._rebuild_standings_table()
+        except Exception:
+            pass
 
     def _rebuild_standings_table(self):
         """Rebuild the standings table with live gaps and proper lapped classification."""
@@ -4643,8 +4603,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             colour = f"#{r:02X}{g:02X}{b:02X}"
-            self.pace_value_label.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+            self.pace_value_label.setStyleSheet(CONTROL_LABEL_STYLE)
             # Update slider styling: sub-page shows selected colour
             self.pace_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
@@ -4680,8 +4639,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             colour = f"#{r:02X}{g:02X}{b:02X}"
-            self.overtake_value_label.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+            self.overtake_value_label.setStyleSheet(CONTROL_LABEL_STYLE)
             style = (
                 "QSlider::groove:horizontal { "
                 "height: 8px; background: #2E2E2E; "
@@ -4728,75 +4686,78 @@ class RaceWindow(QMainWindow):
         else:
             self.player_driver_id = None
 
-        # Ensure the player driver is present in the drivers list used for
-        # creating cars and the standings. `set_player_driver` may be called
-        # after the race window has already loaded its data, so we need to
-        # reconcile the lists and rebuild the visible cars/standings when
-        # necessary.
-        try:
-            existing = getattr(self, 'drivers', None)
-            if driver and existing is not None:
-                present = any(getattr(d, 'id', None) == driver.id for d in existing)
-                if not present:
-                    # Keep total count constant: if we've already selected the
-                    # maximum (e.g. 16), replace the last entry; otherwise append.
-                    if len(existing) >= 16:
-                        existing[-1] = driver
-                    else:
-                        existing.append(driver)
-
-                # If cars/standings were already created, rebuild them so the
-                # player shows up on the grid and in the table.
-                if getattr(self, 'track_widget', None) is not None:
-                    # Recreate cars using the same logic as in _load_data
-                    cars = []
-                    for i, drv in enumerate(self.drivers):
-                        row = i // 2
-                        grid_spacing = 15.0
-                        start_position = row * grid_spacing
-                        drv_id_raw = getattr(drv, 'id', 0)
-                        try:
-                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
-                        except Exception:
-                            drv_id = 0
-                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
-                        cars.append(Car(
-                            driver_id=drv_id,
-                            driver_name=getattr(drv, 'name', ''),
-                            s=start_position,
-                            colour=car_colour,
-                            total_time=0.0,
-                            avg_lap_time=60.0,
-                            last_lap=0
-                        ))
-                    # Push updated cars to the track widget
-                    try:
-                        tw = getattr(self, 'track_widget', None)
-                        if tw is not None:
-                            tw.set_cars(cars)
-                            print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
-                        else:
-                            print("[RACE WINDOW] Track widget not available to set cars")
-                    except Exception:
-                        print("[RACE WINDOW] Failed to set rebuilt cars")
-
-                    # Update standings table names to match new drivers list
-                    try:
-                        self.standings_table.setRowCount(len(self.drivers))
-                        for i, drv in enumerate(self.drivers):
-                            self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
-                        print("[RACE WINDOW] Standings updated to include player driver")
-                    except Exception:
-                        print("[RACE WINDOW] Failed to update standings table")
-        except Exception:
-            # Non-fatal: log and continue
-            print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
+        # Keep entrant list and visuals consistent when player selection changes.
+        self._ensure_player_driver_in_grid(driver)
 
         # Refresh team-controlled driver ids after driver assignment.
         try:
             self._rebuild_player_team_driver_ids()
         except Exception:
             pass
+
+    def _build_cars_from_drivers(self) -> List[Car]:
+        """Create grid cars from current entrant list using stable grid spacing."""
+        cars: List[Car] = []
+        for i, drv in enumerate(getattr(self, 'drivers', []) or []):
+            row = i // 2
+            grid_spacing = 15.0
+            start_position = row * grid_spacing
+            drv_id_raw = getattr(drv, 'id', 0)
+            try:
+                drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
+            except Exception:
+                drv_id = 0
+            car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
+            cars.append(Car(
+                driver_id=drv_id,
+                driver_name=getattr(drv, 'name', ''),
+                s=start_position,
+                colour=car_colour,
+                total_time=0.0,
+                avg_lap_time=60.0,
+                last_lap=0
+            ))
+        return cars
+
+    def _refresh_standings_names(self) -> None:
+        """Refresh standings names to match current entrant order."""
+        self.standings_table.setRowCount(len(getattr(self, 'drivers', []) or []))
+        for i, drv in enumerate(self.drivers):
+            self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
+
+    def _refresh_grid_visuals(self) -> bool:
+        """Rebuild cars + table rows after entrant list changes.
+
+        Returns True when cars are pushed to the track widget.
+        """
+        tw = getattr(self, 'track_widget', None)
+        if tw is None:
+            return False
+
+        cars = self._build_cars_from_drivers()
+        tw.set_cars(cars)
+        self._refresh_standings_names()
+        return True
+
+    def _ensure_player_driver_in_grid(self, driver) -> None:
+        """Ensure selected player driver is present in entrants, then refresh visuals."""
+        try:
+            existing = getattr(self, 'drivers', None)
+            if not driver or existing is None:
+                return
+
+            present = any(getattr(d, 'id', None) == driver.id for d in existing)
+            if not present:
+                if len(existing) >= RACE_GRID_SIZE:
+                    existing[-1] = driver
+                else:
+                    existing.append(driver)
+
+            if self._refresh_grid_visuals():
+                print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+                print("[RACE WINDOW] Standings updated to include player driver")
+        except Exception:
+            print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
 
     def set_player_team(self, team):
         """Set the player team so strategy controls apply to all team cars."""
@@ -4812,54 +4773,37 @@ class RaceWindow(QMainWindow):
             self.player_team_id = None
 
         # Ensure all cars from the selected team are present on the race grid.
-        try:
-            if self.player_team_id is not None and self.db is not None and getattr(self, 'drivers', None) is not None:
-                team_drivers = self.db.get_drivers_by_team(self.player_team_id)
-                present_ids = {int(getattr(d, 'id')) for d in self.drivers if getattr(d, 'id', None) is not None}
-                changed = False
-                replace_idx = max(0, len(self.drivers) - 1)
-                for team_driver in team_drivers:
-                    td_id = getattr(team_driver, 'id', None)
-                    if td_id is None or int(td_id) in present_ids:
-                        continue
-                    if len(self.drivers) < RACE_GRID_SIZE:
-                        self.drivers.append(team_driver)
-                    else:
-                        self.drivers[replace_idx] = team_driver
-                        replace_idx = max(0, replace_idx - 1)
-                    present_ids.add(int(td_id))
-                    changed = True
-
-                if changed and getattr(self, 'track_widget', None) is not None:
-                    cars = []
-                    for i, drv in enumerate(self.drivers):
-                        row = i // 2
-                        grid_spacing = 15.0
-                        start_position = row * grid_spacing
-                        drv_id_raw = getattr(drv, 'id', 0)
-                        try:
-                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
-                        except Exception:
-                            drv_id = 0
-                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
-                        cars.append(Car(
-                            driver_id=drv_id,
-                            driver_name=getattr(drv, 'name', ''),
-                            s=start_position,
-                            colour=car_colour,
-                            total_time=0.0,
-                            avg_lap_time=60.0,
-                            last_lap=0
-                        ))
-                    self.track_widget.set_cars(cars)
-                    self.standings_table.setRowCount(len(self.drivers))
-                    for i, drv in enumerate(self.drivers):
-                        self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
-                    print("[RACE WINDOW] Rebuilt grid to include all team cars")
-        except Exception:
-            print("[RACE WINDOW] Warning: couldn't ensure team cars in driver list")
+        self._ensure_team_drivers_in_grid()
 
         self._rebuild_player_team_driver_ids()
+
+    def _ensure_team_drivers_in_grid(self) -> None:
+        """Ensure all contracted drivers for player team are present in entrants."""
+        try:
+            if self.player_team_id is None or self.db is None or getattr(self, 'drivers', None) is None:
+                return
+
+            team_drivers = self.db.get_drivers_by_team(self.player_team_id)
+            present_ids = {int(getattr(d, 'id')) for d in self.drivers if getattr(d, 'id', None) is not None}
+            changed = False
+            replace_idx = max(0, len(self.drivers) - 1)
+
+            for team_driver in team_drivers:
+                td_id = getattr(team_driver, 'id', None)
+                if td_id is None or int(td_id) in present_ids:
+                    continue
+                if len(self.drivers) < RACE_GRID_SIZE:
+                    self.drivers.append(team_driver)
+                else:
+                    self.drivers[replace_idx] = team_driver
+                    replace_idx = max(0, replace_idx - 1)
+                present_ids.add(int(td_id))
+                changed = True
+
+            if changed and self._refresh_grid_visuals():
+                print("[RACE WINDOW] Rebuilt grid to include all team cars")
+        except Exception:
+            print("[RACE WINDOW] Warning: couldn't ensure team cars in driver list")
 
     def _rebuild_player_team_driver_ids(self):
         """Recompute controlled team-car IDs from current entrants."""
@@ -4887,21 +4831,17 @@ class RaceWindow(QMainWindow):
     def _set_camera_mode(self, mode: str):
         """Set camera mode: 'full' or 'follow'."""
         self.camera_mode = mode
-        if self.track_widget:
-            # Determine which car to follow
-            follow_id = None
-            if mode == 'follow':
-                # Prefer selected player driver, fallback to any controlled team car
-                if hasattr(self, 'player_driver_id') and self.player_driver_id is not None:
-                    follow_id = self.player_driver_id
-                elif hasattr(self, 'player_team_driver_ids') and self.player_team_driver_ids:
-                    follow_id = self.player_team_driver_ids[0]
-                else:
-                    print("[CAMERA] No player driver set - cannot follow")
-                    self.camera_mode = 'full'
-                    follow_id = None
-            
-            self.track_widget.set_camera_mode(mode, follow_id)
+        follow_id = None
+        if mode == 'follow':
+            follow_id = self._resolve_follow_driver_id()
+            if follow_id is None:
+                print("[CAMERA] No player driver set - cannot follow")
+                self.camera_mode = 'full'
+                mode = 'full'
+
+        tw = getattr(self, 'track_widget', None)
+        if tw is not None:
+            tw.set_camera_mode(mode, follow_id)
 
         # Update button styles
         if mode == 'full':
@@ -4915,6 +4855,17 @@ class RaceWindow(QMainWindow):
 
         print(f"[CAMERA] Switched to {mode} mode (follow_id: {follow_id})")
 
+    def _resolve_follow_driver_id(self) -> Optional[int]:
+        """Resolve which driver to follow in camera mode.
+
+        Priority: explicit player driver, then any controlled team car.
+        """
+        if hasattr(self, 'player_driver_id') and self.player_driver_id is not None:
+            return self.player_driver_id
+        if hasattr(self, 'player_team_driver_ids') and self.player_team_driver_ids:
+            return self.player_team_driver_ids[0]
+        return None
+
     def set_display_mode(self, mode: str):
         """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
         self.display_mode = mode
@@ -4922,57 +4873,63 @@ class RaceWindow(QMainWindow):
         available = screen_obj.availableGeometry() if screen_obj else None
 
         if mode == "windowed":
-            # Ensure frameless disabled for normal windowed mode
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
-            self.showNormal()
-            self.setGeometry(100, 100, 1600, 900)
-            print("[INFO] Race window: windowed mode (1600x900)")
-
+            self._apply_windowed_mode()
         elif mode == "borderless":
-            # Enable frameless for borderless-windowed fullscreen
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-            if available is not None:
-                try:
-                    self.setMinimumSize(0, 0)
-                except Exception:
-                    pass
-                try:
-                    for w in self.findChildren(QWidget):
-                        try:
-                            w.setMinimumSize(0, 0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                try:
-                    self.setMaximumSize(available.width(), available.height())
-                except Exception:
-                    pass
-                self.setGeometry(available)
-            self.showMaximized()
-            print("[INFO] Race window: borderless windowed fullscreen")
-
+            self._apply_borderless_mode(available)
         elif mode == "fullscreen":
-            # Use native fullscreen; ensure frameless is disabled so system handles fullscreen
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
-            # Clamp maximum size to available geometry before fullscreen request
-            if available is not None:
-                try:
-                    for w in self.findChildren(QWidget):
-                        try:
-                            w.setMinimumSize(0, 0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                try:
-                    self.setMaximumSize(available.width(), available.height())
-                except Exception:
-                    pass
-            self.showFullScreen()
-            print("[INFO] Race window: exclusive fullscreen")
+            self._apply_fullscreen_mode(available)
 
         self.show()
+
+    def _reset_child_min_sizes(self) -> None:
+        """Clear size constraints so window mode switches don't fight widget minimums."""
+        try:
+            for w in self.findChildren(QWidget):
+                try:
+                    w.setMinimumSize(0, 0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _apply_max_size_from_rect(self, rect) -> None:
+        """Clamp window max size to the provided screen rectangle."""
+        if rect is None:
+            return
+        try:
+            self.setMaximumSize(rect.width(), rect.height())
+        except Exception:
+            pass
+
+    def _apply_windowed_mode(self) -> None:
+        """Switch to standard resizable windowed mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
+        self.showNormal()
+        self.setGeometry(100, 100, 1600, 900)
+        print("[INFO] Race window: windowed mode (1600x900)")
+
+    def _apply_borderless_mode(self, available) -> None:
+        """Switch to borderless-windowed fullscreen mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        if available is not None:
+            try:
+                self.setMinimumSize(0, 0)
+            except Exception:
+                pass
+            self._reset_child_min_sizes()
+            self._apply_max_size_from_rect(available)
+            self.setGeometry(available)
+        self.showMaximized()
+        print("[INFO] Race window: borderless windowed fullscreen")
+
+    def _apply_fullscreen_mode(self, available) -> None:
+        """Switch to native exclusive fullscreen mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
+        if available is not None:
+            self._reset_child_min_sizes()
+            self._apply_max_size_from_rect(available)
+        self.showFullScreen()
+        print("[INFO] Race window: exclusive fullscreen")
 
     def keyPressEvent(self, a0: Optional[QKeyEvent]):
         """Handle keyboard events."""
