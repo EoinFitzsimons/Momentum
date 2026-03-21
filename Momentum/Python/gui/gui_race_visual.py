@@ -2563,393 +2563,381 @@ class RaceWindow(QMainWindow):
     def _load_data(self):
         """Load drivers and track from database."""
         try:
-            # Initialise database
-            try:
-                from database.database_manager import DatabaseManager
-                self.db = DatabaseManager()
-            except Exception as e:
-                self.info_label.setText(f"Database connection failed: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Database initialisation failed: {e}")
-                _traceback.print_exc()
+            if not self._init_database():
                 return
-
-            # Load drivers
-            try:
-                loaded_drivers = self._load_race_drivers()
-                if not loaded_drivers:
-                    self.info_label.setText("Error: No drivers in database")
-                    self.start_btn.setEnabled(False)
-                    print("ERROR: No drivers found in database")
-                    return
-
-                # Use configured number of drivers for race grid.
-                self.drivers = loaded_drivers[:RACE_GRID_SIZE] if len(
-                    loaded_drivers) >= RACE_GRID_SIZE else loaded_drivers
-
-                print(f"Loaded {len(self.drivers)} drivers")
-                if self.drivers:
-                    print(
-                        f"First driver: id={
-                            self.drivers[0].id}, name={
-                            self.drivers[0].name}")
-
-                placeholder_count = sum(
-                    1 for d in self.drivers
-                    if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
-                )
-                if placeholder_count > 0:
-                    print(
-                        f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
-                        "Run scripts/seed_career_mode.py for realistic Faker data."
-                    )
-
-                # Prepare deterministic driver colours (shared between cars, standings, livery)
-                # Extended palette for up to 16 drivers
-                palette = [
-                    QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
-                    QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
-                    QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
-                    QColor(200, 200, 255), QColor(180, 120, 60), QColor(120, 60, 180),
-                    QColor(60, 180, 120), QColor(255, 200, 100), QColor(100, 200, 255),
-                    QColor(200, 100, 255)
-                ]
-                # Ensure palette covers the configured grid size; repeat if needed
-                if RACE_GRID_SIZE > len(palette):
-                    repeat = (RACE_GRID_SIZE // len(palette)) + 1
-                    palette = (palette * repeat)[:RACE_GRID_SIZE]
-                self.driver_colours = {}
-                for i, driver in enumerate(self.drivers):
-                    self.driver_colours[driver.id] = palette[i % len(palette)]
-
-                # Initialise vehicle liveries immediately after loading drivers
-                # so they're ready for grid display
-                try:
-                    teams_dict = {}
-                    for driver in self.drivers:
-                        if driver.current_team_id and driver.current_team_id not in teams_dict:
-                            team = self.db.get_team(driver.current_team_id)
-                            if team:
-                                teams_dict[driver.current_team_id] = team
-
-                    for driver in self.drivers:
-                        team = teams_dict.get(driver.current_team_id) if driver.current_team_id else None
-                        # Build livery directly from driver colour palette (no teams phase)
-                        primary = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-                        secondary = QColor(min(255, primary.red() + 30),
-                                           min(255, primary.green() + 30),
-                                           min(255, primary.blue() + 30))
-                        trim = QColor(255, 255, 255)
-                        livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
-                        # Override palette to match driver colour
-                        livery.primary_color = primary
-                        livery.secondary_color = secondary
-                        livery.trim_color = trim
-                        self.appearance_manager.driver_liveries[driver.id] = livery
-                    print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
-                except Exception as e:
-                    print(f"ERROR: Livery initialisation failed: {e}")
-                    _traceback.print_exc()
-
-            except Exception as e:
-                self.info_label.setText(f"Failed to load drivers: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Failed to load drivers: {e}")
-                _traceback.print_exc()
+            if not self._load_and_prepare_drivers():
                 return
-
-            # Load track - prefer database-backed tracks, create default if missing
-            try:
-                # Use requested track id if provided by launcher/setup
-                try:
-                    req_id = getattr(self, '_initial_track_id', None)
-                    self.track = self.db.get_simple_track(req_id)
-                except Exception:
-                    self.track = self.db.get_simple_track()
-                print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
-            except Exception as e:
-                # Fallback: recreate the previous hard-coded simple track
-                from dataclasses import dataclass
-
-                @dataclass
-                class SimpleTrack:
-                    name: str
-                    length_km: float
-                    turns: int = 12
-                    left_turns: int = 6
-                    right_turns: int = 6
-                    elevation_change_m: float = 15.0
-                    avg_corner_radius_m: float = 40.0
-                    min_corner_radius_m: float = 20.0
-                    max_corner_radius_m: float = 80.0
-                    tightest_corner_radius_m: float = 20.0
-                    longest_straight_m: float = 800.0
-                    shortest_straight_m: float = 150.0
-                    avg_speed_kmh: float = 180.0
-                    top_speed_kmh: float = 280.0
-                    surface: str = "asphalt"
-                    surface_type: str = "asphalt"
-                    surface_grip: float = 12.0
-                    surface_abrasiveness: float = 8.0
-                    climate: str = "temperate"
-                    drs_zones: int = 2
-
-                self.track = SimpleTrack(name="Test Circuit", length_km=4.5)
-                print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
-
-            # Generate circuit (use closure solver to produce exact-first-pass geometry)
-            try:
-                print(f"Generating circuit for {self.track.length_km}km track (closure solver enabled)...")
-                # Build instruction list matching the legacy generator pattern
-                circuit_instructions = [
-                    ('S', int(600 * (self.track.length_km / 6.0))),
-                    ('C', 45, 170, 60, 0.00008),
-                    ('S', int(400 * (self.track.length_km / 6.0))),
-                    ('C', 65, 95, 50, 0.0001),
-                    ('S', int(220 * (self.track.length_km / 6.0))),
-                    ('C', -55, 100, 52, 0.0001),
-                    ('S', int(350 * (self.track.length_km / 6.0))),
-                    ('C', 155, 48, 42, 0.00014),
-                    ('S', int(550 * (self.track.length_km / 6.0))),
-                    ('C', -65, 145, 58, 0.00009),
-                    ('S', int(380 * (self.track.length_km / 6.0))),
-                    ('C', 55, 115, 54, 0.00009),
-                    ('S', int(180 * (self.track.length_km / 6.0))),
-                    ('C', 60, 90, 50, 0.0001),
-                    ('S', int(300 * (self.track.length_km / 6.0))),
-                    ('C', -50, 135, 56, 0.00009),
-                    ('S', int(160 * (self.track.length_km / 6.0))),
-                    ('C', 50, 135, 56, 0.00009),
-                    ('S', int(320 * (self.track.length_km / 6.0))),
-                ]
-                wrapper = {'solve_closure': True, 'instructions': circuit_instructions}
-                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
-                track_points = routes.get('main')
-                if not track_points:
-                    self.info_label.setText(
-                        "Error: Failed to generate circuit")
-                    self.start_btn.setEnabled(False)
-                    print("ERROR: Circuit generation returned empty list")
-                    return
-
-                # USE DATABASE TRACK LENGTH - this is the authoritative value
-                # The generated track points should wrap around this length
-                # using modulo
-                track_length = self.track.length_km * 1000  # Convert km to meters
-                print(
-                    f"Generated circuit with {
-                        len(track_points)} points, using database length: {
-                        track_length:.0f}m")
-
-                # Store track_points for passing to engine
-                self.track_points = track_points
-            except Exception as e:
-                self.info_label.setText(f"Circuit generation failed: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Circuit generation failed: {e}")
-                _traceback.print_exc()
+            self._load_track_with_fallback()
+            track_points, track_length = self._generate_circuit_geometry()
+            if track_points is None or track_length is None:
                 return
-
-            # Create track widget
-            try:
-                self.track_widget = TrackWidget(
-                    track_points,
-                    track_length,
-                    self.appearance_manager,
-                    track_surface=getattr(self.track, 'surface', 'asphalt'),
-                    surface_grip=getattr(self.track, 'surface_grip', None)
-                )
-
-                # Clear loading message and add track widget
-                while self.left_layout.count():
-                    item = self.left_layout.takeAt(0)
-                    if item is None:
-                        continue
-                    widget = item.widget()
-                    if widget is not None:
-                        widget.deleteLater()
-                self.left_layout.addWidget(self.track_widget)
-                print("Track widget created and added to layout")
-            except Exception as e:
-                self.info_label.setText(f"Failed to create track display: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Track widget creation failed: {e}")
-                _traceback.print_exc()
+            if not self._create_and_mount_track_widget(track_points, track_length):
                 return
-
-            # Create cars with grid alignment
-            try:
-                cars = []
-
-                # Starting grid: Stagger cars along track direction (not side-to-side)
-                # Formation: 2 cars per row, 15m spacing between rows.
-                # The UI historically filled the grid from the back which made
-                # the first driver end up at the highest grid number. To be
-                # explicit: assign grid numbers descending (e.g. 20..1) so the
-                # grid is filled from the rear forwards and recorded start
-                # positions match that ordering.
-                total_drivers = len(self.drivers)
-                grid_spacing = 15.0  # meters between rows
-                gridpos_map = {}
-
-                for i, driver in enumerate(self.drivers):
-                    # Assign grid number descending so first loop gets highest number
-                    grid_number = total_drivers - i
-                    # Compute row index (0-based) from grid_number (two cars per row)
-                    row = (grid_number - 1) // 2
-                    start_position = row * grid_spacing
-
-                    # Assign colour to this driver from precomputed palette
-                    car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-
-                    cars.append(Car(
-                        driver_id=driver.id,
-                        driver_name=driver.name,
-                        s=start_position,  # Staggered start positions (by row)
-                        colour=car_colour,
-                        total_time=0.0,
-                        avg_lap_time=60.0,
-                        last_lap=0
-                    ))
-
-                    # Remember which driver was assigned to which grid number
-                    try:
-                        gridpos_map[int(grid_number)] = int(driver.id)
-                    except Exception:
-                        gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
-
-                self.track_widget.set_cars(cars)
-                print(f"Created {len(cars)} cars at start line")
-                print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
-                # Build canonical starting grid list where index 0 = start pos 1
-                try:
-                    self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
-                    print(f"Starting grid recorded (pos1..posN): {self._starting_grid}")
-                except Exception:
-                    # Fallback to simple driver order if anything goes wrong
-                    try:
-                        self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
-                    except Exception:
-                        self._starting_grid = []
-
-                # Detect if the recorded grid is exactly the reverse of the
-                # driver ordering (i.e. filled in the opposite direction).
-                # If so, flip it so start positions map to the expected order.
-                try:
-                    ordered_ids = [getattr(d, 'id', None) for d in self.drivers]
-                    if self._starting_grid == ordered_ids[::-1]:
-                        # Rebuild cars and starting grid using ascending grid numbers
-                        cars = []
-                        gridpos_map = {}
-                        for i, driver in enumerate(self.drivers):
-                            grid_number = i + 1
-                            row = (grid_number - 1) // 2
-                            start_position = row * grid_spacing
-                            car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-                            cars.append(Car(
-                                driver_id=driver.id,
-                                driver_name=driver.name,
-                                s=start_position,
-                                colour=car_colour,
-                                total_time=0.0,
-                                avg_lap_time=60.0,
-                                last_lap=0
-                            ))
-                            try:
-                                gridpos_map[int(grid_number)] = int(driver.id)
-                            except Exception:
-                                gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
-
-                        # Apply corrected cars to track widget
-                        try:
-                            self.track_widget.set_cars(cars)
-                        except Exception:
-                            pass
-
-                        # Recompute starting grid (pos1..posN)
-                        try:
-                            self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
-                        except Exception:
-                            self._starting_grid = ordered_ids
-                        print("Detected reversed grid order; flipped to ascending start positions")
-                        # Ensure the authoritative starting grid reflects the actual
-                        # visual car ordering used by the track widget. The engine and
-                        # the visualiser both publish positions; derive start positions
-                        # from the cars' `s` values (highest `s` == P1 at start).
-                        try:
-                            tw_cars = getattr(self.track_widget, 'cars', None)
-                            if tw_cars:
-                                # Sort cars by `s` descending so the largest `s` (front
-                                # of the grid) maps to P1. Some track widgets place
-                                # the front-of-grid at higher `s` values; using
-                                # reverse=True ensures the computed starting grid
-                                # matches the visual placement.
-                                sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
-                                self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
-                                print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-            except Exception as e:
-                self.info_label.setText(f"Failed to create cars: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Car creation failed: {e}")
-                _traceback.print_exc()
+            if not self._create_cars_and_start_grid():
                 return
-
-            # Initialise standings table (row order = position)
-            try:
-                self.standings_table.setRowCount(len(self.drivers))
-
-                # If we recorded a canonical starting grid earlier, use it so
-                # the table rows map directly to start positions (row 0 == P1).
-                # This prevents the UI showing row 0 as a different grid number
-                # than what the engine reports at race start.
-                if hasattr(self, '_starting_grid') and self._starting_grid:
-                    for i, did in enumerate(self._starting_grid):
-                        # Find driver object by id
-                        driver = next((d for d in self.drivers if getattr(d, 'id', None) == did), None)
-                        driver_name = driver.name if driver is not None else f"Driver {did}"
-                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}' (start pos {i+1})")
-                        # Column 0: colour/position indicator (empty for now)
-                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None) if driver else did)
-                        # Column 1: Driver name
-                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None) if driver else did)
-                        # Column 2: Lap (1-based)
-                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None) if driver else did)
-                        # Column 3: Gap
-                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None) if driver else did)
-                    print("Standings table initialized from starting grid")
-                else:
-                    # Fallback: use the current drivers list order
-                    for i, driver in enumerate(self.drivers):
-                        driver_name = driver.name
-                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
-                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
-                    print("Standings table initialized")
-                # NOTE: do not overwrite previously-computed self._starting_grid here
-                # — it is authoritative for start→finish comparisons later.
-
-            # If anything goes wrong while initializing the standings, log
-            # a warning and continue — standings are non-critical for race
-            # operation.
-            except Exception as e:
-                print(f"WARNING: Standings table initialisation failed: {e}")
-                # Non-critical, continue
-
-            self.info_label.setText(
-                f"{len(self.drivers)} drivers | {self.track.name} ({self.track.length_km:.2f}km)")
-            print("Data loading complete - ready to race")
+            self._init_standings_table_safe()
+            self._set_load_data_ready_message()
 
         except Exception as e:
             self.info_label.setText(f"Unexpected error: {e}")
             self.start_btn.setEnabled(False)
             print(f"ERROR: Unexpected error in _load_data: {e}")
             _traceback.print_exc()
+
+    def _init_database(self) -> bool:
+        """Initialize database manager for race data loading."""
+        try:
+            from database.database_manager import DatabaseManager
+            self.db = DatabaseManager()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Database connection failed: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Database initialisation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _load_and_prepare_drivers(self) -> bool:
+        """Load race drivers and initialize colours/liveries."""
+        try:
+            loaded_drivers = self._load_race_drivers()
+            if not loaded_drivers:
+                self.info_label.setText("Error: No drivers in database")
+                self.start_btn.setEnabled(False)
+                print("ERROR: No drivers found in database")
+                return False
+
+            self.drivers = loaded_drivers[:RACE_GRID_SIZE] if len(loaded_drivers) >= RACE_GRID_SIZE else loaded_drivers
+            print(f"Loaded {len(self.drivers)} drivers")
+            if self.drivers:
+                print(f"First driver: id={self.drivers[0].id}, name={self.drivers[0].name}")
+            self._log_placeholder_driver_warning()
+            self._prepare_driver_colours()
+            self._init_driver_liveries_safe()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to load drivers: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Failed to load drivers: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _log_placeholder_driver_warning(self) -> None:
+        """Log warning if placeholder names are present in active grid."""
+        placeholder_count = sum(
+            1 for d in self.drivers
+            if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
+        )
+        if placeholder_count <= 0:
+            return
+        print(
+            f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
+            "Run scripts/seed_career_mode.py for realistic Faker data."
+        )
+
+    def _prepare_driver_colours(self) -> None:
+        """Create deterministic per-driver colour map for visuals."""
+        palette = [
+            QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
+            QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
+            QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
+            QColor(200, 200, 255), QColor(180, 120, 60), QColor(120, 60, 180),
+            QColor(60, 180, 120), QColor(255, 200, 100), QColor(100, 200, 255),
+            QColor(200, 100, 255),
+        ]
+        if RACE_GRID_SIZE > len(palette):
+            repeat = (RACE_GRID_SIZE // len(palette)) + 1
+            palette = (palette * repeat)[:RACE_GRID_SIZE]
+        self.driver_colours = {}
+        for i, driver in enumerate(self.drivers):
+            self.driver_colours[driver.id] = palette[i % len(palette)]
+
+    def _init_driver_liveries_safe(self) -> None:
+        """Initialize driver liveries; non-fatal on failure."""
+        try:
+            db = self.db
+            if db is None:
+                return
+            teams_dict: Dict[int, Any] = {}
+            for driver in self.drivers:
+                if driver.current_team_id and driver.current_team_id not in teams_dict:
+                    team = db.get_team(driver.current_team_id)
+                    if team:
+                        teams_dict[driver.current_team_id] = team
+
+            for driver in self.drivers:
+                primary = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+                secondary = QColor(
+                    min(255, primary.red() + 30),
+                    min(255, primary.green() + 30),
+                    min(255, primary.blue() + 30),
+                )
+                livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
+                livery.primary_color = primary
+                livery.secondary_color = secondary
+                livery.trim_color = QColor(255, 255, 255)
+                self.appearance_manager.driver_liveries[driver.id] = livery
+            print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
+        except Exception as e:
+            print(f"ERROR: Livery initialisation failed: {e}")
+            _traceback.print_exc()
+
+    def _load_track_with_fallback(self) -> None:
+        """Load track from database, falling back to a local simple track."""
+        db = self.db
+        if db is None:
+            self.track = self._make_fallback_track()
+            print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
+            return
+        try:
+            try:
+                req_id = getattr(self, '_initial_track_id', None)
+                self.track = db.get_simple_track(req_id)
+            except Exception:
+                self.track = db.get_simple_track()
+            print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
+        except Exception:
+            self.track = self._make_fallback_track()
+            print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
+
+    def _make_fallback_track(self) -> Any:
+        """Construct fallback track model compatible with visual/sim code."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class SimpleTrack:
+            name: str
+            length_km: float
+            turns: int = 12
+            left_turns: int = 6
+            right_turns: int = 6
+            elevation_change_m: float = 15.0
+            avg_corner_radius_m: float = 40.0
+            min_corner_radius_m: float = 20.0
+            max_corner_radius_m: float = 80.0
+            tightest_corner_radius_m: float = 20.0
+            longest_straight_m: float = 800.0
+            shortest_straight_m: float = 150.0
+            avg_speed_kmh: float = 180.0
+            top_speed_kmh: float = 280.0
+            surface: str = "asphalt"
+            surface_type: str = "asphalt"
+            surface_grip: float = 12.0
+            surface_abrasiveness: float = 8.0
+            climate: str = "temperate"
+            drs_zones: int = 2
+
+        return SimpleTrack(name="Test Circuit", length_km=4.5)
+
+    def _build_legacy_circuit_instructions(self) -> List[Tuple[Any, ...]]:
+        """Build legacy instruction pattern scaled by loaded track length."""
+        track = self.track
+        length_km = getattr(track, 'length_km', 4.5)
+        return [
+            ('S', int(600 * (length_km / 6.0))),
+            ('C', 45, 170, 60, 0.00008),
+            ('S', int(400 * (length_km / 6.0))),
+            ('C', 65, 95, 50, 0.0001),
+            ('S', int(220 * (length_km / 6.0))),
+            ('C', -55, 100, 52, 0.0001),
+            ('S', int(350 * (length_km / 6.0))),
+            ('C', 155, 48, 42, 0.00014),
+            ('S', int(550 * (length_km / 6.0))),
+            ('C', -65, 145, 58, 0.00009),
+            ('S', int(380 * (length_km / 6.0))),
+            ('C', 55, 115, 54, 0.00009),
+            ('S', int(180 * (length_km / 6.0))),
+            ('C', 60, 90, 50, 0.0001),
+            ('S', int(300 * (length_km / 6.0))),
+            ('C', -50, 135, 56, 0.00009),
+            ('S', int(160 * (length_km / 6.0))),
+            ('C', 50, 135, 56, 0.00009),
+            ('S', int(320 * (length_km / 6.0))),
+        ]
+
+    def _generate_circuit_geometry(self) -> Tuple[Optional[List[TrackPoint]], Optional[float]]:
+        """Generate circuit geometry and return points with authoritative track length."""
+        try:
+            track = self.track
+            track_km = getattr(track, 'length_km', 4.5)
+            print(f"Generating circuit for {track_km}km track (closure solver enabled)...")
+            wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
+            routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+            track_points = routes.get('main')
+            if not track_points:
+                self.info_label.setText("Error: Failed to generate circuit")
+                self.start_btn.setEnabled(False)
+                print("ERROR: Circuit generation returned empty list")
+                return None, None
+            track_length = track_km * 1000
+            print(f"Generated circuit with {len(track_points)} points, using database length: {track_length:.0f}m")
+            self.track_points = track_points
+            return track_points, track_length
+        except Exception as e:
+            self.info_label.setText(f"Circuit generation failed: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Circuit generation failed: {e}")
+            _traceback.print_exc()
+            return None, None
+
+    def _create_and_mount_track_widget(self, track_points: List[TrackPoint], track_length: float) -> bool:
+        """Create TrackWidget and replace loading placeholder in left panel."""
+        try:
+            self.track_widget = TrackWidget(
+                track_points,
+                track_length,
+                self.appearance_manager,
+                track_surface=getattr(self.track, 'surface', 'asphalt'),
+                surface_grip=getattr(self.track, 'surface_grip', None),
+            )
+            while self.left_layout.count():
+                item = self.left_layout.takeAt(0)
+                if item is None:
+                    continue
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self.left_layout.addWidget(self.track_widget)
+            print("Track widget created and added to layout")
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to create track display: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Track widget creation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _build_starting_cars(self, ascending: bool = False) -> Tuple[List[Car], Dict[int, Any]]:
+        """Create grid cars and map from grid position to driver id."""
+        cars: List[Car] = []
+        gridpos_map: Dict[int, Any] = {}
+        total_drivers = len(self.drivers)
+        grid_spacing = 15.0
+        for i, driver in enumerate(self.drivers):
+            grid_number = (i + 1) if ascending else (total_drivers - i)
+            row = (grid_number - 1) // 2
+            start_position = row * grid_spacing
+            car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+            cars.append(Car(
+                driver_id=driver.id,
+                driver_name=driver.name,
+                s=start_position,
+                colour=car_colour,
+                total_time=0.0,
+                avg_lap_time=60.0,
+                last_lap=0,
+            ))
+            try:
+                gridpos_map[int(grid_number)] = int(driver.id)
+            except Exception:
+                gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
+        return cars, gridpos_map
+
+    def _record_starting_grid_from_map(self, gridpos_map: Dict[int, Any], total_drivers: int) -> None:
+        """Build canonical starting grid list where index 0 corresponds to P1."""
+        try:
+            self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+            print(f"Starting grid recorded (pos1..posN): {self._starting_grid}")
+        except Exception:
+            try:
+                self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
+            except Exception:
+                self._starting_grid = []
+
+    def _maybe_fix_reversed_grid_order(self) -> None:
+        """Flip grid assignment if canonical grid is reverse of driver ordering."""
+        try:
+            ordered_ids = [getattr(d, 'id', None) for d in self.drivers]
+            if self._starting_grid != ordered_ids[::-1]:
+                return
+            total_drivers = len(self.drivers)
+            cars, gridpos_map = self._build_starting_cars(ascending=True)
+            tw = self.track_widget
+            if tw is None:
+                return
+            try:
+                tw.set_cars(cars)
+            except Exception:
+                pass
+            try:
+                self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+            except Exception:
+                self._starting_grid = ordered_ids
+            print("Detected reversed grid order; flipped to ascending start positions")
+            self._recompute_grid_from_track_widget_positions()
+        except Exception:
+            pass
+
+    def _recompute_grid_from_track_widget_positions(self) -> None:
+        """Derive starting grid from visual car placement to keep UI/engine aligned."""
+        try:
+            tw_cars = getattr(self.track_widget, 'cars', None)
+            if not tw_cars:
+                return
+            sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
+            self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
+            print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
+        except Exception:
+            pass
+
+    def _create_cars_and_start_grid(self) -> bool:
+        """Create race cars and initialize canonical starting grid."""
+        try:
+            tw = self.track_widget
+            if tw is None:
+                self.info_label.setText("Failed to create cars: Track widget unavailable")
+                self.start_btn.setEnabled(False)
+                print("ERROR: Car creation failed: Track widget unavailable")
+                return False
+            total_drivers = len(self.drivers)
+            cars, gridpos_map = self._build_starting_cars(ascending=False)
+            tw.set_cars(cars)
+            print(f"Created {len(cars)} cars at start line")
+            print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
+            self._record_starting_grid_from_map(gridpos_map, total_drivers)
+            self._maybe_fix_reversed_grid_order()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to create cars: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Car creation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _init_standings_row(self, row: int, driver_name: str, driver_id: Any, extra: str = "") -> None:
+        """Initialize one standings row with default lap/gap values."""
+        print(f"[STANDINGS INIT] Row {row}: Setting driver name to '{driver_name}'{extra}")
+        self._set_standings_item(row, 0, QTableWidgetItem(""), driver_id)
+        self._set_standings_item(row, 1, QTableWidgetItem(driver_name), driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem("1"), driver_id)
+        self._set_standings_item(row, 3, QTableWidgetItem("-"), driver_id)
+
+    def _init_standings_table_safe(self) -> None:
+        """Initialize standings table rows; non-fatal on failure."""
+        try:
+            self.standings_table.setRowCount(len(self.drivers))
+            if hasattr(self, '_starting_grid') and self._starting_grid:
+                for i, did in enumerate(self._starting_grid):
+                    driver = next((d for d in self.drivers if getattr(d, 'id', None) == did), None)
+                    driver_name = driver.name if driver is not None else f"Driver {did}"
+                    driver_id = getattr(driver, 'id', None) if driver else did
+                    self._init_standings_row(i, driver_name, driver_id, f" (start pos {i + 1})")
+                print("Standings table initialized from starting grid")
+                return
+
+            for i, driver in enumerate(self.drivers):
+                self._init_standings_row(i, driver.name, getattr(driver, 'id', None))
+            print("Standings table initialized")
+        except Exception as e:
+            print(f"WARNING: Standings table initialisation failed: {e}")
+
+    def _set_load_data_ready_message(self) -> None:
+        """Set final ready message after successful data load."""
+        track = self.track
+        track_name = getattr(track, 'name', 'Unknown Track')
+        track_km = float(getattr(track, 'length_km', 0.0))
+        self.info_label.setText(f"{len(self.drivers)} drivers | {track_name} ({track_km:.2f}km)")
+        print("Data loading complete - ready to race")
 
     # _auto_start_race method removed: user must click Start Race manually
 
@@ -4115,19 +4103,49 @@ class RaceWindow(QMainWindow):
 
     def _rebuild_standings_table(self):
         """Rebuild the standings table with live gaps and proper lapped classification."""
+        self._rebuild_standings_table_impl()
+
+    def _rebuild_standings_table_impl(self) -> None:
+        """Implementation body extracted to keep entrypoint complexity low."""
         if not hasattr(self, '_race_state'):
             return
 
+        track_length = self._current_track_length_m()
+        standings_list = self._build_standings_entries(track_length)
+        if not standings_list:
+            return
+
+        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
+
+        finished_drivers, lapped_drivers, dnf_drivers, leader_lap = self._classify_standings_entries(standings_list)
+        all_classified = finished_drivers + lapped_drivers + dnf_drivers
+
+        self._ensure_standings_row_count(len(all_classified))
+        cumulative_gap = 0.0
+        for row, entry in enumerate(all_classified):
+            cumulative_gap = self._render_standings_row(
+                row,
+                entry,
+                cumulative_gap,
+                leader_lap,
+                lapped_drivers,
+                dnf_drivers,
+            )
+
+        self._maybe_log_standings_debug(finished_drivers, lapped_drivers, leader_lap)
+        self._resize_standings_height()
+
+    def _current_track_length_m(self) -> float:
+        """Return current track length in meters with fallback."""
         track_obj = getattr(self, 'track', None)
-        track_length = (track_obj.length_km *
-                        1000.0) if track_obj is not None else 6350.0
-        standings_list = []
+        return (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+
+    def _build_standings_entries(self, track_length: float) -> List[Dict[str, Any]]:
+        """Build standings list enriched with total progress and race metadata."""
+        standings_list: List[Dict[str, Any]] = []
         for did, data in self._race_state.items():
-            # Use (lap - 1) so that lap=1 (first racing lap) corresponds to
-            # progress starting at 0
             lap_for_progress = max(0, int(data.get('lap', 1)) - 1)
-            total_progress = lap_for_progress * track_length + \
-                (data.get('distance', 0.0) % track_length)
+            total_progress = lap_for_progress * track_length + (data.get('distance', 0.0) % track_length)
             standings_list.append({
                 'driver_id': did,
                 'name': data['name'],
@@ -4137,133 +4155,139 @@ class RaceWindow(QMainWindow):
                 'distance': data.get('distance', 0.0),
                 'gap_ahead': data.get('gap_ahead', 0.0),
                 'dnf': data.get('dnf', False),
-                'total_progress': total_progress
+                'total_progress': total_progress,
             })
+        return standings_list
 
-        if not standings_list:
-            return
-
-        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
-
-        leader = standings_list[0]
-        leader_lap = leader['lap']
-        cumulative_gap = 0.0
-        
-        # CLASSIFICATION: Separate finished drivers from lapped drivers
-        finished_drivers = []
-        lapped_drivers = []
-        dnf_drivers = []
-        
+    def _classify_standings_entries(self, standings_list: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], int]:
+        """Split standings into finished, lapped, and DNF buckets."""
+        leader_lap = int(standings_list[0]['lap']) if standings_list else 0
+        finished_drivers: List[Dict[str, Any]] = []
+        lapped_drivers: List[Dict[str, Any]] = []
+        dnf_drivers: List[Dict[str, Any]] = []
         for entry in standings_list:
             if entry['dnf']:
                 dnf_drivers.append(entry)
-            elif entry['lap'] < leader_lap:
-                # Lapped driver (on fewer laps than leader)
+                continue
+            if entry['lap'] < leader_lap:
                 lapped_drivers.append(entry)
-            else:
-                # Finished driver (on same or more laps as leader)
-                finished_drivers.append(entry)
-        
-        # Recalculate positions: finished drivers get P1, P2, P3...
-        # Lapped drivers go after all finishers with "+X laps" notation
-        all_classified = finished_drivers + lapped_drivers + dnf_drivers
+                continue
+            finished_drivers.append(entry)
+        return finished_drivers, lapped_drivers, dnf_drivers, leader_lap
 
-        # Resize table row count to match data (only when changed)
-        row_count = len(all_classified)
-        if row_count != getattr(self, '_last_standings_row_count', 0):
-            self.standings_table.setRowCount(row_count)
-            self._last_standings_row_count = row_count
-        for row, entry in enumerate(all_classified):
-            colour_item = QTableWidgetItem()
-            if entry['driver_id'] in self.driver_colours:
-                colour = self.driver_colours[entry['driver_id']]
-                colour_item.setBackground(colour)
-                colour_item.setText("  ")
-            self._set_standings_item(row, 0, colour_item, entry['driver_id'])
+    def _ensure_standings_row_count(self, row_count: int) -> None:
+        """Resize standings table rows only when row count changes."""
+        if row_count == getattr(self, '_last_standings_row_count', 0):
+            return
+        self.standings_table.setRowCount(row_count)
+        self._last_standings_row_count = row_count
 
-            driver_name = entry['name']
-            push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
-            if push_int < 0.25:
-                symbol = "(-)"
-            elif push_int < 0.75:
-                symbol = "(=)"
-            else:
-                symbol = "(+)"
-            self._set_standings_item(
-                row, 1, QTableWidgetItem(f"{symbol} {driver_name}"), entry['driver_id'])
-            # Highlight the player-controlled driver row/cell
-            name_item = self.standings_table.item(row, 1)
-            if name_item is not None:
-                if entry['driver_id'] == getattr(
-                        self, 'player_driver_id', None):
-                    name_item.setBackground(
-                        QColor(255, 215, 0))  # Gold for player
-                    name_item.setForeground(
-                        QColor(0, 0, 0))  # Dark text on gold
-                else:
-                    name_item.setBackground(QColor(37, 38, 39))
+    def _render_standings_row(
+        self,
+        row: int,
+        entry: Dict[str, Any],
+        cumulative_gap: float,
+        leader_lap: int,
+        lapped_drivers: List[Dict[str, Any]],
+        dnf_drivers: List[Dict[str, Any]],
+    ) -> float:
+        """Render one row and return updated cumulative time gap."""
+        driver_id = entry['driver_id']
+        self._set_standings_item(row, 0, self._build_colour_item(driver_id), driver_id)
+        self._set_standings_item(row, 1, self._build_driver_name_item(entry), driver_id)
+        self._style_standings_name_cell(row, driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), driver_id)
+        gap_text, new_cumulative = self._compute_gap_text(
+            row,
+            entry,
+            cumulative_gap,
+            leader_lap,
+            lapped_drivers,
+            dnf_drivers,
+        )
+        self._set_standings_item(row, 3, QTableWidgetItem(gap_text), driver_id)
+        return new_cumulative
 
-            self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), entry['driver_id'])
+    def _build_colour_item(self, driver_id: int) -> QTableWidgetItem:
+        """Create leading colour-cell item for a standings row."""
+        colour_item = QTableWidgetItem()
+        if driver_id in self.driver_colours:
+            colour_item.setBackground(self.driver_colours[driver_id])
+            colour_item.setText("  ")
+        return colour_item
 
-            # Column 3: Gap or Classification
-            if entry.get('dnf', False):
-                gap_text = "DNF"
-            elif entry in dnf_drivers:
-                gap_text = "DNF"
-            elif row == 0:
-                gap_text = "LEADER"
-            elif entry in lapped_drivers:
-                # Lapped driver - show lap deficit
-                lap_deficit = leader_lap - entry['lap']
-                gap_text = f"+{lap_deficit}L"
-            else:
-                # Finished driver - show time gap
-                raw_gap = entry.get('gap_ahead', 0.0)
-                if raw_gap >= 1000.0:
-                    # Gap encoded as 999+N means N laps (from engine)
-                    laps_behind = int(raw_gap - 999.0)
-                    if laps_behind > 0:
-                        gap_text = f"+{laps_behind}L"
-                    else:
-                        cumulative_gap += max(raw_gap - 999.0, 0.0)
-                        gap_text = f"+{cumulative_gap:.1f}s" if cumulative_gap > 0.1 else "-"
-                else:
-                    # Normal time gap accumulation
-                    cumulative_gap += max(raw_gap, 0.0)
-                    if cumulative_gap < 0.1:
-                        gap_text = "-"
-                    else:
-                        gap_text = f"+{cumulative_gap:.1f}s"
+    def _build_driver_name_item(self, entry: Dict[str, Any]) -> QTableWidgetItem:
+        """Build display name with aggression symbol."""
+        push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
+        if push_int < 0.25:
+            symbol = "(-)"
+        elif push_int < 0.75:
+            symbol = "(=)"
+        else:
+            symbol = "(+)"
+        return QTableWidgetItem(f"{symbol} {entry['name']}")
 
-            self._set_standings_item(row, 3, QTableWidgetItem(gap_text), entry['driver_id'])
+    def _compute_gap_text(
+        self,
+        row: int,
+        entry: Dict[str, Any],
+        cumulative_gap: float,
+        leader_lap: int,
+        lapped_drivers: List[Dict[str, Any]],
+        dnf_drivers: List[Dict[str, Any]],
+    ) -> Tuple[str, float]:
+        """Return formatted gap text and updated cumulative gap value."""
+        if entry.get('dnf', False) or entry in dnf_drivers:
+            return "DNF", cumulative_gap
+        if row == 0:
+            return "LEADER", cumulative_gap
+        if entry in lapped_drivers:
+            lap_deficit = leader_lap - entry['lap']
+            return f"+{lap_deficit}L", cumulative_gap
 
-        # Debug log every few seconds
+        raw_gap = entry.get('gap_ahead', 0.0)
+        if raw_gap >= 1000.0:
+            laps_behind = int(raw_gap - 999.0)
+            if laps_behind > 0:
+                return f"+{laps_behind}L", cumulative_gap
+            cumulative_gap += max(raw_gap - 999.0, 0.0)
+        else:
+            cumulative_gap += max(raw_gap, 0.0)
+
+        if cumulative_gap < 0.1:
+            return "-", cumulative_gap
+        return f"+{cumulative_gap:.1f}s", cumulative_gap
+
+    def _maybe_log_standings_debug(
+        self,
+        finished_drivers: List[Dict[str, Any]],
+        lapped_drivers: List[Dict[str, Any]],
+        leader_lap: int,
+    ) -> None:
+        """Print compact periodic standings debug output."""
         if not hasattr(self, '_last_standings_log'):
-            self._last_standings_log = 0
-        import time
-        if time.time() - self._last_standings_log > 3.0:
-            self._last_standings_log = time.time()
-            print("\n  [STANDINGS] Current order (CORRECTED CLASSIFICATION):")
-            # Show first 5 finished drivers
-            for i, entry in enumerate(finished_drivers[:5]):
-                print(
-                    f"    P{
-                        i +
-                        1}: {
-                        entry['name']} (L{
-                        entry['lap']}, gap={
-                        entry.get(
-                            'gap_ahead',
-                            0.0):.1f}s)")
-            # Show lapped drivers separately
-            if lapped_drivers:
-                print("    --- LAPPED ---")
-                for entry in lapped_drivers[:3]:
-                    lap_deficit = leader_lap - entry['lap']
-                    print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
+            self._last_standings_log = 0.0
+        now = time.time()
+        if now - self._last_standings_log <= 3.0:
+            return
+        self._last_standings_log = now
+        print("\n  [STANDINGS] Current order (CORRECTED CLASSIFICATION):")
+        self._log_finished_drivers_debug(finished_drivers)
+        self._log_lapped_drivers_debug(lapped_drivers, leader_lap)
 
-        # Adjust table height to fit all rows (no scrolling)
-        self._resize_standings_height()
+    def _log_finished_drivers_debug(self, finished_drivers: List[Dict[str, Any]]) -> None:
+        """Log top finished drivers with live gap metadata."""
+        for i, entry in enumerate(finished_drivers[:5]):
+            print(f"    P{i + 1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
+
+    def _log_lapped_drivers_debug(self, lapped_drivers: List[Dict[str, Any]], leader_lap: int) -> None:
+        """Log top lapped drivers with lap deficit markers."""
+        if not lapped_drivers:
+            return
+        print("    --- LAPPED ---")
+        for entry in lapped_drivers[:3]:
+            lap_deficit = leader_lap - entry['lap']
+            print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
 
 
     def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: Optional[int] = None):
@@ -4274,29 +4298,9 @@ class RaceWindow(QMainWindow):
         instead of allowing other code to overwrite the cell.
         """
         try:
-            if driver_id is not None and hasattr(self, '_race_state'):
-                entry = self._race_state.get(driver_id, {})
-                if entry.get('dnf', False):
-                    # Gap column (3) should explicitly show 'DNF', pos/lap -> '-'
-                    if col == 3:
-                        self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
-                    elif col in (0, 2):
-                        self.standings_table.setItem(row, col, QTableWidgetItem("-"))
-                    else:
-                        # For other columns (e.g. name) just set the item but grey it
-                        self.standings_table.setItem(row, col, item)
-
-                    # Grey out name cell for clarity
-                    try:
-                        name_cell = self.standings_table.item(row, 1)
-                        if name_cell is not None:
-                            name_cell.setBackground(QColor(80, 80, 80))
-                            name_cell.setForeground(QColor(200, 200, 200))
-                    except Exception:
-                        pass
-                    return
-
-            # Default behaviour: set the supplied item
+            if self._is_dnf_driver(driver_id):
+                self._set_dnf_standings_item(row, col, item)
+                return
             self.standings_table.setItem(row, col, item)
         except Exception:
             try:
@@ -4304,6 +4308,34 @@ class RaceWindow(QMainWindow):
                 self.standings_table.setItem(row, col, item)
             except Exception:
                 pass
+
+    def _is_dnf_driver(self, driver_id: Optional[int]) -> bool:
+        """Return True when the target row belongs to a DNF driver."""
+        if driver_id is None or not hasattr(self, '_race_state'):
+            return False
+        entry = self._race_state.get(driver_id, {})
+        return bool(entry.get('dnf', False))
+
+    def _set_dnf_standings_item(self, row: int, col: int, item: QTableWidgetItem) -> None:
+        """Write DNF-safe placeholders and muted styling."""
+        if col == 3:
+            self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
+        elif col in (0, 2):
+            self.standings_table.setItem(row, col, QTableWidgetItem("-"))
+        else:
+            self.standings_table.setItem(row, col, item)
+        self._apply_dnf_name_cell_style(row)
+
+    def _apply_dnf_name_cell_style(self, row: int) -> None:
+        """Apply greyed-out style to DNF name cell."""
+        try:
+            name_cell = self.standings_table.item(row, 1)
+            if name_cell is None:
+                return
+            name_cell.setBackground(QColor(80, 80, 80))
+            name_cell.setForeground(QColor(200, 200, 200))
+        except Exception:
+            pass
 
     def _resize_standings_height(self):
         """Resize standings table to its contents to avoid scrollbars."""
