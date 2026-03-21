@@ -117,6 +117,9 @@ class MomentumLauncher:
         display_mode = config.get("display_mode", "borderless")
         self.race_window.set_display_mode(display_mode)
 
+        # Store active game mode on race window for round-to-round routing.
+        setattr(self.race_window, "_game_mode", config.get("mode", "single_race"))
+
         # Connect race window signals
         self.race_window.return_to_menu.connect(self.return_to_menu)
         self.race_window.next_race.connect(self.next_race)
@@ -194,10 +197,14 @@ class MomentumLauncher:
             race_obj = db.get_race(next_race['race_id'])
             track_obj = db.get_track(race_obj.track_id) if race_obj else None
             
-            # Show pre-race setup dialog
-            from GUI.gui_championship import PreRaceSetupDialog
+            # Show pre-race setup dialog for the active mode.
+            mode = (config.get('mode') or 'championship').lower()
+            if mode == 'career':
+                from GUI.gui_career import CareerPreRaceSetupDialog as SetupDialog
+            else:
+                from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
             
-            setup_dialog = PreRaceSetupDialog(
+            setup_dialog = SetupDialog(
                 db,
                 championship,
                 race_obj,
