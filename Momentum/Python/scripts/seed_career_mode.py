@@ -170,11 +170,16 @@ DRIVER_SLOTS_PER_DISCIPLINE = {
 # UTILITY FUNCTIONS
 # ============================================================================
 
-# Try to use unidecode for robust transliteration
-try:
-    from unidecode import unidecode as _unidecode
-except ImportError:
-    _unidecode = None
+def _load_unidecode():
+    """Best-effort dynamic import of unidecode to avoid hard dependency."""
+    try:
+        module = __import__("unidecode")
+        return getattr(module, "unidecode", None)
+    except Exception:
+        return None
+
+
+_unidecode = _load_unidecode()
 
 
 def to_latin(s: str) -> str:
@@ -401,11 +406,15 @@ def generate_team_name(fake: Faker, discipline: str, existing_names: set) -> Opt
         
         # Clean company name (remove Inc, Ltd, etc.)
         company = re.sub(r'\b(Inc|Ltd|LLC|Corp|Group|Holdings)\b\.?', '', company, flags=re.IGNORECASE).strip()
-        company = to_latin(company)
-        surname = to_latin(surname)
-        city = to_latin(city)
-        place = to_latin(place)
-        adjective = to_latin(adjective)
+        company = to_latin(company).strip()
+        surname = to_latin(surname).strip()
+        city = to_latin(city).strip()
+        place = to_latin(place).strip()
+        adjective = to_latin(adjective).strip()
+        
+        # Reject if any critical component became empty (non-Latin locale artifact)
+        if not company or not surname or not city or not place:
+            continue
         
         values = {
             "company": company,
@@ -417,21 +426,33 @@ def generate_team_name(fake: Faker, discipline: str, existing_names: set) -> Opt
         name = pattern.format_map(values)
         name = clean_name(name)
         
-        if name and re.search(r'[A-Za-z]', name) and name not in existing_names:
+        # Verify name has content and is unique
+        if name and len(name) > 3 and re.search(r'[A-Za-z]', name) and name not in existing_names:
             return name
     
     return None
 
 
-def generate_team(fake: Faker, discipline: str, nationality: str, tier: str, existing_names: set) -> Optional[dict]:
-    """Generate a single team"""
-    name = generate_team_name(fake, discipline, existing_names)
-    if not name:
-        return None
-    
-    # Budget based on tier and discipline
+def _get_country_codes_for_team_seed() -> list:
+    """Return all country codes used for team nationality sampling."""
+    try:
+        from data.countries import COUNTRIES
+        return list(COUNTRIES.keys())
+    except ImportError:
+        return ['USA', 'GBR', 'DEU', 'ITA', 'FRA', 'ESP', 'JPN', 'BRA']
+
+
+def _safe_locales_for_team_names() -> list:
+    """Locales that reliably produce Latin-script company/place strings."""
+    return [
+        'en_US', 'en_GB', 'de_DE', 'fr_FR', 'it_IT', 'es_ES',
+        'pt_BR', 'nl_NL', 'sv_SE', 'da_DK', 'en_AU', 'en_CA'
+    ]
+
+
+def _calculate_team_budget_and_ops(discipline: str, tier: str) -> Tuple[float, float]:
+    """Return generated (budget, operations_rating) for team tier/discipline."""
     base_budget = BUDGET_CAPS.get(discipline, 50_000_000)
-    
     if tier == "tier1":
         budget = base_budget * random.uniform(0.85, 1.0)
         operations_rating = round(random.uniform(75.0, 95.0), 2)
@@ -441,32 +462,69 @@ def generate_team(fake: Faker, discipline: str, nationality: str, tier: str, exi
     else:  # tier3
         budget = base_budget * random.uniform(0.35, 0.65)
         operations_rating = round(random.uniform(45.0, 70.0), 2)
-    
+    return round(budget, 2), operations_rating
+
+
+def _build_seed_team_data(
+    discipline: str,
+    country_codes: list,
+    safe_locales_for_names: list,
+    existing_names: set,
+) -> Optional[dict]:
+    """Generate one team payload suitable for insertion, or None if invalid."""
+    nationality = random.choice(country_codes)
+
+    safe_locale = random.choice(safe_locales_for_names)
+    fake_for_names = Faker(safe_locale)
+    fake_for_principal = _build_fake_for_nationality(nationality)
+
+    tier = _pick_tier_from_distribution()
+    team_name = generate_team_name(fake_for_names, discipline, existing_names)
+    if not team_name:
+        return None
+
+    budget, operations_rating = _calculate_team_budget_and_ops(discipline, tier)
+
     team_data = {
-        'name': name,
+        'name': team_name,
         'nationality': nationality,
         'discipline': discipline,
         'tier': tier,
-        'budget': round(budget, 2),
+        'budget': budget,
         'founded_year': random.randint(1950, 2024),
-        'team_principal': clean_name(fake.name()),
-        'headquarters': fake.city(),
+        'team_principal': clean_name(fake_for_principal.name()),
+        'headquarters': fake_for_principal.city(),
         'operations_rating': operations_rating,
         'strategy_profile': random.choice(['conservative', 'standard', 'aggressive'])
     }
-    
+
+    if not team_data['team_principal']:
+        return None
+
     return team_data
+
+
+def _insert_seed_team(cursor, team_data: dict) -> None:
+    """Insert a generated team payload into teams table."""
+    cursor.execute('''
+        INSERT INTO teams (
+            name, nationality, discipline, tier, budget, founded_year,
+            team_principal, headquarters, operations_rating, strategy_profile
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        team_data['name'], team_data['nationality'], team_data['discipline'],
+        team_data['tier'], team_data['budget'], team_data['founded_year'],
+        team_data['team_principal'], team_data['headquarters'],
+        team_data['operations_rating'], team_data['strategy_profile']
+    ))
 
 
 def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list) -> int:
     """Seed database with teams"""
     print(f"\n=== Generating {teams_per_discipline} Teams per Discipline ===")
-    
-    try:
-        from data.countries import COUNTRIES
-        country_codes = list(COUNTRIES.keys())
-    except ImportError:
-        country_codes = ['USA', 'GBR', 'DEU', 'ITA', 'FRA', 'ESP', 'JPN', 'BRA']
+
+    country_codes = _get_country_codes_for_team_seed()
+    safe_locales_for_names = _safe_locales_for_team_names()
     
     teams_created = 0
     existing_names = set()
@@ -484,29 +542,17 @@ def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list
             discipline_teams = 0
             
             for _ in range(teams_per_discipline):
-                nationality = random.choice(country_codes)
-                fake = _build_fake_for_nationality(nationality)
-                
-                # Determine tier based on distribution
-                tier = _pick_tier_from_distribution()
-                
-                team_data = generate_team(fake, discipline, nationality, tier, existing_names)
-                
+                team_data = _build_seed_team_data(
+                    discipline,
+                    country_codes,
+                    safe_locales_for_names,
+                    existing_names,
+                )
                 if not team_data:
                     continue
                 
                 try:
-                    cursor.execute('''
-                        INSERT INTO teams (
-                            name, nationality, discipline, tier, budget, founded_year,
-                            team_principal, headquarters, operations_rating, strategy_profile
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        team_data['name'], team_data['nationality'], team_data['discipline'],
-                        team_data['tier'], team_data['budget'], team_data['founded_year'],
-                        team_data['team_principal'], team_data['headquarters'],
-                        team_data['operations_rating'], team_data['strategy_profile']
-                    ))
+                    _insert_seed_team(cursor, team_data)
                     
                     existing_names.add(team_data['name'])
                     teams_created += 1
@@ -634,7 +680,9 @@ def assign_driver_contracts(db: DatabaseManager, disciplines: list) -> int:
             if not driver_ids:
                 continue
 
-            team_slot_targets = [(team_id, slot) for team_id in team_ids for slot in range(slots)]
+            # Fill rosters in round-robin slot order (slot 1 for all teams,
+            # then slot 2, etc.) so limited driver pools still spread fairly.
+            team_slot_targets = [(team_id, slot) for slot in range(slots) for team_id in team_ids]
             pair_count = min(len(driver_ids), len(team_slot_targets))
 
             for idx in range(pair_count):

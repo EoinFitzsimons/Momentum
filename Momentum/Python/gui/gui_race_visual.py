@@ -3688,7 +3688,7 @@ class RaceWindow(QMainWindow):
         return start_pos
 
     def _build_summary_rows(self, results_sorted: list, start_pos: Dict[Any, int]) -> List[Tuple[Optional[int], int, str, int, str]]:
-        """Build sortable start-vs-finish rows for the summary table."""
+        """Build start-vs-finish rows sorted by race finish order."""
         rows: List[Tuple[Optional[int], int, str, int, str]] = []
         for res in results_sorted:
             did = res.get('driver_id')
@@ -3700,7 +3700,8 @@ class RaceWindow(QMainWindow):
             change = (start - finish) if start is not None else 0
             rows.append((start, finish, name, change, status))
 
-        rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 9999))
+        # Default to result order (finish position) so the table reads like race standings.
+        rows.sort(key=lambda r: (r[1], r[0] if r[0] is not None else 9999))
         return rows
 
     def _show_summary_table_dialog(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> None:

@@ -238,23 +238,22 @@ class MomentumLauncher:
 
     def _show_next_race_setup_dialog(self, config: dict, db, championship, race_obj, track_obj):
         """Open mode-aware setup dialog and return race config when accepted."""
-            mode = (config.get('mode') or 'championship').lower()
-            if mode == 'career':
-                from GUI.gui_career import CareerPreRaceSetupDialog as SetupDialog
-            else:
-                from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
+        mode = (config.get('mode') or 'championship').lower()
+        if mode == 'career':
+            from GUI.gui_career import CareerPreRaceSetupDialog as SetupDialog
+        else:
+            from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
 
-            setup_dialog = SetupDialog(
-                db,
-                championship,
-                race_obj,
-                track_obj,
-                parent=None
-            )
-            if setup_dialog.exec() == 1:
-                return setup_dialog.get_race_config()
-            return None
-
+        setup_dialog = SetupDialog(
+            db,
+            championship,
+            race_obj,
+            track_obj,
+            parent=None
+        )
+        if setup_dialog.exec() == 1:
+            return setup_dialog.get_race_config()
+        return None
     def return_to_menu(self):
         """Return from race to main menu."""
         if self.race_window:
