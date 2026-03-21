@@ -392,7 +392,7 @@ class MainMenuWindow(QMainWindow):
         championship_btn.clicked.connect(self._show_championship_mode)
         layout.addWidget(championship_btn)
 
-        # Career Mode (placeholder)
+        # Career Mode
         career_btn = QPushButton("Career Mode")
         career_btn.setMinimumHeight(80)
         career_btn.setStyleSheet("""
@@ -420,8 +420,9 @@ class MainMenuWindow(QMainWindow):
                 border-color: #555;
             }
         """)
-        career_btn.setEnabled(False)  # Not implemented yet
-        career_btn.setToolTip("Coming Soon")
+        career_btn.setEnabled(True)
+        career_btn.setToolTip("Start or continue a career season")
+        career_btn.clicked.connect(self._show_career_mode)
         layout.addWidget(career_btn)
 
         layout.addStretch()
@@ -537,11 +538,29 @@ class MainMenuWindow(QMainWindow):
             self.championship_window.start_race_signal.connect(self._start_championship_race)
             self.championship_window.show()
             self.hide()
+
+    def _show_career_mode(self):
+        """Show career selection/management in a dedicated career GUI."""
+        from GUI.gui_career import CareerSelectionDialog, CareerWindow
+
+        dialog = CareerSelectionDialog(self.db, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_championship:
+            self.career_window = CareerWindow(dialog.selected_championship, self)
+            self.career_window.return_to_menu.connect(self._return_from_career)
+            self.career_window.start_race_signal.connect(self._start_career_race)
+            self.career_window.show()
+            self.hide()
     
     def _return_from_championship(self):
         """Return from championship to main menu."""
         if hasattr(self, 'championship_window'):
             self.championship_window.close()
+        self.show()
+
+    def _return_from_career(self):
+        """Return from career to main menu."""
+        if hasattr(self, 'career_window'):
+            self.career_window.close()
         self.show()
     
     def _start_championship_race(self, config: dict):
@@ -551,6 +570,13 @@ class MainMenuWindow(QMainWindow):
         self.start_race_signal.emit(config)
         if hasattr(self, 'championship_window'):
             self.championship_window.hide()
+
+    def _start_career_race(self, config: dict):
+        """Start a career race."""
+        config["display_mode"] = self.display_mode
+        self.start_race_signal.emit(config)
+        if hasattr(self, 'career_window'):
+            self.career_window.hide()
 
     def _on_display_mode_changed(self, button):
         """Handle display mode radio button change."""

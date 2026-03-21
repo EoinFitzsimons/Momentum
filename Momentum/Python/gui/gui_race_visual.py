@@ -3539,6 +3539,7 @@ class RaceWindow(QMainWindow):
         config = {
             'championship_id': self._championship_id,
             'race_id': self._race_id,
+            'mode': getattr(self, '_game_mode', 'championship'),
         }
         self.next_race.emit(config)
         print(f"[NEXT RACE] Emitted next_race signal with config: {config}")
