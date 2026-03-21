@@ -3023,9 +3023,7 @@ class RaceWindow(QMainWindow):
         if self.db is None:
             return []
 
-        # Force entrants to come from contracted drivers in teams of the
-        # active discipline for both championship and quick-race modes.
-        self._ensure_contracted_grid_for_discipline(self._initial_discipline, RACE_GRID_SIZE)
+        # Use existing contracted drivers only; do not mutate contracts here.
         contracted = self._get_contracted_discipline_drivers(self._initial_discipline, RACE_GRID_SIZE)
         if contracted:
             return contracted

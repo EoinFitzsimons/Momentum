@@ -1008,6 +1008,7 @@ class PreRaceSetupDialog(QDialog):
 
         return {
             "mode": "championship",
+            "personnel_transfers_enabled": False,
             "championship_id": self.championship.id,
             "race_id": self.race.id,
             "track_id": self.race.track_id,

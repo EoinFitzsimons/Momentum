@@ -1077,6 +1077,8 @@ class QuickRaceSetupWindow(QDialog):
             track_id = None
 
         config = {
+            "mode": "single_race",
+            "personnel_transfers_enabled": False,
             "driver": self.selected_driver,
             "team": self.selected_team,
             "display_mode": self.display_mode,
@@ -1297,7 +1299,6 @@ class QuickRaceSetupWindow(QDialog):
 
         selected_discipline = self.discipline_combo.currentData()
         selected_tier = self.tier_combo.currentData() if hasattr(self, "tier_combo") else "TIER_2"
-        self._ensure_contracted_pool_for_discipline(selected_discipline, selected_tier)
         contracted = self._get_contracted_drivers_for_discipline(selected_discipline, selected_tier)
         if not contracted:
             self.driver_list.clear()

@@ -768,6 +768,118 @@ def adjust_drivers_by_tier(db: DatabaseManager) -> int:
     return adjusted_count
 
 
+def refresh_unsupported_disciplines(db: DatabaseManager, disciplines: list) -> dict:
+    """Purge records for disciplines no longer supported by config."""
+    print("\n=== Refreshing Unsupported Disciplines ===")
+    supported = set(disciplines)
+    placeholders = ",".join(["?"] * len(supported))
+
+    result = {
+        "teams_deleted": 0,
+        "tracks_deleted": 0,
+        "championships_deleted": 0,
+        "races_deleted": 0,
+        "race_results_deleted": 0,
+        "drivers_detached": 0,
+        "staff_detached": 0,
+    }
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+
+        unsupported_team_ids = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT id FROM teams WHERE discipline NOT IN ({placeholders})",
+                tuple(supported),
+            ).fetchall()
+        ]
+
+        unsupported_champ_ids = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT id FROM championships WHERE discipline NOT IN ({placeholders})",
+                tuple(supported),
+            ).fetchall()
+        ]
+
+        if unsupported_team_ids:
+            team_q = ",".join(["?"] * len(unsupported_team_ids))
+
+            result["drivers_detached"] = cursor.execute(
+                f"UPDATE drivers SET current_team_id = NULL WHERE current_team_id IN ({team_q})",
+                tuple(unsupported_team_ids),
+            ).rowcount
+            result["staff_detached"] = cursor.execute(
+                f"UPDATE staff_members SET current_team_id = NULL WHERE current_team_id IN ({team_q})",
+                tuple(unsupported_team_ids),
+            ).rowcount
+
+            result["race_results_deleted"] += cursor.execute(
+                f"DELETE FROM race_results WHERE team_id IN ({team_q})",
+                tuple(unsupported_team_ids),
+            ).rowcount
+
+            for table_name in [
+                "team_ownership",
+                "team_budget_transactions",
+                "team_facility_upgrades",
+                "team_audit_log",
+            ]:
+                cursor.execute(
+                    f"DELETE FROM {table_name} WHERE team_id IN ({team_q})",
+                    tuple(unsupported_team_ids),
+                )
+
+            result["teams_deleted"] = cursor.execute(
+                f"DELETE FROM teams WHERE id IN ({team_q})",
+                tuple(unsupported_team_ids),
+            ).rowcount
+
+        if unsupported_champ_ids:
+            champ_q = ",".join(["?"] * len(unsupported_champ_ids))
+            race_ids = [
+                row[0]
+                for row in cursor.execute(
+                    f"SELECT id FROM races WHERE championship_id IN ({champ_q})",
+                    tuple(unsupported_champ_ids),
+                ).fetchall()
+            ]
+
+            if race_ids:
+                race_q = ",".join(["?"] * len(race_ids))
+                result["race_results_deleted"] += cursor.execute(
+                    f"DELETE FROM race_results WHERE race_id IN ({race_q})",
+                    tuple(race_ids),
+                ).rowcount
+                result["races_deleted"] = cursor.execute(
+                    f"DELETE FROM races WHERE id IN ({race_q})",
+                    tuple(race_ids),
+                ).rowcount
+
+            result["championships_deleted"] = cursor.execute(
+                f"DELETE FROM championships WHERE id IN ({champ_q})",
+                tuple(unsupported_champ_ids),
+            ).rowcount
+
+        result["tracks_deleted"] = cursor.execute(
+            f"""
+            DELETE FROM tracks
+            WHERE primary_discipline NOT IN ({placeholders})
+              AND id NOT IN (SELECT DISTINCT track_id FROM races)
+            """,
+            tuple(supported),
+        ).rowcount
+
+        conn.commit()
+
+    print(
+        f"✓ Refresh complete: teams={result['teams_deleted']}, "
+        f"tracks={result['tracks_deleted']}, championships={result['championships_deleted']}"
+    )
+    return result
+
+
 # ============================================================================
 # MAIN EXECUTION
 # ============================================================================
@@ -778,6 +890,7 @@ def main():
     parser.add_argument('--teams-per-discipline', type=int, default=100, help='Teams per discipline (default: 100)')
     parser.add_argument('--staff', type=int, default=100, help='Number of staff members (default: 100)')
     parser.add_argument('--clear-existing', action='store_true', help='Clear existing data before seeding')
+    parser.add_argument('--hard-refresh', action='store_true', help='Purge unsupported discipline records before seeding')
     args = parser.parse_args()
     
     print("=" * 70)
@@ -790,12 +903,17 @@ def main():
     print(f"  Staff: {args.staff}")
     print(f"  Total teams: ~{args.teams_per_discipline * 6}")
     print(f"  Clear existing data: {args.clear_existing}")
+    print(f"  Hard refresh unsupported disciplines: {args.hard_refresh}")
     
     # Initialize database
     db = DatabaseManager()
     
     # Get discipline list
     disciplines = list(DISCIPLINES.keys())
+
+    # Optional purge of legacy/unsupported disciplines
+    if args.hard_refresh:
+        refresh_unsupported_disciplines(db, disciplines)
     
     # Optionally clear existing data
     if args.clear_existing:
