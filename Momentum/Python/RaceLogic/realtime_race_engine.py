@@ -780,13 +780,7 @@ class RealtimeRaceEngine:
         team_modifier = 0.975 + (team_performance * 0.05)
 
         # Cornering skill affects corners only
-        position_in_lap = (state.position_m % track_length_m) / track_length_m
-        in_corner = abs(
-            np.sin(
-                position_in_lap *
-                2 *
-                np.pi *
-                8)) > 0.5  # 8 corners per lap
+        in_corner = self._is_in_corner_proxy(state, track_length_m)
 
         if in_corner:
             # 85-100% speed in corners
@@ -798,17 +792,7 @@ class RealtimeRaceEngine:
         speed = reference_speed * push_multiplier * \
             driver_modifier * team_modifier * corner_modifier
 
-        # DEBUG: Print actual calculation for first few frames
-        if not hasattr(self, '_speed_debug_counter'):
-            self._speed_debug_counter = 0
-        self._speed_debug_counter += 1
-        if self._speed_debug_counter < 50 or self._speed_debug_counter % 300 == 0:
-            print(
-                f"  [SPEED] {
-                    state.driver_name}: push={
-                    state.push_intensity:.2f} -> mult={
-                    push_multiplier:.2f} -> speed={
-                    speed:.1f}m/s")
+        self._log_speed_debug(state, push_multiplier, speed)
 
         # Tire degradation - worn tires lose grip
         tire_penalty = 1.0 - (1.0 - state.tire_condition) * 0.25
@@ -829,49 +813,9 @@ class RealtimeRaceEngine:
         if state.in_slipstream:
             speed *= (1.0 + self.SLIPSTREAM_BONUS)
 
-        # === DIRTY AIR PENALTY (corners) ===
-        # Following closely in corners disrupts airflow, reduces downforce
-        # Only applies in corners, not on straights
-        if hasattr(self, 'track_map') and self.track_map:
-            position_on_track = state.position_m % track_length_m
-            section_type, _ = self.track_map.get_section_at_position(
-                position_on_track)
+        speed = self._apply_dirty_air_penalty(speed, state, track_length_m)
 
-            # TrackSection already imported at top of file
-            is_corner = section_type in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER,
-                                         TrackSection.FAST_CORNER, TrackSection.BRAKING_ZONE]
-
-            # Check if in dirty air (only if car ahead exists and velocity is
-            # non-zero)
-            if is_corner and state.velocity_mps > 1.0 and state.gap_ahead < self.DIRTY_AIR_DISTANCE / \
-                    state.velocity_mps:
-                # In dirty air in corner - reduce speed
-                speed *= (1.0 - self.DIRTY_AIR_PENALTY)
-
-        # === COLLISION AVOIDANCE - ALLOW MUCH CLOSER RACING ===
-        # Slow down when too close to car ahead to prevent driving into them
-        # Less than 0.8 seconds gap (was 1.5 - VERY AGGRESSIVE)
-        if state.gap_ahead < 0.8:
-            CAR_LENGTH = 4.0  # meters (20% smaller cars)
-            # Need at least 1.2 car lengths (6m, was 2 = 10m)
-            MINIMUM_GAP = CAR_LENGTH * 1.2
-
-            # Calculate actual distance gap in meters
-            if state.velocity_mps > 0.1:
-                distance_gap = state.gap_ahead * state.velocity_mps
-
-                if distance_gap < MINIMUM_GAP:
-                    # Too close! Reduce speed to avoid collision
-                    # The closer we are, the more we need to slow down
-                    safety_factor = distance_gap / MINIMUM_GAP
-                    # Minimum 65% speed (was 40% - allows closer racing)
-                    safety_factor = max(0.65, safety_factor)
-                    speed *= safety_factor
-
-                    # Extra braking if dangerously close
-                    if distance_gap < CAR_LENGTH * 0.7:  # Was 1.5 car lengths, now 0.7
-                        # Heavy braking to avoid rear-end (was 0.6)
-                        speed *= 0.75
+        speed = self._apply_collision_avoidance(speed, state)
 
         # Consistency variance
         consistency = get_safe_attribute(driver, 'consistency') / 100.0
@@ -880,6 +824,55 @@ class RealtimeRaceEngine:
 
         # Clamp to realistic bounds
         return np.clip(speed, self.MIN_SPEED_MPS, self.MAX_SPEED_MPS)
+
+    def _is_in_corner_proxy(self, state: DriverState, track_length_m: float) -> bool:
+        """Approximate corner occupancy using lap-phase sine proxy."""
+        position_in_lap = (state.position_m % track_length_m) / track_length_m
+        return abs(np.sin(position_in_lap * 2 * np.pi * 8)) > 0.5
+
+    def _log_speed_debug(self, state: DriverState, push_multiplier: float, speed: float) -> None:
+        """Emit throttled speed diagnostics for early frames and periodic checkpoints."""
+        if not hasattr(self, '_speed_debug_counter'):
+            self._speed_debug_counter = 0
+        self._speed_debug_counter += 1
+        if self._speed_debug_counter < 50 or self._speed_debug_counter % 300 == 0:
+            print(
+                f"  [SPEED] {state.driver_name}: push={state.push_intensity:.2f} -> mult={push_multiplier:.2f} -> speed={speed:.1f}m/s")
+
+    def _apply_dirty_air_penalty(self, speed: float, state: DriverState, track_length_m: float) -> float:
+        """Apply corner dirty-air speed penalty when following too closely."""
+        if not (hasattr(self, 'track_map') and self.track_map):
+            return speed
+
+        position_on_track = state.position_m % track_length_m
+        section_type, _ = self.track_map.get_section_at_position(position_on_track)
+        is_corner = section_type in [
+            TrackSection.SLOW_CORNER,
+            TrackSection.MEDIUM_CORNER,
+            TrackSection.FAST_CORNER,
+            TrackSection.BRAKING_ZONE,
+        ]
+
+        if is_corner and state.velocity_mps > 1.0 and state.gap_ahead < self.DIRTY_AIR_DISTANCE / state.velocity_mps:
+            return speed * (1.0 - self.DIRTY_AIR_PENALTY)
+        return speed
+
+    def _apply_collision_avoidance(self, speed: float, state: DriverState) -> float:
+        """Reduce speed when gap to car ahead is physically unsafe."""
+        if state.gap_ahead >= 0.8 or state.velocity_mps <= 0.1:
+            return speed
+
+        car_length = 4.0
+        minimum_gap = car_length * 1.2
+        distance_gap = state.gap_ahead * state.velocity_mps
+        if distance_gap >= minimum_gap:
+            return speed
+
+        safety_factor = max(0.65, distance_gap / minimum_gap)
+        speed *= safety_factor
+        if distance_gap < car_length * 0.7:
+            speed *= 0.75
+        return speed
 
     def _get_team_multiplier(self, team: Team) -> float:
         """Get team performance multiplier"""
@@ -1491,22 +1484,7 @@ class RealtimeRaceEngine:
         """Compile final race results with accurate timing and proper lapped classification"""
         results = []
 
-        # Separate finished drivers from lapped/DNF drivers FIRST
-        all_states = list(race_state.driver_states.values())
-        finished_drivers = []
-        lapped_drivers = []
-        dnf_drivers = []
-        
-        for state in all_states:
-            if state.dnf_reason is not None:
-                # DNF - excluded from classification
-                dnf_drivers.append(state)
-            elif state.lap >= race_state.total_laps:
-                # Completed all required laps
-                finished_drivers.append(state)
-            else:
-                # Lapped - completed fewer than required laps
-                lapped_drivers.append(state)
+        finished_drivers, lapped_drivers, dnf_drivers = self._classify_result_states(race_state)
         
         # Sort finished drivers by position on track
         finished_drivers.sort(key=lambda s: s.position_m)
@@ -1516,55 +1494,74 @@ class RealtimeRaceEngine:
         
         # Add finished drivers first (positions 1, 2, 3...)
         for position, state in enumerate(finished_drivers, 1):
-            results.append({
-                "driver_id": state.driver_id,
-                "driver_name": state.driver_name,
-                "team_id": state.team.id,
-                "position": position,
-                "laps_completed": state.lap,
-                "time_seconds": state.total_time,
-                "dnf_reason": state.dnf_reason,
-                "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
-                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
-                "status": "FINISHED",
-                "lapped": False
-            })
+            results.append(self._build_result_entry(race_state, state, position, "FINISHED", False))
         
         # Add lapped drivers after finishers, marked as lapped with their lap deficit
         for position, state in enumerate(lapped_drivers, len(finished_drivers) + 1):
             lap_deficit = race_state.total_laps - state.lap
-            results.append({
-                "driver_id": state.driver_id,
-                "driver_name": state.driver_name,
-                "team_id": state.team.id,
-                "position": position,
-                "laps_completed": state.lap,
-                "time_seconds": state.total_time,
-                "dnf_reason": state.dnf_reason,
-                "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
-                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
-                "status": "LAPPED",
-                "lapped": True,
-                "lap_deficit": lap_deficit
-            })
+            results.append(
+                self._build_result_entry(
+                    race_state,
+                    state,
+                    position,
+                    "LAPPED",
+                    True,
+                    lap_deficit=lap_deficit,
+                )
+            )
         
         # Add DNF drivers at the end
         for state in dnf_drivers:
-            results.append({
-                "driver_id": state.driver_id,
-                "driver_name": state.driver_name,
-                "team_id": state.team.id,
-                "position": len(results) + 1,
-                "laps_completed": state.lap,
-                "time_seconds": state.total_time,
-                "dnf_reason": state.dnf_reason,
-                "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
-                "average_lap_time": np.mean(race_state.lap_times[state.driver_id]) if race_state.lap_times[state.driver_id] else None,
-                "status": "DNF",
-                "lapped": False
-            })
+            results.append(self._build_result_entry(race_state, state, len(results) + 1, "DNF", False))
 
         return results
+
+    def _classify_result_states(self, race_state: RaceState):
+        """Split driver states into finished, lapped and DNF buckets."""
+        finished_drivers = []
+        lapped_drivers = []
+        dnf_drivers = []
+
+        for state in race_state.driver_states.values():
+            if state.dnf_reason is not None:
+                dnf_drivers.append(state)
+            elif state.lap >= race_state.total_laps:
+                finished_drivers.append(state)
+            else:
+                lapped_drivers.append(state)
+
+        return finished_drivers, lapped_drivers, dnf_drivers
+
+    def _build_result_entry(
+        self,
+        race_state: RaceState,
+        state: DriverState,
+        position: int,
+        status: str,
+        lapped: bool,
+        lap_deficit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Build a standardized result row with optional lap-deficit metadata."""
+        average_lap_time = None
+        if race_state.lap_times[state.driver_id]:
+            average_lap_time = float(np.mean(race_state.lap_times[state.driver_id]))
+
+        entry = {
+            "driver_id": state.driver_id,
+            "driver_name": state.driver_name,
+            "team_id": state.team.id,
+            "position": position,
+            "laps_completed": state.lap,
+            "time_seconds": state.total_time,
+            "dnf_reason": state.dnf_reason,
+            "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
+            "average_lap_time": average_lap_time,
+            "status": status,
+            "lapped": lapped,
+        }
+        if lap_deficit is not None:
+            entry["lap_deficit"] = lap_deficit
+        return entry
 
 
 __all__ = ['RealtimeRaceEngine', 'DriverState', 'RaceState', 'RacingMode']
