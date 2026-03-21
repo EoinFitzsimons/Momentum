@@ -3078,6 +3078,10 @@ class RaceWindow(QMainWindow):
 
     def _start_race(self):
         """Start the race simulation."""
+        self._start_race_impl()
+
+    def _start_race_impl(self):
+        """Race-start implementation split from entrypoint to keep orchestration clear."""
         if not self.drivers or not self.track:
             self.info_label.setText("Error: No drivers or track loaded")
             print("ERROR: Cannot start race - no drivers or track")
@@ -3123,6 +3127,11 @@ class RaceWindow(QMainWindow):
         if not hasattr(self, '_animation_started'):
             self._animation_started = False
         print("[RACE START] Waiting for simulation to send first position data...")
+
+        self._launch_race_thread()
+
+    def _launch_race_thread(self) -> None:
+        """Launch simulation thread and attach event callback bridge."""
 
         def race_runner():
             try:
@@ -3711,366 +3720,126 @@ class RaceWindow(QMainWindow):
             print("[RACE FINISHED] Next Race button enabled (championship mode)")
 
     def _show_position_change_summary(self, results_sorted: list):
+        """Display a post-race start-vs-finish summary dialog."""
+        try:
+            self._show_position_change_summary_impl(results_sorted)
+        except Exception as e:
+            print(f"Error building position change summary: {e}")
+
+    def _show_position_change_summary_impl(self, results_sorted: list):
         """Display a modal dialog that compares starting grid to final positions.
 
         Columns: StartPos, FinishPos, Driver, Change, Status
         """
+        if not hasattr(self, '_starting_grid') or not self._starting_grid:
+            print("No starting grid recorded; skipping position-change summary")
+            return
+        start_pos = self._build_summary_start_positions(results_sorted)
+        rows = self._build_summary_rows(results_sorted, start_pos)
+        self._show_summary_table_dialog(rows)
+
+    def _normalize_driver_id(self, driver_id: Any) -> Any:
+        """Normalize driver id keys to int when possible."""
         try:
-            if not hasattr(self, '_starting_grid') or not self._starting_grid:
-                print("No starting grid recorded; skipping position-change summary")
-                return
+            return int(driver_id)
+        except Exception:
+            return driver_id
 
+    def _build_summary_start_positions(self, results_sorted: list) -> Dict[Any, int]:
+        """Build start-position mapping from recorded grid and engine hints."""
+        start_pos: Dict[Any, int] = {}
 
-            # Build starting positions map.
-            # Use the recorded `_starting_grid` (captured when the race began)
-            # as the authoritative source. However, double-check against the
-            # track widget's car ordering (by `s`) to detect a reversed mapping
-            # that can occasionally reappear; if we can derive a consistent
-            # ordering from the visual cars, prefer that ordering (P1..PN).
-            start_pos = {}
+        for idx, did in enumerate(getattr(self, '_starting_grid', []) or []):
+            if did is None:
+                continue
+            start_pos[self._normalize_driver_id(did)] = idx + 1
+
+        for res in results_sorted:
+            did = res.get('driver_id')
+            if did is None:
+                continue
+            gp = res.get('grid_position') or res.get('grid')
+            if gp is None:
+                continue
             try:
-                if hasattr(self, '_starting_grid') and self._starting_grid:
-                    # If track widget provides a reliable car ordering, prefer
-                    # that to correct any accidental reversal of `self._starting_grid`.
-                    try:
-                        tw_cars = getattr(self.track_widget, 'cars', None)
-                        if tw_cars:
-                            tw_ids: List[int] = []
-                            for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0)):
-                                did = getattr(c, 'driver_id', None)
-                                if did is None:
-                                    continue
-                                try:
-                                    tw_ids.append(int(did))
-                                except Exception:
-                                    continue
-                            # If the sets match but the orders differ, prefer the
-                            # visual ordering (P1..PN). This fixes cases where the
-                            # recorded grid was reversed relative to the track widget.
-                            # If the visual ordering contains the same drivers as
-                            # the recorded starting grid, prefer the visual ordering
-                            # as the authoritative start positions. This forces the
-                            # UI Start column to match the track widget layout.
-                            starting_grid_ids: List[int] = []
-                            for grid_id in self._starting_grid:
-                                if grid_id is None:
-                                    continue
-                                try:
-                                    starting_grid_ids.append(int(grid_id))
-                                except Exception:
-                                    continue
-                            if set(tw_ids) == set(starting_grid_ids):
-                                if tw_ids != starting_grid_ids:
-                                    print("Correcting starting grid order from visual track widget")
-                                else:
-                                    print("Using visual track widget ordering as authoritative for starting grid")
-                                self._starting_grid = tw_ids
-                    except Exception:
-                        pass
-
-                    # `_starting_grid` is a list where index 0 == start pos 1
-                    for idx, did in enumerate(self._starting_grid):
-                        if did is None:
-                            continue
-                        try:
-                            start_pos[int(did)] = idx + 1
-                        except Exception:
-                            start_pos[did] = idx + 1
+                start_pos[self._normalize_driver_id(did)] = int(gp)
             except Exception:
-                start_pos = {}
-
-            # Prefer engine-provided grid positions when available.
-            # The engine's `grid_position`/`grid` is authoritative for start
-            # ordering; override the GUI-recorded `_starting_grid` when the
-            # engine supplies explicit values. If the engine does not provide
-            # grid info, fall back to the GUI-recorded starting grid.
-            for res in results_sorted:
-                did = res.get('driver_id')
-                if did is None:
-                    continue
                 try:
-                    key = int(did)
-                except Exception:
-                    key = did
-                gp = res.get('grid_position') or res.get('grid')
-                if gp is not None:
-                    try:
-                        start_pos[key] = int(gp)
-                    except Exception:
-                        try:
-                            start_pos[key] = int(float(gp))
-                        except Exception:
-                            pass
-
-            # If the track widget provides a full ordering and its set of
-            # drivers matches the race results, force the start_pos mapping
-            # to follow the visual ordering. This makes the Start column
-            # in the summary match the track widget (visual grid) exactly
-            # regardless of engine-provided `grid_position` values.
-            try:
-                tw_cars = getattr(self.track_widget, 'cars', None)
-                if tw_cars:
-                    tw_ids: List[int] = []
-                    for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True):
-                        did = getattr(c, 'driver_id', None)
-                        if did is None:
-                            continue
-                        try:
-                            tw_ids.append(int(did))
-                        except Exception:
-                            continue
-                    result_ids: List[int] = []
-                    for res in results_sorted:
-                        rid = res.get('driver_id')
-                        if rid is None:
-                            continue
-                        try:
-                            result_ids.append(int(rid))
-                        except Exception:
-                            continue
-                    if set(tw_ids) == set(result_ids):
-                        # Rebuild start_pos using visual ordering (P1..PN)
-                        start_pos = {}
-                        for idx, did in enumerate(tw_ids):
-                            start_pos[did] = idx + 1
-                        print("[DEBUG] Overrode start_pos with visual track ordering")
-            except Exception:
-                pass
-
-            # Build rows: finish_pos, driver_id, driver_name, status
-            rows = []
-            for res in results_sorted:
-                did = res.get('driver_id')
-                finish = res.get('position') or 999
-                name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
-                status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
-                start = start_pos.get(did, None)
-                change = start - finish if start is not None else 0
-                rows.append((start, finish, name, change, status))
-
-            # Sort rows so Start position (P1) appears at the top of the table.
-            # Drivers without a known start position appear after those with one.
-            rows = sorted(rows, key=lambda r: (r[0] is None, r[0] if r[0] is not None else 9999))
-
-            # Create modal dialog with table
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Race Position Changes")
-            dlg_layout = QVBoxLayout()
-
-            # Header with clearer styling
-            info = QLabel("<h2>Start → Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
-            info.setTextFormat(Qt.TextFormat.RichText)
-            dlg_layout.addWidget(info)
-
-            # Create a horizontal split: left = plot & filters, right = results table
-            from PyQt6.QtWidgets import QSplitter, QListWidget, QListWidgetItem
-            splitter = QSplitter()
-
-            # Left pane: plot canvas (matplotlib) + filter list
-            left_widget = QWidget()
-            left_layout = QVBoxLayout(left_widget)
-
-            # Try to import matplotlib; if unavailable, show explanatory label
-            use_plot = True
-            canvas = None
-            fig = None
-            ax = None
-            try:
-                from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-                from matplotlib.figure import Figure
-                from PyQt6.QtWidgets import QListWidget, QListWidgetItem
-                
-                fig = Figure(figsize=(6, 3), dpi=100)
-                canvas = FigureCanvas(fig)
-                ax = fig.add_subplot(111)
-                ax.invert_yaxis()  # position 1 at top
-                ax.set_ylabel('Position')
-                ax.set_xlabel('Distance (m)')
-                ax.set_title('Positions Over Time')
-                left_layout.addWidget(canvas)
-                print("[RACE RESULTS] matplotlib plot initialized successfully")
-            except ImportError as e:
-                use_plot = False
-                print(f"[RACE RESULTS] matplotlib not available: {e}")
-                print("[RACE RESULTS] Install matplotlib for position plots: pip install matplotlib")
-                # Add placeholder message
-                no_plot_label = QLabel("📊 Position plot unavailable\n\nInstall matplotlib to see position changes over time:\npip install matplotlib")
-                no_plot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                no_plot_label.setStyleSheet("color: #999; padding: 40px; font-size: 12px;")
-                left_layout.addWidget(no_plot_label)
-            except Exception as e:
-                use_plot = False
-                print(f"[RACE RESULTS] matplotlib error: {e}")
-                import traceback
-                traceback.print_exc()
-
-            if use_plot and canvas and fig and ax:
-                # Filter list to show/hide drivers
-                filter_label = QLabel('Show drivers:')
-                left_layout.addWidget(filter_label)
-                filter_list = QListWidget()
-                filter_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-                try:
-                    filter_list.setMinimumHeight(140)
+                    start_pos[self._normalize_driver_id(did)] = int(float(gp))
                 except Exception:
                     pass
-                # Populate with drivers found in results_sorted (use driver names)
-                driver_map = {}
-                for res in results_sorted:
-                    did = res.get('driver_id')
-                    name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
-                    driver_map[did] = name
-                    item = QListWidgetItem(name)
-                    item.setData(Qt.ItemDataRole.UserRole, did)
-                    item.setSelected(True)
-                    filter_list.addItem(item)
-                try:
-                    filter_list.selectAll()
-                except Exception:
-                    pass
-                left_layout.addWidget(filter_list)
 
-                def redraw_plot():
-                    try:
-                        if not ax or not fig or not canvas:
-                            return
-                        ax.clear()
-                        ax.invert_yaxis()
-                        ax.set_ylabel('Position')
-                        ax.set_xlabel('Distance (m)')
-                        ax.set_title('Positions Over Time')
-                        # For each selected driver, plot its time-series
-                        for idx in range(filter_list.count()):
-                            it = filter_list.item(idx)
-                            if it is None:
-                                continue
-                            if not it.isSelected():
-                                continue
-                            did = it.data(Qt.ItemDataRole.UserRole)
-                            hist = getattr(self, '_position_history', {}).get(did, None)
-                            if hist:
-                                # history stored as (distance_m, position)
-                                xs = [t for (t, p) in hist]
-                                ys = [p for (t, p) in hist]
-                                ax.plot(xs, ys, label=driver_map.get(did, str(did)))
-                            else:
-                                # No history available: show flat line at final pos
-                                final = next((r.get('position') for r in results_sorted if r.get('driver_id') == did), None)
-                                if final is not None:
-                                    max_dist = max((h[-1][0] for h in getattr(self, '_position_history', {}).values() if h), default=1000)
-                                    ax.plot([0, max_dist], [final, final], '--', label=driver_map.get(did, str(did)))
-                        try:
-                            ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0., fontsize='small')
-                            try:
-                                fig.subplots_adjust(right=0.72, bottom=0.12)
-                            except Exception:
-                                pass
-                        except Exception:
-                            ax.legend(loc='upper right', fontsize='small', ncol=1)
-                        try:
-                            fig.tight_layout()
-                        except Exception:
-                            pass
-                        try:
-                            canvas.draw()
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        print(f"ERROR drawing positions plot: {e}")
+        return start_pos
 
-                filter_list.itemSelectionChanged.connect(redraw_plot)
-                # Initial draw
-                redraw_plot()
+    def _build_summary_rows(self, results_sorted: list, start_pos: Dict[Any, int]) -> List[Tuple[Optional[int], int, str, int, str]]:
+        """Build sortable start-vs-finish rows for the summary table."""
+        rows: List[Tuple[Optional[int], int, str, int, str]] = []
+        for res in results_sorted:
+            did = res.get('driver_id')
+            did_key = self._normalize_driver_id(did)
+            finish = int(res.get('position') or 999)
+            name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
+            status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
+            start = start_pos.get(did_key)
+            change = (start - finish) if start is not None else 0
+            rows.append((start, finish, name, change, status))
 
-            else:
-                left_layout.addWidget(QLabel('matplotlib not available — install matplotlib to see position plot.'))
+        rows.sort(key=lambda r: (r[0] is None, r[0] if r[0] is not None else 9999))
+        return rows
 
-            # Note: add the results table first so it appears on the left side
-            # of the splitter. The plot/filter pane will be added after so it
-            # appears on the right and does not get overly compressed.
+    def _show_summary_table_dialog(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> None:
+        """Show a compact position-change dialog with table-only content."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Race Position Changes")
+        dlg_layout = QVBoxLayout()
 
-            # Right pane: results table (added first to splitter)
-            table = QTableWidget()
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
-            table.setRowCount(len(rows))
-            for r, row in enumerate(rows):
-                start, finish, name, change, status = row
-                table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
-                table.setItem(r, 1, QTableWidgetItem(str(finish)))
-                table.setItem(r, 2, QTableWidgetItem(name))
-                table.setItem(r, 3, QTableWidgetItem(f"{change:+d}"))
-                status_item = QTableWidgetItem(status)
-                if status == 'DNF':
-                    status_item.setBackground(QColor(220, 40, 40))
-                    status_item.setForeground(QColor(255, 255, 255))
-                table.setItem(r, 4, status_item)
+        info = QLabel("<h2>Start -> Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
+        info.setTextFormat(Qt.TextFormat.RichText)
+        dlg_layout.addWidget(info)
 
-            table.resizeColumnsToContents()
-            try:
-                # Make the Driver column stretch and keep others sized to contents
-                hdr = table.horizontalHeader()
-                if isinstance(hdr, QHeaderView):
-                    hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-                    hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-                table.setAlternatingRowColors(True)
-            except Exception:
-                pass
-            # Add table to splitter first (index 0)
-            splitter.addWidget(table)
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
+        table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            start, finish, name, change, status = row
+            table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
+            table.setItem(r, 1, QTableWidgetItem(str(finish)))
+            table.setItem(r, 2, QTableWidgetItem(name))
+            table.setItem(r, 3, QTableWidgetItem(f"{change:+d}"))
+            status_item = QTableWidgetItem(status)
+            if status == 'DNF':
+                status_item.setBackground(QColor(220, 40, 40))
+                status_item.setForeground(QColor(255, 255, 255))
+            table.setItem(r, 4, status_item)
 
-            # Ensure the plot/filter pane has a usable minimum width so it
-            # remains visible when the table is large.
-            try:
-                if left_widget is not None:
-                    left_widget.setMinimumWidth(360)
-                # If canvas exists, ensure a reasonable min size
-                try:
-                    if canvas is not None:
-                        canvas.setMinimumSize(360, 260)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+        table.resizeColumnsToContents()
+        hdr = table.horizontalHeader()
+        if isinstance(hdr, QHeaderView):
+            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        table.setAlternatingRowColors(True)
+        dlg_layout.addWidget(table)
 
-            # Now add the plot/filter pane (index 1)
-            splitter.addWidget(left_widget)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        dlg_layout.addWidget(close_btn)
 
-            # Give the results table the majority of horizontal space but allow
-            # the plot pane to remain usable.
-            splitter.setStretchFactor(0, 2)
-            splitter.setStretchFactor(1, 1)
-            dlg_layout.addWidget(splitter)
+        try:
+            pref_w, pref_h = get_preferred_window_size()
+            dlg_w = int(pref_w * 0.65)
+            dlg_h = int(pref_h * 0.5)
+            dlg.setMinimumSize(dlg_w, dlg_h)
+            dlg.resize(dlg_w, dlg_h)
+        except Exception:
+            pass
 
-            # Resize dialog to a consistent application-scale size so the
-            # position-change summary matches the main UI resolution.
-            try:
-                pref_w, pref_h = get_preferred_window_size()
-                dlg_w = int(pref_w * 0.75)
-                dlg_h = int(pref_h * 0.55)
-                dlg.setMinimumSize(dlg_w, dlg_h)
-                dlg.resize(dlg_w, dlg_h)
-                # Set table min width and left_widget min width relative to dialog
-                try:
-                    table.setMinimumWidth(int(dlg_w * 0.55))
-                    left_widget.setMinimumWidth(int(dlg_w * 0.35))
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
-            close_btn = QPushButton("Close")
-            close_btn.clicked.connect(dlg.accept)
-            dlg_layout.addWidget(close_btn)
-
-            dlg.setLayout(dlg_layout)
-            dlg.setModal(True)
-            dlg.exec()
-        except Exception as e:
-            print(f"Error building position change summary: {e}")
+        dlg.setLayout(dlg_layout)
+        dlg.setModal(True)
+        dlg.exec()
 
     def _on_event(self, message: str):
         """
