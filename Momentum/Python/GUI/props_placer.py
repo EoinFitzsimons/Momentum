@@ -53,39 +53,18 @@ def place_props(points: List[Tuple[float, float]], seed: int = 0, density: float
     """
     if not points:
         return []
-    # Compute bbox
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    minx, maxx = min(xs), max(xs)
-    miny, maxy = min(ys), max(ys)
-    w = max(2, maxx - minx)
-    h = max(2, maxy - miny)
-    area = w * h
-
+    minx, maxx, miny, maxy, area = _compute_bbox_area(points)
     rnd = random.Random(seed or 0)
     count = max(0, int(area * density))
     props = []
     attempts = 0
     placed = 0
-    # Simple point-in-polygon test
-    def point_in_poly(x, y):
-        inside = False
-        j = len(points) - 1
-        for i in range(len(points)):
-            xi, yi = points[i]
-            xj, yj = points[j]
-            intersect = ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
-            if intersect:
-                inside = not inside
-            j = i
-        return inside
-
     max_attempts = count * 6 + 50
     while placed < count and attempts < max_attempts:
         attempts += 1
         rx = rnd.uniform(minx, maxx)
         ry = rnd.uniform(miny, maxy)
-        if not point_in_poly(rx, ry):
+        if not _point_in_poly(points, rx, ry):
             continue
         ptype = 'tree' if rnd.random() < 0.6 else 'bush'
         size = rnd.uniform(6.0, 18.0) if ptype == 'tree' else rnd.uniform(3.0, 8.0)
@@ -93,6 +72,68 @@ def place_props(points: List[Tuple[float, float]], seed: int = 0, density: float
         placed += 1
 
     return props
+
+
+def _compute_bbox_area(points: List[Tuple[float, float]]) -> Tuple[float, float, float, float, float]:
+    """Compute polygon bounding box and area approximation."""
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    minx, maxx = min(xs), max(xs)
+    miny, maxy = min(ys), max(ys)
+    w = max(2, maxx - minx)
+    h = max(2, maxy - miny)
+    return minx, maxx, miny, maxy, (w * h)
+
+
+def _point_in_poly(points: List[Tuple[float, float]], x: float, y: float) -> bool:
+    """Ray-cast point-in-polygon test."""
+    inside = False
+    j = len(points) - 1
+    for i in range(len(points)):
+        xi, yi = points[i]
+        xj, yj = points[j]
+        intersect = ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi + 1e-12) + xi)
+        if intersect:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _draw_tree_prop(painter: QPainter, x: float, y: float, size: float, rot: float) -> None:
+    """Draw a stylized tree prop."""
+    painter.setBrush(QBrush(QColor(0, 0, 0, 60)))
+    painter.setPen(Qt.PenStyle.NoPen)
+    sh_w = int(size * 0.9)
+    sh_h = int(size * 0.35)
+    painter.drawEllipse(int(x - sh_w/2), int(y + size*0.15), sh_w, sh_h)
+
+    trunk_w = max(1, int(size * 0.14))
+    trunk_h = max(2, int(size * 0.28))
+    painter.setBrush(QBrush(QColor(90, 55, 30)))
+    painter.drawRect(int(x - trunk_w/2), int(y - trunk_h/2), trunk_w, trunk_h)
+
+    painter.save()
+    painter.translate(x, y - trunk_h/2)
+    painter.rotate(rot)
+    canopy_colors = [QColor(30, 90, 30, 230), QColor(48, 110, 48, 210), QColor(20, 70, 20, 200)]
+    offsets = [(-0.25, 0.0), (0.2, -0.15), (0.4, 0.05)]
+    for i, (ox, oy) in enumerate(offsets):
+        col = canopy_colors[i % len(canopy_colors)]
+        painter.setBrush(QBrush(col))
+        rw = int(size * (0.9 - i * 0.15))
+        rh = int(size * (0.6 - i * 0.12))
+        painter.drawEllipse(int(ox * size - rw/2), int(oy * size - rh/2), rw, rh)
+    painter.restore()
+
+
+def _draw_bush_prop(painter: QPainter, x: float, y: float, size: float) -> None:
+    """Draw a stylized bush prop."""
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QBrush(QColor(40, 80, 40, 220)))
+    painter.drawEllipse(int(x - size/2), int(y - size/2), int(size), int(size*0.7))
+    painter.setBrush(QBrush(QColor(30, 70, 30, 200)))
+    painter.drawEllipse(int(x - size*0.35), int(y - size*0.6), int(size*0.5), int(size*0.45))
+    painter.drawEllipse(int(x + size*0.05), int(y - size*0.55), int(size*0.45), int(size*0.4))
 
 
 def draw_props(painter: QPainter, props: List[Dict], offset_x: float = 0.0, offset_y: float = 0.0):
@@ -131,44 +172,8 @@ def draw_props(painter: QPainter, props: List[Dict], offset_x: float = 0.0, offs
             continue
 
         if prop['type'] == 'tree':
-            # Draw soft shadow
-            painter.setBrush(QBrush(QColor(0, 0, 0, 60)))
-            painter.setPen(Qt.PenStyle.NoPen)
-            sh_w = int(size * 0.9)
-            sh_h = int(size * 0.35)
-            painter.drawEllipse(int(x - sh_w/2), int(y + size*0.15), sh_w, sh_h)
-
-            # Trunk (small rectangle)
-            trunk_w = max(1, int(size * 0.14))
-            trunk_h = max(2, int(size * 0.28))
-            painter.setBrush(QBrush(QColor(90, 55, 30)))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRect(int(x - trunk_w/2), int(y - trunk_h/2), trunk_w, trunk_h)
-
-            # Canopy: layered overlapping ellipses for organic shape
-            painter.save()
-            painter.translate(x, y - trunk_h/2)
-            painter.rotate(rot)
-            canopy_colors = [QColor(30, 90, 30, 230), QColor(48, 110, 48, 210), QColor(20, 70, 20, 200)]
-            offsets = [(-0.25, 0.0), (0.2, -0.15), (0.4, 0.05)]
-            for i, (ox, oy) in enumerate(offsets):
-                col = canopy_colors[i % len(canopy_colors)]
-                painter.setBrush(QBrush(col))
-                rw = int(size * (0.9 - i * 0.15))
-                rh = int(size * (0.6 - i * 0.12))
-                painter.drawEllipse(int(ox * size - rw/2), int(oy * size - rh/2), rw, rh)
-            painter.restore()
-
+            _draw_tree_prop(painter, x, y, size, rot)
         else:
-            # Bush: irregular blob using multiple small ellipses
-            painter.setPen(Qt.PenStyle.NoPen)
-            base_col = QColor(40, 80, 40, 220)
-            painter.setBrush(QBrush(base_col))
-            # main body
-            painter.drawEllipse(int(x - size/2), int(y - size/2), int(size), int(size*0.7))
-            # add a couple of overlapping darker lumps
-            painter.setBrush(QBrush(QColor(30, 70, 30, 200)))
-            painter.drawEllipse(int(x - size*0.35), int(y - size*0.6), int(size*0.5), int(size*0.45))
-            painter.drawEllipse(int(x + size*0.05), int(y - size*0.55), int(size*0.45), int(size*0.4))
+            _draw_bush_prop(painter, x, y, size)
 
     painter.restore()

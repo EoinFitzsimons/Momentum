@@ -24,7 +24,7 @@ import json
 import random
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -43,6 +43,8 @@ from tools.locale_mapping import get_all_country_codes, get_locale_for_country
 # CONFIGURATION
 # ============================================================================
 
+COMPANY_MOTORSPORT = "{company} Motorsport"
+
 # Team naming patterns by discipline
 TEAM_NAME_PATTERNS = {
     "SINGLE_SEATER": [
@@ -60,7 +62,7 @@ TEAM_NAME_PATTERNS = {
         "{company} Formula Team"
     ],
     "PRODUCTION_TOURING": [
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "{surname} Racing",
         "{company} GT Team",
         "{company} Touring",
@@ -100,7 +102,7 @@ TEAM_NAME_PATTERNS = {
         "{surname} RX Team",
         "{company} Sprint Racing",
         "RX Team {surname}",
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "{surname} Competition",
         "{place} Rallycross",
         "{adjective} RX",
@@ -110,7 +112,7 @@ TEAM_NAME_PATTERNS = {
     "ENDURANCE": [
         "{company} Endurance",
         "{surname} Racing Team",
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "Team {company} Endurance",
         "{surname} Le Mans Team",
         "{company} Prototype Racing",
@@ -143,6 +145,14 @@ COMMON_LOCALES = [
     'en_US', 'en_GB', 'de_DE', 'fr_FR', 'it_IT', 'es_ES', 
     'pt_BR', 'ja_JP', 'zh_CN', 'ru_RU', 'ko_KR', 'nl_NL'
 ]
+
+HONORIFIC_PREFIXES = {
+    'dr', 'mr', 'ms', 'mrs', 'miss', 'prof', 'sir', 'dame', 'lady'
+}
+
+HONORIFIC_SUFFIXES = {
+    'md', 'dds', 'phd', 'jr', 'sr', 'ii', 'iii', 'iv'
+}
 
 DRIVER_SLOTS_PER_DISCIPLINE = {
     "SINGLE_SEATER": 2,
@@ -181,19 +191,21 @@ def to_latin(s: str) -> str:
 
 def clean_name(name: str) -> str:
     """Remove honorifics and clean name"""
-    # Remove common honorifics
-    honorific_prefix = re.compile(r'^(Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Miss\.?|Prof\.?|Sir\.?|Dame\.?|Lady\.?)\s+', re.IGNORECASE)
-    honorific_suffix = re.compile(r'\b(MD|M\.D\.|DDS|D\.D\.S\.|PhD|Ph\.D\.|Jr\.|Sr\.|II|III|IV)\b', re.IGNORECASE)
-    
-    name = honorific_prefix.sub('', name)
-    name = honorific_suffix.sub('', name).strip()
-    name = to_latin(name)
-    
-    # Fallback if name is empty or only non-Latin characters
-    if not re.search(r'[A-Za-z]', name):
-        return None
-    
-    return name
+    if not name:
+        return ""
+    tokens = [t for t in name.strip().split() if t]
+    if not tokens:
+        return ""
+
+    while tokens and tokens[0].lower().rstrip('.') in HONORIFIC_PREFIXES:
+        tokens.pop(0)
+    while tokens and tokens[-1].lower().rstrip('.') in HONORIFIC_SUFFIXES:
+        tokens.pop()
+
+    cleaned = to_latin(" ".join(tokens)).strip()
+    if not re.search(r'[A-Za-z]', cleaned):
+        return ""
+    return cleaned
 
 
 def random_birth_date(min_age: int = 18, max_age: int = 45) -> str:
@@ -207,6 +219,38 @@ def random_birth_date(min_age: int = 18, max_age: int = 45) -> str:
 def get_locale_for_nationality(nationality: str) -> str:
     """Get appropriate Faker locale for nationality"""
     return get_locale_for_country(nationality)
+
+
+def _build_fake_for_nationality(nationality: str) -> Faker:
+    """Create Faker instance for nationality locale with safe fallback."""
+    locale = get_locale_for_nationality(nationality)
+    try:
+        return Faker(locale)
+    except Exception:
+        return Faker("en_US")
+
+
+def _pick_tier_from_distribution() -> str:
+    """Sample a team tier using configured distribution weights."""
+    rand = random.random()
+    if rand < TIER_DISTRIBUTION['tier1']:
+        return 'tier1'
+    if rand < TIER_DISTRIBUTION['tier1'] + TIER_DISTRIBUTION['tier2']:
+        return 'tier2'
+    return 'tier3'
+
+
+def _tier_age_skill_profile(tier: str) -> Tuple[int, float, float]:
+    """Return (age, skill_mean, skill_std) profile by normalized team tier."""
+    t = (tier or '').lower()
+    if t in ('tier1', 'tier_1', '1'):
+        age = random.randint(28, 45) if random.random() < 0.80 else random.randint(22, 27)
+        return age, 78.0, 10.0
+    if t in ('tier2', 'tier_2', '2'):
+        age = random.choice([random.randint(22, 30)] * 6 + [random.randint(30, 38)] * 4)
+        return age, 62.0, 12.0
+    age = random.randint(18, 32) if random.random() < 0.85 else random.randint(35, 45)
+    return age, 55.0, 13.0
 
 
 def skill_distribution(mean: float = 60.0, std: float = 15.0, min_val: float = 30.0, max_val: float = 95.0) -> float:
@@ -240,7 +284,7 @@ def generate_driver(fake: Faker, nationality: str, discipline: str, locale: str)
     else:
         skill_mean = 55.0  # Rookies
     
-    birth_date = (datetime.utcnow().date() - timedelta(days=365 * age)).strftime('%Y-%m-%d')
+    birth_date = (datetime.now(timezone.utc).date() - timedelta(days=365 * age)).strftime('%Y-%m-%d')
     
     # Generate all skill attributes
     driver_data = {
@@ -439,24 +483,12 @@ def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list
             print(f"\n  Creating teams for {discipline}...")
             discipline_teams = 0
             
-            for i in range(teams_per_discipline):
+            for _ in range(teams_per_discipline):
                 nationality = random.choice(country_codes)
-                locale = get_locale_for_nationality(nationality)
-                try:
-                    fake = Faker(locale)
-                except Exception:
-                    # Fall back to en_US if locale is invalid
-                    fake = Faker("en_US")
-                    locale = "en_US"
+                fake = _build_fake_for_nationality(nationality)
                 
                 # Determine tier based on distribution
-                rand = random.random()
-                if rand < TIER_DISTRIBUTION['tier1']:
-                    tier = 'tier1'
-                elif rand < TIER_DISTRIBUTION['tier1'] + TIER_DISTRIBUTION['tier2']:
-                    tier = 'tier2'
-                else:
-                    tier = 'tier3'
+                tier = _pick_tier_from_distribution()
                 
                 team_data = generate_team(fake, discipline, nationality, tier, existing_names)
                 
@@ -527,7 +559,7 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
     with db.get_connection() as conn:
         cursor = conn.cursor()
         
-        for i in range(count):
+        for _ in range(count):
             # Random locale for name
             locale = random.choice(COMMON_LOCALES)
             try:
@@ -668,54 +700,15 @@ def adjust_drivers_by_tier(db: DatabaseManager) -> int:
             if tier not in tier_adjustments:
                 tier_adjustments[tier] = 0
             
-            # Calculate current age
             try:
-                birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
-                current_age = (datetime.utcnow().date() - birth_date).days // 365
-            except:
-                current_age = 25
-            
-            # Determine new age and skill adjustments based on tier
-            if tier.lower() in ('tier1', 'tier_1', '1'):
-                # TIER 1: Experienced drivers, high skill
-                # 80% should be 28-45 years old (peak/veteran)
-                rand = random.random()
-                if rand < 0.80:
-                    new_age = random.randint(28, 45)
-                else:
-                    new_age = random.randint(22, 27)  # Occasional rising star
-                
-                # High skill distribution for tier 1
-                skill_mean = 78.0
-                skill_std = 10.0
-                
-            elif tier.lower() in ('tier2', 'tier_2', '2'):
-                # TIER 2: Mid-range drivers, balanced ages
-                # Mix of young drivers (22-30) and experienced (30-38)
-                new_age = random.choice(
-                    [random.randint(22, 30)] * 6 +  # 60% younger
-                    [random.randint(30, 38)] * 4     # 40% more experienced
-                )
-                
-                # Mid-range skill distribution for tier 2
-                skill_mean = 62.0
-                skill_std = 12.0
-                
-            else:  # TIER 3
-                # TIER 3: Young drivers mostly, lower skill
-                # 85% young (18-32), 15% veterans (35+)
-                rand = random.random()
-                if rand < 0.85:
-                    new_age = random.randint(18, 32)  # Young pool
-                else:
-                    new_age = random.randint(35, 45)  # Occasional veteran
-                
-                # Lower skill distribution for tier 3, but still varied
-                skill_mean = 55.0
-                skill_std = 13.0
+                datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+            except Exception:
+                pass
+
+            new_age, skill_mean, skill_std = _tier_age_skill_profile(tier)
             
             # Calculate new birth date from age
-            new_birth_date = (datetime.utcnow().date() - timedelta(days=365 * new_age)).strftime('%Y-%m-%d')
+            new_birth_date = (datetime.now(timezone.utc).date() - timedelta(days=365 * new_age)).strftime('%Y-%m-%d')
             
             # Generate tier-appropriate skill attributes
             speed = skill_distribution(skill_mean, skill_std)
@@ -896,7 +889,7 @@ def main():
     print("=" * 70)
     print("MOMENTUM CAREER MODE DATABASE GENERATOR")
     print("=" * 70)
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  Database: {DATABASE_PATH}")
     print(f"  Drivers: {args.drivers}")
     print(f"  Teams per discipline: {args.teams_per_discipline}")
@@ -948,7 +941,7 @@ def main():
         for k, v in final_stats.items():
             print(f"  {k}: {v}")
         
-        print(f"\nNew entries created:")
+        print("\nNew entries created:")
         print(f"  Drivers: {drivers_created}")
         print(f"  Teams: {teams_created}")
         print(f"  Staff: {staff_created}")

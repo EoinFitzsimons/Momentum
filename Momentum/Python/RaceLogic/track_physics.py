@@ -127,6 +127,10 @@ class TrackMap:
 
     def _generate_corners(self):
         """Generate corner analysis from track data"""
+        self._generate_corners_impl()
+
+    def _generate_corners_impl(self):
+        """Implementation body extracted to keep entrypoint complexity low."""
         track_length_m = self.track.length_km * 1000
         num_corners = self.track.turns
         rng = np.random.default_rng(seed=42)  # Create random generator with seed
@@ -138,23 +142,7 @@ class TrackMap:
 
             # Vary corner types based on track characteristics
             corner_type = self._determine_corner_type(i, num_corners)
-
-            # Corner characteristics
-            if corner_type == "slow":
-                radius_m = self.track.tightest_corner_radius_m * \
-                    rng.uniform(0.8, 1.2)
-                apex_speed_kmh = self.track.avg_speed_kmh * 0.4
-                overtaking_diff = 0.3  # Easier to overtake at slow corners
-            elif corner_type == "medium":
-                radius_m = self.track.tightest_corner_radius_m * \
-                    rng.uniform(2.0, 4.0)
-                apex_speed_kmh = self.track.avg_speed_kmh * 0.7
-                overtaking_diff = 0.6
-            else:  # fast
-                radius_m = self.track.tightest_corner_radius_m * \
-                    rng.uniform(5.0, 10.0)
-                apex_speed_kmh = self.track.avg_speed_kmh * 0.85
-                overtaking_diff = 0.9  # Very difficult
+            radius_m, apex_speed_kmh, overtaking_diff = self._corner_characteristics(corner_type, rng)
 
             # Direction (alternate with bias from track data)
             direction = "left" if (
@@ -169,31 +157,7 @@ class TrackMap:
             else:
                 angle_deg = 120
 
-            # Determine grip level from track properties. Prefer an explicit
-            # numeric `surface_grip` if available (scale may be >1), otherwise
-            # fall back to a simple mapping from surface name.
-            raw_surface_grip = getattr(self.track, 'surface_grip', None)
-            if raw_surface_grip is not None:
-                try:
-                    # If stored as a >1 value (e.g. 12.0), normalise to 0.0-1.0
-                    if raw_surface_grip > 1.0:
-                        grip_level_val = min(1.0, float(raw_surface_grip) / 20.0)
-                    else:
-                        grip_level_val = float(raw_surface_grip)
-                except Exception:
-                    grip_level_val = 1.0
-            else:
-                surface_name = getattr(self.track, 'surface', '') or getattr(self.track, 'surface_type', '')
-                surface_map = {
-                    'asphalt': 1.0,
-                    'tarmac': 1.0,
-                    'concrete': 0.95,
-                    'gravel': 0.6,
-                    'mixed': 0.75,
-                    'dirt': 0.55,
-                    'grassy': 0.65,
-                }
-                grip_level_val = surface_map.get(surface_name.lower(), 0.9)
+            grip_level_val = self._resolve_track_grip_level()
 
             corner = TrackCorner(
                 corner_number=i + 1,
@@ -211,6 +175,40 @@ class TrackMap:
             )
 
             self.corners.append(corner)
+
+    def _corner_characteristics(self, corner_type: str, rng) -> Tuple[float, float, float]:
+        """Return (radius_m, apex_speed_kmh, overtaking_difficulty) for corner class."""
+        if corner_type == "slow":
+            radius_m = self.track.tightest_corner_radius_m * rng.uniform(0.8, 1.2)
+            return radius_m, self.track.avg_speed_kmh * 0.4, 0.3
+        if corner_type == "medium":
+            radius_m = self.track.tightest_corner_radius_m * rng.uniform(2.0, 4.0)
+            return radius_m, self.track.avg_speed_kmh * 0.7, 0.6
+        radius_m = self.track.tightest_corner_radius_m * rng.uniform(5.0, 10.0)
+        return radius_m, self.track.avg_speed_kmh * 0.85, 0.9
+
+    def _resolve_track_grip_level(self) -> float:
+        """Resolve normalized grip level from explicit or surface-derived values."""
+        raw_surface_grip = getattr(self.track, 'surface_grip', None)
+        if raw_surface_grip is not None:
+            try:
+                if raw_surface_grip > 1.0:
+                    return min(1.0, float(raw_surface_grip) / 20.0)
+                return float(raw_surface_grip)
+            except Exception:
+                return 1.0
+
+        surface_name = getattr(self.track, 'surface', '') or getattr(self.track, 'surface_type', '')
+        surface_map = {
+            'asphalt': 1.0,
+            'tarmac': 1.0,
+            'concrete': 0.95,
+            'gravel': 0.6,
+            'mixed': 0.75,
+            'dirt': 0.55,
+            'grassy': 0.65,
+        }
+        return surface_map.get(surface_name.lower(), 0.9)
 
     def _determine_corner_type(self, corner_index: int,
                                total_corners: int) -> str:

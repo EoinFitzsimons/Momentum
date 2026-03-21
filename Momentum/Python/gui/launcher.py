@@ -135,75 +135,115 @@ class MomentumLauncher:
     def next_race(self, config: dict):
         """Proceed to next race in championship."""
         print(f"[LAUNCHER] Proceeding to next race in championship: {config}")
-        
+
         championship_id = config.get('championship_id')
         race_id = config.get('race_id')
-        
+
         if not championship_id:
             print("[LAUNCHER] ERROR: No championship_id in next_race config")
             self.return_to_menu()
             return
-        
-        # Close current race window
-        if self.race_window:
-            self.race_window.close()
-            self.race_window = None
-        
+
+        self._close_active_race_window()
+
         try:
-            from database.database_manager import DatabaseManager
-            from services.championship_service import ChampionshipService
-            
-            db = DatabaseManager()
-            championship = db.get_championship(championship_id)
-            if not championship:
-                print(f"[LAUNCHER] ERROR: Could not find championship with id {championship_id}")
-                self.return_to_menu()
+            ctx = self._load_championship_context(championship_id)
+            if ctx is None:
                 return
-            
-            championship_service = ChampionshipService(db)
-            
-            # Mark current race as completed
-            if race_id:
-                try:
-                    success, error_msg = championship_service.update_race_lifecycle_status(
-                        race_id,
-                        "completed"
-                    )
-                    if success:
-                        print(f"[LAUNCHER] Race {race_id} marked as completed")
-                    else:
-                        print(f"[LAUNCHER] WARNING: Could not mark race as completed: {error_msg}")
-                except Exception as e:
-                    print(f"[LAUNCHER] ERROR marking race as completed: {e}")
-            
-            # Get next scheduled race
-            calendar = championship_service.get_championship_calendar(
+            db, championship, championship_service = ctx
+
+            self._mark_race_completed_safe(championship_service, race_id)
+            next_race = self._get_next_scheduled_race(
+                championship_service,
                 championship_id,
-                championship.current_season
+                championship.current_season,
             )
-            
-            next_race = None
-            for race in calendar:
-                if race['status'] == 'scheduled':
-                    next_race = race
-                    break
-            
             if not next_race:
                 print("[LAUNCHER] No more scheduled races in championship")
                 self.return_to_menu()
                 return
-            
-            # Get race and track details
+
             race_obj = db.get_race(next_race['race_id'])
             track_obj = db.get_track(race_obj.track_id) if race_obj else None
-            
-            # Show pre-race setup dialog for the active mode.
+            setup_config = self._show_next_race_setup_dialog(
+                config,
+                db,
+                championship,
+                race_obj,
+                track_obj,
+            )
+            if setup_config is None:
+                return
+
+            success, error_msg = championship_service.update_race_lifecycle_status(
+                next_race['race_id'],
+                "in-progress",
+            )
+            if not success:
+                print(f"[LAUNCHER] ERROR updating race status: {error_msg}")
+                return
+
+            print(f"[LAUNCHER] Starting next race {next_race['race_id']}")
+            self.start_race(setup_config)
+
+        except Exception as e:
+            print(f"[LAUNCHER] ERROR proceeding to next race: {e}")
+            import traceback
+            traceback.print_exc()
+            self.return_to_menu()
+
+    def _close_active_race_window(self) -> None:
+        """Close current race window before routing to next flow."""
+        if self.race_window:
+            self.race_window.close()
+            self.race_window = None
+
+    def _load_championship_context(self, championship_id):
+        """Load database + championship service context for race progression."""
+        from database.database_manager import DatabaseManager
+        from services.championship_service import ChampionshipService
+
+        db = DatabaseManager()
+        championship = db.get_championship(championship_id)
+        if not championship:
+            print(f"[LAUNCHER] ERROR: Could not find championship with id {championship_id}")
+            self.return_to_menu()
+            return None
+        championship_service = ChampionshipService(db)
+        return db, championship, championship_service
+
+    def _mark_race_completed_safe(self, championship_service, race_id) -> None:
+        """Best-effort update for completed race lifecycle state."""
+        if not race_id:
+            return
+        try:
+            success, error_msg = championship_service.update_race_lifecycle_status(
+                race_id,
+                "completed",
+            )
+            if success:
+                print(f"[LAUNCHER] Race {race_id} marked as completed")
+            else:
+                print(f"[LAUNCHER] WARNING: Could not mark race as completed: {error_msg}")
+        except Exception as e:
+            print(f"[LAUNCHER] ERROR marking race as completed: {e}")
+
+    def _get_next_scheduled_race(self, championship_service, championship_id, season):
+        """Return next scheduled race dict from championship calendar."""
+        calendar = championship_service.get_championship_calendar(championship_id, season)
+        for race in calendar:
+            if race['status'] == 'scheduled':
+                return race
+        return None
+
+    def _show_next_race_setup_dialog(self, config: dict, db, championship, race_obj, track_obj):
+        """Open mode-aware setup dialog and return race config when accepted."""
             mode = (config.get('mode') or 'championship').lower()
             if mode == 'career':
                 from GUI.gui_career import CareerPreRaceSetupDialog as SetupDialog
             else:
                 from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
-            
+
             setup_dialog = SetupDialog(
                 db,
                 championship,
@@ -211,28 +251,9 @@ class MomentumLauncher:
                 track_obj,
                 parent=None
             )
-            
-            if setup_dialog.exec() == 1:  # QDialog.DialogCode.Accepted = 1
-                config = setup_dialog.get_race_config()
-                
-                # Update race status to in-progress
-                success, error_msg = championship_service.update_race_lifecycle_status(
-                    next_race['race_id'],
-                    "in-progress"
-                )
-                
-                if not success:
-                    print(f"[LAUNCHER] ERROR updating race status: {error_msg}")
-                    return
-                
-                print(f"[LAUNCHER] Starting next race {next_race['race_id']}")
-                self.start_race(config)
-            
-        except Exception as e:
-            print(f"[LAUNCHER] ERROR proceeding to next race: {e}")
-            import traceback
-            traceback.print_exc()
-            self.return_to_menu()
+            if setup_dialog.exec() == 1:
+                return setup_dialog.get_race_config()
+            return None
 
     def return_to_menu(self):
         """Return from race to main menu."""

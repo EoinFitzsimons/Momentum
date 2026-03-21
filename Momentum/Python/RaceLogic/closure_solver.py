@@ -38,92 +38,157 @@ def _simulate_primitives(instructions: List[Any], multipliers: List[float]) -> T
 
     Multipliers are applied to straight lengths and corner angles.
     """
+    return _simulate_primitives_impl(instructions, multipliers)
+
+
+def _integrate_clothoid_discrete(length: int, k_clothoid: float, sign: int, theta0: float, reverse: bool = False) -> Tuple[float, float, float]:
+    """Discrete-step clothoid integration matching generator semantics."""
+    x_loc = 0.0
+    y_loc = 0.0
+    theta_loc = theta0
+    for i in range(int(length)):
+        curvature = k_clothoid * ((int(length) - i) if reverse else i) * sign
+        theta_loc += curvature
+        x_loc += math.cos(theta_loc)
+        y_loc += math.sin(theta_loc)
+    dtheta = theta_loc - theta0
+    return x_loc, y_loc, dtheta
+
+
+def _integrate_clothoid_continuous(length: float, k_clothoid: float, sign: int, theta0: float) -> Tuple[float, float, float]:
+    """Continuous clothoid integration using quadrature."""
+    a = k_clothoid * sign
+    fx = lambda t: math.cos(theta0 + 0.5 * a * t * t)
+    fy = lambda t: math.sin(theta0 + 0.5 * a * t * t)
+    ix = integrate.quad(fx, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
+    iy = integrate.quad(fy, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
+    dtheta = 0.5 * a * length * length
+    return ix, iy, dtheta
+
+
+def _apply_tuple_instruction_discrete(instr: Any, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+    typ = instr[0]
+    if typ == 'S':
+        L = float(instr[1]) * multipliers[param_idx]
+        return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
+    if typ != 'C':
+        return x, y, theta, param_idx
+
+    angle_deg, radius, clothoid_len, k = instr[1:5]
+    angle = math.radians(float(angle_deg)) * multipliers[param_idx]
+    sign = 1 if angle > 0 else -1
+    entry_start = theta
+    ix, iy, dtheta1 = _integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=False)
+    x += ix
+    y += iy
+    theta += dtheta1
+
+    arc_angle = angle - 2 * (theta - entry_start)
+    arc_curvature = sign / float(radius)
+    arc_length = int(abs(float(radius) * arc_angle))
+    for _ in range(arc_length):
+        theta += arc_curvature
+        x += math.cos(theta)
+        y += math.sin(theta)
+
+    ix2, iy2, dtheta2 = _integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=True)
+    x += ix2
+    y += iy2
+    theta += dtheta2
+    return x, y, theta, param_idx + 1
+
+
+def _apply_dict_instruction_discrete(instr: dict, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+    typ = instr.get('type', '').upper()
+    if typ == 'S':
+        L = float(instr.get('length_m', 50)) * multipliers[param_idx]
+        return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
+    if typ != 'C':
+        return x, y, theta, param_idx
+
+    angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
+    radius = float(instr.get('radius_m', 80))
+    clothoid = float(instr.get('clothoid_len', 50))
+    k = float(instr.get('k', 0.00009))
+    sign = 1 if angle > 0 else -1
+    ix, iy, dtheta1 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
+    x += ix
+    y += iy
+    theta += dtheta1
+    x += radius * (math.sin(theta + angle) - math.sin(theta))
+    y += -radius * (math.cos(theta + angle) - math.cos(theta))
+    theta += angle
+    ix2, iy2, dtheta2 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
+    x += ix2
+    y += iy2
+    theta += dtheta2
+    return x, y, theta, param_idx + 1
+
+
+def _apply_tuple_instruction_continuous(instr: Any, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+    typ = instr[0]
+    if typ == 'S':
+        L = float(instr[1]) * multipliers[param_idx]
+        return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
+    if typ != 'C':
+        return x, y, theta, param_idx
+
+    angle_deg, radius, clothoid_len, k = instr[1:5]
+    angle = math.radians(float(angle_deg)) * multipliers[param_idx]
+    sign = 1 if angle > 0 else -1
+    ix, iy, dtheta1 = _integrate_clothoid_continuous(float(clothoid_len), float(k), sign, theta)
+    x += ix
+    y += iy
+    theta += dtheta1
+    x += float(radius) * (math.sin(theta + angle) - math.sin(theta))
+    y += -float(radius) * (math.cos(theta + angle) - math.cos(theta))
+    theta += angle
+    ix2, iy2, dtheta2 = _integrate_clothoid_continuous(float(clothoid_len), float(k), sign, theta)
+    x += ix2
+    y += iy2
+    theta += dtheta2
+    return x, y, theta, param_idx + 1
+
+
+def _apply_dict_instruction_continuous(instr: dict, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+    typ = instr.get('type', '').upper()
+    if typ == 'S':
+        L = float(instr.get('length_m', 50)) * multipliers[param_idx]
+        return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
+    if typ != 'C':
+        return x, y, theta, param_idx
+
+    angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
+    radius = float(instr.get('radius_m', 80))
+    clothoid = float(instr.get('clothoid_len', 50))
+    k = float(instr.get('k', 0.00009))
+    sign = 1 if angle > 0 else -1
+    ix, iy, dtheta1 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
+    x += ix
+    y += iy
+    theta += dtheta1
+    x += radius * (math.sin(theta + angle) - math.sin(theta))
+    y += -radius * (math.cos(theta + angle) - math.cos(theta))
+    theta += angle
+    ix2, iy2, dtheta2 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
+    x += ix2
+    y += iy2
+    theta += dtheta2
+    return x, y, theta, param_idx + 1
+
+
+def _simulate_primitives_impl(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+    """Implementation body extracted for lower cognitive complexity at entrypoint."""
     x = 0.0
     y = 0.0
     theta = 0.0
     param_idx = 0
 
-    def integrate_clothoid_discrete(length, k_clothoid, sign, theta0, reverse=False):
-        # Discrete-step simulation matching CircuitGenerator._add_clothoid
-        x_loc = 0.0
-        y_loc = 0.0
-        theta_loc = theta0
-        for i in range(int(length)):
-            curvature = k_clothoid * ((int(length) - i) if reverse else i) * sign
-            theta_loc += curvature
-            x_loc += math.cos(theta_loc)
-            y_loc += math.sin(theta_loc)
-        dtheta = theta_loc - theta0
-        return x_loc, y_loc, dtheta
-
     for instr in instructions:
         if isinstance(instr, (list, tuple)):
-            typ = instr[0]
-            if typ == 'S':
-                L = float(instr[1]) * multipliers[param_idx]
-                x += L * math.cos(theta)
-                y += L * math.sin(theta)
-                # theta unchanged
-                param_idx += 1
-            elif typ == 'C':
-                angle_deg, radius, clothoid_len, k = instr[1:5]
-                angle = math.radians(float(angle_deg)) * multipliers[param_idx]
-                sign = 1 if angle > 0 else -1
-                # entry clothoid (discrete)
-                entry_start = theta
-                ix, iy, dtheta1 = integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=False)
-                x += ix
-                y += iy
-                theta += dtheta1
-
-                # arc: follow CircuitGenerator._add_arc semantics
-                arc_angle = angle - 2 * (theta - entry_start)
-                arc_curvature = sign / float(radius)
-                arc_length = int(abs(float(radius) * arc_angle))
-                for _ in range(arc_length):
-                    theta += arc_curvature
-                    x += math.cos(theta)
-                    y += math.sin(theta)
-
-                # exit clothoid (discrete, reverse)
-                ix2, iy2, dtheta2 = integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=True)
-                x += ix2
-                y += iy2
-                theta += dtheta2
-                param_idx += 1
-            else:
-                continue
+            x, y, theta, param_idx = _apply_tuple_instruction_discrete(instr, multipliers, param_idx, x, y, theta)
         elif isinstance(instr, dict):
-            typ = instr.get('type', '').upper()
-            if typ == 'S':
-                L = float(instr.get('length_m', 50)) * multipliers[param_idx]
-                x += L * math.cos(theta)
-                y += L * math.sin(theta)
-                param_idx += 1
-            elif typ == 'C':
-                angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
-                radius = float(instr.get('radius_m', 80))
-                clothoid = float(instr.get('clothoid_len', 50))
-                k = float(instr.get('k', 0.00009))
-                sign = 1 if angle > 0 else -1
-                ix, iy, dtheta1 = integrate_clothoid(clothoid, k, sign, theta)
-                x += ix
-                y += iy
-                theta += dtheta1
-                arc_dx = radius * (math.sin(theta + angle) - math.sin(theta))
-                arc_dy = -radius * (math.cos(theta + angle) - math.cos(theta))
-                x += arc_dx
-                y += arc_dy
-                theta += angle
-                ix2, iy2, dtheta2 = integrate_clothoid(clothoid, k, sign, theta)
-                x += ix2
-                y += iy2
-                theta += dtheta2
-                param_idx += 1
-            elif typ in ('PIT', 'JOKER'):
-                continue
-            else:
-                continue
+            x, y, theta, param_idx = _apply_dict_instruction_discrete(instr, multipliers, param_idx, x, y, theta)
         else:
             continue
 
@@ -133,79 +198,21 @@ def _simulate_primitives(instructions: List[Any], multipliers: List[float]) -> T
 
 def _simulate_primitives_continuous(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
     """Continuous integral simulation for initial solve (uses quad)."""
+    return _simulate_primitives_continuous_impl(instructions, multipliers)
+
+
+def _simulate_primitives_continuous_impl(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+    """Implementation body extracted for lower cognitive complexity at entrypoint."""
     x = 0.0
     y = 0.0
     theta = 0.0
     param_idx = 0
 
-    def integrate_clothoid(length, k_clothoid, sign, theta0):
-        a = k_clothoid * sign
-        fx = lambda t: math.cos(theta0 + 0.5 * a * t * t)
-        fy = lambda t: math.sin(theta0 + 0.5 * a * t * t)
-        ix = integrate.quad(fx, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
-        iy = integrate.quad(fy, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
-        dtheta = 0.5 * a * length * length
-        return ix, iy, dtheta
-
     for instr in instructions:
         if isinstance(instr, (list, tuple)):
-            typ = instr[0]
-            if typ == 'S':
-                L = float(instr[1]) * multipliers[param_idx]
-                x += L * math.cos(theta)
-                y += L * math.sin(theta)
-                param_idx += 1
-            elif typ == 'C':
-                angle_deg, radius, clothoid_len, k = instr[1:5]
-                angle = math.radians(float(angle_deg)) * multipliers[param_idx]
-                sign = 1 if angle > 0 else -1
-                ix, iy, dtheta1 = integrate_clothoid(float(clothoid_len), float(k), sign, theta)
-                x += ix
-                y += iy
-                theta += dtheta1
-                arc_dx = float(radius) * (math.sin(theta + angle) - math.sin(theta))
-                arc_dy = -float(radius) * (math.cos(theta + angle) - math.cos(theta))
-                x += arc_dx
-                y += arc_dy
-                theta += angle
-                ix2, iy2, dtheta2 = integrate_clothoid(float(clothoid_len), float(k), sign, theta)
-                x += ix2
-                y += iy2
-                theta += dtheta2
-                param_idx += 1
-            else:
-                continue
+            x, y, theta, param_idx = _apply_tuple_instruction_continuous(instr, multipliers, param_idx, x, y, theta)
         elif isinstance(instr, dict):
-            typ = instr.get('type', '').upper()
-            if typ == 'S':
-                L = float(instr.get('length_m', 50)) * multipliers[param_idx]
-                x += L * math.cos(theta)
-                y += L * math.sin(theta)
-                param_idx += 1
-            elif typ == 'C':
-                angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
-                radius = float(instr.get('radius_m', 80))
-                clothoid = float(instr.get('clothoid_len', 50))
-                k = float(instr.get('k', 0.00009))
-                sign = 1 if angle > 0 else -1
-                ix, iy, dtheta1 = integrate_clothoid(clothoid, k, sign, theta)
-                x += ix
-                y += iy
-                theta += dtheta1
-                arc_dx = radius * (math.sin(theta + angle) - math.sin(theta))
-                arc_dy = -radius * (math.cos(theta + angle) - math.cos(theta))
-                x += arc_dx
-                y += arc_dy
-                theta += angle
-                ix2, iy2, dtheta2 = integrate_clothoid(clothoid, k, sign, theta)
-                x += ix2
-                y += iy2
-                theta += dtheta2
-                param_idx += 1
-            elif typ in ('PIT', 'JOKER'):
-                continue
-            else:
-                continue
+            x, y, theta, param_idx = _apply_dict_instruction_continuous(instr, multipliers, param_idx, x, y, theta)
         else:
             continue
 

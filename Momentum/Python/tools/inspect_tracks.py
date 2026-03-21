@@ -42,38 +42,19 @@ def analyze():
 
     print(f"Found {len(rows)} tracks in DB: \n")
     for row in rows:
-        tid = row[0]
-        name = row[1]
-        # optional fields
-        geom_raw = None
-        surface = None
-        surface_grip = None
-        surface_type = None
-        # map values by index based on select_fields
-        for idx, field in enumerate(select_fields):
-            if field == 'geometry_json':
-                geom_raw = row[idx]
-            if field == 'surface':
-                surface = row[idx]
-            if field == 'surface_grip':
-                surface_grip = row[idx]
-            if field == 'surface_type':
-                surface_type = row[idx]
-
-        has_geom = bool(geom_raw)
+        tid, name, info = _extract_track_row_info(row, select_fields)
+        has_geom = bool(info.get('geometry_json'))
         print(f"Track {tid}: {name}")
         print(f"  has_geometry_json: {has_geom}")
-        print(f"  surface: {surface}  surface_type: {surface_type}  surface_grip: {surface_grip}")
+        print(
+            f"  surface: {info.get('surface')}  "
+            f"surface_type: {info.get('surface_type')}  "
+            f"surface_grip: {info.get('surface_grip')}"
+        )
 
         # Build TrackMap if possible
         try:
-            if has_geom:
-                # attempt to parse geometry_json into Track object
-                # We'll use DatabaseManager.get_track to get a Track dataclass
-                t = db.get_track(tid)
-            else:
-                # fallback to get_simple_track but pass track_id to retrieve row
-                t = db.get_track(tid)
+            t = db.get_track(tid)
 
             if t:
                 tm = TrackMap(t)
@@ -86,6 +67,17 @@ def analyze():
             print("  ERROR building TrackMap:", e)
 
         print("")
+
+
+def _extract_track_row_info(row, select_fields):
+    """Return (track_id, name, optional_fields_map) for a DB row."""
+    tid = row[0]
+    name = row[1]
+    info = {'geometry_json': None, 'surface': None, 'surface_grip': None, 'surface_type': None}
+    for idx, field in enumerate(select_fields):
+        if field in info:
+            info[field] = row[idx]
+    return tid, name, info
 
 
 if __name__ == '__main__':
