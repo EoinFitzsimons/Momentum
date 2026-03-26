@@ -26,6 +26,7 @@ pydantic
 Faker
 python-dotenv
 requests
+unidecode
 
 # Geometry and track generation
 shapely

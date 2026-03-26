@@ -621,7 +621,8 @@ def recalculate_championship_standings(
 @app.post(
     "/championships/{championship_id}/events",
     response_model=RaceEventResponse,
-    status_code=201
+    status_code=201,
+    responses={404: {"description": "Championship not found"}, 400: {"description": "Invalid race request"}, 500: {"description": "Database error"}}
 )
 def create_race_event(championship_id: int, request: RaceEventCreate):
     """
@@ -759,7 +760,7 @@ def get_championship_schedule(
 # UC-9: UPDATE RACE STATUS
 # ============================================================================
 
-@app.patch("/races/{race_id}/status")
+@app.patch("/races/{race_id}/status", responses={400: {"description": "Invalid status transition"}, 500: {"description": "Database error"}})
 def update_race_status(race_id: int, request: RaceStatusUpdate):
     """
     Update Race Status (UC-9)
@@ -879,7 +880,7 @@ def get_race_results(race_id: int):
 # RACE COMPLETION & STANDINGS UPDATE
 # ============================================================================
 
-@app.post("/races/{race_id}/complete")
+@app.post("/races/{race_id}/complete", responses={404: {"description": "Race not found"}, 400: {"description": "Invalid race state"}, 500: {"description": "Database error"}})
 def complete_race_and_update_standings(race_id: int):
     """
     Complete a race and automatically update championship standings.
@@ -940,7 +941,7 @@ def complete_race_and_update_standings(race_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to complete race: {str(e)}")
 
 
-@app.get("/championships/{championship_id}/next-race")
+@app.get("/championships/{championship_id}/next-race", responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}})
 def get_next_race(championship_id: int):
     """
     Get the next scheduled race in a championship.
@@ -1130,7 +1131,7 @@ def get_available_staff(
         raise HTTPException(status_code=500, detail=f"Error fetching available staff: {str(e)}")
 
 
-@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"])
+@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"], responses={400: {"description": "Invalid contract request"}, 500: {"description": "Database error"}})
 def sign_driver_contract(request: DriverContractRequest):
     """
     UC-16: Sign Driver Contract
@@ -1186,7 +1187,7 @@ def sign_driver_contract(request: DriverContractRequest):
         raise HTTPException(status_code=500, detail=f"Error signing driver contract: {str(e)}")
 
 
-@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"])
+@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"], responses={400: {"description": "Invalid contract request"}, 500: {"description": "Database error"}})
 def sign_staff_contract(request: StaffContractRequest):
     """
     UC-18: Sign Staff Contract
@@ -1283,7 +1284,7 @@ def release_contract(request: ContractReleaseRequest):
 # PROGRESSION ENDPOINTS (UC-19)
 # ============================================================================
 
-@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"])
+@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"], responses={500: {"description": "Database error"}})
 def process_season_progression(request: SeasonProgressionRequest):
     """
     UC-19: Process Season-End Driver Progression
@@ -1312,8 +1313,7 @@ def process_season_progression(request: SeasonProgressionRequest):
     """
     try:
         results = progression_service.process_season_end_progression(
-            season=request.season,
-            championship_id=request.championship_id
+            season=request.season
         )
         
         # Convert results to response format
