@@ -3594,6 +3594,7 @@ class RaceWindow(QMainWindow):
     def _save_single_race_result(self, result: dict) -> bool:
         """Save one race result record; return True on success."""
         from database.models import RaceResult
+        from services.championship_service import ChampionshipService
 
         driver_id = result.get('driver_id')
         driver = next((d for d in self.drivers if d.id == driver_id), None)
@@ -3602,15 +3603,28 @@ class RaceWindow(QMainWindow):
             print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
             return False
 
+        discipline = str(getattr(self, '_initial_discipline', 'SINGLE_SEATER') or 'SINGLE_SEATER')
+        position = int(result.get('position', 0) or 0)
+        fastest_lap = bool(result.get('fastest_lap', False))
+        dnf_reason = result.get('dnf_reason')
+
+        points = 0
+        if dnf_reason is None and position > 0:
+            points = ChampionshipService(self.db).calculate_points(
+                position=position,
+                discipline=discipline,
+                fastest_lap=fastest_lap,
+            )
+
         race_result = RaceResult(
             id=None,
             race_id=self._race_id,
             driver_id=driver_id,
             team_id=team_id,
-            position=result.get('position'),
-            points=result.get('points', 0),
-            fastest_lap=result.get('fastest_lap', False),
-            dnf_reason=result.get('dnf_reason'),
+            position=position,
+            points=points,
+            fastest_lap=fastest_lap,
+            dnf_reason=dnf_reason,
             grid_position=result.get('grid_position', result.get('position')),
         )
         try:

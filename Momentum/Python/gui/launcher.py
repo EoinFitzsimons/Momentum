@@ -138,6 +138,7 @@ class MomentumLauncher:
 
         championship_id = config.get('championship_id')
         race_id = config.get('race_id')
+        mode = (config.get('mode') or 'championship').lower()
 
         if not championship_id:
             print("[LAUNCHER] ERROR: No championship_id in next_race config")
@@ -152,12 +153,24 @@ class MomentumLauncher:
                 return
             db, championship, championship_service = ctx
 
-            self._mark_race_completed_safe(championship_service, race_id)
+            self._mark_race_completed_safe(
+                championship_service,
+                race_id,
+                db=db,
+                discipline=championship.discipline,
+            )
             next_race = self._get_next_scheduled_race(
                 championship_service,
                 championship_id,
                 championship.current_season,
             )
+
+            if mode == 'career':
+                # Career mode returns to HQ between races instead of showing
+                # an in-race setup dialog.
+                self._show_or_create_career_hq(championship)
+                return
+
             if not next_race:
                 print("[LAUNCHER] No more scheduled races in championship")
                 self.return_to_menu()
@@ -212,11 +225,17 @@ class MomentumLauncher:
         championship_service = ChampionshipService(db)
         return db, championship, championship_service
 
-    def _mark_race_completed_safe(self, championship_service, race_id) -> None:
+    def _mark_race_completed_safe(self, championship_service, race_id, db=None, discipline: str = "SINGLE_SEATER") -> None:
         """Best-effort update for completed race lifecycle state."""
         if not race_id:
             return
         try:
+            self._backfill_race_points_if_needed(
+                championship_service,
+                race_id,
+                db=db,
+                discipline=discipline,
+            )
             success, error_msg = championship_service.update_race_lifecycle_status(
                 race_id,
                 "completed",
@@ -228,6 +247,45 @@ class MomentumLauncher:
         except Exception as e:
             print(f"[LAUNCHER] ERROR marking race as completed: {e}")
 
+    def _backfill_race_points_if_needed(self, championship_service, race_id: int, db=None, discipline: str = "SINGLE_SEATER") -> None:
+        """Repair missing points for saved race results from older zero-point payloads."""
+        if db is None:
+            return
+
+        try:
+            results = db.get_race_results(race_id)
+        except Exception as e:
+            print(f"[LAUNCHER] WARNING: Could not load race results for points backfill: {e}")
+            return
+
+        if not results:
+            return
+
+        updated = 0
+        for result in results:
+            if getattr(result, 'dnf_reason', None):
+                expected_points = 0
+            else:
+                expected_points = championship_service.calculate_points(
+                    position=int(getattr(result, 'position', 0) or 0),
+                    discipline=discipline,
+                    fastest_lap=bool(getattr(result, 'fastest_lap', False)),
+                )
+
+            current_points = int(getattr(result, 'points', 0) or 0)
+            if current_points == expected_points:
+                continue
+
+            result.points = expected_points
+            try:
+                db.save_race_result(result)
+                updated += 1
+            except Exception as e:
+                print(f"[LAUNCHER] WARNING: Could not update points for driver {getattr(result, 'driver_id', '?')}: {e}")
+
+        if updated:
+            print(f"[LAUNCHER] Backfilled points for {updated} race result rows in race {race_id}")
+
     def _get_next_scheduled_race(self, championship_service, championship_id, season):
         """Return next scheduled race dict from championship calendar."""
         calendar = championship_service.get_championship_calendar(championship_id, season)
@@ -238,22 +296,51 @@ class MomentumLauncher:
 
     def _show_next_race_setup_dialog(self, config: dict, db, championship, race_obj, track_obj):
         """Open mode-aware setup dialog and return race config when accepted."""
-        mode = (config.get('mode') or 'championship').lower()
-        if mode == 'career':
-            from GUI.gui_career import CareerPreRaceSetupDialog as SetupDialog
-        else:
-            from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
+        from GUI.gui_championship import PreRaceSetupDialog as SetupDialog
+
+        locked_team_id = None
+        team_obj = config.get('team') or self.race_config.get('team')
+        if team_obj is not None:
+            locked_team_id = getattr(team_obj, 'id', None)
 
         setup_dialog = SetupDialog(
             db,
             championship,
             race_obj,
             track_obj,
+            locked_team_id=locked_team_id,
             parent=None
         )
         if setup_dialog.exec() == 1:
             return setup_dialog.get_race_config()
         return None
+
+    def _show_or_create_career_hq(self, championship):
+        """Show existing career HQ window if present, otherwise create one."""
+        existing = None
+        if self.main_menu and hasattr(self.main_menu, 'career_window'):
+            existing = getattr(self.main_menu, 'career_window')
+
+        if existing is not None:
+            if hasattr(existing, 'load_data'):
+                existing.load_data()
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            if self.main_menu:
+                self.main_menu.hide()
+            return
+
+        from GUI.gui_career import CareerWindow
+
+        parent = self.main_menu if self.main_menu else None
+        career_window = CareerWindow(championship, parent)
+        career_window.return_to_menu.connect(self.return_to_menu)
+        career_window.start_race_signal.connect(self.start_race)
+        if self.main_menu is not None:
+            setattr(self.main_menu, 'career_window', career_window)
+            self.main_menu.hide()
+        career_window.show()
     def return_to_menu(self):
         """Return from race to main menu."""
         if self.race_window:

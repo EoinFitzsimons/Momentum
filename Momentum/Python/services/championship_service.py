@@ -123,50 +123,63 @@ class ChampionshipService:
         if not races:
             return []
         
-        # Aggregate results by driver
+        driver_stats = self._aggregate_driver_stats(races)
+        standings = self._build_standing_entries(driver_stats)
+        return self._rank_standings(standings)
+
+    def _aggregate_driver_stats(self, races: List[Race]) -> Dict[int, Dict[str, Any]]:
+        """Aggregate per-driver stats across completed races."""
         driver_stats: Dict[int, Dict[str, Any]] = {}
-        
+
         for race in races:
             if race.status != "completed":
                 continue
-                
             results = self.db.get_race_results(race.id)
-            
             for result in results:
-                if result.driver_id not in driver_stats:
-                    driver_stats[result.driver_id] = {
-                        "driver_id": result.driver_id,
-                        "team_id": result.team_id,
-                        "total_points": 0,
-                        "wins": 0,
-                        "podiums": 0,
-                        "races_started": 0,
-                        "dnf_count": 0,
-                        "fastest_laps": 0
-                    }
-                
-                stats = driver_stats[result.driver_id]
-                stats["races_started"] += 1
-                
-                # Only count points if not DNF
-                if result.dnf_reason is None:
-                    stats["total_points"] += result.points
-                    
-                    if result.position == 1:
-                        stats["wins"] += 1
-                    if result.position <= 3:
-                        stats["podiums"] += 1
-                    if result.fastest_lap:
-                        stats["fastest_laps"] += 1
-                else:
-                    stats["dnf_count"] += 1
-        
-        # Get driver and team names
+                stats = self._ensure_driver_stats(driver_stats, result.driver_id, result.team_id)
+                self._accumulate_result_stats(stats, result)
+
+        return driver_stats
+
+    def _ensure_driver_stats(self, driver_stats: Dict[int, Dict[str, Any]], driver_id: int, team_id: Optional[int]) -> Dict[str, Any]:
+        """Initialize driver stats entry when missing and return it."""
+        if driver_id not in driver_stats:
+            driver_stats[driver_id] = {
+                "driver_id": driver_id,
+                "team_id": team_id,
+                "total_points": 0,
+                "wins": 0,
+                "podiums": 0,
+                "races_started": 0,
+                "dnf_count": 0,
+                "fastest_laps": 0,
+            }
+        return driver_stats[driver_id]
+
+    def _accumulate_result_stats(self, stats: Dict[str, Any], result: RaceResult) -> None:
+        """Update running driver stats from one race result row."""
+        stats["races_started"] += 1
+
+        if result.dnf_reason is not None:
+            stats["dnf_count"] += 1
+            return
+
+        stats["total_points"] += result.points
+        if result.position == 1:
+            stats["wins"] += 1
+        if result.position <= 3:
+            stats["podiums"] += 1
+        if result.fastest_lap:
+            stats["fastest_laps"] += 1
+
+    def _build_standing_entries(self, driver_stats: Dict[int, Dict[str, Any]]) -> List[StandingEntry]:
+        """Convert aggregated driver stats into standings entries."""
         standings: List[StandingEntry] = []
+
         for driver_id, stats in driver_stats.items():
             driver = self.db.get_driver(driver_id)
             team = self.db.get_team(stats["team_id"]) if stats["team_id"] else None
-            
+
             standings.append(StandingEntry(
                 driver_id=driver_id,
                 driver_name=driver.name if driver else f"Driver {driver_id}",
@@ -177,24 +190,26 @@ class ChampionshipService:
                 podiums=stats["podiums"],
                 races_started=stats["races_started"],
                 dnf_count=stats["dnf_count"],
-                fastest_laps=stats["fastest_laps"]
+                fastest_laps=stats["fastest_laps"],
             ))
-        
-        # Sort with tie-breaking
+
+        return standings
+
+    def _rank_standings(self, standings: List[StandingEntry]) -> List[StandingEntry]:
+        """Sort standings and assign position values."""
         standings.sort(
             key=lambda x: (
-                -x.total_points,      # Primary: highest points
-                -x.wins,              # Tie-break 1: most wins
-                -x.podiums,           # Tie-break 2: most podiums
-                -x.fastest_laps,      # Tie-break 3: most fastest laps
-                -x.races_started      # Tie-break 4: most races (consistency)
+                -x.total_points,
+                -x.wins,
+                -x.podiums,
+                -x.fastest_laps,
+                -x.races_started,
             )
         )
-        
-        # Assign positions
+
         for position, entry in enumerate(standings, start=1):
             entry.position = position
-        
+
         return standings
     
     def create_championship_season(

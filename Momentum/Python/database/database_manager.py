@@ -40,6 +40,9 @@ from database.models import Driver, Team, Track, Championship, Race, RaceResult,
 from config import DATABASE_PATH
 
 
+INTEGER_DEFAULT_NULL = 'INTEGER DEFAULT NULL'
+
+
 @dataclass
 class SimpleTrack:
     name: str
@@ -153,159 +156,140 @@ class DatabaseManager:
         ensuring backward compatibility with existing data.
         """
         with self.get_connection() as conn:
-            # Check if teams table exists and add missing columns
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
+                    "teams",
+                    {
+                        'headquarters': "TEXT DEFAULT ''",
+                        'biography': "TEXT DEFAULT ''",
+                        'version': 'INTEGER NOT NULL DEFAULT 1',
+                        'updated_at': 'TEXT DEFAULT CURRENT_TIMESTAMP'
+                    },
+                ),
+            )
+
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
+                    "drivers",
+                    {
+                        'contract_start_season': INTEGER_DEFAULT_NULL,
+                        'contract_end_season': INTEGER_DEFAULT_NULL,
+                        'performance_bonus': 'REAL DEFAULT 0.0'
+                    },
+                ),
+            )
+
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
+                    "staff_members",
+                    {
+                        'annual_salary': 'REAL DEFAULT NULL',
+                        'contract_length': INTEGER_DEFAULT_NULL,
+                        'contract_start_season': INTEGER_DEFAULT_NULL,
+                        'contract_end_season': INTEGER_DEFAULT_NULL
+                    },
+                ),
+            )
+
+            self._run_schema_migration_step(conn, self._ensure_team_management_tables)
+
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
+                    "tracks",
+                    {
+                        'length_km': 'REAL DEFAULT 3.2',
+                        'turns': 'INTEGER DEFAULT 12',
+                        'avg_speed_kmh': 'REAL DEFAULT 160.0',
+                        'longest_straight_m': 'REAL DEFAULT 700.0',
+                        'tightest_corner_radius_m': 'REAL DEFAULT 30.0',
+                        'left_turns': 'INTEGER DEFAULT 6',
+                        'right_turns': 'INTEGER DEFAULT 6',
+                        'drs_zones': 'INTEGER DEFAULT 1',
+                        'surface': "TEXT DEFAULT 'asphalt'",
+                        'surface_type': "TEXT DEFAULT 'asphalt'",
+                        'surface_grip': 'REAL DEFAULT 1.0',
+                        'surface_abrasiveness': 'REAL DEFAULT 8.0',
+                        'climate': "TEXT DEFAULT 'temperate'"
+                    },
+                ),
+            )
+
+    def _run_schema_migration_step(self, conn: sqlite3.Connection, migration_fn) -> None:
+        """Run one migration step and ignore compatibility errors."""
+        try:
+            migration_fn(conn)
+        except Exception:
+            pass
+
+    def _ensure_table_columns(self, conn: sqlite3.Connection, table_name: str, required_columns: Dict[str, str]) -> None:
+        """Ensure required columns exist on a table."""
+        cursor = conn.execute(f"PRAGMA table_info({table_name})")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        for column_name, column_def in required_columns.items():
+            if column_name in existing_columns:
+                continue
             try:
-                cursor = conn.execute("PRAGMA table_info(teams)")
-                existing_columns = {row[1] for row in cursor.fetchall()}
-                
-                # Define columns that should exist in teams table
-                required_columns = {
-                    'headquarters': "TEXT DEFAULT ''",
-                    'biography': "TEXT DEFAULT ''",
-                    'version': 'INTEGER NOT NULL DEFAULT 1',
-                    'updated_at': 'TEXT DEFAULT CURRENT_TIMESTAMP'
-                }
-                
-                # Add missing columns
-                for column_name, column_def in required_columns.items():
-                    if column_name not in existing_columns:
-                        try:
-                            conn.execute(f"ALTER TABLE teams ADD COLUMN {column_name} {column_def}")
-                        except sqlite3.OperationalError:
-                            pass  # Column already exists or other issue
-                
-                conn.commit()
-            except Exception:
-                pass  # Table might not exist yet, will be created by SCHEMA_SQL
-
-            # Ensure drivers table has contract tracking columns used by hiring lifecycle.
-            try:
-                cursor = conn.execute("PRAGMA table_info(drivers)")
-                existing_columns = {row[1] for row in cursor.fetchall()}
-
-                required_columns = {
-                    'contract_start_season': 'INTEGER DEFAULT NULL',
-                    'contract_end_season': 'INTEGER DEFAULT NULL',
-                    'performance_bonus': 'REAL DEFAULT 0.0'
-                }
-
-                for column_name, column_def in required_columns.items():
-                    if column_name not in existing_columns:
-                        try:
-                            conn.execute(f"ALTER TABLE drivers ADD COLUMN {column_name} {column_def}")
-                        except sqlite3.OperationalError:
-                            pass
-
-                conn.commit()
-            except Exception:
+                conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def}")
+            except sqlite3.OperationalError:
                 pass
 
-            # Ensure staff table has salary/contract fields for cap checks and expiry.
-            try:
-                cursor = conn.execute("PRAGMA table_info(staff_members)")
-                existing_columns = {row[1] for row in cursor.fetchall()}
+        conn.commit()
 
-                required_columns = {
-                    'annual_salary': 'REAL DEFAULT NULL',
-                    'contract_length': 'INTEGER DEFAULT NULL',
-                    'contract_start_season': 'INTEGER DEFAULT NULL',
-                    'contract_end_season': 'INTEGER DEFAULT NULL'
-                }
+    def _ensure_team_management_tables(self, conn: sqlite3.Connection) -> None:
+        """Ensure supporting team management tables/indexes exist."""
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS team_ownership (
+            team_id INTEGER PRIMARY KEY,
+            player_id TEXT NOT NULL UNIQUE,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
 
-                for column_name, column_def in required_columns.items():
-                    if column_name not in existing_columns:
-                        try:
-                            conn.execute(f"ALTER TABLE staff_members ADD COLUMN {column_name} {column_def}")
-                        except sqlite3.OperationalError:
-                            pass
+        CREATE TABLE IF NOT EXISTS team_budget_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            amount REAL NOT NULL,
+            description TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
 
-                conn.commit()
-            except Exception:
-                pass
+        CREATE TABLE IF NOT EXISTS team_facility_upgrades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL,
+            facility_name TEXT NOT NULL,
+            level INTEGER NOT NULL DEFAULT 1,
+            invested_amount REAL NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(team_id, facility_name),
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
 
-            # Ensure supporting team management tables exist for ownership,
-            # audit logs, budget transactions, and facility upgrades.
-            try:
-                conn.executescript("""
-                CREATE TABLE IF NOT EXISTS team_ownership (
-                    team_id INTEGER PRIMARY KEY,
-                    player_id TEXT NOT NULL UNIQUE,
-                    is_active INTEGER NOT NULL DEFAULT 1,
-                    acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (team_id) REFERENCES teams(id)
-                );
+        CREATE TABLE IF NOT EXISTS team_audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            team_id INTEGER NOT NULL,
+            actor_id TEXT,
+            action TEXT NOT NULL,
+            changes_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (team_id) REFERENCES teams(id)
+        );
 
-                CREATE TABLE IF NOT EXISTS team_budget_transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    team_id INTEGER NOT NULL,
-                    category TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    description TEXT DEFAULT '',
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (team_id) REFERENCES teams(id)
-                );
-
-                CREATE TABLE IF NOT EXISTS team_facility_upgrades (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    team_id INTEGER NOT NULL,
-                    facility_name TEXT NOT NULL,
-                    level INTEGER NOT NULL DEFAULT 1,
-                    invested_amount REAL NOT NULL DEFAULT 0,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(team_id, facility_name),
-                    FOREIGN KEY (team_id) REFERENCES teams(id)
-                );
-
-                CREATE TABLE IF NOT EXISTS team_audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    team_id INTEGER NOT NULL,
-                    actor_id TEXT,
-                    action TEXT NOT NULL,
-                    changes_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (team_id) REFERENCES teams(id)
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_team_budget_transactions_team_id ON team_budget_transactions(team_id);
-                CREATE INDEX IF NOT EXISTS idx_team_audit_log_team_id ON team_audit_log(team_id);
-                """)
-                conn.commit()
-            except Exception:
-                pass
-            
-            # Check if tracks table exists and add missing columns
-            try:
-                cursor = conn.execute("PRAGMA table_info(tracks)")
-                existing_columns = {row[1] for row in cursor.fetchall()}
-                
-                # Define columns that should exist in tracks table
-                required_columns = {
-                    'length_km': 'REAL DEFAULT 3.2',
-                    'turns': 'INTEGER DEFAULT 12',
-                    'avg_speed_kmh': 'REAL DEFAULT 160.0',
-                    'longest_straight_m': 'REAL DEFAULT 700.0',
-                    'tightest_corner_radius_m': 'REAL DEFAULT 30.0',
-                    'left_turns': 'INTEGER DEFAULT 6',
-                    'right_turns': 'INTEGER DEFAULT 6',
-                    'drs_zones': 'INTEGER DEFAULT 1',
-                    'surface': "TEXT DEFAULT 'asphalt'",
-                    'surface_type': "TEXT DEFAULT 'asphalt'",
-                    'surface_grip': 'REAL DEFAULT 1.0',
-                    'surface_abrasiveness': 'REAL DEFAULT 8.0',
-                    'climate': "TEXT DEFAULT 'temperate'"
-                }
-                
-                # Add missing columns
-                for column_name, column_def in required_columns.items():
-                    if column_name not in existing_columns:
-                        try:
-                            conn.execute(f"ALTER TABLE tracks ADD COLUMN {column_name} {column_def}")
-                        except sqlite3.OperationalError:
-                            pass  # Column already exists or other issue
-                
-                conn.commit()
-            except Exception:
-                pass  # Table might not exist yet, will be created by SCHEMA_SQL
+        CREATE INDEX IF NOT EXISTS idx_team_budget_transactions_team_id ON team_budget_transactions(team_id);
+        CREATE INDEX IF NOT EXISTS idx_team_audit_log_team_id ON team_audit_log(team_id);
+        """)
+        conn.commit()
 
     def get_connection(self) -> sqlite3.Connection:
         """
@@ -958,84 +942,119 @@ class DatabaseManager:
         identical.
         """
         with self.get_connection() as conn:
-            if track_id is not None:
-                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?", (track_id,)).fetchone()
-            else:
-                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks ORDER BY id LIMIT 1").fetchone()
-
-            if not row:
-                # Insert default Test Circuit using geometry_json to store full attributes
-                default_attrs = {
-                    "length_km": 4.5,
-                    "turns": 12,
-                    "left_turns": 6,
-                    "right_turns": 6,
-                    "elevation_change_m": 15.0,
-                    "avg_corner_radius_m": 40.0,
-                    "min_corner_radius_m": 20.0,
-                    "max_corner_radius_m": 80.0,
-                    "tightest_corner_radius_m": 20.0,
-                    "longest_straight_m": 800.0,
-                    "shortest_straight_m": 150.0,
-                    "avg_speed_kmh": 180.0,
-                    "top_speed_kmh": 280.0,
-                    "surface": "asphalt",
-                    "surface_type": "asphalt",
-                    "surface_grip": 12.0,
-                    "surface_abrasiveness": 8.0,
-                    "climate": "temperate",
-                    "drs_zones": 2
-                }
-                cursor = conn.execute(
-                    "INSERT INTO tracks (name, country, primary_discipline, geometry_json) VALUES (?, ?, ?, ?)",
-                    ("Test Circuit", "Nowhere", "SINGLE_SEATER", json.dumps(default_attrs))
-                )
-                new_id = cursor.lastrowid
-                row = conn.execute("SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?", (new_id,)).fetchone()
-
+            row = self._fetch_simple_track_row(conn, track_id)
             rowd = dict(row)
-            geom = None
-            raw_geom = rowd.get('geometry_json')
-            try:
-                if raw_geom:
-                    if isinstance(raw_geom, str):
-                        parsed = json.loads(raw_geom)
-                    elif isinstance(raw_geom, (dict, list)):
-                        parsed = raw_geom
-                    else:
-                        parsed = None
-                    # Only accept dict-style geometry for attribute mapping
-                    geom = parsed if isinstance(parsed, dict) else None
-                else:
-                    geom = None
-            except Exception:
-                geom = None
-
-            # Build a simple object merging DB fields and geometry attributes
-            attrs = {
-                'name': rowd.get('name') or 'Unnamed Circuit',
-                'length_km': float(geom.get('length_km')) if geom and geom.get('length_km') is not None else float(rowd.get('length_km') or 3.2),
-                'turns': int(geom.get('turns')) if geom and geom.get('turns') is not None else int(rowd.get('turns') or 12),
-                'left_turns': int(geom.get('left_turns')) if geom and geom.get('left_turns') is not None else int(rowd.get('left_turns') or 6),
-                'right_turns': int(geom.get('right_turns')) if geom and geom.get('right_turns') is not None else int(rowd.get('right_turns') or 6),
-                'elevation_change_m': float(geom.get('elevation_change_m')) if geom and geom.get('elevation_change_m') is not None else 0.0,
-                'avg_corner_radius_m': float(geom.get('avg_corner_radius_m')) if geom and geom.get('avg_corner_radius_m') is not None else 40.0,
-                'min_corner_radius_m': float(geom.get('min_corner_radius_m')) if geom and geom.get('min_corner_radius_m') is not None else 20.0,
-                'max_corner_radius_m': float(geom.get('max_corner_radius_m')) if geom and geom.get('max_corner_radius_m') is not None else 80.0,
-                'tightest_corner_radius_m': float(geom.get('tightest_corner_radius_m')) if geom and geom.get('tightest_corner_radius_m') is not None else 20.0,
-                'longest_straight_m': float(geom.get('longest_straight_m')) if geom and geom.get('longest_straight_m') is not None else 800.0,
-                'shortest_straight_m': float(geom.get('shortest_straight_m')) if geom and geom.get('shortest_straight_m') is not None else 150.0,
-                'avg_speed_kmh': float(geom.get('avg_speed_kmh')) if geom and geom.get('avg_speed_kmh') is not None else 180.0,
-                'top_speed_kmh': float(geom.get('top_speed_kmh')) if geom and geom.get('top_speed_kmh') is not None else 280.0,
-                'surface': geom.get('surface') if geom and geom.get('surface') else (rowd.get('surface') or 'asphalt'),
-                'surface_type': geom.get('surface_type') if geom and geom.get('surface_type') else (rowd.get('surface_type') or 'asphalt'),
-                'surface_grip': float(geom.get('surface_grip')) if geom and geom.get('surface_grip') is not None else 12.0,
-                'surface_abrasiveness': float(geom.get('surface_abrasiveness')) if geom and geom.get('surface_abrasiveness') is not None else 8.0,
-                'climate': geom.get('climate') if geom and geom.get('climate') else 'temperate',
-                'drs_zones': int(geom.get('drs_zones')) if geom and geom.get('drs_zones') is not None else 1
-            }
-
+            geom = self._parse_track_geometry(rowd.get('geometry_json'))
+            attrs = self._build_simple_track_attrs(rowd, geom)
             return SimpleTrack(**attrs)
+
+    def _default_track_geometry_attrs(self) -> Dict[str, Any]:
+        """Default geometry payload used for seeded fallback test track."""
+        return {
+            "length_km": 4.5,
+            "turns": 12,
+            "left_turns": 6,
+            "right_turns": 6,
+            "elevation_change_m": 15.0,
+            "avg_corner_radius_m": 40.0,
+            "min_corner_radius_m": 20.0,
+            "max_corner_radius_m": 80.0,
+            "tightest_corner_radius_m": 20.0,
+            "longest_straight_m": 800.0,
+            "shortest_straight_m": 150.0,
+            "avg_speed_kmh": 180.0,
+            "top_speed_kmh": 280.0,
+            "surface": "asphalt",
+            "surface_type": "asphalt",
+            "surface_grip": 12.0,
+            "surface_abrasiveness": 8.0,
+            "climate": "temperate",
+            "drs_zones": 2,
+        }
+
+    def _fetch_simple_track_row(self, conn: sqlite3.Connection, track_id: Optional[int]):
+        """Fetch requested track row, seeding a fallback track when needed."""
+        if track_id is not None:
+            row = conn.execute(
+                "SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?",
+                (track_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, name, country, primary_discipline, geometry_json FROM tracks ORDER BY id LIMIT 1"
+            ).fetchone()
+
+        if row:
+            return row
+
+        default_attrs = self._default_track_geometry_attrs()
+        cursor = conn.execute(
+            "INSERT INTO tracks (name, country, primary_discipline, geometry_json) VALUES (?, ?, ?, ?)",
+            ("Test Circuit", "Nowhere", "SINGLE_SEATER", json.dumps(default_attrs)),
+        )
+        new_id = cursor.lastrowid
+        return conn.execute(
+            "SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?",
+            (new_id,),
+        ).fetchone()
+
+    def _parse_track_geometry(self, raw_geom: Any) -> Optional[Dict[str, Any]]:
+        """Parse geometry payload and return dict data when valid."""
+        try:
+            if not raw_geom:
+                return None
+            if isinstance(raw_geom, str):
+                parsed = json.loads(raw_geom)
+            elif isinstance(raw_geom, dict):
+                parsed = raw_geom
+            else:
+                return None
+            return parsed if isinstance(parsed, dict) else None
+        except Exception:
+            return None
+
+    def _pick_float(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> float:
+        """Read float from geometry with fallback."""
+        if geom and geom.get(key) is not None:
+            return float(geom.get(key))
+        return float(fallback)
+
+    def _pick_int(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> int:
+        """Read int from geometry with fallback."""
+        if geom and geom.get(key) is not None:
+            return int(geom.get(key))
+        return int(fallback)
+
+    def _pick_str(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> str:
+        """Read string from geometry with fallback."""
+        if geom and geom.get(key):
+            return str(geom.get(key))
+        return str(fallback)
+
+    def _build_simple_track_attrs(self, rowd: Dict[str, Any], geom: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build `SimpleTrack` init attrs from DB row and optional geometry payload."""
+        return {
+            'name': rowd.get('name') or 'Unnamed Circuit',
+            'length_km': self._pick_float(geom, 'length_km', rowd.get('length_km') or 3.2),
+            'turns': self._pick_int(geom, 'turns', rowd.get('turns') or 12),
+            'left_turns': self._pick_int(geom, 'left_turns', rowd.get('left_turns') or 6),
+            'right_turns': self._pick_int(geom, 'right_turns', rowd.get('right_turns') or 6),
+            'elevation_change_m': self._pick_float(geom, 'elevation_change_m', 0.0),
+            'avg_corner_radius_m': self._pick_float(geom, 'avg_corner_radius_m', 40.0),
+            'min_corner_radius_m': self._pick_float(geom, 'min_corner_radius_m', 20.0),
+            'max_corner_radius_m': self._pick_float(geom, 'max_corner_radius_m', 80.0),
+            'tightest_corner_radius_m': self._pick_float(geom, 'tightest_corner_radius_m', 20.0),
+            'longest_straight_m': self._pick_float(geom, 'longest_straight_m', 800.0),
+            'shortest_straight_m': self._pick_float(geom, 'shortest_straight_m', 150.0),
+            'avg_speed_kmh': self._pick_float(geom, 'avg_speed_kmh', 180.0),
+            'top_speed_kmh': self._pick_float(geom, 'top_speed_kmh', 280.0),
+            'surface': self._pick_str(geom, 'surface', rowd.get('surface') or 'asphalt'),
+            'surface_type': self._pick_str(geom, 'surface_type', rowd.get('surface_type') or 'asphalt'),
+            'surface_grip': self._pick_float(geom, 'surface_grip', 12.0),
+            'surface_abrasiveness': self._pick_float(geom, 'surface_abrasiveness', 8.0),
+            'climate': self._pick_str(geom, 'climate', 'temperate'),
+            'drs_zones': self._pick_int(geom, 'drs_zones', 1),
+        }
 
     def synthesize_instructions_from_fields(self, track: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Create a simple instruction list from compact track fields as fallback.
@@ -1086,7 +1105,7 @@ class DatabaseManager:
                 )
                 conn.commit()
                 return cursor.rowcount > 0
-        except Exception as e:
+        except Exception:
             # Error updating surface, but continue gracefully
             return False
     
@@ -1139,6 +1158,33 @@ class DatabaseManager:
                 return Championship(
                     **{k: v for k, v in dict(row).items() if k != 'created_at'})
             return None
+
+    def delete_championship(self, championship_id: int) -> bool:
+        """Delete a championship and all race/result rows under it."""
+        with self.get_connection() as conn:
+            race_rows = conn.execute(
+                "SELECT id FROM races WHERE championship_id = ?",
+                (championship_id,),
+            ).fetchall()
+            race_ids = [int(row[0]) for row in race_rows]
+
+            for race_id in race_ids:
+                conn.execute(
+                    "DELETE FROM race_results WHERE race_id = ?",
+                    (race_id,),
+                )
+
+            conn.execute(
+                "DELETE FROM races WHERE championship_id = ?",
+                (championship_id,),
+            )
+
+            cursor = conn.execute(
+                "DELETE FROM championships WHERE id = ?",
+                (championship_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     # Race operations
     def create_race(self, race: Race) -> Optional[int]:
