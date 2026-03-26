@@ -65,6 +65,9 @@ class HiringService:
         'MARKETING_DIRECTOR': (120_000, 500_000)
     }
     
+    # Error messages
+    TEAM_NOT_FOUND_ERROR = "Team not found"
+    
     def __init__(self, db_path: str = DATABASE_PATH):
         """Initialize hiring service with database connection"""
         self.db = DatabaseManager(db_path)
@@ -239,7 +242,7 @@ class HiringService:
         """
         team = self.db.get_team(team_id)
         if not team:
-            return (False, "Team not found")
+            return (False, self.TEAM_NOT_FOUND_ERROR)
         
         # Calculate total contract value
         total_value = annual_salary * contract_length
@@ -285,7 +288,7 @@ class HiringService:
         Returns:
             Tuple of (driver list with salary estimates, total count)
         """
-        drivers, total = self.db.get_available_drivers(
+        drivers, total = self.db.get_available_drivers(  # type: ignore[attr-defined]
             discipline=discipline,
             min_rating=min_rating,
             max_salary=max_salary,
@@ -355,7 +358,7 @@ class HiringService:
         # Check team exists
         team = self.db.get_team(team_id)
         if not team:
-            return (False, "Team not found", {})
+            return (False, self.TEAM_NOT_FOUND_ERROR, {})
         
         # Validate budget
         is_valid, error_msg = self.validate_contract_budget(team_id, salary, contract_length)
@@ -369,7 +372,7 @@ class HiringService:
         contract_end = contract_start + contract_length - 1
         
         # Sign contract
-        success = self.db.sign_driver_contract(
+        success = self.db.sign_driver_contract(  # type: ignore[attr-defined]
             driver_id,
             team_id,
             contract_length,
@@ -381,7 +384,7 @@ class HiringService:
             return (False, "Database error during contract signing", {})
         
         # Deduct signing bonus from team budget
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)
+        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
         
         # Return contract details
         contract_details = {
@@ -423,7 +426,7 @@ class HiringService:
         Returns:
             Tuple of (staff list with salary estimates, total count)
         """
-        staff_list, total = self.db.get_available_staff(
+        staff_list, total = self.db.get_available_staff(  # type: ignore[attr-defined]
             role=role,
             min_rating=min_rating,
             page=page,
@@ -483,7 +486,7 @@ class HiringService:
         # Check team exists
         team = self.db.get_team(team_id)
         if not team:
-            return (False, "Team not found", {})
+            return (False, self.TEAM_NOT_FOUND_ERROR, {})
         
         # Validate budget (staff costs less, 10% signing bonus)
         total_value = salary * contract_length
@@ -501,7 +504,7 @@ class HiringService:
         contract_end = contract_start + contract_length - 1
         
         # Sign contract
-        success = self.db.sign_staff_contract(
+        success = self.db.sign_staff_contract(  # type: ignore[attr-defined]
             staff_id,
             team_id,
             contract_length,
@@ -512,7 +515,7 @@ class HiringService:
             return (False, "Database error during contract signing", {})
         
         # Deduct signing bonus
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)
+        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
         
         # Return contract details
         contract_details = {
@@ -552,7 +555,7 @@ class HiringService:
         """
         team = self.db.get_team(team_id)
         if not team:
-            return (False, "Team not found", {})
+            return (False, self.TEAM_NOT_FOUND_ERROR, {})
         
         if personnel_type.lower() == 'driver':
             driver = self.db.get_driver(personnel_id)
@@ -575,8 +578,8 @@ class HiringService:
                 return (False, f"Insufficient budget for buyout. Need {buyout_cost:,.0f} EUR", {})
             
             # Release driver
-            self.db.release_driver(personnel_id)
-            new_budget = self.db.update_team_budget(team_id, -buyout_cost)
+            self.db.release_driver(personnel_id)  # type: ignore[attr-defined]
+            new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
             
             return (True, f"Released {driver.name} from contract", {
                 'personnel_id': personnel_id,
@@ -603,11 +606,11 @@ class HiringService:
             buyout_cost = 50_000
             
             if team.budget < buyout_cost:
-                return (False, f"Insufficient budget for buyout", {})
+                return (False, "Insufficient budget for buyout", {})
             
             # Release staff
-            self.db.release_staff(personnel_id)
-            new_budget = self.db.update_team_budget(team_id, -buyout_cost)
+            self.db.release_staff(personnel_id)  # type: ignore[attr-defined]
+            new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
             
             return (True, f"Released {staff.name} from contract", {
                 'personnel_id': personnel_id,
