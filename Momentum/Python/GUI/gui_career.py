@@ -319,6 +319,8 @@ class CareerWindow(QMainWindow):
             return
 
         self.owned_team = self.db.get_team(self.owned_team.id)
+        if not self.owned_team:
+            return
         self._load_team_panel()
         self._load_drivers_panel()
         self._load_staff_panel()
@@ -327,6 +329,8 @@ class CareerWindow(QMainWindow):
         self._load_standings_panel()
 
     def _load_team_panel(self):
+        if not self.owned_team:
+            return
         self.header_label.setText(f"Career HQ - {self.championship.name}")
         self.subheader_label.setText(
             f"Discipline: {_player_label(self.championship.discipline)} | Season {self.championship.current_season}"
@@ -338,6 +342,8 @@ class CareerWindow(QMainWindow):
         self.team_hq_label.setText(f"HQ: {self.owned_team.headquarters or '-'}")
 
     def _load_drivers_panel(self):
+        if not self.owned_team:
+            return
         drivers = self.db.get_drivers_by_team(self.owned_team.id)
 
         self.driver_combo.clear()
@@ -365,6 +371,8 @@ class CareerWindow(QMainWindow):
         )
 
     def _load_staff_panel(self):
+        if not self.owned_team:
+            return
         try:
             staff = self.db.get_staff_by_team(self.owned_team.id)
         except Exception:
@@ -377,6 +385,8 @@ class CareerWindow(QMainWindow):
             self.staff_table.setItem(row, 2, QTableWidgetItem(f"{float(member.rating):.1f}"))
 
     def _load_car_panel(self):
+        if not self.owned_team:
+            return
         self.car_ops_label.setText(f"Operations Rating: {self.owned_team.operations_rating:.1f}")
         self.car_strategy_label.setText(f"Strategy Profile: {_player_label(self.owned_team.strategy_profile)}")
 

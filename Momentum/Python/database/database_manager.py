@@ -718,7 +718,7 @@ class DatabaseManager:
                 """,
                 (team_id, category, amount, description)
             )
-            return int(cursor.lastrowid)
+            return int(cursor.lastrowid or 0)
 
     def get_budget_transactions(self, team_id: int) -> List[Dict[str, Any]]:
         """Get all persisted budget transactions for a team."""
@@ -775,7 +775,7 @@ class DatabaseManager:
                 """,
                 (team_id, actor_id, action, json.dumps(changes, ensure_ascii=True))
             )
-            return int(cursor.lastrowid)
+            return int(cursor.lastrowid or 0)
 
     def get_team_audit_logs(self, team_id: int, limit: int = 20) -> List[Dict[str, Any]]:
         """Get recent team audit logs."""
@@ -1015,14 +1015,18 @@ class DatabaseManager:
 
     def _pick_float(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> float:
         """Read float from geometry with fallback."""
-        if geom and geom.get(key) is not None:
-            return float(geom.get(key))
+        if geom:
+            val = geom.get(key)
+            if val is not None:
+                return float(val)
         return float(fallback)
 
     def _pick_int(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> int:
         """Read int from geometry with fallback."""
-        if geom and geom.get(key) is not None:
-            return int(geom.get(key))
+        if geom:
+            val = geom.get(key)
+            if val is not None:
+                return int(val)
         return int(fallback)
 
     def _pick_str(self, geom: Optional[Dict[str, Any]], key: str, fallback: Any) -> str:
