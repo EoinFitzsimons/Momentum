@@ -47,6 +47,196 @@ def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) ->
     return None
 
 
+def _setup_context_teams(context: RaceContext) -> None:
+    """Populate context.teams if not already set"""
+    if not getattr(context, 'teams', None):
+        ctx_teams = {}
+        for d in getattr(context, 'drivers', []) or []:
+            ctx_teams[d.current_team_id] = Team(
+                id=d.current_team_id,
+                name=f"Team {d.current_team_id}",
+                nationality="USA",
+                discipline="formula",
+                tier="tier2",
+                budget=100.0,
+                founded_year=2020,
+                team_principal="Unknown"
+            )
+        context.teams = ctx_teams
+
+
+def _extract_context_fields(context: RaceContext, seed: Optional[int]) -> tuple:
+    """Extract fields from RaceContext for simulation"""
+    engine = RealtimeRaceEngine(seed=seed)
+    drivers = context.drivers
+    track = context.track
+    laps = context.total_laps
+    event_callback = context.event_callback
+    teams_dict = getattr(context, 'teams', {}) or {}
+    track_points = None
+    player_driver_id = None
+    player_overrides = None
+    
+    # Pull from track_conditions if present
+    if isinstance(getattr(context, 'track_conditions', None), dict):
+        track_points = context.track_conditions.get('track_points')
+        player_driver_id = context.track_conditions.get('player_driver_id')
+        player_overrides = context.track_conditions.get('player_overrides')
+    
+    return engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides
+
+
+def _populate_team_data_from_db(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]], 
+                                 db: Optional[Any], verbose: bool = False) -> Dict[int, Team]:
+    """Fetch team data from database if available"""
+    if not db or not drivers:
+        return teams_dict
+    
+    try:
+        team_ids = {d.current_team_id for d in drivers if d.current_team_id}
+        from typing import cast
+        db_any = cast(Any, db)
+        get_team_fn = getattr(db_any, "get_team", None)
+        for team_id in team_ids:
+            if callable(get_team_fn) and team_id not in teams_dict:
+                team = get_team_fn(team_id)
+                if team:
+                    teams_dict[team_id] = team
+    except Exception as e:
+        if verbose:
+            print(f"Warning: Could not fetch team data: {e}")
+    
+    return teams_dict
+
+
+def _create_placeholder_teams(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]]) -> Dict[int, Team]:
+    """Create placeholder teams for any drivers without team data"""
+    if not drivers:
+        return teams_dict
+    
+    for driver in drivers:
+        if driver.current_team_id not in teams_dict:
+            teams_dict[driver.current_team_id] = Team(
+                id=driver.current_team_id,
+                name=f"Team {driver.current_team_id}",
+                nationality="USA",
+                discipline="formula",
+                tier="tier2",
+                budget=100.0,
+                founded_year=2020,
+                team_principal="Unknown"
+            )
+    
+    return teams_dict
+
+
+def _calculate_race_laps(track: Optional[Track], laps: Optional[int]) -> int:
+    """Calculate appropriate lap count based on track length"""
+    if laps is not None:
+        return laps
+    if track is not None:
+        return max(20, min(int(300 / track.length_km), 80))
+    return 20
+
+
+def _print_race_summary(verbose: bool, track: Optional[Track], drivers: Optional[List[Driver]], laps: Optional[int]) -> None:
+    """Print race simulation summary info"""
+    if not verbose or track is None or drivers is None or laps is None:
+        return
+    
+    print(f"\n{'='*70}")
+    print("REAL-TIME RACE SIMULATION - 30 FPS")
+    print(f"{'='*70}")
+    print(f"Track: {track.name} ({track.length_km:.2f}km)")
+    print(f"Drivers: {len(drivers)} | Laps: {laps}")
+    print(f"Expected updates: ~{2700 * laps * len(drivers):,}")
+    print(f"{'='*70}\n")
+
+
+def _extract_time_from_result(result: dict) -> Optional[float]:
+    """Extract total time from result dict, trying multiple common field names"""
+    # Try direct time fields
+    for k in ("time_seconds", "total_time", "total_time_seconds", "race_time", "total_seconds"):
+        if k in result and result[k] is not None:
+            try:
+                return float(result[k])
+            except Exception:
+                continue
+    
+    # Fallback: calculate from lap times
+    avg = result.get("average_lap_time") or result.get("best_lap_time")
+    laps = result.get("laps_completed") or 0
+    try:
+        if avg and laps:
+            return float(avg) * float(laps)
+    except Exception:
+        pass
+    
+    return None
+
+
+def _convert_result_to_race_result(result: dict, race_id: int) -> RaceResult:
+    """Convert a simulation result dict to a RaceResult object"""
+    total_time = _extract_time_from_result(result)
+    
+    rr = RaceResult(
+        id=0,
+        race_id=race_id,
+        driver_id=result.get("driver_id"),
+        team_id=result.get("team_id"),
+        position=result.get("position"),
+        points=result.get("points", 0),
+        fastest_lap=bool(result.get("fastest_lap", False)),
+        dnf_reason=result.get("dnf_reason"),
+        grid_position=result.get("position"),
+        time_seconds=total_time,
+        best_lap_time=result.get("best_lap_time"),
+        average_lap_time=result.get("average_lap_time")
+    )
+    
+    setattr(rr, 'laps_completed', result.get("laps_completed", 0))
+    
+    # Set status from result or infer from DNF reason
+    try:
+        rr.status = result.get('status') or ('DNF' if result.get('dnf_reason') else 'FINISHED')
+    except Exception:
+        rr.status = 'FINISHED'
+    
+    return rr
+
+
+def _convert_results_to_race_results(results_list: List[dict], race_id: int) -> List[RaceResult]:
+    """Convert simulation results list to RaceResult objects"""
+    return [_convert_result_to_race_result(result, race_id) for result in results_list]
+
+
+def _print_final_results_summary(verbose: bool, results_list: List[dict]) -> None:
+    """Print final results summary to console"""
+    if not verbose:
+        return
+    
+    print(f"\n{'='*70}")
+    print("FINAL RESULTS")
+    print(f"{'='*70}")
+    for i, result in enumerate(results_list[:10], 1):
+        status = f"DNF ({result['dnf_reason']})" if result["dnf_reason"] else f"{result['laps_completed']} laps"
+        best = f"{result['best_lap_time']:.2f}s" if result.get('best_lap_time') else "N/A"
+        print(f"{i:2d}. {result['driver_name']:20s} - {status:15s} | Best: {best}")
+    print(f"{'='*70}\n")
+
+
+def _persist_race_results(db: Optional[Any], race_id: int, results_list: List[dict]) -> None:
+    """Persist race results to database if available"""
+    if not db or not race_id or not getattr(db, 'save_race_results', None):
+        return
+    
+    try:
+        save_fn = getattr(db, 'save_race_results')
+        save_fn(race_id, results_list)
+    except Exception:
+        pass  # Silent fail on persistence errors
+
+
 def simulate_race(
     drivers: Optional[List[Driver]] = None,
     track: Optional[Track] = None,
@@ -68,118 +258,43 @@ def simulate_race(
     Drivers are AI agents making live racing decisions (attack/defend/manage)
     based on gaps, position, and their attributes.
     """
+    engine = RealtimeRaceEngine(seed=seed)
     teams_dict: Dict[int, Team] = {}
-
-    # If a full RaceContext is provided prefer discipline-specific engines
+    
+    # Process context if provided
     if context is not None:
-        # Best-effort: ensure a minimal teams mapping exists on the context so
-        # discipline adapters or fallback engines that require a team object
-        # per-driver don't skip drivers when callers omit `context.teams`.
         try:
-            if not getattr(context, 'teams', None):
-                ctx_teams = {}
-                for d in getattr(context, 'drivers', []) or []:
-                    ctx_teams[d.current_team_id] = Team(
-                        id=d.current_team_id,
-                        name=f"Team {d.current_team_id}",
-                        nationality="USA",
-                        discipline="formula",
-                        tier="tier2",
-                        budget=100.0,
-                        founded_year=2020,
-                        team_principal="Unknown"
-                    )
-                context.teams = ctx_teams
+            _setup_context_teams(context)
         except Exception:
-            # Best-effort population; if anything goes wrong, continue and let
-            # the downstream engine handle missing teams gracefully.
-            pass
-
-        # Try to dynamically load a discipline adapter
+            pass  # Best-effort; continue on error
+        
+        # Try discipline-specific adapter first
         adapter = _load_discipline_engine(context, seed=seed)
         if adapter is not None:
             if verbose:
                 print(f"Using discipline adapter: {adapter.__class__.__name__} for {context.discipline}")
             return adapter.simulate_race(context)
-
-        # Otherwise, fall back to RealtimeRaceEngine using the context fields
-        engine = RealtimeRaceEngine(seed=seed)
-        drivers = context.drivers
-        track = context.track
-        laps = context.total_laps
-        event_callback = context.event_callback
-        # Provide teams if available on context
-        teams_dict = getattr(context, 'teams', {}) or {}
-        # Pull track_points and player overrides from context.track_conditions if present
-        if isinstance(getattr(context, 'track_conditions', None), dict):
-            track_points = context.track_conditions.get('track_points', track_points)
-            player_driver_id = context.track_conditions.get('player_driver_id', player_driver_id)
-            player_overrides = context.track_conditions.get('player_overrides', player_overrides)
-        if laps is None:
-            laps = max(20, min(int(300 / track.length_km), 80))
-
-    else:
-        engine = RealtimeRaceEngine(seed=seed)
+        
+        # Extract fields from context for fallback
+        engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides = _extract_context_fields(context, seed)
     
-    if context is None:
-        if laps is None and track is not None:
-            laps = max(20, min(int(300 / track.length_km), 80))
-        elif laps is None:
-            laps = 20  # Default if no track provided
-    
-    # Fetch team data if not provided via context
-    if 'teams_dict' not in locals():
-        teams_dict = {}
-    if db and drivers is not None:
-        try:
-            team_ids = {d.current_team_id for d in drivers if d.current_team_id}
-            # Some PersistenceIface implementations may provide get_team but the
-            # interface type does not declare it; access it dynamically and cast
-            # to Any to satisfy static type-checkers.
-            from typing import Any, cast
-            db_any = cast(Any, db)
-            get_team_fn = getattr(db_any, "get_team", None)
-            for team_id in team_ids:
-                if callable(get_team_fn):
-                    team = get_team_fn(team_id)
-                    if team:
-                        teams_dict[team_id] = team
-        except Exception as e:
-            if verbose:
-                print(f"Warning: Could not fetch team data: {e}")
+    # Fetch team data from database if provided
+    teams_dict = _populate_team_data_from_db(teams_dict, drivers, db, verbose)
     
     # Create placeholder teams if needed
-    if not teams_dict and drivers is not None:
-        for driver in drivers:
-            if driver.current_team_id not in teams_dict:
-                teams_dict[driver.current_team_id] = Team(
-                    id=driver.current_team_id,
-                    name=f"Team {driver.current_team_id}",
-                    nationality="USA",
-                    discipline="formula",
-                    tier="tier2",
-                    budget=100.0,
-                    founded_year=2020,
-                    team_principal="Unknown"
-                )
+    teams_dict = _create_placeholder_teams(teams_dict, drivers)
     
-    if verbose and track is not None and drivers is not None and laps is not None:
-        print(f"\n{'='*70}")
-        print("REAL-TIME RACE SIMULATION - 30 FPS")
-        print(f"{'='*70}")
-        print(f"Track: {track.name} ({track.length_km:.2f}km)")
-        print(f"Drivers: {len(drivers)} | Laps: {laps}")
-        print(f"Expected updates: ~{2700 * laps * len(drivers):,}")
-        print(f"{'='*70}\n")
+    # Calculate lap count
+    laps = _calculate_race_laps(track, laps)
     
-    # Run simulation with visual track
-    # Ensure required parameters are not None
+    # Print summary
+    _print_race_summary(verbose, track, drivers, laps)
+    
+    # Validate required parameters
     if drivers is None:
         raise ValueError("drivers parameter is required")
     if track is None:
         raise ValueError("track parameter is required")
-    if laps is None:
-        laps = 20  # Default fallback
     
     try:
         results_list = engine.simulate_race(
@@ -188,11 +303,11 @@ def simulate_race(
             track=track,
             total_laps=laps,
             event_callback=event_callback,
-            stop_event=stop_event,  # Pass stop event for cancellation
-            realtime_speed=5.0,  # 5x real-time speed for watchable racing
-            track_points=track_points,  # Visual track for unified position mapping
-            player_driver_id=player_driver_id,  # Player-controlled driver
-            player_overrides=player_overrides  # Player's pace and overtake settings
+            stop_event=stop_event,
+            realtime_speed=5.0,
+            track_points=track_points,
+            player_driver_id=player_driver_id,
+            player_overrides=player_overrides
         )
     except Exception as e:
         if verbose:
@@ -202,73 +317,12 @@ def simulate_race(
         raise
     
     # Convert to RaceResult objects
-    db_results = []
-    for result in results_list:
-        # Attempt to extract a sensible total time from common keys
-        def _extract_time(res):
-            for k in ("time_seconds", "total_time", "total_time_seconds", "race_time", "total_seconds"):
-                if k in res and res[k] is not None:
-                    try:
-                        return float(res[k])
-                    except Exception:
-                        continue
-            # Fallback: if average lap time and laps are present, estimate total
-            avg = res.get("average_lap_time") or res.get("best_lap_time")
-            laps = res.get("laps_completed") or 0
-            try:
-                if avg and laps:
-                    return float(avg) * float(laps)
-            except Exception:
-                pass
-            return None
-
-        total_time = _extract_time(result)
-
-        rr = RaceResult(
-            id=0,
-            race_id=race_id,
-            driver_id=result.get("driver_id"),
-            team_id=result.get("team_id"),
-            position=result.get("position"),
-            points=result.get("points", 0),
-            fastest_lap=bool(result.get("fastest_lap", False)),
-            dnf_reason=result.get("dnf_reason"),
-            grid_position=result.get("position"),
-            time_seconds=total_time,
-            best_lap_time=result.get("best_lap_time"),
-            average_lap_time=result.get("average_lap_time")
-        )
-        setattr(rr, 'laps_completed', result.get("laps_completed", 0))
-        # Persist explicit status if engine provided one (DNF/FINISHED)
-        try:
-            rr.status = result.get('status') or ('DNF' if result.get('dnf_reason') else 'FINISHED')
-        except Exception:
-            rr.status = 'FINISHED'
-        db_results.append(rr)
+    db_results = _convert_results_to_race_results(results_list, race_id)
     
-    if verbose:
-        print(f"\n{'='*70}")
-        print("FINAL RESULTS")
-        print(f"{'='*70}")
-        for i, result in enumerate(results_list[:10], 1):
-            status = f"DNF ({result['dnf_reason']})" if result["dnf_reason"] else f"{result['laps_completed']} laps"
-            best = f"{result['best_lap_time']:.2f}s" if result.get('best_lap_time') else "N/A"
-            print(f"{i:2d}. {result['driver_name']:20s} - {status:15s} | Best: {best}")
-        print(f"{'='*70}\n")
+    # Print final results summary
+    _print_final_results_summary(verbose, results_list)
     
-    # Persist results if a persistence layer and race_id provided
-    try:
-        if db and race_id and getattr(db, 'save_race_results', None):
-            save_fn = getattr(db, 'save_race_results')
-            if callable(save_fn):
-                try:
-                    save_fn(race_id, db_results)
-                except Exception:
-                    # Do not hide simulation results on persistence failure
-                    if verbose:
-                        print(f"Warning: failed to persist race results for race_id={race_id}")
-    except Exception:
-        # Silently ignore persistence-related errors here
-        pass
+    # Persist results to database
+    _persist_race_results(db, race_id, db_results)
 
     return db_results
