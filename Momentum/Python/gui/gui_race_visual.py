@@ -3633,7 +3633,7 @@ class RaceWindow(QMainWindow):
         dnf_reason = result.get('dnf_reason')
 
         points = 0
-        if dnf_reason is None and position > 0:
+        if dnf_reason is None and position > 0 and self.db is not None:
             points = ChampionshipService(self.db).calculate_points(
                 position=position,
                 discipline=discipline,

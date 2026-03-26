@@ -19,7 +19,7 @@ import re
 
 # Try to use Unidecode for robust transliteration; fall back to NFKD
 try:
-    from unidecode import unidecode as _unidecode
+    from unidecode import unidecode as _unidecode  # type: ignore[import-not-found]
 except Exception:
     _unidecode = None
 
