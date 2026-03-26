@@ -24,15 +24,13 @@ class VehicleAppearanceManager:
         self.vehicle_configs: Dict[int, VehicleConfiguration] = {}
         self.driver_liveries: Dict[int, Livery] = {}
 
-    def create_vehicle_for_driver(self, driver: Driver, team: Team,
-                                 vehicle_type: VehicleType = VehicleType.SINGLE_SEATER) -> VehicleConfiguration:
+    def create_vehicle_for_driver(self, driver: Driver, team: Team) -> VehicleConfiguration:
         """
         Create vehicle configuration for a driver.
 
         Args:
             driver: Driver database model
             team: Team database model
-            vehicle_type: Type of racing vehicle (default: Formula)
 
         Returns:
             VehicleConfiguration with livery and specifications
@@ -88,7 +86,7 @@ class VehicleAppearanceManager:
         painter.rotate(rotation)
 
         VehicleRenderer.render_car(
-            painter, config.vehicle_type, config.livery, scale
+            painter, VehicleType.SINGLE_SEATER, config.livery, scale
         )
 
         painter.restore()

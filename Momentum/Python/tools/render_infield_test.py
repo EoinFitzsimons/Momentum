@@ -43,7 +43,9 @@ def _build_widget_directly():
     except Exception:
         pts = []
     track_length = pts[-1].s if pts else 2000
-    return track_widget(pts, track_length, appearance_manager=None)
+    from vehicles.appearance_integration import VehicleAppearanceManager
+    appearance_manager = VehicleAppearanceManager()
+    return track_widget(pts, track_length, appearance_manager=appearance_manager)
 
 
 def _build_widget_from_launcher():
@@ -88,9 +90,12 @@ def main():
     print('Saved debug render to', out)
 
     # Clean exit
-    widget.close()
-    if launcher is not None and getattr(launcher, 'race_window', None):
-        launcher.race_window.close()
+    if widget is not None:
+        widget.close()
+    if launcher is not None:
+        race_window = getattr(launcher, 'race_window', None)
+        if race_window is not None:
+            race_window.close()
     app.quit()
 
 

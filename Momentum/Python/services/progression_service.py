@@ -130,8 +130,7 @@ class ProgressionService:
         # Physical skills - decline faster with age
         physical_skills = ['fitness', 'reactions']
         for skill in physical_skills:
-            current_value = getattr(driver, skill, 50.0)
-            
+            # Physical skills decline faster with age than other skills
             if age < 28:
                 change = base_change * random.uniform(0.3, 1.0)
             elif age <= 32:
@@ -146,8 +145,7 @@ class ProgressionService:
         # Mental skills - improve with experience, decline slower
         mental_skills = ['pressure', 'setup_knowledge', 'adaptability']
         for skill in mental_skills:
-            current_value = getattr(driver, skill, 50.0)
-            
+            # Mental skills improve with experience, decline slower with age
             if age < 35:
                 # Mental skills improve throughout career
                 change = base_change * random.uniform(0.2, 0.8)
@@ -189,13 +187,13 @@ class ProgressionService:
         skill_changes = self.calculate_skill_progression(driver, races_completed)
         
         # Apply changes to database
-        self.db.update_driver_skills(driver_id, skill_changes)
+        self.db.update_driver_skills(driver_id, skill_changes)  # type: ignore[attr-defined]
         
         # Age the driver
-        self.db.age_driver(driver_id)
+        self.db.age_driver(driver_id)  # type: ignore[attr-defined]
         
         # Increment experience
-        self.db.increment_driver_experience(driver_id, races_completed)
+        self.db.increment_driver_experience(driver_id, races_completed)  # type: ignore[attr-defined]
         
         return skill_changes
     
@@ -266,7 +264,7 @@ class ProgressionService:
         Returns:
             True if successful
         """
-        return self.db.retire_driver(driver_id)
+        return self.db.retire_driver(driver_id)  # type: ignore[attr-defined]
     
     def recycle_driver(self, driver_id: int) -> Optional[int]:
         """
@@ -281,14 +279,13 @@ class ProgressionService:
         Returns:
             New driver ID if successful
         """
-        return self.db.recycle_driver(driver_id)
+        return self.db.recycle_driver(driver_id)  # type: ignore[attr-defined]
     
     # ========================================================================
     # SEASON-END PROCESSING (UC-19)
     # ========================================================================
     
-    def process_season_end_progression(self, season: int, 
-                                      championship_id: Optional[int] = None) -> Dict:
+    def process_season_end_progression(self, season: int) -> Dict:
         """
         Process season-end progression for all drivers
         
@@ -306,7 +303,7 @@ class ProgressionService:
             Summary dictionary with progression results
         """
         # Get all active drivers
-        drivers = self.db.get_drivers_for_progression(season)
+        drivers = self.db.get_drivers_for_progression(season)  # type: ignore[attr-defined]
         
         results = {
             'season': season,
@@ -325,7 +322,7 @@ class ProgressionService:
         }
 
         # Release personnel with expired contracts as the new season opens.
-        expired = self.db.expire_contracts_for_season(season)
+        expired = self.db.expire_contracts_for_season(season)  # type: ignore[attr-defined]
         results['summary']['contracts_expired_drivers'] = expired.get('drivers_released', 0)
         results['summary']['contracts_expired_staff'] = expired.get('staff_released', 0)
         
@@ -341,7 +338,7 @@ class ProgressionService:
                 results['summary']['declined'] += 1
             
             # Check retirement
-            should_retire, reason, probability = self.check_retirement_eligibility(driver)
+            should_retire, reason, _ = self.check_retirement_eligibility(driver)
             
             if should_retire:
                 self.retire_driver(driver.id)
