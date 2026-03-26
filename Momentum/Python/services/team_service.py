@@ -18,7 +18,7 @@ Notes:
 - Faker-based unique team name generation
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
@@ -288,6 +288,77 @@ class TeamService:
         if not player_id:
             return False
         return owner == str(player_id)
+
+    def _apply_allowed_team_field_updates(
+        self,
+        team: Team,
+        updates: Dict[str, Any],
+        allowed_fields: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Apply allowed scalar field updates and return a change map."""
+        changes: Dict[str, Dict[str, Any]] = {}
+        for field, value in updates.items():
+            if field not in allowed_fields or value is None:
+                continue
+            old_value = getattr(team, field, None)
+            if old_value == value:
+                continue
+            setattr(team, field, value)
+            changes[field] = {
+                "old": old_value,
+                "new": value,
+            }
+        return changes
+
+    def _apply_facility_upgrades(
+        self,
+        team_id: int,
+        team: Team,
+        facility_upgrades: List[Any]
+    ) -> Dict[str, Dict[str, str]]:
+        """Apply facility upgrades, update budget/transactions, and return change map."""
+        changes: Dict[str, Dict[str, str]] = {}
+        for facility_name in facility_upgrades:
+            if not isinstance(facility_name, str) or not facility_name.strip():
+                continue
+            name = facility_name.strip()
+            facility_cost = self._facility_upgrade_cost(team.tier)
+            if team.budget < facility_cost:
+                raise ValueError(
+                    f"Insufficient budget for facility upgrade '{name}'. "
+                    f"Required: €{facility_cost:,.0f}, Available: €{team.budget:,.0f}"
+                )
+
+            team.budget -= facility_cost
+            self.db.add_budget_transaction(
+                team_id,
+                "facility_upgrade",
+                facility_cost,
+                f"Facility upgrade: {name}"
+            )
+            self.db.upsert_facility_upgrade(team_id, name, facility_cost)
+            changes[f"facility_upgrade::{name}"] = {
+                "old": "not-upgraded",
+                "new": f"invested €{facility_cost:,.0f}"
+            }
+        return changes
+
+    def _build_update_team_response(
+        self,
+        team_id: int,
+        team: Team,
+        refreshed_team: Team,
+        changes: Dict[str, Any],
+        message: str,
+    ) -> Dict[str, Any]:
+        return {
+            "id": team_id,
+            "name": team.name,
+            "updated_at": datetime.now().isoformat(),
+            "changes": changes,
+            "new_version": int(getattr(refreshed_team, "version", 1) or 1),
+            "message": message,
+        }
     
     # ========================================================================
     # UC-14: Update Team Attributes
@@ -318,55 +389,20 @@ class TeamService:
 
         expected_version = updates.pop("expected_version", None)
         facility_upgrades = updates.pop("facility_upgrades", None) or []
-        
-        # Track changes
-        changes = {}
-        
-        # Only allow certain fields to be updated
+
         allowed_fields = ["name", "team_principal", "headquarters", "biography", "strategy_profile"]
-        
-        for field, value in updates.items():
-            if field in allowed_fields and value is not None:
-                old_value = getattr(team, field, None)
-                if old_value != value:
-                    setattr(team, field, value)
-                    changes[field] = {
-                        "old": old_value,
-                        "new": value
-                    }
-        
-        for facility_name in facility_upgrades:
-            if not isinstance(facility_name, str) or not facility_name.strip():
-                continue
-            facility_cost = self._facility_upgrade_cost(team.tier)
-            if team.budget < facility_cost:
-                raise ValueError(
-                    f"Insufficient budget for facility upgrade '{facility_name}'. "
-                    f"Required: €{facility_cost:,.0f}, Available: €{team.budget:,.0f}"
-                )
-            team.budget -= facility_cost
-            self.db.add_budget_transaction(
-                team_id,
-                "facility_upgrade",
-                facility_cost,
-                f"Facility upgrade: {facility_name.strip()}"
-            )
-            self.db.upsert_facility_upgrade(team_id, facility_name.strip(), facility_cost)
-            changes[f"facility_upgrade::{facility_name.strip()}"] = {
-                "old": "not-upgraded",
-                "new": f"invested €{facility_cost:,.0f}"
-            }
+        changes = self._apply_allowed_team_field_updates(team, updates, allowed_fields)
+        changes.update(self._apply_facility_upgrades(team_id, team, facility_upgrades))
 
         if not changes:
             refreshed_team = self.db.get_team(team_id)
-            return {
-                "id": team_id,
-                "name": team.name,
-                "updated_at": datetime.now().isoformat(),
-                "changes": {},
-                "new_version": int(getattr(refreshed_team, "version", 1) or 1),
-                "message": "No changes were made"
-            }
+            return self._build_update_team_response(
+                team_id,
+                team,
+                refreshed_team,
+                {},
+                "No changes were made",
+            )
         
         # Update team in database
         success = self.db.update_team(team_id, team, expected_version=expected_version)
@@ -380,15 +416,14 @@ class TeamService:
         
         # Log audit trail
         self._log_team_change(team_id, changes, actor_id=actor_id, action="team_updated")
-        
-        return {
-            "id": team_id,
-            "name": team.name,
-            "updated_at": datetime.now().isoformat(),
-            "changes": changes,
-            "new_version": int(getattr(refreshed_team, "version", 1) or 1),
-            "message": f"Team {team.name} updated successfully"
-        }
+
+        return self._build_update_team_response(
+            team_id,
+            team,
+            refreshed_team,
+            changes,
+            f"Team {team.name} updated successfully",
+        )
     
     # ========================================================================
     # Budget Management
