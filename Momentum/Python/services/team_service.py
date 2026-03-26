@@ -203,7 +203,7 @@ class TeamService:
                 }
                 for s in staff
             ]
-        except:
+        except Exception:
             staff_entries = []
         
         # Calculate financials
@@ -481,14 +481,16 @@ class TeamService:
             for category, amount in sorted(category_totals.items())
         ]
 
+        total_expenditure = float((details or {}).get("total_expenditure", 0.0))
+
         return {
             "team_id": team_id,
             "team_name": team.name,
-            "total_budget": team.budget + details["total_expenditure"],  # Original + spent
+            "total_budget": team.budget + total_expenditure,  # Original + spent
             "allocated": allocations,
             "available": team.budget,
             "monthly_income": self._estimate_annual_income(team) / 12,
-            "monthly_expenditure": details["total_expenditure"] / 12
+            "monthly_expenditure": total_expenditure / 12
         }
     
     # ========================================================================

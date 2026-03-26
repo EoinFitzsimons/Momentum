@@ -433,8 +433,10 @@ def create_championship(request: ChampionshipCreate):
             champ_id = db_manager.create_championship(championship)
         
         # Retrieve created championship
+        if champ_id is None:
+            raise HTTPException(status_code=500, detail="Failed to create championship")
         created_champ = db_manager.get_championship(champ_id)
-        
+
         if not created_champ:
             raise HTTPException(status_code=500, detail="Championship created but not retrievable")
         

@@ -68,6 +68,8 @@ def simulate_race(
     Drivers are AI agents making live racing decisions (attack/defend/manage)
     based on gaps, position, and their attributes.
     """
+    teams_dict: Dict[int, Team] = {}
+
     # If a full RaceContext is provided prefer discipline-specific engines
     if context is not None:
         # Best-effort: ensure a minimal teams mapping exists on the context so

@@ -16,11 +16,13 @@ from faker import Faker
 import random
 import re
 import unicodedata
-from typing import List, Set
+import importlib
+from typing import List, Set, Optional, Callable, cast
 
 # Try to use Unidecode for robust transliteration
 try:
-    from unidecode import unidecode as _unidecode
+    _unidecode_module = importlib.import_module("unidecode")
+    _unidecode = cast(Callable[[str], str], getattr(_unidecode_module, "unidecode"))
 except Exception:
     _unidecode = None
 
@@ -184,26 +186,24 @@ class TeamNameGenerator:
         
         return name
     
-    def _get_company_name(self, locale: str = None) -> str:
+    def _get_company_name(self, locale: Optional[str] = None) -> str:
         """Get a company name from Faker"""
-        if not locale:
-            locale = random.choice(self.LOCALES)
-        
-        faker = self.fakers[locale]
+        selected_locale = locale or random.choice(self.LOCALES)
+
+        faker = self.fakers[selected_locale]
         company = faker.company()
         return self._sanitize_name(company)
-    
-    def _get_place_name(self, locale: str = None) -> str:
+
+    def _get_place_name(self, locale: Optional[str] = None) -> str:
         """Get a place name from Faker"""
-        if not locale:
-            locale = random.choice(self.LOCALES)
-        
-        faker = self.fakers[locale]
+        selected_locale = locale or random.choice(self.LOCALES)
+
+        faker = self.fakers[selected_locale]
         # Use city names (most reliable across all locales)
         place = faker.city()
         return self._sanitize_name(place)
     
-    def generate_name(self, discipline: str = None) -> str:
+    def generate_name(self, discipline: Optional[str] = None) -> str:
         """
         Generate a unique team name
         
@@ -261,7 +261,7 @@ class TeamNameGenerator:
         adjective = random.choice(self.ADJECTIVES)
         return f"{adjective} {company}".strip()
     
-    def generate_names(self, count: int, discipline: str = None) -> List[str]:
+    def generate_names(self, count: int, discipline: Optional[str] = None) -> List[str]:
         """
         Generate multiple unique team names
         
@@ -315,12 +315,12 @@ def get_generator() -> TeamNameGenerator:
     return _generator
 
 
-def generate_team_name(discipline: str = None) -> str:
+def generate_team_name(discipline: Optional[str] = None) -> str:
     """Generate a unique team name (convenience function)"""
     return get_generator().generate_name(discipline)
 
 
-def generate_team_names(count: int, discipline: str = None) -> List[str]:
+def generate_team_names(count: int, discipline: Optional[str] = None) -> List[str]:
     """Generate multiple unique team names (convenience function)"""
     return get_generator().generate_names(count, discipline)
 
