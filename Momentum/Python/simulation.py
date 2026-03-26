@@ -803,6 +803,26 @@ def update_race_status(race_id: int, request: RaceStatusUpdate):
 # UC-4: READ RACE RESULTS
 # ============================================================================
 
+def _build_race_result_entry(result):
+    """Helper to build a race result classification entry"""
+    driver = db_manager.get_driver(result.driver_id)
+    team = db_manager.get_team(result.team_id) if result.team_id else None
+    
+    return {
+        "position": result.position,
+        "driver_id": result.driver_id,
+        "driver_name": driver.name if driver else f"Driver {result.driver_id}",
+        "team_id": result.team_id,
+        "team_name": team.name if team else "No Team",
+        "points": result.points,
+        "fastest_lap": result.fastest_lap,
+        "dnf_reason": result.dnf_reason,
+        "grid_position": result.grid_position,
+        "time_seconds": result.time_seconds,
+        "status": "DNF" if result.dnf_reason else "Finished"
+    }
+
+
 @app.get("/races/{race_id}/results", response_model=RaceResultDetailResponse, responses={404: {"description": "Race not found"}, 500: {"description": "Database error"}})
 def get_race_results(race_id: int):
     """
@@ -833,26 +853,11 @@ def get_race_results(race_id: int):
         fastest_lap_info = None
         
         for result in results:
-            driver = db_manager.get_driver(result.driver_id)
-            team = db_manager.get_team(result.team_id) if result.team_id else None
-            
-            entry = {
-                "position": result.position,
-                "driver_id": result.driver_id,
-                "driver_name": driver.name if driver else f"Driver {result.driver_id}",
-                "team_id": result.team_id,
-                "team_name": team.name if team else "No Team",
-                "points": result.points,
-                "fastest_lap": result.fastest_lap,
-                "dnf_reason": result.dnf_reason,
-                "grid_position": result.grid_position,
-                "time_seconds": result.time_seconds,
-                "status": "DNF" if result.dnf_reason else "Finished"
-            }
-            
+            entry = _build_race_result_entry(result)
             classification.append(entry)
             
             if result.fastest_lap and not fastest_lap_info:
+                driver = db_manager.get_driver(result.driver_id)
                 fastest_lap_info = {
                     "driver_name": driver.name if driver else f"Driver {result.driver_id}",
                     "time": result.time_seconds
