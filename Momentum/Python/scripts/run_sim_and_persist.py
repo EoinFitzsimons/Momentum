@@ -22,7 +22,8 @@ def main():
         if not drivers:
             try:
                 # Try to run the Faker seeder script (provides realistic names)
-                from scripts import seed_faker_drivers as faker_seeder
+                import importlib
+                faker_seeder = importlib.import_module("scripts.seed_faker_drivers")
                 faker_seeder.main()
             except Exception:
                 # Fallback to simple placeholder seed (used by tests)
