@@ -2711,21 +2711,45 @@ class RaceWindow(QMainWindow):
             ('S', int(320 * (length_km / 6.0))),
         ]
 
+    def _is_drag_discipline(self) -> bool:
+        """Return True when the active race discipline is drag racing."""
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        return discipline == 'DRAG_ACCELERATION'
+
+    def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
+        """Build a point-to-point drag strip profile (mostly straight, slight bend)."""
+        total_m = max(350, int(track_length_m))
+        first_straight = max(180, int(total_m * 0.58))
+        second_straight = max(120, total_m - first_straight - 70)
+
+        return [
+            {'type': 'S', 'length_m': first_straight},
+            {'type': 'C', 'angle_deg': 7, 'radius_m': 850, 'clothoid_len': 55, 'k': 0.00006},
+            {'type': 'S', 'length_m': second_straight},
+        ]
+
     def _generate_circuit_geometry(self) -> Tuple[Optional[List[TrackPoint]], Optional[float]]:
         """Generate circuit geometry and return points with authoritative track length."""
         try:
             track = self.track
             track_km = getattr(track, 'length_km', 4.5)
             print(f"Generating circuit for {track_km}km track (closure solver enabled)...")
-            wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
-            routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+            track_length = track_km * 1000
+
+            if self._is_drag_discipline():
+                instructions = self._build_drag_strip_instructions(track_length)
+                wrapper = {'instructions': instructions}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': True})
+            else:
+                wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+
             track_points = routes.get('main')
             if not track_points:
                 self.info_label.setText("Error: Failed to generate circuit")
                 self.start_btn.setEnabled(False)
                 print("ERROR: Circuit generation returned empty list")
                 return None, None
-            track_length = track_km * 1000
             print(f"Generated circuit with {len(track_points)} points, using database length: {track_length:.0f}m")
             self.track_points = track_points
             return track_points, track_length

@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
 
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
-from GUI.gui_championship import ChampionshipSelectionDialog
+from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
 
 PLAYER_ID = "local_player"
@@ -111,7 +111,7 @@ class CareerTeamSelectionDialog(QDialog):
             team_item = QTableWidgetItem(team.name)
             team_item.setData(Qt.ItemDataRole.UserRole, team)
             self.teams_table.setItem(row, 0, team_item)
-            self.teams_table.setItem(row, 1, QTableWidgetItem(str(team.tier)))
+            self.teams_table.setItem(row, 1, QTableWidgetItem(_player_label(team.tier)))
             self.teams_table.setItem(row, 2, QTableWidgetItem(f"EUR {team.budget:,.0f}"))
             self.teams_table.setItem(row, 3, QTableWidgetItem(str(len(drivers))))
             self.teams_table.setItem(row, 4, QTableWidgetItem(str(len(staff))))
@@ -328,11 +328,13 @@ class CareerWindow(QMainWindow):
 
     def _load_team_panel(self):
         self.header_label.setText(f"Career HQ - {self.championship.name}")
-        self.subheader_label.setText(f"Discipline: {self.championship.discipline} | Season {self.championship.current_season}")
+        self.subheader_label.setText(
+            f"Discipline: {_player_label(self.championship.discipline)} | Season {self.championship.current_season}"
+        )
 
         self.team_name_label.setText(f"Team: {self.owned_team.name}")
         self.team_budget_label.setText(f"Budget: EUR {self.owned_team.budget:,.0f}")
-        self.team_tier_label.setText(f"Tier: {self.owned_team.tier}")
+        self.team_tier_label.setText(f"Tier: {_player_label(self.owned_team.tier)}")
         self.team_hq_label.setText(f"HQ: {self.owned_team.headquarters or '-'}")
 
     def _load_drivers_panel(self):
@@ -371,12 +373,12 @@ class CareerWindow(QMainWindow):
         self.staff_table.setRowCount(len(staff))
         for row, member in enumerate(staff):
             self.staff_table.setItem(row, 0, QTableWidgetItem(str(member.name)))
-            self.staff_table.setItem(row, 1, QTableWidgetItem(str(member.role)))
+            self.staff_table.setItem(row, 1, QTableWidgetItem(_player_label(member.role)))
             self.staff_table.setItem(row, 2, QTableWidgetItem(f"{float(member.rating):.1f}"))
 
     def _load_car_panel(self):
         self.car_ops_label.setText(f"Operations Rating: {self.owned_team.operations_rating:.1f}")
-        self.car_strategy_label.setText(f"Strategy Profile: {self.owned_team.strategy_profile}")
+        self.car_strategy_label.setText(f"Strategy Profile: {_player_label(self.owned_team.strategy_profile)}")
 
         facilities = self.db.get_facility_upgrades(self.owned_team.id)
         if not facilities:
@@ -399,7 +401,7 @@ class CareerWindow(QMainWindow):
             self.schedule_table.setItem(row, 0, QTableWidgetItem(f"R{race['round_number']}"))
             self.schedule_table.setItem(row, 1, QTableWidgetItem(str(race['track_name'])))
             self.schedule_table.setItem(row, 2, QTableWidgetItem(str(race['race_date'])))
-            self.schedule_table.setItem(row, 3, QTableWidgetItem(str(race['status']).upper()))
+            self.schedule_table.setItem(row, 3, QTableWidgetItem(_player_label(race['status'])))
 
             if self.next_race is None and race['status'] == 'scheduled':
                 self.next_race = race
