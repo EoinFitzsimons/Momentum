@@ -458,7 +458,6 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Humidity/temperature (affects air density)
         temp = weather.get('temperature', 20.0)
-        humidity = weather.get('humidity', 50.0)
 
         # Hot, dry conditions = better (thinner air density = less drag at top speed)
         # But this is complex; simplified to temperature only
