@@ -15,6 +15,9 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
+RACING_DISCIPLINE_DESCRIPTION = "Racing discipline"
+
+
 # ============================================================================
 # RACE SIMULATION SCHEMAS
 # ============================================================================
@@ -28,7 +31,7 @@ class RaceSimulationRequest(BaseModel):
     """
     discipline: str = Field(
         ...,
-        description="Racing discipline",
+        description=RACING_DISCIPLINE_DESCRIPTION,
         examples=[
             "SINGLE_SEATER",
             "ENDURANCE",
@@ -230,7 +233,7 @@ class TeamCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     discipline: str = Field(
         ...,
-        description="Racing discipline",
+        description=RACING_DISCIPLINE_DESCRIPTION,
         examples=["SINGLE_SEATER", "ENDURANCE", "PRODUCTION_TOURING", "URBAN_STREET"]
     )
     nationality: str = Field(default="INT")
@@ -547,7 +550,7 @@ class ChampionshipCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     discipline: str = Field(
         ...,
-        description="Racing discipline",
+        description=RACING_DISCIPLINE_DESCRIPTION,
         examples=["SINGLE_SEATER", "ENDURANCE", "URBAN_STREET"]
     )
     season_length: int = Field(ge=1, le=50, default=20)

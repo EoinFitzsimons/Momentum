@@ -68,6 +68,8 @@ def _screen_dimensions(fallback_width: int = 1280, fallback_height: int = 720) -
 
 class ChampionshipSelectionDialog(QDialog):
     """Dialog for selecting or creating a championship."""
+
+    NO_SELECTION_TITLE = "No Selection"
     
     def __init__(self, db: DatabaseManager, parent=None):
         super().__init__(parent)
@@ -124,6 +126,11 @@ class ChampionshipSelectionDialog(QDialog):
         create_btn.clicked.connect(self.create_championship)
         create_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #B9F2FF; color: #353839; font-weight: bold; }")
         buttons_layout.addWidget(create_btn)
+
+        delete_btn = QPushButton("Delete Championship")
+        delete_btn.clicked.connect(self.delete_championship)
+        delete_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #8B0000; color: white; font-weight: bold; }")
+        buttons_layout.addWidget(delete_btn)
         
         select_btn = QPushButton("Select Championship")
         select_btn.clicked.connect(self.select_championship)
@@ -167,12 +174,56 @@ class ChampionshipSelectionDialog(QDialog):
             row = self.championships_table.currentRow()
             item = self.championships_table.item(row, 0)
             if item is None:
-                QMessageBox.warning(self, "No Selection", "Please select a valid championship.")
+                QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a valid championship.")
                 return
             self.selected_championship = item.data(Qt.ItemDataRole.UserRole)
             self.accept()
         else:
-            QMessageBox.warning(self, "No Selection", "Please select a championship.")
+            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship.")
+
+    def delete_championship(self):
+        """Delete selected championship and its races/results."""
+        row = self.championships_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship to delete.")
+            return
+
+        item = self.championships_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Selection Error", "Please select a valid championship.")
+            return
+
+        championship = item.data(Qt.ItemDataRole.UserRole)
+        if championship is None:
+            QMessageBox.warning(self, "Selection Error", "Could not resolve selected championship.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Delete Championship",
+            (
+                f"Delete championship '{championship.name}'?\n\n"
+                "This will permanently delete all races and race results in it."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            deleted = self.db.delete_championship(championship.id)
+            if not deleted:
+                QMessageBox.warning(self, "Delete Failed", "Championship could not be deleted.")
+                return
+
+            if self.selected_championship and getattr(self.selected_championship, 'id', None) == championship.id:
+                self.selected_championship = None
+
+            self.load_championships()
+            QMessageBox.information(self, "Deleted", f"Championship '{championship.name}' deleted.")
+        except Exception as e:
+            QMessageBox.critical(self, "Delete Error", f"Failed to delete championship: {str(e)}")
     
     def create_championship(self):
         """Show dialog to create new championship."""
@@ -776,6 +827,7 @@ class PreRaceSetupDialog(QDialog):
         championship: Championship,
         race: Race,
         track,
+        locked_team_id: Optional[int] = None,
         parent=None
     ):
         super().__init__(parent)
@@ -783,6 +835,7 @@ class PreRaceSetupDialog(QDialog):
         self.championship = championship
         self.race = race
         self.track = track
+        self.locked_team_id = locked_team_id
         self.selected_driver = None
         self.selected_team = None
         self.race_config = {}
@@ -858,6 +911,10 @@ class PreRaceSetupDialog(QDialog):
         
         self.team_combo.currentIndexChanged.connect(self.on_team_selected)
         team_layout.addWidget(self.team_combo)
+
+        # Team is locked in championship flow to prevent in-race/pre-race
+        # team switching. Team selection should happen outside this dialog.
+        self.team_combo.setEnabled(False)
         
         # Team budget
         self.team_budget = QLabel()
@@ -1040,16 +1097,36 @@ class PreRaceSetupDialog(QDialog):
             valid = getattr(self.selected_driver, 'current_team_id', None) == getattr(self.selected_team, 'id', None)
         self.start_btn.setEnabled(valid)
 
-    def _select_first_team_with_drivers(self):
-        """Auto-select a team that has at least one contracted driver."""
-        for i in range(self.team_combo.count()):
+    def _find_team_index_with_drivers(self, preferred_team_id: Optional[int] = None) -> Optional[int]:
+        """Return first index for a valid team with contracted drivers."""
+        candidate_indices = list(range(self.team_combo.count()))
+        if preferred_team_id is not None:
+            preferred = []
+            remaining = []
+            for i in candidate_indices:
+                team = self.team_combo.itemData(i)
+                if team and getattr(team, 'id', None) == preferred_team_id:
+                    preferred.append(i)
+                else:
+                    remaining.append(i)
+            candidate_indices = preferred + remaining
+
+        for i in candidate_indices:
             team = self.team_combo.itemData(i)
             if not team:
                 continue
             if self._drivers_for_team(team.id):
-                self.team_combo.setCurrentIndex(i)
-                self.selected_team = team
-                return
+                return i
+        return None
+
+    def _select_first_team_with_drivers(self):
+        """Auto-select a team that has at least one contracted driver."""
+        selected_index = self._find_team_index_with_drivers(self.locked_team_id)
+        if selected_index is None:
+            return
+
+        self.team_combo.setCurrentIndex(selected_index)
+        self.selected_team = self.team_combo.itemData(selected_index)
     
     def get_race_config(self) -> Dict[str, Any]:
         """Return the configured race setup."""
