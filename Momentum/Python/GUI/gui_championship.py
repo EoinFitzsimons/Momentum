@@ -66,6 +66,34 @@ def _screen_dimensions(fallback_width: int = 1280, fallback_height: int = 720) -
     return geometry.width(), geometry.height()
 
 
+def _player_label(value: Any) -> str:
+    """Convert enum-like/internal values to player-facing Title Case labels."""
+    if value is None:
+        return ""
+
+    raw = str(value).strip()
+    if not raw:
+        return ""
+
+    normalized = raw.upper().replace(" ", "_")
+    mapping = {
+        "TOP_TIER": "Top Tier",
+        "TIER_1": "Tier 1",
+        "TIER_2": "Tier 2",
+        "TIER_3": "Tier 3",
+        "SINGLE_SEATER": "Single Seater",
+        "PRODUCTION_TOURING": "Production Touring",
+        "URBAN_STREET": "Urban Street",
+        "DRAG_ACCELERATION": "Drag Acceleration",
+        "SPRINT_RALLYCROSS": "Sprint Rallycross",
+        "IN_PROGRESS": "In Progress",
+    }
+    if normalized in mapping:
+        return mapping[normalized]
+
+    return raw.replace("_", " ").title()
+
+
 class ChampionshipSelectionDialog(QDialog):
     """Dialog for selecting or creating a championship."""
 
@@ -155,12 +183,12 @@ class ChampionshipSelectionDialog(QDialog):
             calendar = self.championship_service.get_championship_calendar(champ.id, champ.current_season)
             
             self.championships_table.setItem(i, 0, QTableWidgetItem(champ.name))
-            self.championships_table.setItem(i, 1, QTableWidgetItem(champ.discipline))
+            self.championships_table.setItem(i, 1, QTableWidgetItem(_player_label(champ.discipline)))
             self.championships_table.setItem(i, 2, QTableWidgetItem(str(champ.current_season)))
             self.championships_table.setItem(i, 3, QTableWidgetItem(f"{len(calendar)} races"))
             
             status = "Archived" if champ.archived else "Active"
-            self.championships_table.setItem(i, 4, QTableWidgetItem(status))
+            self.championships_table.setItem(i, 4, QTableWidgetItem(_player_label(status)))
             
             # Store championship object in row
             row_item = self.championships_table.item(i, 0)
@@ -277,14 +305,16 @@ class CreateChampionshipDialog(QDialog):
         discipline_layout = QHBoxLayout()
         discipline_layout.addWidget(QLabel("Discipline:"))
         self.discipline_combo = QComboBox()
-        self.discipline_combo.addItems([
+        discipline_values = [
             "SINGLE_SEATER",
             "ENDURANCE",
             "PRODUCTION_TOURING",
             "URBAN_STREET",
             "DRAG_ACCELERATION",
             "SPRINT_RALLYCROSS"
-        ])
+        ]
+        for value in discipline_values:
+            self.discipline_combo.addItem(_player_label(value), value)
         discipline_layout.addWidget(self.discipline_combo)
         details_layout.addLayout(discipline_layout)
         
@@ -303,7 +333,9 @@ class CreateChampionshipDialog(QDialog):
         tier_layout = QHBoxLayout()
         tier_layout.addWidget(QLabel("Tier:"))
         self.tier_combo = QComboBox()
-        self.tier_combo.addItems(["TOP_TIER", "TIER_2", "TIER_3"])
+        tier_values = ["TOP_TIER", "TIER_2", "TIER_3"]
+        for value in tier_values:
+            self.tier_combo.addItem(_player_label(value), value)
         tier_layout.addWidget(self.tier_combo)
         details_layout.addLayout(tier_layout)
         
@@ -350,19 +382,22 @@ class CreateChampionshipDialog(QDialog):
         
         try:
             logger.info(f"Creating championship: '{name}'")
-            logger.info(f"  Discipline: {self.discipline_combo.currentText()}")
+            selected_discipline = self.discipline_combo.currentData() or self.discipline_combo.currentText()
+            selected_tier = self.tier_combo.currentData() or self.tier_combo.currentText()
+
+            logger.info(f"  Discipline: {_player_label(selected_discipline)}")
             logger.info(f"  Season Length: {self.season_spin.value()} races")
-            logger.info(f"  Tier: {self.tier_combo.currentText()}")
+            logger.info(f"  Tier: {_player_label(selected_tier)}")
             
             # Create championship object
             championship = Championship(
                 id=0,
                 name=name,
-                discipline=self.discipline_combo.currentText(),
+                discipline=selected_discipline,
                 season_length=self.season_spin.value(),
                 points_system="standard",
                 current_season=1,
-                tier=self.tier_combo.currentText(),
+                tier=selected_tier,
                 founded_year=datetime.now().year,
                 description=self.description_input.toPlainText()
             )
@@ -487,7 +522,7 @@ class ChampionshipWindow(QMainWindow):
         season_label.setStyleSheet(f"font-size: 14px; color: {COLORS['accent']}; font-weight: bold;")
         status_layout.addWidget(season_label)
         
-        discipline_label = QLabel(f"Discipline: {self.championship.discipline}")
+        discipline_label = QLabel(f"Discipline: {_player_label(self.championship.discipline)}")
         discipline_label.setStyleSheet("font-size: 12px; color: #999;")
         status_layout.addWidget(discipline_label)
         
@@ -628,7 +663,7 @@ class ChampionshipWindow(QMainWindow):
 
     def _build_schedule_status_item(self, race_status: str) -> Tuple[QTableWidgetItem, bool]:
         """Build schedule status cell and return whether race counts as completed."""
-        status_item = QTableWidgetItem(race_status.upper())
+        status_item = QTableWidgetItem(_player_label(race_status))
         if race_status == 'scheduled':
             status_item.setForeground(QColor(COLORS['info']))
             return status_item, False
@@ -1054,7 +1089,7 @@ class PreRaceSetupDialog(QDialog):
         if self.team_combo.currentIndex() >= 0:
             self.selected_team = self.team_combo.currentData()
             if self.selected_team:
-                budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {self.selected_team.tier}"
+                budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {_player_label(self.selected_team.tier)}"
                 self.team_budget.setText(budget_text)
                 self._refresh_driver_combo_for_selected_team()
                 self._update_start_button_state()

@@ -52,7 +52,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     def __init__(self, seed: Optional[int] = None):
         """Initialise single seater engine"""
         super().__init__(seed if seed is not None else 0)
-        self.discipline: RacingDiscipline = RacingDiscipline.SINGLE_SEATER
+        self.discipline = RacingDiscipline.SINGLE_SEATER
 
     def get_attribute_weights(self) -> Dict[str, float]:
         """
@@ -441,8 +441,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
         return {
             "active_drivers": set(driver_ids),
-            "total_times": {did: 0.0 for did in driver_ids},
-            "laps_completed": {did: 0 for did in driver_ids},
+            "total_times": dict.fromkeys(driver_ids, 0.0),
+            "laps_completed": dict.fromkeys(driver_ids, 0),
             "positions": {did: i + 1 for i, did in enumerate(driver_ids)},
             "dnf_reasons": {},
             "dnf_laps": {},

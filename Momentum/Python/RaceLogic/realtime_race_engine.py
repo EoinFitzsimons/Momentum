@@ -391,10 +391,9 @@ class RealtimeRaceEngine:
             'rain': 1.2,
         }
         surf = None
-        try:
-            surf = getattr(self.track_map.track, 'surface', None) or getattr(self.track_map.track, 'surface_type', None)
-        except Exception:
-            surf = None
+        track_obj = getattr(self.track_map, 'track', None) if self.track_map is not None else None
+        if track_obj is not None:
+            surf = getattr(track_obj, 'surface', None) or getattr(track_obj, 'surface_type', None)
         surface_mul = surface_multipliers.get((surf or '').lower(), 1.0)
         comp_key = (getattr(state, 'tire_compound', 'medium') or 'medium').lower()
         comp_mul = compound_multipliers.get(comp_key, 1.0)
@@ -717,6 +716,11 @@ class RealtimeRaceEngine:
         return True
 
     def _apply_track_aware_attack(self, state: DriverState, race_state: RaceState, driver: Driver, car_ahead: DriverState, base_push: float) -> None:
+        if self.track_map is None:
+            state.racing_mode = RacingMode.ATTACK
+            state.push_intensity = min(1.0, base_push + 0.15)
+            return
+
         section_type, corner = self.track_map.get_section_at_position(state.position_m % race_state.track_length_m)
         gap_m = state.gap_ahead * state.velocity_mps
 
@@ -754,7 +758,7 @@ class RealtimeRaceEngine:
         state: DriverState,
         car_ahead: DriverState,
         race_state: RaceState,
-        attempt_type: str,
+        attempt_type: OvertakeAttemptType | str,
         gap_m: float,
         corner: Optional[Any],
     ) -> None:
@@ -764,10 +768,18 @@ class RealtimeRaceEngine:
         if race_state.current_time < cooldown_expiry or key in self.active_overtakes:
             return
 
+        if isinstance(attempt_type, OvertakeAttemptType):
+            normalized_attempt_type = attempt_type
+        else:
+            try:
+                normalized_attempt_type = OvertakeAttemptType(attempt_type)
+            except Exception:
+                normalized_attempt_type = OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+
         self.active_overtakes[key] = OvertakeAttempt(
             attacker_id=state.driver_id,
             defender_id=car_ahead.driver_id,
-            attempt_type=attempt_type,
+            attempt_type=normalized_attempt_type,
             position_m=state.position_m,
             gap_m=gap_m,
             speed_advantage_kmh=(state.velocity_mps - car_ahead.velocity_mps) * 3.6,
@@ -1331,7 +1343,8 @@ class RealtimeRaceEngine:
             return True
 
         position_on_track = attacker_state.position_m % race_state.track_length_m
-        _, _ = self.track_map.get_section_at_position(position_on_track)
+        if self.track_map is not None:
+            self.track_map.get_section_at_position(position_on_track)
 
         speed_diff = attacker_state.velocity_mps - defender_state.velocity_mps
         gap_meters = attacker_state.gap_ahead * attacker_state.velocity_mps
