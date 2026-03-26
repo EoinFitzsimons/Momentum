@@ -397,20 +397,20 @@ def patch_database_manager():
     """Add hiring and progression methods to DatabaseManager class"""
     from database.database_manager import DatabaseManager
     
-    DatabaseManager.get_available_drivers = get_available_drivers
-    DatabaseManager.get_available_staff = get_available_staff
-    DatabaseManager.sign_driver_contract = sign_driver_contract
-    DatabaseManager.sign_staff_contract = sign_staff_contract
-    DatabaseManager.release_driver = release_driver
-    DatabaseManager.release_staff = release_staff
-    DatabaseManager.update_team_budget = update_team_budget
-    DatabaseManager.update_driver_skills = update_driver_skills
-    DatabaseManager.age_driver = age_driver
-    DatabaseManager.retire_driver = retire_driver
-    DatabaseManager.recycle_driver = recycle_driver
-    DatabaseManager.get_drivers_for_progression = get_drivers_for_progression
-    DatabaseManager.increment_driver_experience = increment_driver_experience
-    DatabaseManager.expire_contracts_for_season = expire_contracts_for_season
+    DatabaseManager.get_available_drivers = get_available_drivers  # type: ignore[attr-defined]
+    DatabaseManager.get_available_staff = get_available_staff  # type: ignore[attr-defined]
+    DatabaseManager.sign_driver_contract = sign_driver_contract  # type: ignore[attr-defined]
+    DatabaseManager.sign_staff_contract = sign_staff_contract  # type: ignore[attr-defined]
+    DatabaseManager.release_driver = release_driver  # type: ignore[attr-defined]
+    DatabaseManager.release_staff = release_staff  # type: ignore[attr-defined]
+    DatabaseManager.update_team_budget = update_team_budget  # type: ignore[attr-defined]
+    DatabaseManager.update_driver_skills = update_driver_skills  # type: ignore[attr-defined]
+    DatabaseManager.age_driver = age_driver  # type: ignore[attr-defined]
+    DatabaseManager.retire_driver = retire_driver  # type: ignore[attr-defined]
+    DatabaseManager.recycle_driver = recycle_driver  # type: ignore[attr-defined]
+    DatabaseManager.get_drivers_for_progression = get_drivers_for_progression  # type: ignore[attr-defined]
+    DatabaseManager.increment_driver_experience = increment_driver_experience  # type: ignore[attr-defined]
+    DatabaseManager.expire_contracts_for_season = expire_contracts_for_season  # type: ignore[attr-defined]
 
 
 # Auto-patch on import
