@@ -24,7 +24,7 @@ import json
 import random
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -43,6 +43,8 @@ from tools.locale_mapping import get_all_country_codes, get_locale_for_country
 # CONFIGURATION
 # ============================================================================
 
+COMPANY_MOTORSPORT = "{company} Motorsport"
+
 # Team naming patterns by discipline
 TEAM_NAME_PATTERNS = {
     "SINGLE_SEATER": [
@@ -60,7 +62,7 @@ TEAM_NAME_PATTERNS = {
         "{company} Formula Team"
     ],
     "PRODUCTION_TOURING": [
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "{surname} Racing",
         "{company} GT Team",
         "{company} Touring",
@@ -100,7 +102,7 @@ TEAM_NAME_PATTERNS = {
         "{surname} RX Team",
         "{company} Sprint Racing",
         "RX Team {surname}",
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "{surname} Competition",
         "{place} Rallycross",
         "{adjective} RX",
@@ -110,7 +112,7 @@ TEAM_NAME_PATTERNS = {
     "ENDURANCE": [
         "{company} Endurance",
         "{surname} Racing Team",
-        "{company} Motorsport",
+        COMPANY_MOTORSPORT,
         "Team {company} Endurance",
         "{surname} Le Mans Team",
         "{company} Prototype Racing",
@@ -144,6 +146,14 @@ COMMON_LOCALES = [
     'pt_BR', 'ja_JP', 'zh_CN', 'ru_RU', 'ko_KR', 'nl_NL'
 ]
 
+HONORIFIC_PREFIXES = {
+    'dr', 'mr', 'ms', 'mrs', 'miss', 'prof', 'sir', 'dame', 'lady'
+}
+
+HONORIFIC_SUFFIXES = {
+    'md', 'dds', 'phd', 'jr', 'sr', 'ii', 'iii', 'iv'
+}
+
 DRIVER_SLOTS_PER_DISCIPLINE = {
     "SINGLE_SEATER": 2,
     "PRODUCTION_TOURING": 2,
@@ -160,11 +170,16 @@ DRIVER_SLOTS_PER_DISCIPLINE = {
 # UTILITY FUNCTIONS
 # ============================================================================
 
-# Try to use unidecode for robust transliteration
-try:
-    from unidecode import unidecode as _unidecode
-except ImportError:
-    _unidecode = None
+def _load_unidecode():
+    """Best-effort dynamic import of unidecode to avoid hard dependency."""
+    try:
+        module = __import__("unidecode")
+        return getattr(module, "unidecode", None)
+    except Exception:
+        return None
+
+
+_unidecode = _load_unidecode()
 
 
 def to_latin(s: str) -> str:
@@ -181,19 +196,21 @@ def to_latin(s: str) -> str:
 
 def clean_name(name: str) -> str:
     """Remove honorifics and clean name"""
-    # Remove common honorifics
-    honorific_prefix = re.compile(r'^(Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Miss\.?|Prof\.?|Sir\.?|Dame\.?|Lady\.?)\s+', re.IGNORECASE)
-    honorific_suffix = re.compile(r'\b(MD|M\.D\.|DDS|D\.D\.S\.|PhD|Ph\.D\.|Jr\.|Sr\.|II|III|IV)\b', re.IGNORECASE)
-    
-    name = honorific_prefix.sub('', name)
-    name = honorific_suffix.sub('', name).strip()
-    name = to_latin(name)
-    
-    # Fallback if name is empty or only non-Latin characters
-    if not re.search(r'[A-Za-z]', name):
-        return None
-    
-    return name
+    if not name:
+        return ""
+    tokens = [t for t in name.strip().split() if t]
+    if not tokens:
+        return ""
+
+    while tokens and tokens[0].lower().rstrip('.') in HONORIFIC_PREFIXES:
+        tokens.pop(0)
+    while tokens and tokens[-1].lower().rstrip('.') in HONORIFIC_SUFFIXES:
+        tokens.pop()
+
+    cleaned = to_latin(" ".join(tokens)).strip()
+    if not re.search(r'[A-Za-z]', cleaned):
+        return ""
+    return cleaned
 
 
 def random_birth_date(min_age: int = 18, max_age: int = 45) -> str:
@@ -207,6 +224,38 @@ def random_birth_date(min_age: int = 18, max_age: int = 45) -> str:
 def get_locale_for_nationality(nationality: str) -> str:
     """Get appropriate Faker locale for nationality"""
     return get_locale_for_country(nationality)
+
+
+def _build_fake_for_nationality(nationality: str) -> Faker:
+    """Create Faker instance for nationality locale with safe fallback."""
+    locale = get_locale_for_nationality(nationality)
+    try:
+        return Faker(locale)
+    except Exception:
+        return Faker("en_US")
+
+
+def _pick_tier_from_distribution() -> str:
+    """Sample a team tier using configured distribution weights."""
+    rand = random.random()
+    if rand < TIER_DISTRIBUTION['tier1']:
+        return 'tier1'
+    if rand < TIER_DISTRIBUTION['tier1'] + TIER_DISTRIBUTION['tier2']:
+        return 'tier2'
+    return 'tier3'
+
+
+def _tier_age_skill_profile(tier: str) -> Tuple[int, float, float]:
+    """Return (age, skill_mean, skill_std) profile by normalized team tier."""
+    t = (tier or '').lower()
+    if t in ('tier1', 'tier_1', '1'):
+        age = random.randint(28, 45) if random.random() < 0.80 else random.randint(22, 27)
+        return age, 78.0, 10.0
+    if t in ('tier2', 'tier_2', '2'):
+        age = random.choice([random.randint(22, 30)] * 6 + [random.randint(30, 38)] * 4)
+        return age, 62.0, 12.0
+    age = random.randint(18, 32) if random.random() < 0.85 else random.randint(35, 45)
+    return age, 55.0, 13.0
 
 
 def skill_distribution(mean: float = 60.0, std: float = 15.0, min_val: float = 30.0, max_val: float = 95.0) -> float:
@@ -240,7 +289,7 @@ def generate_driver(fake: Faker, nationality: str, discipline: str, locale: str)
     else:
         skill_mean = 55.0  # Rookies
     
-    birth_date = (datetime.utcnow().date() - timedelta(days=365 * age)).strftime('%Y-%m-%d')
+    birth_date = (datetime.now(timezone.utc).date() - timedelta(days=365 * age)).strftime('%Y-%m-%d')
     
     # Generate all skill attributes
     driver_data = {
@@ -357,11 +406,15 @@ def generate_team_name(fake: Faker, discipline: str, existing_names: set) -> Opt
         
         # Clean company name (remove Inc, Ltd, etc.)
         company = re.sub(r'\b(Inc|Ltd|LLC|Corp|Group|Holdings)\b\.?', '', company, flags=re.IGNORECASE).strip()
-        company = to_latin(company)
-        surname = to_latin(surname)
-        city = to_latin(city)
-        place = to_latin(place)
-        adjective = to_latin(adjective)
+        company = to_latin(company).strip()
+        surname = to_latin(surname).strip()
+        city = to_latin(city).strip()
+        place = to_latin(place).strip()
+        adjective = to_latin(adjective).strip()
+        
+        # Reject if any critical component became empty (non-Latin locale artifact)
+        if not company or not surname or not city or not place:
+            continue
         
         values = {
             "company": company,
@@ -373,21 +426,33 @@ def generate_team_name(fake: Faker, discipline: str, existing_names: set) -> Opt
         name = pattern.format_map(values)
         name = clean_name(name)
         
-        if name and re.search(r'[A-Za-z]', name) and name not in existing_names:
+        # Verify name has content and is unique
+        if name and len(name) > 3 and re.search(r'[A-Za-z]', name) and name not in existing_names:
             return name
     
     return None
 
 
-def generate_team(fake: Faker, discipline: str, nationality: str, tier: str, existing_names: set) -> Optional[dict]:
-    """Generate a single team"""
-    name = generate_team_name(fake, discipline, existing_names)
-    if not name:
-        return None
-    
-    # Budget based on tier and discipline
+def _get_country_codes_for_team_seed() -> list:
+    """Return all country codes used for team nationality sampling."""
+    try:
+        from data.countries import COUNTRIES
+        return list(COUNTRIES.keys())
+    except ImportError:
+        return ['USA', 'GBR', 'DEU', 'ITA', 'FRA', 'ESP', 'JPN', 'BRA']
+
+
+def _safe_locales_for_team_names() -> list:
+    """Locales that reliably produce Latin-script company/place strings."""
+    return [
+        'en_US', 'en_GB', 'de_DE', 'fr_FR', 'it_IT', 'es_ES',
+        'pt_BR', 'nl_NL', 'sv_SE', 'da_DK', 'en_AU', 'en_CA'
+    ]
+
+
+def _calculate_team_budget_and_ops(discipline: str, tier: str) -> Tuple[float, float]:
+    """Return generated (budget, operations_rating) for team tier/discipline."""
     base_budget = BUDGET_CAPS.get(discipline, 50_000_000)
-    
     if tier == "tier1":
         budget = base_budget * random.uniform(0.85, 1.0)
         operations_rating = round(random.uniform(75.0, 95.0), 2)
@@ -397,32 +462,69 @@ def generate_team(fake: Faker, discipline: str, nationality: str, tier: str, exi
     else:  # tier3
         budget = base_budget * random.uniform(0.35, 0.65)
         operations_rating = round(random.uniform(45.0, 70.0), 2)
-    
+    return round(budget, 2), operations_rating
+
+
+def _build_seed_team_data(
+    discipline: str,
+    country_codes: list,
+    safe_locales_for_names: list,
+    existing_names: set,
+) -> Optional[dict]:
+    """Generate one team payload suitable for insertion, or None if invalid."""
+    nationality = random.choice(country_codes)
+
+    safe_locale = random.choice(safe_locales_for_names)
+    fake_for_names = Faker(safe_locale)
+    fake_for_principal = _build_fake_for_nationality(nationality)
+
+    tier = _pick_tier_from_distribution()
+    team_name = generate_team_name(fake_for_names, discipline, existing_names)
+    if not team_name:
+        return None
+
+    budget, operations_rating = _calculate_team_budget_and_ops(discipline, tier)
+
     team_data = {
-        'name': name,
+        'name': team_name,
         'nationality': nationality,
         'discipline': discipline,
         'tier': tier,
-        'budget': round(budget, 2),
+        'budget': budget,
         'founded_year': random.randint(1950, 2024),
-        'team_principal': clean_name(fake.name()),
-        'headquarters': fake.city(),
+        'team_principal': clean_name(fake_for_principal.name()),
+        'headquarters': fake_for_principal.city(),
         'operations_rating': operations_rating,
         'strategy_profile': random.choice(['conservative', 'standard', 'aggressive'])
     }
-    
+
+    if not team_data['team_principal']:
+        return None
+
     return team_data
+
+
+def _insert_seed_team(cursor, team_data: dict) -> None:
+    """Insert a generated team payload into teams table."""
+    cursor.execute('''
+        INSERT INTO teams (
+            name, nationality, discipline, tier, budget, founded_year,
+            team_principal, headquarters, operations_rating, strategy_profile
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        team_data['name'], team_data['nationality'], team_data['discipline'],
+        team_data['tier'], team_data['budget'], team_data['founded_year'],
+        team_data['team_principal'], team_data['headquarters'],
+        team_data['operations_rating'], team_data['strategy_profile']
+    ))
 
 
 def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list) -> int:
     """Seed database with teams"""
     print(f"\n=== Generating {teams_per_discipline} Teams per Discipline ===")
-    
-    try:
-        from data.countries import COUNTRIES
-        country_codes = list(COUNTRIES.keys())
-    except ImportError:
-        country_codes = ['USA', 'GBR', 'DEU', 'ITA', 'FRA', 'ESP', 'JPN', 'BRA']
+
+    country_codes = _get_country_codes_for_team_seed()
+    safe_locales_for_names = _safe_locales_for_team_names()
     
     teams_created = 0
     existing_names = set()
@@ -439,42 +541,18 @@ def seed_teams(db: DatabaseManager, teams_per_discipline: int, disciplines: list
             print(f"\n  Creating teams for {discipline}...")
             discipline_teams = 0
             
-            for i in range(teams_per_discipline):
-                nationality = random.choice(country_codes)
-                locale = get_locale_for_nationality(nationality)
-                try:
-                    fake = Faker(locale)
-                except Exception:
-                    # Fall back to en_US if locale is invalid
-                    fake = Faker("en_US")
-                    locale = "en_US"
-                
-                # Determine tier based on distribution
-                rand = random.random()
-                if rand < TIER_DISTRIBUTION['tier1']:
-                    tier = 'tier1'
-                elif rand < TIER_DISTRIBUTION['tier1'] + TIER_DISTRIBUTION['tier2']:
-                    tier = 'tier2'
-                else:
-                    tier = 'tier3'
-                
-                team_data = generate_team(fake, discipline, nationality, tier, existing_names)
-                
+            for _ in range(teams_per_discipline):
+                team_data = _build_seed_team_data(
+                    discipline,
+                    country_codes,
+                    safe_locales_for_names,
+                    existing_names,
+                )
                 if not team_data:
                     continue
                 
                 try:
-                    cursor.execute('''
-                        INSERT INTO teams (
-                            name, nationality, discipline, tier, budget, founded_year,
-                            team_principal, headquarters, operations_rating, strategy_profile
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        team_data['name'], team_data['nationality'], team_data['discipline'],
-                        team_data['tier'], team_data['budget'], team_data['founded_year'],
-                        team_data['team_principal'], team_data['headquarters'],
-                        team_data['operations_rating'], team_data['strategy_profile']
-                    ))
+                    _insert_seed_team(cursor, team_data)
                     
                     existing_names.add(team_data['name'])
                     teams_created += 1
@@ -527,7 +605,7 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
     with db.get_connection() as conn:
         cursor = conn.cursor()
         
-        for i in range(count):
+        for _ in range(count):
             # Random locale for name
             locale = random.choice(COMMON_LOCALES)
             try:
@@ -602,7 +680,9 @@ def assign_driver_contracts(db: DatabaseManager, disciplines: list) -> int:
             if not driver_ids:
                 continue
 
-            team_slot_targets = [(team_id, slot) for team_id in team_ids for slot in range(slots)]
+            # Fill rosters in round-robin slot order (slot 1 for all teams,
+            # then slot 2, etc.) so limited driver pools still spread fairly.
+            team_slot_targets = [(team_id, slot) for slot in range(slots) for team_id in team_ids]
             pair_count = min(len(driver_ids), len(team_slot_targets))
 
             for idx in range(pair_count):
@@ -668,54 +748,15 @@ def adjust_drivers_by_tier(db: DatabaseManager) -> int:
             if tier not in tier_adjustments:
                 tier_adjustments[tier] = 0
             
-            # Calculate current age
             try:
-                birth_date = datetime.strptime(birth_date_str, '%Y-%m-%d').date()
-                current_age = (datetime.utcnow().date() - birth_date).days // 365
-            except:
-                current_age = 25
-            
-            # Determine new age and skill adjustments based on tier
-            if tier.lower() in ('tier1', 'tier_1', '1'):
-                # TIER 1: Experienced drivers, high skill
-                # 80% should be 28-45 years old (peak/veteran)
-                rand = random.random()
-                if rand < 0.80:
-                    new_age = random.randint(28, 45)
-                else:
-                    new_age = random.randint(22, 27)  # Occasional rising star
-                
-                # High skill distribution for tier 1
-                skill_mean = 78.0
-                skill_std = 10.0
-                
-            elif tier.lower() in ('tier2', 'tier_2', '2'):
-                # TIER 2: Mid-range drivers, balanced ages
-                # Mix of young drivers (22-30) and experienced (30-38)
-                new_age = random.choice(
-                    [random.randint(22, 30)] * 6 +  # 60% younger
-                    [random.randint(30, 38)] * 4     # 40% more experienced
-                )
-                
-                # Mid-range skill distribution for tier 2
-                skill_mean = 62.0
-                skill_std = 12.0
-                
-            else:  # TIER 3
-                # TIER 3: Young drivers mostly, lower skill
-                # 85% young (18-32), 15% veterans (35+)
-                rand = random.random()
-                if rand < 0.85:
-                    new_age = random.randint(18, 32)  # Young pool
-                else:
-                    new_age = random.randint(35, 45)  # Occasional veteran
-                
-                # Lower skill distribution for tier 3, but still varied
-                skill_mean = 55.0
-                skill_std = 13.0
+                datetime.strptime(birth_date_str, '%Y-%m-%d').date()
+            except Exception:
+                pass
+
+            new_age, skill_mean, skill_std = _tier_age_skill_profile(tier)
             
             # Calculate new birth date from age
-            new_birth_date = (datetime.utcnow().date() - timedelta(days=365 * new_age)).strftime('%Y-%m-%d')
+            new_birth_date = (datetime.now(timezone.utc).date() - timedelta(days=365 * new_age)).strftime('%Y-%m-%d')
             
             # Generate tier-appropriate skill attributes
             speed = skill_distribution(skill_mean, skill_std)
@@ -896,7 +937,7 @@ def main():
     print("=" * 70)
     print("MOMENTUM CAREER MODE DATABASE GENERATOR")
     print("=" * 70)
-    print(f"\nConfiguration:")
+    print("\nConfiguration:")
     print(f"  Database: {DATABASE_PATH}")
     print(f"  Drivers: {args.drivers}")
     print(f"  Teams per discipline: {args.teams_per_discipline}")
@@ -948,7 +989,7 @@ def main():
         for k, v in final_stats.items():
             print(f"  {k}: {v}")
         
-        print(f"\nNew entries created:")
+        print("\nNew entries created:")
         print(f"  Drivers: {drivers_created}")
         print(f"  Teams: {teams_created}")
         print(f"  Staff: {staff_created}")

@@ -42,6 +42,33 @@ from typing import Optional, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+COMBO_BOX_STYLE = """
+    QComboBox {
+        background-color: #353839;
+        color: #B9F2FF;
+        border: 2px solid #B9F2FF;
+        border-radius: 8px;
+        padding: 8px;
+        font-size: 14px;
+    }
+    QComboBox::drop-down {
+        border: none;
+    }
+    QComboBox::down-arrow {
+        image: none;
+        border-left: 5px solid transparent;
+        border-right: 5px solid transparent;
+        border-top: 8px solid #B9F2FF;
+    }
+    QComboBox QAbstractItemView {
+        background-color: #353839;
+        color: #B9F2FF;
+        selection-background-color: #DD2D4A;
+        selection-color: #F5F5F5;
+        border: 2px solid #B9F2FF;
+    }
+"""
+
 
 class DriverCard(QWidget):
     """Premium driver card widget with team colors and detailed info."""
@@ -59,22 +86,10 @@ class DriverCard(QWidget):
         # Team color bar (left edge indicator)
         team_bar = QWidget()
         team_bar.setFixedWidth(5)
-        team = None
-        if db and hasattr(drv, 'current_team_id') and drv.current_team_id:
-            try:
-                team = db.get_team(int(drv.current_team_id))
-            except:
-                pass
+        team = self._resolve_team(db, drv)
         
         # Get team color - use team primary color or discipline-based color
-        if team and hasattr(team, 'primary_color'):
-            try:
-                team_color = team.primary_color if isinstance(team.primary_color, str) else '#B9F2FF'
-            except:
-                team_color = '#B9F2FF'
-        else:
-            # Default to discipline color or cyan
-            team_color = '#B9F2FF'
+        team_color = self._resolve_team_color(team)
         
         team_bar.setStyleSheet(f'background-color: {team_color};')
         h.addWidget(team_bar)
@@ -119,7 +134,7 @@ class DriverCard(QWidget):
         # Age (computed_age property)
         try:
             age = drv.computed_age if hasattr(drv, 'computed_age') else 0
-        except:
+        except Exception:
             age = 0
         age_label = QLabel(f"{age}y")
         age_label.setStyleSheet('color:#999; font-size:11px; font-weight:600;')
@@ -156,7 +171,7 @@ class DriverCard(QWidget):
         card_layout.addLayout(bottom_row)
         
         # Card styling
-        self.setStyleSheet(f'''
+        self.setStyleSheet('''
             DriverCard {{
                 background-color: #2E2E2E;
                 border: 1px solid #444;
@@ -165,6 +180,26 @@ class DriverCard(QWidget):
         ''')
         
         h.addWidget(card_content)
+
+    @staticmethod
+    def _resolve_team(db, drv):
+        """Resolve driver's team object when available."""
+        if not db or not hasattr(drv, 'current_team_id') or not drv.current_team_id:
+            return None
+        try:
+            return db.get_team(int(drv.current_team_id))
+        except Exception:
+            return None
+
+    @staticmethod
+    def _resolve_team_color(team) -> str:
+        """Resolve safe team color string for card accenting."""
+        if team and hasattr(team, 'primary_color'):
+            try:
+                return team.primary_color if isinstance(team.primary_color, str) else '#B9F2FF'
+            except Exception:
+                return '#B9F2FF'
+        return '#B9F2FF'
 
     def set_selected(self, selected: bool):
         """Update card appearance for selection."""
@@ -197,11 +232,14 @@ class MainMenuWindow(QMainWindow):
         self.setWindowTitle("Momentum - Main Menu")
         # Use screen-relative sizing for responsiveness
         from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
+        screen_obj = QGuiApplication.primaryScreen()
+        screen = screen_obj.geometry() if screen_obj is not None else None
         # Use 70% of screen size, but respect preferred minimums
         pref_w, pref_h = get_preferred_window_size()
-        window_w = max(pref_w, int(screen.width() * 0.7))
-        window_h = max(pref_h, int(screen.height() * 0.7))
+        screen_w = screen.width() if screen is not None else pref_w
+        screen_h = screen.height() if screen is not None else pref_h
+        window_w = max(pref_w, int(screen_w * 0.7))
+        window_h = max(pref_h, int(screen_h * 0.7))
         self.resize(window_w, window_h)
         self.setMinimumSize(800, 600)  # Absolute minimum for usability
 
@@ -392,7 +430,7 @@ class MainMenuWindow(QMainWindow):
         championship_btn.clicked.connect(self._show_championship_mode)
         layout.addWidget(championship_btn)
 
-        # Career Mode (placeholder)
+        # Career Mode
         career_btn = QPushButton("Career Mode")
         career_btn.setMinimumHeight(80)
         career_btn.setStyleSheet("""
@@ -420,8 +458,9 @@ class MainMenuWindow(QMainWindow):
                 border-color: #555;
             }
         """)
-        career_btn.setEnabled(False)  # Not implemented yet
-        career_btn.setToolTip("Coming Soon")
+        career_btn.setEnabled(True)
+        career_btn.setToolTip("Start or continue a career season")
+        career_btn.clicked.connect(self._show_career_mode)
         layout.addWidget(career_btn)
 
         layout.addStretch()
@@ -527,6 +566,9 @@ class MainMenuWindow(QMainWindow):
     def _show_championship_mode(self):
         """Show championship selection/management."""
         from GUI.gui_championship import ChampionshipSelectionDialog, ChampionshipWindow
+        if self.db is None:
+            QMessageBox.warning(self, "Database Unavailable", "Database is not initialized.")
+            return
         
         # Show championship selection
         dialog = ChampionshipSelectionDialog(self.db, self)
@@ -537,11 +579,32 @@ class MainMenuWindow(QMainWindow):
             self.championship_window.start_race_signal.connect(self._start_championship_race)
             self.championship_window.show()
             self.hide()
+
+    def _show_career_mode(self):
+        """Show career selection/management in a dedicated career GUI."""
+        from GUI.gui_career import CareerSelectionDialog, CareerWindow
+        if self.db is None:
+            QMessageBox.warning(self, "Database Unavailable", "Database is not initialized.")
+            return
+
+        dialog = CareerSelectionDialog(self.db, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_championship:
+            self.career_window = CareerWindow(dialog.selected_championship, self)
+            self.career_window.return_to_menu.connect(self._return_from_career)
+            self.career_window.start_race_signal.connect(self._start_career_race)
+            self.career_window.show()
+            self.hide()
     
     def _return_from_championship(self):
         """Return from championship to main menu."""
         if hasattr(self, 'championship_window'):
             self.championship_window.close()
+        self.show()
+
+    def _return_from_career(self):
+        """Return from career to main menu."""
+        if hasattr(self, 'career_window'):
+            self.career_window.close()
         self.show()
     
     def _start_championship_race(self, config: dict):
@@ -551,6 +614,13 @@ class MainMenuWindow(QMainWindow):
         self.start_race_signal.emit(config)
         if hasattr(self, 'championship_window'):
             self.championship_window.hide()
+
+    def _start_career_race(self, config: dict):
+        """Start a career race."""
+        config["display_mode"] = self.display_mode
+        self.start_race_signal.emit(config)
+        if hasattr(self, 'career_window'):
+            self.career_window.hide()
 
     def _on_display_mode_changed(self, button):
         """Handle display mode radio button change."""
@@ -658,9 +728,12 @@ class QuickRaceSetupWindow(QDialog):
 
         # Size dialog responsively based on screen size
         from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        w = min(int(screen.width() * 0.85), 1400)  # Max 85% of screen or 1400px
-        h = min(int(screen.height() * 0.85), 1000)  # Max 85% of screen or 1000px
+        screen_obj = QGuiApplication.primaryScreen()
+        screen = screen_obj.geometry() if screen_obj is not None else None
+        screen_w = screen.width() if screen is not None else 1400
+        screen_h = screen.height() if screen is not None else 1000
+        w = min(int(screen_w * 0.85), 1400)  # Max 85% of screen or 1400px
+        h = min(int(screen_h * 0.85), 1000)  # Max 85% of screen or 1000px
         self.setMinimumSize(800, 600)  # Usable minimum
         self.resize(w, h)
 
@@ -770,7 +843,7 @@ class QuickRaceSetupWindow(QDialog):
                 self.values = [float(v) for v in vals[:6]]
                 self.update()
 
-            def paintEvent(self, event):
+            def paintEvent(self, a0):
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.RenderHint.Antialiasing)
                 w = self.width()
@@ -835,32 +908,7 @@ class QuickRaceSetupWindow(QDialog):
             "Tyre Sensitive (Strategic)",
             "tyre_sensitive")
         self.preset_combo.setCurrentIndex(0)
-        self.preset_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 2px solid #B9F2FF;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 14px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #B9F2FF;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #353839;
-                color: #B9F2FF;
-                selection-background-color: #DD2D4A;
-                selection-color: #F5F5F5;
-                border: 2px solid #B9F2FF;
-            }
-        """)
+        self.preset_combo.setStyleSheet(COMBO_BOX_STYLE)
         preset_layout.addWidget(self.preset_combo)
 
         # Preset descriptions
@@ -923,32 +971,7 @@ class QuickRaceSetupWindow(QDialog):
         for discipline_id, display_name in self.disciplines_map.items():
             self.discipline_combo.addItem(display_name, discipline_id)
         
-        self.discipline_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 2px solid #B9F2FF;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 14px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #B9F2FF;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #353839;
-                color: #B9F2FF;
-                selection-background-color: #DD2D4A;
-                selection-color: #F5F5F5;
-                border: 2px solid #B9F2FF;
-            }
-        """)
+        self.discipline_combo.setStyleSheet(COMBO_BOX_STYLE)
         self.discipline_combo.setCurrentIndex(0)
         self.discipline_combo.currentIndexChanged.connect(self._on_discipline_changed)
         discipline_layout.addWidget(self.discipline_combo)
@@ -973,32 +996,7 @@ class QuickRaceSetupWindow(QDialog):
         track_layout.addWidget(track_label)
 
         self.track_combo = QComboBox()
-        self.track_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 2px solid #B9F2FF;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 14px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 8px solid #B9F2FF;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #353839;
-                color: #B9F2FF;
-                selection-background-color: #DD2D4A;
-                selection-color: #F5F5F5;
-                border: 2px solid #B9F2FF;
-            }
-        """)
+        self.track_combo.setStyleSheet(COMBO_BOX_STYLE)
         track_layout.addWidget(self.track_combo)
         layout.addWidget(track_group)
 
@@ -1363,59 +1361,53 @@ class QuickRaceSetupWindow(QDialog):
         if driver is None:
             return
 
-        # Use service helpers for robust, canonical-driven display
+        self._update_profile_panel(driver)
+        self._update_radar_widget_safe(driver)
+        self._update_driver_card_selection_style(current, previous)
+
+    def _update_profile_panel(self, driver) -> None:
+        """Update profile text fields and selected team for the chosen driver."""
         name = get_display_name(driver)
         nationality = get_display_nationality(driver)
         skill = get_driver_skill_int(driver)
-
         self.profile_name.setText(name)
         self.profile_nationality.setText(f"Nationality: {nationality}")
         self.profile_skill.setText(f"Skill: {skill}")
 
         team = self._resolve_driver_team(driver)
         self.selected_team = team
-        if team is not None:
-            team_name = getattr(team, "name", "Unknown Team")
-            team_tier = getattr(team, "tier", "N/A")
-            self.profile_team.setText(f"Team: {team_name} ({team_tier})")
-        else:
+        if team is None:
             self.profile_team.setText("Team: Unassigned")
+            return
+        team_name = getattr(team, "name", "Unknown Team")
+        team_tier = getattr(team, "tier", "N/A")
+        self.profile_team.setText(f"Team: {team_name} ({team_tier})")
 
-        # Update radar widget with canonical 6-axis values
+    def _update_radar_widget_safe(self, driver) -> None:
+        """Refresh radar polygon values if helper is available."""
         try:
             from services.driver_attributes import get_driver_radar_values
-            radar_vals = get_driver_radar_values(driver)
-            # radar widget expects floats 0-100
-            self.radar.set_values(radar_vals)
+            self.radar.set_values(get_driver_radar_values(driver))
         except Exception:
-            # If radar helper missing, leave the default values
             pass
 
-        # Update visual selection on DriverCard widgets: clear previous, set selected border
+    def _apply_card_style_safe(self, widget, attr_name: str, fallback_style: str = "") -> None:
+        """Apply a style stored on a card widget; no-op on failures."""
+        if widget is None or not hasattr(widget, 'setStyleSheet'):
+            return
         try:
-            prev_widget = None
-            if previous is not None:
-                prev_widget = self.driver_list.itemWidget(previous)
+            style = getattr(widget, attr_name, None)
+            widget.setStyleSheet(style if style else fallback_style)
+        except Exception:
+            pass
+
+    def _update_driver_card_selection_style(self, current, previous) -> None:
+        """Update visual selection styles for previous and current card widgets."""
+        try:
+            prev_widget = self.driver_list.itemWidget(previous) if previous is not None else None
             cur_widget = self.driver_list.itemWidget(current)
-
-            if prev_widget is not None and hasattr(prev_widget, 'setStyleSheet'):
-                # revert to base style if available
-                try:
-                    base = getattr(prev_widget, '_base_style', None)
-                    if base:
-                        prev_widget.setStyleSheet(base)
-                    else:
-                        prev_widget.setStyleSheet('')
-                except Exception:
-                    pass
-
-            if cur_widget is not None and hasattr(cur_widget, 'setStyleSheet'):
-                try:
-                    sel = getattr(cur_widget, '_selected_style', None)
-                    if sel:
-                        cur_widget.setStyleSheet(sel)
-                except Exception:
-                    pass
+            self._apply_card_style_safe(prev_widget, '_base_style', '')
+            self._apply_card_style_safe(cur_widget, '_selected_style')
         except Exception:
             pass
 
@@ -1439,7 +1431,7 @@ class QuickRaceSetupWindow(QDialog):
         except Exception:
             pass
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, a0):
         """Handle keyboard shortcuts inside the quick race dialog.
 
         - Up/Down: navigate driver list (handled by list when focused)
@@ -1449,7 +1441,9 @@ class QuickRaceSetupWindow(QDialog):
         """
         # local import removed - QKeyEvent imported at module level
         try:
-            k = event.key()
+            if a0 is None:
+                return
+            k = a0.key()
             # Start race on Enter/Return
             if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._start_race()
@@ -1473,10 +1467,10 @@ class QuickRaceSetupWindow(QDialog):
                     return
 
             # Default: let Qt handle navigation (so Up/Down change current item)
-            super().keyPressEvent(event)
+            super().keyPressEvent(a0)
         except Exception:
             try:
-                super().keyPressEvent(event)
+                super().keyPressEvent(a0)
             except Exception:
                 pass
 

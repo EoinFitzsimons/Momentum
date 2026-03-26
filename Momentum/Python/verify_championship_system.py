@@ -65,9 +65,9 @@ for discipline in POINTS_SYSTEMS:
     print(f"  ✓ {discipline}")
 
 # Test 6: Verify API endpoints
-endpoints = [r.path for r in app.routes]
+endpoints = [getattr(r, 'path', '') for r in app.routes]  # type: ignore[attr-defined]
 championship_endpoints = [e for e in endpoints if 'championship' in e.lower() or 'race' in e.lower()]
-print(f"\n✅ API Endpoints: {len(championship_endpoints)} championship-related routes")
+print(f"\n✅ API Endpoints: {len(championship_endpoints)} championship-related routes")  # type: ignore[index]
 
 print("\n" + "="*60)
 print("✅ ALL VERIFICATION CHECKS PASSED")

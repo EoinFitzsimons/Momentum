@@ -304,7 +304,7 @@ def get_preferred_window_size() -> tuple[int, int]:
 	try:
 		from PyQt6.QtWidgets import QApplication
 		app = QApplication.instance()
-		if app is not None:
+		if isinstance(app, QApplication):
 			screen = app.primaryScreen()
 			if screen is not None:
 				size = screen.size()

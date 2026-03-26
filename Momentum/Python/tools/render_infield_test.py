@@ -28,54 +28,47 @@ def import_gui():
     return TrackWidget, CircuitGenerator
 
 
+def _build_widget_directly():
+    """Build TrackWidget directly when launcher path is unavailable."""
+    track_widget, circuit_generator = import_gui()
+    try:
+        from database.database_manager import DatabaseManager
+        db = DatabaseManager()
+        simple_track = db.get_simple_track()
+        length_km = getattr(simple_track, 'length_km', 4.5) if simple_track else 4.5
+    except Exception:
+        length_km = 4.5
+    try:
+        pts = circuit_generator.generate(length_km)
+    except Exception:
+        pts = []
+    track_length = pts[-1].s if pts else 2000
+    from vehicles.appearance_integration import VehicleAppearanceManager
+    appearance_manager = VehicleAppearanceManager()
+    return track_widget(pts, track_length, appearance_manager=appearance_manager)
+
+
+def _build_widget_from_launcher():
+    """Try constructing race widget via the normal app launcher path."""
+    from GUI.launcher import MomentumLauncher
+    launcher = MomentumLauncher()
+    launcher.start_race({})
+    race_win = launcher.race_window
+    widget = getattr(race_win, 'track_widget', None)
+    if widget is None:
+        print('RaceWindow did not create track_widget — falling back to direct TrackWidget')
+        widget = _build_widget_directly()
+    return launcher, widget
+
+
 def main():
     app = QApplication(sys.argv)
-    # Use the actual MomentumLauncher so the same track loading path is used
-    # and the RaceWindow/TrackWidget are constructed exactly as in the app.
-    from GUI.launcher import MomentumLauncher
-    # Create launcher (this will create a QApplication internally but we're already inside one)
-    launcher = MomentumLauncher()
-
-    # Start race using default config so RaceWindow is created and loaded
+    launcher = None
     try:
-        launcher.start_race({})
-        race_win = launcher.race_window
-        # Ensure track_widget exists (RaceWindow._load_data runs synchronously)
-        widget = getattr(race_win, 'track_widget', None)
-        if widget is None:
-            print('RaceWindow did not create track_widget — falling back to direct TrackWidget')
-            track_widget, circuit_generator = import_gui()
-            # fallback: generate a circuit from default length
-            try:
-                from database.database_manager import DatabaseManager
-                db = DatabaseManager()
-                simple_track = db.get_simple_track()
-                length_km = getattr(simple_track, 'length_km', 4.5) if simple_track else 4.5
-            except Exception:
-                length_km = 4.5
-            try:
-                pts = circuit_generator.generate(length_km)
-            except Exception:
-                pts = []
-            track_length = pts[-1].s if pts else 2000
-            widget = track_widget(pts, track_length, appearance_manager=None)
+        launcher, widget = _build_widget_from_launcher()
     except Exception as e:
         print('Failed to use MomentumLauncher:', e)
-        # fallback to direct construction
-        track_widget, circuit_generator = import_gui()
-        try:
-            from database.database_manager import DatabaseManager
-            db = DatabaseManager()
-            simple_track = db.get_simple_track()
-            length_km = getattr(simple_track, 'length_km', 4.5) if simple_track else 4.5
-        except Exception:
-            length_km = 4.5
-        try:
-            pts = circuit_generator.generate(length_km)
-        except Exception:
-            pts = []
-        track_length = pts[-1].s if pts else 2000
-        widget = track_widget(pts, track_length, appearance_manager=None)
+        widget = _build_widget_directly()
 
     widget.resize(1400, 900)
     widget.show()
@@ -97,9 +90,12 @@ def main():
     print('Saved debug render to', out)
 
     # Clean exit
-    widget.close()
-    if getattr(launcher, 'race_window', None):
-        launcher.race_window.close()
+    if widget is not None:
+        widget.close()
+    if launcher is not None:
+        race_window = getattr(launcher, 'race_window', None)
+        if race_window is not None:
+            race_window.close()
     app.quit()
 
 

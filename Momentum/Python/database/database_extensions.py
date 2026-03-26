@@ -116,7 +116,7 @@ def get_available_staff(self, role: Optional[str] = None,
 def sign_driver_contract(self, driver_id: int, team_id: int,
                        contract_length: int, salary: float,
                        contract_start_season: Optional[int] = None,
-                       performance_bonus: float = 0.0) -> bool:
+                       performance_bonus: float = 0.0) -> None:
     """UC-16: Sign driver to team contract"""
     if contract_start_season is None:
         contract_start_season = datetime.now().year
@@ -141,12 +141,11 @@ def sign_driver_contract(self, driver_id: int, team_id: int,
             performance_bonus,
             driver_id
         ))
-        return True
 
 
 def sign_staff_contract(self, staff_id: int, team_id: int,
                       contract_length: int, salary: float,
-                      contract_start_season: Optional[int] = None) -> bool:
+                      contract_start_season: Optional[int] = None) -> None:
     """UC-18: Sign staff to team contract"""
     if contract_start_season is None:
         contract_start_season = datetime.now().year
@@ -169,10 +168,9 @@ def sign_staff_contract(self, staff_id: int, team_id: int,
             contract_end_season,
             staff_id
         ))
-        return True
 
 
-def release_driver(self, driver_id: int) -> bool:
+def release_driver(self, driver_id: int) -> None:
     """Release driver from contract"""
     with self.get_connection() as conn:
         conn.execute("""
@@ -184,10 +182,9 @@ def release_driver(self, driver_id: int) -> bool:
                 performance_bonus = 0.0
             WHERE id = ?
         """, (driver_id,))
-        return True
 
 
-def release_staff(self, staff_id: int) -> bool:
+def release_staff(self, staff_id: int) -> None:
     """Release staff member from team"""
     with self.get_connection() as conn:
         conn.execute("""
@@ -199,7 +196,6 @@ def release_staff(self, staff_id: int) -> bool:
                 contract_end_season = NULL
             WHERE id = ?
         """, (staff_id,))
-        return True
 
 
 def expire_contracts_for_season(self, season: int) -> Dict[str, int]:
@@ -272,7 +268,7 @@ def update_team_budget(self, team_id: int, amount: float) -> float:
         return row[0] if row else 0.0
 
 
-def update_driver_skills(self, driver_id: int, skill_changes: Dict[str, float]) -> bool:
+def update_driver_skills(self, driver_id: int, skill_changes: Dict[str, float]) -> None:
     """UC-19: Update driver skills with progression changes"""
     with self.get_connection() as conn:
         set_clauses = []
@@ -283,12 +279,11 @@ def update_driver_skills(self, driver_id: int, skill_changes: Dict[str, float]) 
             params.append(change)
         
         if not set_clauses:
-            return True
+            return
         
         params.append(driver_id)
         sql = f"UPDATE drivers SET {', '.join(set_clauses)} WHERE id = ?"
         conn.execute(sql, params)
-        return True
 
 
 def age_driver(self, driver_id: int) -> int:
@@ -312,7 +307,7 @@ def age_driver(self, driver_id: int) -> int:
         return driver.computed_age if driver else 0
 
 
-def retire_driver(self, driver_id: int) -> bool:
+def retire_driver(self, driver_id: int) -> None:
     """UC-19: Retire driver from active competition"""
     with self.get_connection() as conn:
         conn.execute("""
@@ -322,7 +317,6 @@ def retire_driver(self, driver_id: int) -> bool:
                 contract_length = NULL
             WHERE id = ?
         """, (driver_id,))
-        return True
 
 
 def recycle_driver(self, driver_id: int) -> Optional[int]:
@@ -380,7 +374,7 @@ def get_drivers_for_progression(self, season: int):
         return [d for d in drivers if d]
 
 
-def increment_driver_experience(self, driver_id: int, starts: int = 1) -> bool:
+def increment_driver_experience(self, driver_id: int, starts: int = 1) -> None:
     """Increment driver career starts and seasons active"""
     with self.get_connection() as conn:
         conn.execute("""
@@ -389,7 +383,6 @@ def increment_driver_experience(self, driver_id: int, starts: int = 1) -> bool:
                 seasons_active = seasons_active + 1
             WHERE id = ?
         """, (starts, driver_id))
-        return True
 
 
 # Monkey-patch methods into DatabaseManager
@@ -397,20 +390,20 @@ def patch_database_manager():
     """Add hiring and progression methods to DatabaseManager class"""
     from database.database_manager import DatabaseManager
     
-    DatabaseManager.get_available_drivers = get_available_drivers
-    DatabaseManager.get_available_staff = get_available_staff
-    DatabaseManager.sign_driver_contract = sign_driver_contract
-    DatabaseManager.sign_staff_contract = sign_staff_contract
-    DatabaseManager.release_driver = release_driver
-    DatabaseManager.release_staff = release_staff
-    DatabaseManager.update_team_budget = update_team_budget
-    DatabaseManager.update_driver_skills = update_driver_skills
-    DatabaseManager.age_driver = age_driver
-    DatabaseManager.retire_driver = retire_driver
-    DatabaseManager.recycle_driver = recycle_driver
-    DatabaseManager.get_drivers_for_progression = get_drivers_for_progression
-    DatabaseManager.increment_driver_experience = increment_driver_experience
-    DatabaseManager.expire_contracts_for_season = expire_contracts_for_season
+    DatabaseManager.get_available_drivers = get_available_drivers  # type: ignore[attr-defined]
+    DatabaseManager.get_available_staff = get_available_staff  # type: ignore[attr-defined]
+    DatabaseManager.sign_driver_contract = sign_driver_contract  # type: ignore[attr-defined]
+    DatabaseManager.sign_staff_contract = sign_staff_contract  # type: ignore[attr-defined]
+    DatabaseManager.release_driver = release_driver  # type: ignore[attr-defined]
+    DatabaseManager.release_staff = release_staff  # type: ignore[attr-defined]
+    DatabaseManager.update_team_budget = update_team_budget  # type: ignore[attr-defined]
+    DatabaseManager.update_driver_skills = update_driver_skills  # type: ignore[attr-defined]
+    DatabaseManager.age_driver = age_driver  # type: ignore[attr-defined]
+    DatabaseManager.retire_driver = retire_driver  # type: ignore[attr-defined]
+    DatabaseManager.recycle_driver = recycle_driver  # type: ignore[attr-defined]
+    DatabaseManager.get_drivers_for_progression = get_drivers_for_progression  # type: ignore[attr-defined]
+    DatabaseManager.increment_driver_experience = increment_driver_experience  # type: ignore[attr-defined]
+    DatabaseManager.expire_contracts_for_season = expire_contracts_for_season  # type: ignore[attr-defined]
 
 
 # Auto-patch on import

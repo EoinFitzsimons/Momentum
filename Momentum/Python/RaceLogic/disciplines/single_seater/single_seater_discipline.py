@@ -52,7 +52,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     def __init__(self, seed: Optional[int] = None):
         """Initialise single seater engine"""
         super().__init__(seed if seed is not None else 0)
-        self.discipline: RacingDiscipline = RacingDiscipline.SINGLE_SEATER
+        self.discipline = RacingDiscipline.SINGLE_SEATER
 
     def get_attribute_weights(self) -> Dict[str, float]:
         """
@@ -101,6 +101,84 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             "smoothness": 0.03,             # Smooth driving for tire preservation
         }
 
+    def _apply_base_tuning(self, engine: RealtimeRaceEngine) -> None:
+        engine.BASE_SPEED_MPS = 75.0
+        engine.MAX_SPEED_MPS = 100.0
+        engine.MIN_SPEED_MPS = 30.0
+        engine.DIRTY_AIR_PENALTY = 0.22
+        engine.DIRTY_AIR_DISTANCE = 160.0
+        engine.SLIPSTREAM_BONUS = 0.06
+        engine.SLIPSTREAM_DISTANCE = 45.0
+        engine.ATTACK_THRESHOLD_GAP = 2.5
+        engine.DEFEND_THRESHOLD_GAP = 1.5
+        engine.NEARBY_DISTANCE_M = 140.0
+        engine.TIRE_DEGRADATION_RATE = 0.000012
+        engine.FUEL_BURN_RATE = 0.000025
+        engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.5
+
+    def _apply_preset_tuning(self, engine: RealtimeRaceEngine, preset: str) -> None:
+        preset = (preset or "balanced").lower()
+        self._apply_base_tuning(engine)
+
+        if preset == 'aggressive':
+            engine.DIRTY_AIR_PENALTY = 0.14
+            engine.DIRTY_AIR_DISTANCE = 120.0
+            engine.SLIPSTREAM_BONUS = 0.12
+            engine.SLIPSTREAM_DISTANCE = 80.0
+            engine.ATTACK_THRESHOLD_GAP = 1.6
+            engine.DEFEND_THRESHOLD_GAP = 1.0
+            engine.NEARBY_DISTANCE_M = 160.0
+            engine.OVERTAKE_INCIDENT_MULTIPLIER = 3.2
+            engine.TIRE_DEGRADATION_RATE = 0.00001
+        elif preset == 'tyre_sensitive':
+            engine.DIRTY_AIR_PENALTY = 0.26
+            engine.DIRTY_AIR_DISTANCE = 180.0
+            engine.SLIPSTREAM_BONUS = 0.04
+            engine.SLIPSTREAM_DISTANCE = 40.0
+            engine.ATTACK_THRESHOLD_GAP = 3.0
+            engine.DEFEND_THRESHOLD_GAP = 2.0
+            engine.NEARBY_DISTANCE_M = 120.0
+            engine.TIRE_DEGRADATION_RATE = 0.000018
+            engine.FUEL_BURN_RATE = 0.000028
+            engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.0
+
+    def _extract_track_conditions(self, context: RaceContext) -> Dict[str, Any]:
+        return context.track_conditions if isinstance(context.track_conditions, dict) else {}
+
+    def _extract_preset_choice(self, track_conditions: Dict[str, Any]) -> str:
+        preset_raw = track_conditions.get('tuning_preset', track_conditions.get('preset', 'balanced'))
+        return preset_raw if isinstance(preset_raw, str) else 'balanced'
+
+    def _parse_player_driver_id(self, track_conditions: Dict[str, Any]) -> Optional[int]:
+        pdid = track_conditions.get('player_driver_id')
+        if isinstance(pdid, int):
+            return int(pdid)
+        if isinstance(pdid, float) and pdid.is_integer():
+            return int(pdid)
+        return None
+
+    def _parse_player_team_driver_ids(self, track_conditions: Dict[str, Any]) -> Optional[List[int]]:
+        ptids = track_conditions.get('player_team_driver_ids')
+        if not isinstance(ptids, list):
+            return None
+        parsed_ids: List[int] = []
+        for item in ptids:
+            try:
+                parsed_ids.append(int(item))
+            except Exception:
+                continue
+        return parsed_ids
+
+    def _parse_player_overrides(self, track_conditions: Dict[str, Any]) -> Optional[Dict[str, float]]:
+        po = track_conditions.get('player_overrides')
+        return po if isinstance(po, dict) else None
+
+    def _parse_realtime_speed(self, track_conditions: Dict[str, Any]) -> float:
+        rs_val = track_conditions.get('realtime_speed')
+        if rs_val is not None and isinstance(rs_val, (int, float, str)):
+            return float(rs_val)
+        return 5.0
+
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
         """
         Delegate simulation to the real-time agent-based engine.
@@ -112,69 +190,11 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
         Returns the list of result dictionaries produced by the realtime engine.
         """
-
         # Instantiate realtime engine and tune for single-seater behaviour
         engine = RealtimeRaceEngine(seed=None)
-
-        # Apply default single-seater tuning, then override via preset
-        def apply_base_tuning():
-            engine.BASE_SPEED_MPS = 75.0
-            engine.MAX_SPEED_MPS = 100.0
-            engine.MIN_SPEED_MPS = 30.0
-            engine.DIRTY_AIR_PENALTY = 0.22
-            engine.DIRTY_AIR_DISTANCE = 160.0
-            engine.SLIPSTREAM_BONUS = 0.06
-            engine.SLIPSTREAM_DISTANCE = 45.0
-            engine.ATTACK_THRESHOLD_GAP = 2.5
-            engine.DEFEND_THRESHOLD_GAP = 1.5
-            engine.NEARBY_DISTANCE_M = 140.0
-            engine.TIRE_DEGRADATION_RATE = 0.000012
-            engine.FUEL_BURN_RATE = 0.000025
-            engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.5
-
-        def apply_preset(preset: str):
-            preset = (preset or "balanced").lower()
-            # Balanced: the default above
-            if preset == 'balanced':
-                apply_base_tuning()
-            elif preset == 'aggressive':
-                # More overtakes, lower dirty-air penalty, stronger slipstream
-                apply_base_tuning()
-                engine.DIRTY_AIR_PENALTY = 0.14
-                engine.DIRTY_AIR_DISTANCE = 120.0
-                engine.SLIPSTREAM_BONUS = 0.12
-                engine.SLIPSTREAM_DISTANCE = 80.0
-                engine.ATTACK_THRESHOLD_GAP = 1.6
-                engine.DEFEND_THRESHOLD_GAP = 1.0
-                engine.NEARBY_DISTANCE_M = 160.0
-                engine.OVERTAKE_INCIDENT_MULTIPLIER = 3.2
-                engine.TIRE_DEGRADATION_RATE = 0.00001
-            elif preset == 'tyre_sensitive':
-                # Tyre sensitivity: more wear, larger lap time swing,
-                # conservative overtakes
-                apply_base_tuning()
-                engine.DIRTY_AIR_PENALTY = 0.26
-                engine.DIRTY_AIR_DISTANCE = 180.0
-                engine.SLIPSTREAM_BONUS = 0.04
-                engine.SLIPSTREAM_DISTANCE = 40.0
-                engine.ATTACK_THRESHOLD_GAP = 3.0
-                engine.DEFEND_THRESHOLD_GAP = 2.0
-                engine.NEARBY_DISTANCE_M = 120.0
-                engine.TIRE_DEGRADATION_RATE = 0.000018
-                engine.FUEL_BURN_RATE = 0.000028
-                engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.0
-            else:
-                # Unknown preset, fallback to balanced
-                apply_base_tuning()
-
-        # Extract preset choice from context.track_conditions if provided
-        tc = context.track_conditions if isinstance(
-            context.track_conditions, dict) else {}
-        _preset_raw = tc.get('tuning_preset', tc.get('preset', 'balanced'))
-        # Ensure we pass a str to apply_preset (mypy: avoid Any | None)
-        preset_choice: str = _preset_raw if isinstance(
-            _preset_raw, str) else 'balanced'
-        apply_preset(preset_choice)
+        tc = self._extract_track_conditions(context)
+        preset_choice = self._extract_preset_choice(tc)
+        self._apply_preset_tuning(engine, preset_choice)
 
         print(f"-> SingleSeaterEngine tuning preset applied: {preset_choice}")
 
@@ -182,31 +202,10 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         teams = getattr(context, 'teams', {}) or {}
 
         # Player overrides: safely extract typed values from track_conditions
-        tc = context.track_conditions if isinstance(
-            context.track_conditions, dict) else {}
-        pdid = tc.get('player_driver_id')
-        player_driver_id: Optional[int] = int(pdid) if isinstance(pdid, int) or (
-            isinstance(pdid, float) and pdid.is_integer()) else None
-
-        ptids = tc.get('player_team_driver_ids')
-        player_team_driver_ids: Optional[list[int]] = None
-        if isinstance(ptids, list):
-            parsed_ids = []
-            for item in ptids:
-                try:
-                    parsed_ids.append(int(item))
-                except Exception:
-                    continue
-            player_team_driver_ids = parsed_ids
-
-        po = tc.get('player_overrides')
-        player_overrides: Optional[Dict[str, float]
-                                   ] = po if isinstance(po, dict) else None
-
-        # Realtime speed multiplier for demo; default to 5.0 (watchable)
-        rs_val = tc.get('realtime_speed')
-        realtime_speed: float = float(rs_val) if rs_val is not None and (
-            isinstance(rs_val, (int, float, str))) else 5.0
+        player_driver_id = self._parse_player_driver_id(tc)
+        player_team_driver_ids = self._parse_player_team_driver_ids(tc)
+        player_overrides = self._parse_player_overrides(tc)
+        realtime_speed = self._parse_realtime_speed(tc)
 
         # Delegate to realtime engine
         results = engine.simulate_race(
@@ -441,8 +440,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
         return {
             "active_drivers": set(driver_ids),
-            "total_times": {did: 0.0 for did in driver_ids},
-            "laps_completed": {did: 0 for did in driver_ids},
+            "total_times": dict.fromkeys(driver_ids, 0.0),
+            "laps_completed": dict.fromkeys(driver_ids, 0),
             "positions": {did: i + 1 for i, did in enumerate(driver_ids)},
             "dnf_reasons": {},
             "dnf_laps": {},
