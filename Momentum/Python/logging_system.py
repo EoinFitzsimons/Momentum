@@ -183,7 +183,7 @@ class MomentumLogger:
         Log exception with full traceback
         Automatically captures current exception context
         """
-        exc_type, exc_value, exc_traceback = sys.exc_info()
+        exc_type, exc_value, _ = sys.exc_info()
 
         error_msg = f"{message}\n"
         error_msg += f"Exception Type: {
@@ -276,7 +276,7 @@ class MomentumLogger:
 
         # Add current exception if available
         if sys.exc_info()[0] is not None:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
+            exc_type, exc_value, _ = sys.exc_info()
             crash_report['exception'] = {
                 'type': exc_type.__name__ if exc_type else None,
                 'message': str(exc_value) if exc_value else None,
@@ -437,7 +437,8 @@ class LoggedOperation:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        duration = (datetime.now() - self.start_time).total_seconds()
+        start_time = self.start_time or datetime.now()
+        duration = (datetime.now() - start_time).total_seconds()
 
         if exc_type is None:
             logger.info(f"Completed: {self.operation_name} ({duration:.3f}s)")

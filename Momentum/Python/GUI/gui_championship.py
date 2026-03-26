@@ -55,8 +55,49 @@ COLORS = {
 }
 
 
+def _screen_dimensions(fallback_width: int = 1280, fallback_height: int = 720) -> Tuple[int, int]:
+    """Return screen width and height with a safe fallback for headless/type-checking paths."""
+    from PyQt6.QtGui import QGuiApplication
+
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return fallback_width, fallback_height
+    geometry = screen.geometry()
+    return geometry.width(), geometry.height()
+
+
+def _player_label(value: Any) -> str:
+    """Convert enum-like/internal values to player-facing Title Case labels."""
+    if value is None:
+        return ""
+
+    raw = str(value).strip()
+    if not raw:
+        return ""
+
+    normalized = raw.upper().replace(" ", "_")
+    mapping = {
+        "TOP_TIER": "Top Tier",
+        "TIER_1": "Tier 1",
+        "TIER_2": "Tier 2",
+        "TIER_3": "Tier 3",
+        "SINGLE_SEATER": "Single Seater",
+        "PRODUCTION_TOURING": "Production Touring",
+        "URBAN_STREET": "Urban Street",
+        "DRAG_ACCELERATION": "Drag Acceleration",
+        "SPRINT_RALLYCROSS": "Sprint Rallycross",
+        "IN_PROGRESS": "In Progress",
+    }
+    if normalized in mapping:
+        return mapping[normalized]
+
+    return raw.replace("_", " ").title()
+
+
 class ChampionshipSelectionDialog(QDialog):
     """Dialog for selecting or creating a championship."""
+
+    NO_SELECTION_TITLE = "No Selection"
     
     def __init__(self, db: DatabaseManager, parent=None):
         super().__init__(parent)
@@ -66,10 +107,9 @@ class ChampionshipSelectionDialog(QDialog):
         
         self.setWindowTitle("Select Championship")
         # Responsive sizing based on screen dimensions
-        from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        width = min(int(screen.width() * 0.6), 900)
-        height = min(int(screen.height() * 0.6), 700)
+        screen_width, screen_height = _screen_dimensions()
+        width = min(int(screen_width * 0.6), 900)
+        height = min(int(screen_height * 0.6), 700)
         self.setMinimumSize(600, 400)  # Usable minimum
         self.resize(width, height)
         self.setup_ui()
@@ -97,7 +137,9 @@ class ChampionshipSelectionDialog(QDialog):
         self.championships_table.setHorizontalHeaderLabels([
             "Name", "Discipline", "Season", "Races", "Status"
         ])
-        self.championships_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        championship_header = self.championships_table.horizontalHeader()
+        if championship_header is not None:
+            championship_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.championships_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.championships_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.championships_table.doubleClicked.connect(self.accept)
@@ -112,6 +154,11 @@ class ChampionshipSelectionDialog(QDialog):
         create_btn.clicked.connect(self.create_championship)
         create_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #B9F2FF; color: #353839; font-weight: bold; }")
         buttons_layout.addWidget(create_btn)
+
+        delete_btn = QPushButton("Delete Championship")
+        delete_btn.clicked.connect(self.delete_championship)
+        delete_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #8B0000; color: white; font-weight: bold; }")
+        buttons_layout.addWidget(delete_btn)
         
         select_btn = QPushButton("Select Championship")
         select_btn.clicked.connect(self.select_championship)
@@ -136,15 +183,17 @@ class ChampionshipSelectionDialog(QDialog):
             calendar = self.championship_service.get_championship_calendar(champ.id, champ.current_season)
             
             self.championships_table.setItem(i, 0, QTableWidgetItem(champ.name))
-            self.championships_table.setItem(i, 1, QTableWidgetItem(champ.discipline))
+            self.championships_table.setItem(i, 1, QTableWidgetItem(_player_label(champ.discipline)))
             self.championships_table.setItem(i, 2, QTableWidgetItem(str(champ.current_season)))
             self.championships_table.setItem(i, 3, QTableWidgetItem(f"{len(calendar)} races"))
             
             status = "Archived" if champ.archived else "Active"
-            self.championships_table.setItem(i, 4, QTableWidgetItem(status))
+            self.championships_table.setItem(i, 4, QTableWidgetItem(_player_label(status)))
             
             # Store championship object in row
-            self.championships_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, champ)
+            row_item = self.championships_table.item(i, 0)
+            if row_item is not None:
+                row_item.setData(Qt.ItemDataRole.UserRole, champ)
     
     def select_championship(self):
         """Select the highlighted championship."""
@@ -152,10 +201,57 @@ class ChampionshipSelectionDialog(QDialog):
         if selected_rows:
             row = self.championships_table.currentRow()
             item = self.championships_table.item(row, 0)
+            if item is None:
+                QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a valid championship.")
+                return
             self.selected_championship = item.data(Qt.ItemDataRole.UserRole)
             self.accept()
         else:
-            QMessageBox.warning(self, "No Selection", "Please select a championship.")
+            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship.")
+
+    def delete_championship(self):
+        """Delete selected championship and its races/results."""
+        row = self.championships_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship to delete.")
+            return
+
+        item = self.championships_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Selection Error", "Please select a valid championship.")
+            return
+
+        championship = item.data(Qt.ItemDataRole.UserRole)
+        if championship is None:
+            QMessageBox.warning(self, "Selection Error", "Could not resolve selected championship.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Delete Championship",
+            (
+                f"Delete championship '{championship.name}'?\n\n"
+                "This will permanently delete all races and race results in it."
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            deleted = self.db.delete_championship(championship.id)
+            if not deleted:
+                QMessageBox.warning(self, "Delete Failed", "Championship could not be deleted.")
+                return
+
+            if self.selected_championship and getattr(self.selected_championship, 'id', None) == championship.id:
+                self.selected_championship = None
+
+            self.load_championships()
+            QMessageBox.information(self, "Deleted", f"Championship '{championship.name}' deleted.")
+        except Exception as e:
+            QMessageBox.critical(self, "Delete Error", f"Failed to delete championship: {str(e)}")
     
     def create_championship(self):
         """Show dialog to create new championship."""
@@ -176,10 +272,9 @@ class CreateChampionshipDialog(QDialog):
         
         self.setWindowTitle(self.CREATE_CHAMPIONSHIP_TITLE)
         # Responsive sizing based on screen dimensions
-        from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        width = min(int(screen.width() * 0.5), 800)
-        height = min(int(screen.height() * 0.7), 900)
+        screen_width, screen_height = _screen_dimensions()
+        width = min(int(screen_width * 0.5), 800)
+        height = min(int(screen_height * 0.7), 900)
         self.setMinimumSize(500, 500)  # Usable minimum
         self.resize(width, height)
         self.setup_ui()
@@ -210,14 +305,16 @@ class CreateChampionshipDialog(QDialog):
         discipline_layout = QHBoxLayout()
         discipline_layout.addWidget(QLabel("Discipline:"))
         self.discipline_combo = QComboBox()
-        self.discipline_combo.addItems([
+        discipline_values = [
             "SINGLE_SEATER",
             "ENDURANCE",
             "PRODUCTION_TOURING",
             "URBAN_STREET",
             "DRAG_ACCELERATION",
             "SPRINT_RALLYCROSS"
-        ])
+        ]
+        for value in discipline_values:
+            self.discipline_combo.addItem(_player_label(value), value)
         discipline_layout.addWidget(self.discipline_combo)
         details_layout.addLayout(discipline_layout)
         
@@ -236,7 +333,9 @@ class CreateChampionshipDialog(QDialog):
         tier_layout = QHBoxLayout()
         tier_layout.addWidget(QLabel("Tier:"))
         self.tier_combo = QComboBox()
-        self.tier_combo.addItems(["TOP_TIER", "TIER_2", "TIER_3"])
+        tier_values = ["TOP_TIER", "TIER_2", "TIER_3"]
+        for value in tier_values:
+            self.tier_combo.addItem(_player_label(value), value)
         tier_layout.addWidget(self.tier_combo)
         details_layout.addLayout(tier_layout)
         
@@ -283,19 +382,22 @@ class CreateChampionshipDialog(QDialog):
         
         try:
             logger.info(f"Creating championship: '{name}'")
-            logger.info(f"  Discipline: {self.discipline_combo.currentText()}")
+            selected_discipline = self.discipline_combo.currentData() or self.discipline_combo.currentText()
+            selected_tier = self.tier_combo.currentData() or self.tier_combo.currentText()
+
+            logger.info(f"  Discipline: {_player_label(selected_discipline)}")
             logger.info(f"  Season Length: {self.season_spin.value()} races")
-            logger.info(f"  Tier: {self.tier_combo.currentText()}")
+            logger.info(f"  Tier: {_player_label(selected_tier)}")
             
             # Create championship object
             championship = Championship(
                 id=0,
                 name=name,
-                discipline=self.discipline_combo.currentText(),
+                discipline=selected_discipline,
                 season_length=self.season_spin.value(),
                 points_system="standard",
                 current_season=1,
-                tier=self.tier_combo.currentText(),
+                tier=selected_tier,
                 founded_year=datetime.now().year,
                 description=self.description_input.toPlainText()
             )
@@ -332,7 +434,7 @@ class CreateChampionshipDialog(QDialog):
                 datetime.now()
             )
             
-            logger.info(f"Championship created successfully!")
+            logger.info("Championship created successfully!")
             logger.info(f"  Championship ID: {champ_id}")
             logger.info(f"  Number of races: {len(race_ids)}")
             logger.info(f"  Race IDs: {race_ids}")
@@ -388,10 +490,9 @@ class ChampionshipWindow(QMainWindow):
         
         self.setWindowTitle(f"Championship: {championship.name}")
         # Responsive sizing - use most of screen for standings view
-        from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        width = min(int(screen.width() * 0.85), 1600)
-        height = min(int(screen.height() * 0.85), 1000)
+        screen_width, screen_height = _screen_dimensions()
+        width = min(int(screen_width * 0.85), 1600)
+        height = min(int(screen_height * 0.85), 1000)
         self.setMinimumSize(900, 600)  # Usable minimum
         self.resize(width, height)
         
@@ -421,8 +522,8 @@ class ChampionshipWindow(QMainWindow):
         season_label.setStyleSheet(f"font-size: 14px; color: {COLORS['accent']}; font-weight: bold;")
         status_layout.addWidget(season_label)
         
-        discipline_label = QLabel(f"Discipline: {self.championship.discipline}")
-        discipline_label.setStyleSheet(f"font-size: 12px; color: #999;")
+        discipline_label = QLabel(f"Discipline: {_player_label(self.championship.discipline)}")
+        discipline_label.setStyleSheet("font-size: 12px; color: #999;")
         status_layout.addWidget(discipline_label)
         
         header_layout.addLayout(status_layout)
@@ -448,8 +549,10 @@ class ChampionshipWindow(QMainWindow):
         self.standings_table.setHorizontalHeaderLabels([
             "Pos", "Driver", "Team", "Points", "Wins", "Podiums", "Races"
         ])
-        self.standings_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.standings_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        standings_header = self.standings_table.horizontalHeader()
+        if standings_header is not None:
+            standings_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            standings_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.standings_table.setAlternatingRowColors(True)
         self.standings_table.setStyleSheet("""
             QTableWidget { alternate-background-color: rgba(185, 242, 255, 0.05); }
@@ -470,7 +573,9 @@ class ChampionshipWindow(QMainWindow):
         self.schedule_table.setHorizontalHeaderLabels([
             "Round", "Track", "Date", "Status"
         ])
-        self.schedule_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        schedule_header = self.schedule_table.horizontalHeader()
+        if schedule_header is not None:
+            schedule_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.schedule_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.schedule_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.schedule_table.setStyleSheet("""
@@ -533,88 +638,108 @@ class ChampionshipWindow(QMainWindow):
         content_layout.addLayout(right_layout, 2)
         
         layout.addLayout(content_layout)
+
+    def _populate_standings_table(self, standings) -> None:
+        """Render standings rows into the standings table."""
+        self.standings_table.setRowCount(len(standings))
+        for i, entry in enumerate(standings):
+            pos_item = QTableWidgetItem(str(entry.position))
+            pos_item.setForeground(QColor(COLORS['accent']))
+            pos_item.setFont(QFont(pos_item.font().family(), pos_item.font().pointSize(), QFont.Weight.Bold))
+            self.standings_table.setItem(i, 0, pos_item)
+
+            self.standings_table.setItem(i, 1, QTableWidgetItem(entry.driver_name))
+            self.standings_table.setItem(i, 2, QTableWidgetItem(entry.team_name))
+
+            points_item = QTableWidgetItem(str(entry.total_points))
+            if i == 0:
+                points_item.setForeground(QColor(COLORS['success']))
+                points_item.setFont(QFont(points_item.font().family(), points_item.font().pointSize(), QFont.Weight.Bold))
+            self.standings_table.setItem(i, 3, points_item)
+
+            self.standings_table.setItem(i, 4, QTableWidgetItem(str(entry.wins)))
+            self.standings_table.setItem(i, 5, QTableWidgetItem(str(entry.podiums)))
+            self.standings_table.setItem(i, 6, QTableWidgetItem(str(entry.races_started)))
+
+    def _build_schedule_status_item(self, race_status: str) -> Tuple[QTableWidgetItem, bool]:
+        """Build schedule status cell and return whether race counts as completed."""
+        status_item = QTableWidgetItem(_player_label(race_status))
+        if race_status == 'scheduled':
+            status_item.setForeground(QColor(COLORS['info']))
+            return status_item, False
+        if race_status == 'in-progress':
+            status_item.setForeground(QColor(COLORS['warning']))
+            status_item.setFont(QFont(status_item.font().family(), status_item.font().pointSize(), QFont.Weight.Bold))
+            return status_item, False
+        if race_status == 'completed':
+            status_item.setForeground(QColor(COLORS['success']))
+            return status_item, True
+        return status_item, False
+
+    def _highlight_schedule_row(self, row: int) -> None:
+        """Highlight a schedule row for the next scheduled race."""
+        for col in range(4):
+            item = self.schedule_table.item(row, col)
+            if item:
+                item.setBackground(QColor(COLORS['success']).darker(300))
+
+    def _populate_schedule_table(self, calendar) -> Tuple[Optional[int], int]:
+        """Render schedule rows and return next race id and completed-race count."""
+        self.schedule_table.setRowCount(len(calendar))
+        next_race_id = None
+        races_completed = 0
+
+        for i, race in enumerate(calendar):
+            self.schedule_table.setItem(i, 0, QTableWidgetItem(f"R{race['round_number']}"))
+            self.schedule_table.setItem(i, 1, QTableWidgetItem(race['track_name']))
+            self.schedule_table.setItem(i, 2, QTableWidgetItem(race['race_date']))
+
+            status_item, is_completed = self._build_schedule_status_item(race['status'])
+            if is_completed:
+                races_completed += 1
+
+            self.schedule_table.setItem(i, 3, status_item)
+
+            round_item = self.schedule_table.item(i, 0)
+            if round_item is not None:
+                round_item.setData(Qt.ItemDataRole.UserRole, race)
+
+            if race['status'] == 'scheduled' and next_race_id is None:
+                next_race_id = race['race_id']
+                self._highlight_schedule_row(i)
+
+        return next_race_id, races_completed
+
+    def _update_next_race_ui(self, next_race_id: Optional[int], races_completed: int, total_races: int) -> None:
+        """Update next-race button and progress notification from rendered schedule state."""
+        self.next_race_id = next_race_id
+        if self.next_race_id is not None:
+            self.next_race_btn.setEnabled(True)
+            self.next_race_btn.setText("Start Next Race")
+            progress = f"{races_completed}/{total_races} races completed"
+            self.show_notification(f"Season in progress: {progress}", "info")
+            return
+
+        self.next_race_btn.setEnabled(False)
+        self.next_race_btn.setText("Season Complete")
+        self.show_notification("Championship season complete!", "success")
     
     def load_data(self):
         """Load championship data with standings and schedule."""
         try:
-            # Load standings
             standings = self.championship_service.recalculate_standings(
                 self.championship.id,
                 self.championship.current_season
             )
-            
-            self.standings_table.setRowCount(len(standings))
-            for i, entry in enumerate(standings):
-                # Position
-                pos_item = QTableWidgetItem(str(entry.position))
-                pos_item.setForeground(QColor(COLORS['accent']))
-                pos_item.setFont(QFont(pos_item.font().family(), pos_item.font().pointSize(), QFont.Weight.Bold))
-                self.standings_table.setItem(i, 0, pos_item)
-                
-                self.standings_table.setItem(i, 1, QTableWidgetItem(entry.driver_name))
-                self.standings_table.setItem(i, 2, QTableWidgetItem(entry.team_name))
-                
-                # Points (color by leader)
-                points_item = QTableWidgetItem(str(entry.total_points))
-                if i == 0:
-                    points_item.setForeground(QColor(COLORS['success']))
-                    points_item.setFont(QFont(points_item.font().family(), points_item.font().pointSize(), QFont.Weight.Bold))
-                self.standings_table.setItem(i, 3, points_item)
-                
-                self.standings_table.setItem(i, 4, QTableWidgetItem(str(entry.wins)))
-                self.standings_table.setItem(i, 5, QTableWidgetItem(str(entry.podiums)))
-                self.standings_table.setItem(i, 6, QTableWidgetItem(str(entry.races_started)))
-            
-            # Load schedule
+            self._populate_standings_table(standings)
+
             calendar = self.championship_service.get_championship_calendar(
                 self.championship.id,
                 self.championship.current_season
             )
-            
-            self.schedule_table.setRowCount(len(calendar))
-            self.next_race_id = None
-            races_completed = 0
-            
-            for i, race in enumerate(calendar):
-                self.schedule_table.setItem(i, 0, QTableWidgetItem(f"R{race['round_number']}"))
-                self.schedule_table.setItem(i, 1, QTableWidgetItem(race['track_name']))
-                self.schedule_table.setItem(i, 2, QTableWidgetItem(race['race_date']))
-                
-                # Status with color coding
-                status_item = QTableWidgetItem(race['status'].upper())
-                if race['status'] == 'scheduled':
-                    status_item.setForeground(QColor(COLORS['info']))
-                elif race['status'] == 'in-progress':
-                    status_item.setForeground(QColor(COLORS['warning']))
-                    status_item.setFont(QFont(status_item.font().family(), status_item.font().pointSize(), QFont.Weight.Bold))
-                elif race['status'] == 'completed':
-                    status_item.setForeground(QColor(COLORS['success']))
-                    races_completed += 1
-                
-                self.schedule_table.setItem(i, 3, status_item)
-                
-                # Store race data
-                self.schedule_table.item(i, 0).setData(Qt.ItemDataRole.UserRole, race)
-                
-                # Find next scheduled race
-                if race['status'] == 'scheduled' and self.next_race_id is None:
-                    self.next_race_id = race['race_id']
-                    # Highlight next race
-                    for col in range(4):
-                        item = self.schedule_table.item(i, col)
-                        if item:
-                            item.setBackground(QColor(COLORS['success']).darker(300))
-            
-            # Update button state and show progress
-            if self.next_race_id is not None:
-                self.next_race_btn.setEnabled(True)
-                self.next_race_btn.setText("Start Next Race")
-                progress = f"{races_completed}/{len(calendar)} races completed"
-                self.show_notification(f"Season in progress: {progress}", "info")
-            else:
-                self.next_race_btn.setEnabled(False)
-                self.next_race_btn.setText("Season Complete")
-                self.show_notification("Championship season complete!", "success")
+
+            next_race_id, races_completed = self._populate_schedule_table(calendar)
+            self._update_next_race_ui(next_race_id, races_completed, len(calendar))
         
         except Exception as e:
             logger.error(f"Error loading championship data: {str(e)}", exc_info=True)
@@ -631,7 +756,10 @@ class ChampionshipWindow(QMainWindow):
             
             # Check for status changes and update next race if needed
             for i, race in enumerate(calendar):
-                current_status = self.schedule_table.item(i, 3).text().lower()
+                status_item = self.schedule_table.item(i, 3)
+                if status_item is None:
+                    continue
+                current_status = status_item.text().lower()
                 
                 if race['status'] != current_status:
                     # Status changed, reload all data
@@ -664,10 +792,10 @@ class ChampionshipWindow(QMainWindow):
         self.refresh_timer.stop()
         self.return_to_menu.emit()
     
-    def closeEvent(self, event):
+    def closeEvent(self, a0):
         """Handle window close."""
         self.refresh_timer.stop()
-        super().closeEvent(event)
+        super().closeEvent(a0)
     
     def start_next_race(self):
         """Start the next scheduled race with pre-race setup."""
@@ -734,6 +862,7 @@ class PreRaceSetupDialog(QDialog):
         championship: Championship,
         race: Race,
         track,
+        locked_team_id: Optional[int] = None,
         parent=None
     ):
         super().__init__(parent)
@@ -741,6 +870,7 @@ class PreRaceSetupDialog(QDialog):
         self.championship = championship
         self.race = race
         self.track = track
+        self.locked_team_id = locked_team_id
         self.selected_driver = None
         self.selected_team = None
         self.race_config = {}
@@ -748,10 +878,9 @@ class PreRaceSetupDialog(QDialog):
         
         self.setWindowTitle(f"Pre-Race Setup - {track.name if track else 'Race'}")
         # Responsive sizing
-        from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        width = min(int(screen.width() * 0.7), 1000)
-        height = min(int(screen.height() * 0.7), 800)
+        screen_width, screen_height = _screen_dimensions()
+        width = min(int(screen_width * 0.7), 1000)
+        height = min(int(screen_height * 0.7), 800)
         self.setMinimumSize(700, 500)  # Usable minimum
         self.resize(width, height)
         self.setup_ui()
@@ -817,6 +946,10 @@ class PreRaceSetupDialog(QDialog):
         
         self.team_combo.currentIndexChanged.connect(self.on_team_selected)
         team_layout.addWidget(self.team_combo)
+
+        # Team is locked in championship flow to prevent in-race/pre-race
+        # team switching. Team selection should happen outside this dialog.
+        self.team_combo.setEnabled(False)
         
         # Team budget
         self.team_budget = QLabel()
@@ -889,7 +1022,7 @@ class PreRaceSetupDialog(QDialog):
         
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setMinimumHeight(50)
-        cancel_btn.setStyleSheet(f"""
+        cancel_btn.setStyleSheet("""
             QPushButton {{
                 font-size: 14px;
                 background-color: #555;
@@ -912,29 +1045,42 @@ class PreRaceSetupDialog(QDialog):
         """Update display when driver is selected."""
         if self._syncing_driver_team:
             return
-        if self.driver_combo.currentIndex() >= 0:
-            self.selected_driver = self.driver_combo.currentData()
-            if self.selected_driver:
-                stats_text = f"Speed: {self.selected_driver.speed:.0f} | Racecraft: {self.selected_driver.racecraft:.0f} | Consistency: {self.selected_driver.consistency:.0f}"
-                self.driver_stats.setText(stats_text)
-
-                # Keep team selection synced to the driver's contracted team.
-                team_id = getattr(self.selected_driver, 'current_team_id', None)
-                if team_id:
-                    self._syncing_driver_team = True
-                    try:
-                        for i in range(self.team_combo.count()):
-                            team = self.team_combo.itemData(i)
-                            if team and getattr(team, 'id', None) == team_id:
-                                self.team_combo.setCurrentIndex(i)
-                                self.selected_team = team
-                                break
-                    finally:
-                        self._syncing_driver_team = False
-            self._update_start_button_state()
-        else:
+        if self.driver_combo.currentIndex() < 0:
             self.driver_stats.setText("No contracted drivers available for this team")
             self._update_start_button_state()
+            return
+
+        self.selected_driver = self.driver_combo.currentData()
+        if self.selected_driver:
+            stats_text = (
+                f"Speed: {self.selected_driver.speed:.0f} | "
+                f"Racecraft: {self.selected_driver.racecraft:.0f} | "
+                f"Consistency: {self.selected_driver.consistency:.0f}"
+            )
+            self.driver_stats.setText(stats_text)
+            self._sync_team_to_selected_driver()
+
+        self._update_start_button_state()
+
+    def _sync_team_to_selected_driver(self):
+        """Sync selected team to the selected driver's current contract team."""
+        if not self.selected_driver:
+            return
+
+        team_id = getattr(self.selected_driver, 'current_team_id', None)
+        if not team_id:
+            return
+
+        self._syncing_driver_team = True
+        try:
+            for i in range(self.team_combo.count()):
+                team = self.team_combo.itemData(i)
+                if team and getattr(team, 'id', None) == team_id:
+                    self.team_combo.setCurrentIndex(i)
+                    self.selected_team = team
+                    return
+        finally:
+            self._syncing_driver_team = False
     
     def on_team_selected(self):
         """Update display when team is selected."""
@@ -943,7 +1089,7 @@ class PreRaceSetupDialog(QDialog):
         if self.team_combo.currentIndex() >= 0:
             self.selected_team = self.team_combo.currentData()
             if self.selected_team:
-                budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {self.selected_team.tier}"
+                budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {_player_label(self.selected_team.tier)}"
                 self.team_budget.setText(budget_text)
                 self._refresh_driver_combo_for_selected_team()
                 self._update_start_button_state()
@@ -986,16 +1132,36 @@ class PreRaceSetupDialog(QDialog):
             valid = getattr(self.selected_driver, 'current_team_id', None) == getattr(self.selected_team, 'id', None)
         self.start_btn.setEnabled(valid)
 
-    def _select_first_team_with_drivers(self):
-        """Auto-select a team that has at least one contracted driver."""
-        for i in range(self.team_combo.count()):
+    def _find_team_index_with_drivers(self, preferred_team_id: Optional[int] = None) -> Optional[int]:
+        """Return first index for a valid team with contracted drivers."""
+        candidate_indices = list(range(self.team_combo.count()))
+        if preferred_team_id is not None:
+            preferred = []
+            remaining = []
+            for i in candidate_indices:
+                team = self.team_combo.itemData(i)
+                if team and getattr(team, 'id', None) == preferred_team_id:
+                    preferred.append(i)
+                else:
+                    remaining.append(i)
+            candidate_indices = preferred + remaining
+
+        for i in candidate_indices:
             team = self.team_combo.itemData(i)
             if not team:
                 continue
             if self._drivers_for_team(team.id):
-                self.team_combo.setCurrentIndex(i)
-                self.selected_team = team
-                return
+                return i
+        return None
+
+    def _select_first_team_with_drivers(self):
+        """Auto-select a team that has at least one contracted driver."""
+        selected_index = self._find_team_index_with_drivers(self.locked_team_id)
+        if selected_index is None:
+            return
+
+        self.team_combo.setCurrentIndex(selected_index)
+        self.selected_team = self.team_combo.itemData(selected_index)
     
     def get_race_config(self) -> Dict[str, Any]:
         """Return the configured race setup."""
@@ -1042,10 +1208,9 @@ class PostRaceResultsDialog(QDialog):
         
         self.setWindowTitle("Race Results")
         # Responsive sizing
-        from PyQt6.QtGui import QGuiApplication
-        screen = QGuiApplication.primaryScreen().geometry()
-        width = min(int(screen.width() * 0.7), 1100)
-        height = min(int(screen.height() * 0.75), 900)
+        screen_width, screen_height = _screen_dimensions()
+        width = min(int(screen_width * 0.7), 1100)
+        height = min(int(screen_height * 0.75), 900)
         self.setMinimumSize(700, 500)  # Usable minimum
         self.resize(width, height)
         self.setup_ui()
@@ -1070,8 +1235,10 @@ class PostRaceResultsDialog(QDialog):
         self.results_table.setHorizontalHeaderLabels([
             "Pos", "Driver", "Team", "Status", "Points", "Fastest Lap", "Gap"
         ])
-        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        results_header = self.results_table.horizontalHeader()
+        if results_header is not None:
+            results_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         
         # Populate results
         self.results_table.setRowCount(len(self.results))
@@ -1108,8 +1275,10 @@ class PostRaceResultsDialog(QDialog):
         self.standings_table.setHorizontalHeaderLabels([
             "Pos", "Driver", "Team", "Points", "Wins", "Races"
         ])
-        self.standings_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.standings_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        results_standings_header = self.standings_table.horizontalHeader()
+        if results_standings_header is not None:
+            results_standings_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            results_standings_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.standings_table.setMaximumHeight(250)
         
         self.standings_table.setRowCount(min(10, len(standings)))  # Show top 10

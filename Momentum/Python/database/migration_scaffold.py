@@ -14,13 +14,13 @@ import shutil
 import sqlite3
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def backup_db(db_path: str) -> str:
     if not os.path.exists(db_path):
         raise FileNotFoundError(f"DB not found: {db_path}")
-    stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     dest = f"{db_path}.backup.{stamp}"
     shutil.copy2(db_path, dest)
     return dest

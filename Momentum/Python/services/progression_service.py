@@ -82,6 +82,83 @@ class ProgressionService:
             # Veteran decline: 0.70 and below
             return max(0.5, 0.70 - (age - 45) * 0.04)
     
+    def _calculate_core_skills(self, driver: Driver, base_change: float, 
+                              age_factor: float, age: int) -> Dict[str, float]:
+        """Calculate changes for core driving skills (speed, racecraft, consistency)"""
+        changes = {}
+        core_skills = ['speed', 'racecraft', 'consistency']
+        
+        for skill in core_skills:
+            current_value = getattr(driver, skill, 50.0)
+            
+            if age < 28:
+                change = base_change * random.uniform(0.5, 2.0)
+            elif age <= 32:
+                change = base_change * random.uniform(-0.2, 0.5)
+            else:
+                decline_factor = (age - 32) / 10.0
+                change = -base_change * random.uniform(0.1, 0.5) * decline_factor
+            
+            # Diminishing returns at high levels
+            if current_value > 80:
+                change *= 0.3
+            elif current_value > 70:
+                change *= 0.6
+            
+            changes[skill] = change * age_factor
+        
+        return changes
+    
+    def _calculate_physical_skills(self, base_change: float,
+                                  age_factor: float, age: int) -> Dict[str, float]:
+        """Calculate changes for physical skills (fitness, reactions)"""
+        changes = {}
+        physical_skills = ['fitness', 'reactions']
+        
+        for skill in physical_skills:
+            if age < 28:
+                change = base_change * random.uniform(0.3, 1.0)
+            elif age <= 32:
+                change = 0.0
+            else:
+                decline_factor = (age - 32) / 8.0
+                change = -base_change * random.uniform(0.3, 0.8) * decline_factor
+            
+            changes[skill] = change * age_factor
+        
+        return changes
+    
+    def _calculate_mental_skills(self, base_change: float,
+                                age: int) -> Dict[str, float]:
+        """Calculate changes for mental skills (pressure, setup_knowledge, adaptability)"""
+        changes = {}
+        mental_skills = ['pressure', 'setup_knowledge', 'adaptability']
+        
+        for skill in mental_skills:
+            if age < 35:
+                change = base_change * random.uniform(0.2, 0.8)
+            else:
+                change = -base_change * random.uniform(0.0, 0.2)
+            
+            changes[skill] = change
+        
+        return changes
+    
+    def _calculate_management_skills(self, base_change: float, age: int) -> Dict[str, float]:
+        """Calculate changes for management skills (fuel_management, tyre_management)"""
+        changes = {}
+        management_skills = ['fuel_management', 'tyre_management']
+        
+        for skill in management_skills:
+            if age < 40:
+                change = base_change * random.uniform(0.1, 0.5)
+            else:
+                change = 0.0
+            
+            changes[skill] = change
+        
+        return changes
+    
     def calculate_skill_progression(self, driver: Driver, 
                                     races_completed: int = 20) -> Dict[str, float]:
         """
@@ -102,70 +179,10 @@ class ProgressionService:
         base_change = (races_completed / 20.0) * learning_rate
         
         skill_changes = {}
-        
-        # Core driving skills - most affected by age and experience
-        core_skills = ['speed', 'racecraft', 'consistency']
-        for skill in core_skills:
-            current_value = getattr(driver, skill, 50.0)
-            
-            # Young drivers improve faster
-            if age < 28:
-                change = base_change * random.uniform(0.5, 2.0)
-            # Peak age - minimal change
-            elif age <= 32:
-                change = base_change * random.uniform(-0.2, 0.5)
-            # Declining - gradual decrease
-            else:
-                decline_factor = (age - 32) / 10.0  # Steeper decline with age
-                change = -base_change * random.uniform(0.1, 0.5) * decline_factor
-            
-            # Apply age factor and diminishing returns (harder to improve at high levels)
-            if current_value > 80:
-                change *= 0.3
-            elif current_value > 70:
-                change *= 0.6
-            
-            skill_changes[skill] = change * age_factor
-        
-        # Physical skills - decline faster with age
-        physical_skills = ['fitness', 'reactions']
-        for skill in physical_skills:
-            current_value = getattr(driver, skill, 50.0)
-            
-            if age < 28:
-                change = base_change * random.uniform(0.3, 1.0)
-            elif age <= 32:
-                change = 0.0
-            else:
-                # Steeper decline for physical skills
-                decline_factor = (age - 32) / 8.0
-                change = -base_change * random.uniform(0.3, 0.8) * decline_factor
-            
-            skill_changes[skill] = change * age_factor
-        
-        # Mental skills - improve with experience, decline slower
-        mental_skills = ['pressure', 'setup_knowledge', 'adaptability']
-        for skill in mental_skills:
-            current_value = getattr(driver, skill, 50.0)
-            
-            if age < 35:
-                # Mental skills improve throughout career
-                change = base_change * random.uniform(0.2, 0.8)
-            else:
-                # Minimal decline
-                change = -base_change * random.uniform(0.0, 0.2)
-            
-            skill_changes[skill] = change
-        
-        # Management skills - improve throughout career
-        management_skills = ['fuel_management', 'tyre_management']
-        for skill in management_skills:
-            if age < 40:
-                change = base_change * random.uniform(0.1, 0.5)
-            else:
-                change = 0.0
-            
-            skill_changes[skill] = change
+        skill_changes.update(self._calculate_core_skills(driver, base_change, age_factor, age))
+        skill_changes.update(self._calculate_physical_skills(base_change, age_factor, age))
+        skill_changes.update(self._calculate_mental_skills(base_change, age))
+        skill_changes.update(self._calculate_management_skills(base_change, age))
         
         return skill_changes
     
@@ -189,13 +206,13 @@ class ProgressionService:
         skill_changes = self.calculate_skill_progression(driver, races_completed)
         
         # Apply changes to database
-        self.db.update_driver_skills(driver_id, skill_changes)
+        self.db.update_driver_skills(driver_id, skill_changes)  # type: ignore[attr-defined]
         
         # Age the driver
-        self.db.age_driver(driver_id)
+        self.db.age_driver(driver_id)  # type: ignore[attr-defined]
         
         # Increment experience
-        self.db.increment_driver_experience(driver_id, races_completed)
+        self.db.increment_driver_experience(driver_id, races_completed)  # type: ignore[attr-defined]
         
         return skill_changes
     
@@ -266,7 +283,7 @@ class ProgressionService:
         Returns:
             True if successful
         """
-        return self.db.retire_driver(driver_id)
+        return self.db.retire_driver(driver_id)  # type: ignore[attr-defined]
     
     def recycle_driver(self, driver_id: int) -> Optional[int]:
         """
@@ -281,14 +298,13 @@ class ProgressionService:
         Returns:
             New driver ID if successful
         """
-        return self.db.recycle_driver(driver_id)
+        return self.db.recycle_driver(driver_id)  # type: ignore[attr-defined]
     
     # ========================================================================
     # SEASON-END PROCESSING (UC-19)
     # ========================================================================
     
-    def process_season_end_progression(self, season: int, 
-                                      championship_id: Optional[int] = None) -> Dict:
+    def process_season_end_progression(self, season: int) -> Dict:
         """
         Process season-end progression for all drivers
         
@@ -306,7 +322,7 @@ class ProgressionService:
             Summary dictionary with progression results
         """
         # Get all active drivers
-        drivers = self.db.get_drivers_for_progression(season)
+        drivers = self.db.get_drivers_for_progression(season)  # type: ignore[attr-defined]
         
         results = {
             'season': season,
@@ -325,7 +341,7 @@ class ProgressionService:
         }
 
         # Release personnel with expired contracts as the new season opens.
-        expired = self.db.expire_contracts_for_season(season)
+        expired = self.db.expire_contracts_for_season(season)  # type: ignore[attr-defined]
         results['summary']['contracts_expired_drivers'] = expired.get('drivers_released', 0)
         results['summary']['contracts_expired_staff'] = expired.get('staff_released', 0)
         
@@ -341,7 +357,7 @@ class ProgressionService:
                 results['summary']['declined'] += 1
             
             # Check retirement
-            should_retire, reason, probability = self.check_retirement_eligibility(driver)
+            should_retire, reason, _ = self.check_retirement_eligibility(driver)
             
             if should_retire:
                 self.retire_driver(driver.id)

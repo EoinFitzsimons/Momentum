@@ -242,6 +242,70 @@ def evaluate_overtaking_opportunity(
     return False, 0.0, OvertakeAttemptType.SLIPSTREAM_STRAIGHT
 
 
+def _get_straight_defense(defender: Driver, attacker: Driver, gap_m: float) -> Tuple[DefensiveAction, RacingLine]:
+    """Evaluate defensive action on straights"""
+    if gap_m < 10.0:
+        # Stronger attackers force more aggressive defense
+        attacker_threat = get_racecraft(attacker) / 100.0
+        defender_skill = get_racecraft(defender) / 100.0
+        
+        # If attacker is significantly better, need active defense; if defender is better, can relax
+        defense_intensity = (attacker_threat - defender_skill) * 0.5 + defender_skill
+        
+        if defense_intensity > 0.65:
+            # Aggressive defense against strong attackers
+            if get_racecraft(defender) < 50:
+                return DefensiveAction.WEAVING, RacingLine.DEFENSIVE
+            else:
+                return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
+        else:
+            # Hold line against weaker attackers
+            return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
+    return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
+
+
+def _get_braking_zone_defense(defender: Driver, attacker: Driver, gap_m: float) -> Tuple[DefensiveAction, RacingLine]:
+    """Evaluate defensive action in braking zones"""
+    if gap_m < 15.0:
+        # Defender awareness vs attacker threat determines response
+        awareness = get_racecraft(defender) / 100.0
+        attacker_aggression = get_driver_aggression(attacker) / 100.0
+        
+        # Adjust awareness threshold based on attacker's aggressiveness
+        effective_threshold = 0.6 - (attacker_aggression * 0.2)
+        
+        if awareness > effective_threshold:
+            # Defend inside against aggressive attackers
+            return DefensiveAction.COVER_INSIDE, RacingLine.DEFENSIVE
+        elif awareness > 0.35:
+            # Late brake to preserve position
+            return DefensiveAction.LATE_BRAKE_DEFENSE, RacingLine.IDEAL
+        else:
+            # Caught unaware - try to maintain ideal line
+            return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
+    return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
+
+
+def _get_corner_defense(defender: Driver, attacker: Driver, gap_m: float) -> Tuple[DefensiveAction, RacingLine]:
+    """Evaluate defensive action in corners"""
+    if gap_m < 5.0:
+        # Side-by-side situation - intensity depends on matchup
+        defender_corner_speed = get_racecraft(defender) / 100.0
+        attacker_corner_speed = get_racecraft(attacker) / 100.0
+        attacker_bravery = get_driver_bravery(attacker) / 100.0
+        
+        # Brave attackers need firmer defense; skill matchup determines squeeze intensity
+        defense_needed = defender_corner_speed > (attacker_corner_speed - attacker_bravery * 0.3)
+        
+        if defense_needed and get_racecraft(defender) > 55:
+            # Assertive defense against competitive attackers
+            return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
+        else:
+            # Hold line - either defender is skilled or attacker too weak to squeeze against
+            return DefensiveAction.HOLD_LINE, RacingLine.DEFENSIVE
+    return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
+
+
 def calculate_defensive_action(
     defender: Driver,
     attacker: Driver,
@@ -256,52 +320,14 @@ def calculate_defensive_action(
         - action: Defensive maneuver to execute
         - line: Racing line to take
     """
-
-    # === STRAIGHT DEFENSE ===
+    # Dispatch to section-specific helper based on track section
     if section == TrackSection.STRAIGHT:
-        if gap_m < 10.0:
-            # Defend aggressively if under pressure (use canonical `racecraft`)
-            if get_racecraft(defender) > 70:
-                # Weaving (risky, may draw penalty if excessive)
-                if get_racecraft(defender) < 50:
-                    return DefensiveAction.WEAVING, RacingLine.DEFENSIVE
-                else:
-                    return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
-            else:
-                # Hold line and let them try
-                return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
-        else:
-            return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
-
-    # === BRAKING ZONE DEFENSE ===
+        return _get_straight_defense(defender, attacker, gap_m)
     elif section == TrackSection.BRAKING_ZONE and corner:
-        if gap_m < 15.0:
-            # Awareness of attack determines response - simplified to `racecraft`
-            awareness = get_racecraft(defender) / 100.0
-
-            if awareness > 0.6:
-                # Cover inside line early
-                return DefensiveAction.COVER_INSIDE, RacingLine.DEFENSIVE
-            elif awareness > 0.4:
-                # Late brake to stay ahead
-                return DefensiveAction.LATE_BRAKE_DEFENSE, RacingLine.IDEAL
-            else:
-                # Unaware - stay on ideal line
-                return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
-        else:
-            return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
-
-    # === CORNER DEFENSE ===
+        return _get_braking_zone_defense(defender, attacker, gap_m)
     elif section in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER]:
-        if gap_m < 5.0:
-            # Side-by-side - squeeze but stay legal (use racecraft)
-            if get_racecraft(defender) > 60:
-                return DefensiveAction.SQUEEZE, RacingLine.DEFENSIVE
-            else:
-                return DefensiveAction.HOLD_LINE, RacingLine.DEFENSIVE
-        else:
-            return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
-
+        return _get_corner_defense(defender, attacker, gap_m)
+    
     # Default: hold optimal line
     return DefensiveAction.HOLD_LINE, RacingLine.IDEAL
 
@@ -318,8 +344,9 @@ def calculate_incident_risk(
     Returns probability (0.0-1.0) of contact/crash
     """
     # === TEMPORARY: COLLISION TESTING DISABLED ===
-    # Base risks set to near-zero for testing car movement and positioning
-    # TODO: Re-enable realistic collision rates once car rendering is verified
+    # Base risks set to near-zero for testing car movement and positioning.
+    # Note: Realistic collision rates (0.10-0.40 range) require verification of visual
+    # car rendering and overlap calculations before they can be re-enabled safely.
     base_risks = {
         TrackSection.STRAIGHT: 0.0001,        # 0.01% - testing only
         TrackSection.BRAKING_ZONE: 0.0001,    # 0.01% - testing only

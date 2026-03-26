@@ -26,6 +26,8 @@ from database.models import Driver as DBDriver, Track as DBTrack, SCHEMA_SQL
 
 
 class PersistenceSQLite:
+    _PRAGMA_RACE_RESULTS_TABLE_INFO = "PRAGMA table_info(race_results)"
+
     def __init__(self, db_path: str = "database/momentum.db"):
         self.db_path = db_path
         # Ensure the directory exists for file-backed DB
@@ -64,7 +66,7 @@ class PersistenceSQLite:
     def _ensure_time_seconds_column(self, cur) -> None:
         """Ensure race_results has time_seconds column."""
         try:
-            cur.execute("PRAGMA table_info(race_results)")
+            cur.execute(self._PRAGMA_RACE_RESULTS_TABLE_INFO)
             rcols = [r[1] for r in cur.fetchall()]
             if 'time_seconds' not in rcols:
                 cur.execute("ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;")
@@ -78,7 +80,7 @@ class PersistenceSQLite:
         This is idempotent and will add any missing columns with safe defaults.
         """
         try:
-            cur.execute("PRAGMA table_info(race_results)")
+            cur.execute(self._PRAGMA_RACE_RESULTS_TABLE_INFO)
             existing = {r[1] for r in cur.fetchall()}
             extras = {
                 'time_seconds': "ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT NULL;",
@@ -229,149 +231,183 @@ class PersistenceSQLite:
         except Exception:
             return 0
 
-    def save_race_results(self, race_id: int, results: List) -> None:
-        cur = self.conn.cursor()
-        cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+    def _try_direct_total_time(self, res_obj) -> Optional[float]:
+        direct_names = ['time_seconds', 'total_time', 'total_seconds', 'race_time', 'time']
+        for name in direct_names:
+            t = self._extract_result_field(res_obj, name, None)
+            if t is not None:
+                try:
+                    return float(t)
+                except Exception:
+                    pass
+        return None
 
-        cur.execute("PRAGMA table_info(race_results)")
-        existing_cols = [r[1] for r in cur.fetchall()]
+    def _safe_float(self, value) -> Optional[float]:
+        try:
+            return float(value)
+        except Exception:
+            return None
 
+    def _safe_int(self, value) -> Optional[int]:
+        try:
+            return int(value)
+        except Exception:
+            return None
+
+    def _is_total_time_key(self, lk: str) -> bool:
+        return ('total' in lk or 'race_time' in lk or 'time_seconds' in lk) and ('time' in lk or 'seconds' in lk)
+
+    def _is_avg_lap_key(self, lk: str) -> bool:
+        return ('average' in lk or 'avg' in lk) and 'lap' in lk
+
+    def _is_best_lap_key(self, lk: str) -> bool:
+        return ('best' in lk or 'fastest' in lk) and 'lap' in lk
+
+    def _is_laps_key(self, lk: str) -> bool:
+        return lk in ('laps', 'laps_completed', 'lap_count', 'completed_laps', 'num_laps')
+
+    def _extract_known_time_fields(self, res_obj) -> tuple:
+        avg = self._safe_float(self._extract_result_field(res_obj, 'average_lap_time', None))
+        best = self._safe_float(self._extract_result_field(res_obj, 'best_lap_time', None))
+        laps_val = self._safe_int(self._extract_result_field(res_obj, 'laps_completed', None))
+        return avg, best, laps_val
+
+    def _estimate_total_from_laps(self, avg: Optional[float], best: Optional[float], laps_val: Optional[int]) -> Optional[float]:
+        candidate_lap = avg if avg is not None else best
+        if candidate_lap is None:
+            return None
+        if laps_val and laps_val > 0:
+            return candidate_lap * float(laps_val)
+        return candidate_lap
+
+    def _update_time_components(self, lk: str, v, avg, best, laps_val, total_time) -> tuple:
+        if total_time is None and self._is_total_time_key(lk):
+            total_time = self._safe_float(v)
+            if total_time is not None:
+                return avg, best, laps_val, total_time
+
+        if avg is None and self._is_avg_lap_key(lk):
+            avg = self._safe_float(v)
+
+        if best is None and self._is_best_lap_key(lk):
+            best = self._safe_float(v)
+
+        if laps_val is None and self._is_laps_key(lk):
+            laps_val = self._safe_int(v)
+
+        return avg, best, laps_val, total_time
+
+    def _scan_dict_time_components(self, res_obj: dict) -> tuple:
+        avg = None
+        best = None
+        laps_val = None
+        total_time = None
+
+        for k, v in res_obj.items():
+            lk = str(k).lower()
+            avg, best, laps_val, total_time = self._update_time_components(lk, v, avg, best, laps_val, total_time)
+
+        return avg, best, laps_val, total_time
+
+    def _compute_total_time(self, res_obj) -> Optional[float]:
+        direct = self._try_direct_total_time(res_obj)
+        if direct is not None:
+            return direct
+
+        avg, best, laps_val = (None, None, None)
+
+        if isinstance(res_obj, dict):
+            avg, best, laps_val, total_time = self._scan_dict_time_components(res_obj)
+            if total_time is not None:
+                return total_time
+
+        field_avg, field_best, field_laps = self._extract_known_time_fields(res_obj)
+        if avg is None:
+            avg = field_avg
+        if best is None:
+            best = field_best
+        if laps_val is None:
+            laps_val = field_laps
+
+        return self._estimate_total_from_laps(avg, best, laps_val)
+
+    def _get_existing_result_columns(self, cur) -> List[str]:
+        cur.execute(self._PRAGMA_RACE_RESULTS_TABLE_INFO)
+        return [r[1] for r in cur.fetchall()]
+
+    def _build_result_insert_statement(self, existing_cols: List[str]) -> tuple:
         preferred_cols = [
             'race_id', 'driver_id', 'team_id', 'position', 'fastest_lap', 'points', 'dnf_reason',
             'time_seconds', 'grid_position', 'laps_completed', 'best_lap_time', 'average_lap_time',
             'pitstops', 'tyre_strategy', 'penalties_seconds', 'penalty_reason', 'gap_to_winner_seconds',
             'status', 'recorded_at'
         ]
-
         insert_cols = [c for c in preferred_cols if c in existing_cols]
         insert_sql = f"INSERT INTO race_results ({', '.join(insert_cols)}) VALUES ({', '.join(['?'] * len(insert_cols))})"
+        return insert_cols, insert_sql
+
+    def _fallback_missing_column_value(self, res, col: str):
+        if col == 'time_seconds':
+            return self._compute_total_time(res)
+        if col == 'best_lap_time':
+            return self._extract_result_field(res, 'best_lap_time', None)
+        if col == 'average_lap_time':
+            return self._extract_result_field(res, 'average_lap_time', None)
+        if col == 'grid_position':
+            return self._extract_result_field(res, 'grid_position', None)
+        if col == 'laps_completed':
+            return self._extract_result_field(res, 'laps_completed', None)
+        return None
+
+    def _build_result_values(self, res, insert_cols: List[str], race_id: int) -> List[Any]:
+        vals: List[Any] = []
+        for col in insert_cols:
+            if col == 'race_id':
+                vals.append(race_id)
+                continue
+            if col == 'team_id':
+                vals.append(self._parse_team_id(res))
+                continue
+            if col == 'fastest_lap':
+                v = self._extract_result_field(res, 'fastest_lap', False)
+                vals.append(1 if v else 0)
+                continue
+
+            v = self._extract_result_field(res, col, None)
+            if v is None:
+                v = self._fallback_missing_column_value(res, col)
+            vals.append(v)
+        return vals
+
+    def _insert_result_row(self, cur, insert_sql: str, vals: List[Any], race_id: int, res) -> None:
+        try:
+            cur.execute(insert_sql, tuple(vals))
+        except sqlite3.IntegrityError as ie:
+            raise ValueError(
+                f"IntegrityError inserting race_result: {ie}; params=(race_id={race_id}, values={vals})"
+            ) from ie
+        except sqlite3.OperationalError as oe:
+            try:
+                driver_id = self._extract_result_field(res, 'driver_id')
+                position = self._extract_result_field(res, 'position')
+                time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
+                cur.execute(
+                    "INSERT INTO race_results (race_id, driver_id, team_id, position, time_seconds) VALUES (?, ?, ?, ?, ?)",
+                    (race_id, driver_id, self._parse_team_id(res), position, time_sec),
+                )
+            except Exception as e:
+                raise oe from e
+
+    def save_race_results(self, race_id: int, results: List) -> None:
+        cur = self.conn.cursor()
+        cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+
+        existing_cols = self._get_existing_result_columns(cur)
+        insert_cols, insert_sql = self._build_result_insert_statement(existing_cols)
 
         for res in results:
-            vals = []
-            # Helper to compute a fallback total time for result objects
-            def _compute_total_time(res_obj):
-                # Try several direct fields and common aliases first
-                direct_names = [
-                    'time_seconds', 'total_time', 'total_seconds', 'race_time', 'time'
-                ]
-                for name in direct_names:
-                    t = self._extract_result_field(res_obj, name, None)
-                    if t is not None:
-                        try:
-                            return float(t)
-                        except Exception:
-                            pass
-
-                # If result is a dict-like, try to discover keys with common patterns
-                avg = None
-                best = None
-                laps_val = None
-                if isinstance(res_obj, dict):
-                    for k, v in res_obj.items():
-                        lk = str(k).lower()
-                        if ('average' in lk or 'avg' in lk) and 'lap' in lk:
-                            if avg is None:
-                                try:
-                                    avg = float(v)
-                                except Exception:
-                                    pass
-                        if ('best' in lk or 'fastest' in lk) and 'lap' in lk:
-                            if best is None:
-                                try:
-                                    best = float(v)
-                                except Exception:
-                                    pass
-                        if lk in ('laps', 'laps_completed', 'lap_count', 'completed_laps', 'num_laps'):
-                            try:
-                                laps_val = int(v)
-                            except Exception:
-                                pass
-                        # total-like keys
-                        if ('total' in lk or 'race_time' in lk or 'time_seconds' in lk) and ('time' in lk or 'seconds' in lk):
-                            try:
-                                return float(v)
-                            except Exception:
-                                pass
-
-                # Populate avg from known fields if still None
-                if avg is None:
-                    avg = self._extract_result_field(res_obj, 'average_lap_time', None)
-                    if avg is not None:
-                        try:
-                            avg = float(avg)
-                        except Exception:
-                            avg = None
-
-                if best is None:
-                    best = self._extract_result_field(res_obj, 'best_lap_time', None)
-                    if best is not None:
-                        try:
-                            best = float(best)
-                        except Exception:
-                            best = None
-
-                if laps_val is None:
-                    laps_val = self._extract_result_field(res_obj, 'laps_completed', None)
-                    try:
-                        laps_val = int(laps_val) if laps_val is not None else None
-                    except Exception:
-                        laps_val = None
-
-                # Prefer average lap if available, otherwise use best lap as approximation
-                candidate_lap = avg if avg is not None else best
-                if candidate_lap is not None:
-                    try:
-                        if laps_val and laps_val > 0:
-                            return float(candidate_lap) * float(laps_val)
-                        # assume single lap if laps unknown
-                        return float(candidate_lap)
-                    except Exception:
-                        return None
-
-                return None
-            for col in insert_cols:
-                if col == 'race_id':
-                    vals.append(race_id)
-                    continue
-                if col == 'team_id':
-                    vals.append(self._parse_team_id(res))
-                    continue
-                if col == 'fastest_lap':
-                    v = self._extract_result_field(res, 'fastest_lap', False)
-                    vals.append(1 if v else 0)
-                    continue
-                v = self._extract_result_field(res, col, None)
-                if v is None:
-                    if col == 'time_seconds':
-                        # Compute a robust fallback total time
-                        v = _compute_total_time(res)
-                    elif col == 'best_lap_time':
-                        v = self._extract_result_field(res, 'best_lap_time', None)
-                    elif col == 'average_lap_time':
-                        v = self._extract_result_field(res, 'average_lap_time', None)
-                    elif col == 'grid_position':
-                        v = self._extract_result_field(res, 'grid_position', None)
-                    elif col == 'laps_completed':
-                        v = self._extract_result_field(res, 'laps_completed', None)
-                vals.append(v)
-
-            try:
-                cur.execute(insert_sql, tuple(vals))
-            except sqlite3.IntegrityError as ie:
-                raise ValueError(
-                    f"IntegrityError inserting race_result: {ie}; params=(race_id={race_id}, values={vals})"
-                )
-            except sqlite3.OperationalError:
-                try:
-                    driver_id = self._extract_result_field(res, 'driver_id')
-                    position = self._extract_result_field(res, 'position')
-                    time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
-                    cur.execute(
-                        "INSERT INTO race_results (race_id, driver_id, team_id, position, time_seconds) VALUES (?, ?, ?, ?, ?)",
-                        (race_id, driver_id, self._parse_team_id(res), position, time_sec),
-                    )
-                except Exception:
-                    raise
+            vals = self._build_result_values(res, insert_cols, race_id)
+            self._insert_result_row(cur, insert_sql, vals, race_id, res)
 
         self.conn.commit()
 

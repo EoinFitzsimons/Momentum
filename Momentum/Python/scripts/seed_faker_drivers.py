@@ -9,7 +9,7 @@ $env:PYTHONPATH='Momentum/Python'; python Momentum/Python/scripts/seed_faker_dri
 from faker import Faker
 import random
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from database.database_manager import DatabaseManager
 from config import DISCIPLINES
 import unicodedata
@@ -19,7 +19,7 @@ import re
 
 # Try to use Unidecode for robust transliteration; fall back to NFKD
 try:
-    from unidecode import unidecode as _unidecode
+    from unidecode import unidecode as _unidecode  # type: ignore[import-not-found]
 except Exception:
     _unidecode = None
 
@@ -57,8 +57,31 @@ def to_latin(s: str) -> str:
 _ascii_letter_re = re.compile(r'[A-Za-z]')
 
 # strip common honorific prefixes and professional suffixes
-HONORIFIC_PREFIX_RE = re.compile(r'^(Dr\.?|Mr\.?|Ms\.?|Mrs\.?|Miss\.?|Prof\.?|Sir\.?|Dame\.?|Lady\.?)\s+', flags=re.IGNORECASE)
-HONORIFIC_SUFFIX_RE = re.compile(r'\b(MD|M\.D\.|DDS|D\.D\.S\.|PhD|Ph\.D\.|Jr\.|Sr\.|II|III|IV)\b', flags=re.IGNORECASE)
+HONORIFIC_PREFIXES = {
+    'dr', 'mr', 'ms', 'mrs', 'miss', 'prof', 'sir', 'dame', 'lady'
+}
+HONORIFIC_SUFFIXES = {
+    'md', 'm.d', 'dds', 'd.d.s', 'phd', 'ph.d', 'jr', 'sr', 'ii', 'iii', 'iv'
+}
+
+
+def _strip_honorifics(name: str) -> str:
+    """Remove common title prefixes and professional suffixes."""
+    tokens = [t for t in (name or '').strip().split() if t]
+    if not tokens:
+        return ''
+
+    while tokens and tokens[0].lower().rstrip('.').replace('.', '') in HONORIFIC_PREFIXES:
+        tokens.pop(0)
+
+    while tokens:
+        tail = tokens[-1].lower().rstrip('.').replace('.', '')
+        if tail in HONORIFIC_SUFFIXES:
+            tokens.pop()
+            continue
+        break
+
+    return ' '.join(tokens)
 
 # Use the canonical country list from the project and map to locales.
 from tools.locale_mapping import get_all_country_codes, get_locale_for_country
@@ -76,7 +99,7 @@ NUM_DRIVERS = int(os.getenv('FAKER_NUM_DRIVERS', str(RACE_GRID_SIZE or 20)))
 
 
 def random_birth_date(min_age=18, max_age=45):
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     age = random.randint(min_age, max_age)
     # approximate birthdate
     birth = today - timedelta(days=365 * age + random.randint(0, 365))
@@ -87,8 +110,7 @@ def format_name(fake: Faker, name_type: str) -> str:
     if name_type == 'full':
         nm = fake.name()
         # remove common honorific prefixes and suffixes
-        nm = HONORIFIC_PREFIX_RE.sub('', nm)
-        nm = HONORIFIC_SUFFIX_RE.sub('', nm).strip()
+        nm = _strip_honorifics(nm)
         nm = to_latin(nm)
         if not _ascii_letter_re.search(nm):
             # fallback to ASCII pool
@@ -98,8 +120,7 @@ def format_name(fake: Faker, name_type: str) -> str:
     last = fake.last_name()
     if name_type == 'initials':
         nm = f"{first[0]}. {last}"
-        nm = HONORIFIC_PREFIX_RE.sub('', nm)
-        nm = HONORIFIC_SUFFIX_RE.sub('', nm).strip()
+        nm = _strip_honorifics(nm)
         nm = to_latin(nm)
         if not _ascii_letter_re.search(nm):
             return f"{random.choice(FIRST_NAME_POOL)} {random.choice(LAST_NAME_POOL)}"
@@ -159,7 +180,7 @@ def main():
     with conn:
         cur = conn.cursor()
 
-        for i in range(NUM_DRIVERS):
+        for _ in range(NUM_DRIVERS):
             nationality = random.choice(COUNTRY_CODES)
             locale = get_locale_for_country(nationality)
             try:

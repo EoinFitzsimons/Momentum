@@ -18,8 +18,9 @@ def main():
     parser.add_argument("--db", help="Path to SQLite DB file. If omitted uses config.DATABASE_PATH from package.")
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parents[2]
-    py_pkg = repo_root / "Momentum" / "Python"
+    # scripts/import_circuits.py lives under Momentum/Python/scripts,
+    # so parents[1] is the Python package root.
+    py_pkg = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(py_pkg))
 
     from database.database_manager import DatabaseManager

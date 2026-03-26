@@ -12,6 +12,9 @@ except Exception as e:
 w,h = img.size
 print(f'Image: {path} size={w}x{h}')
 px = img.load()
+if px is None:
+    print('ERROR loading pixel buffer')
+    sys.exit(3)
 # sample center pixel and area
 cx,cy = w//2, h//2
 print('Center pixel RGBA:', px[cx,cy])

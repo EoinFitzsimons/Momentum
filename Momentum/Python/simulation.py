@@ -34,7 +34,7 @@ Compatible with: Python 3.8+, FastAPI 0.100+
 
 from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Optional, Annotated
 from datetime import datetime
 import uvicorn
 
@@ -144,7 +144,7 @@ def root():
     }
 
 
-@app.get("/health", response_model=HealthCheckResponse)
+@app.get("/health", response_model=HealthCheckResponse, responses={500: {"description": "Health check failed"}})
 def health_check():
     """
     Health Check Endpoint
@@ -166,10 +166,10 @@ def health_check():
 # DRIVER & TEAM ENDPOINTS
 # ============================================================================
 
-@app.get("/drivers")
+@app.get("/drivers", responses={500: {"description": "Database error"}})
 def list_drivers(
-    discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
-    limit: int = Query(100, ge=1, le=1000)
+    discipline: Annotated[Optional[str], Query(description="Filter by preferred discipline")] = None,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100
 ):
     """Get list of drivers with optional filtering"""
     try:
@@ -187,9 +187,9 @@ def list_drivers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/teams")
+@app.get("/teams", responses={500: {"description": "Database error"}})
 def list_teams(
-    discipline: Optional[str] = Query(None, description="Filter by discipline")
+    discipline: Annotated[Optional[str], Query(description="Filter by discipline")] = None
 ):
     """Get list of teams with optional filtering"""
     try:
@@ -210,8 +210,8 @@ def list_teams(
 # TEAM MANAGEMENT ENDPOINTS (UC-11 to UC-14)
 # ============================================================================
 
-@app.get("/teams/me")
-def get_player_team(x_player_id: Optional[str] = Header(default=None, alias="X-Player-Id")):
+@app.get("/teams/me", responses={401: {"description": "Missing X-Player-Id header"}, 404: {"description": "No team found"}, 500: {"description": "Database error"}})
+def get_player_team(x_player_id: Annotated[Optional[str], Header(alias="X-Player-Id")] = None):
     """
     UC-13: Read Player Team
 
@@ -234,7 +234,7 @@ def get_player_team(x_player_id: Optional[str] = Header(default=None, alias="X-P
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/teams/{team_id}", response_model=TeamDetails)
+@app.get("/teams/{team_id}", response_model=TeamDetails, responses={404: {"description": "Team not found"}, 500: {"description": "Database error"}})
 def get_team_details(team_id: int):
     """
     UC-11: Read Team Details
@@ -258,7 +258,7 @@ def get_team_details(team_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/teams", response_model=TeamCreateResponse, status_code=201)
+@app.post("/teams", response_model=TeamCreateResponse, status_code=201, responses={400: {"description": "Invalid team creation request"}, 500: {"description": "Database error"}})
 def create_team(request: TeamCreate):
     """
     UC-12: Create New Team
@@ -291,11 +291,11 @@ def create_team(request: TeamCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.patch("/teams/{team_id}", response_model=TeamUpdateResponse)
+@app.patch("/teams/{team_id}", response_model=TeamUpdateResponse, responses={403: {"description": "Permission denied"}, 409: {"description": "Conflict in update"}, 400: {"description": "Invalid update request"}, 500: {"description": "Database error"}})
 def update_team(
     team_id: int,
     request: TeamUpdate,
-    x_player_id: Optional[str] = Header(default=None, alias="X-Player-Id")
+    x_player_id: Annotated[Optional[str], Header(alias="X-Player-Id")] = None
 ):
     """
     UC-14: Update Team Attributes
@@ -330,7 +330,7 @@ def update_team(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/teams/{team_id}/budget/allocate", response_model=BudgetTransactionResponse)
+@app.post("/teams/{team_id}/budget/allocate", response_model=BudgetTransactionResponse, responses={400: {"description": "Invalid budget request"}, 500: {"description": "Database error"}})
 def allocate_budget(
     team_id: int,
     request: BudgetTransactionRequest
@@ -361,7 +361,7 @@ def allocate_budget(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/teams/{team_id}/budget", response_model=TeamBudgetResponse)
+@app.get("/teams/{team_id}/budget", response_model=TeamBudgetResponse, responses={404: {"description": "Team not found"}, 500: {"description": "Database error"}})
 def get_team_budget(team_id: int):
     """
     Get current budget status and allocation breakdown.
@@ -387,7 +387,7 @@ def get_team_budget(team_id: int):
 # UC-10: CREATE CHAMPIONSHIP
 # ============================================================================
 
-@app.post("/championships", response_model=ChampionshipResponse, status_code=201)
+@app.post("/championships", response_model=ChampionshipResponse, status_code=201, responses={400: {"description": "Invalid championship request"}, 500: {"description": "Database error"}})
 def create_championship(request: ChampionshipCreate):
     """
     Create New Championship (UC-10)
@@ -433,8 +433,10 @@ def create_championship(request: ChampionshipCreate):
             champ_id = db_manager.create_championship(championship)
         
         # Retrieve created championship
+        if champ_id is None:
+            raise HTTPException(status_code=500, detail="Failed to create championship")
         created_champ = db_manager.get_championship(champ_id)
-        
+
         if not created_champ:
             raise HTTPException(status_code=500, detail="Championship created but not retrievable")
         
@@ -451,20 +453,23 @@ def create_championship(request: ChampionshipCreate):
             archived=created_champ.archived
         )
         
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create championship: {str(e)}")
+
+
+@app.get("/championships/{championship_id}", response_model=ChampionshipDetailsResponse, responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}})
 
 
 # ============================================================================
 # UC-5: READ CHAMPIONSHIP DETAILS
 # ============================================================================
 
-@app.get("/championships/{championship_id}", response_model=ChampionshipDetailsResponse)
+@app.get("/championships/{championship_id}", response_model=ChampionshipDetailsResponse, responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}})
 def get_championship_details(
     championship_id: int,
-    season: Optional[int] = Query(None, description="Season number (defaults to current)")
+    season: Annotated[Optional[int], Query(description="Season number (defaults to current)")] = None
 ):
     """
     Get Championship Details (UC-5)
@@ -550,11 +555,12 @@ def get_championship_details(
 
 @app.post(
     "/championships/{championship_id}/standings/recalculate",
-    response_model=RecalculateStandingsResponse
+    response_model=RecalculateStandingsResponse,
+    responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}}
 )
 def recalculate_championship_standings(
     championship_id: int,
-    season: Optional[int] = Query(None, description="Season to recalculate")
+    season: Annotated[Optional[int], Query(description="Season to recalculate")] = None
 ):
     """
     Recalculate Championship Standings (UC-6)
@@ -615,7 +621,8 @@ def recalculate_championship_standings(
 @app.post(
     "/championships/{championship_id}/events",
     response_model=RaceEventResponse,
-    status_code=201
+    status_code=201,
+    responses={404: {"description": "Championship not found"}, 400: {"description": "Invalid race request"}, 500: {"description": "Database error"}}
 )
 def create_race_event(championship_id: int, request: RaceEventCreate):
     """
@@ -698,10 +705,10 @@ def create_race_event(championship_id: int, request: RaceEventCreate):
 # UC-8: READ RACE SCHEDULE
 # ============================================================================
 
-@app.get("/championships/{championship_id}/schedule", response_model=ChampionshipScheduleResponse)
+@app.get("/championships/{championship_id}/schedule", response_model=ChampionshipScheduleResponse, responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}})
 def get_championship_schedule(
     championship_id: int,
-    season: Optional[int] = Query(None, description="Season number")
+    season: Annotated[Optional[int], Query(description="Season number")] = None
 ):
     """
     Get Race Schedule (UC-8)
@@ -753,7 +760,7 @@ def get_championship_schedule(
 # UC-9: UPDATE RACE STATUS
 # ============================================================================
 
-@app.patch("/races/{race_id}/status")
+@app.patch("/races/{race_id}/status", responses={400: {"description": "Invalid status transition"}, 500: {"description": "Database error"}})
 def update_race_status(race_id: int, request: RaceStatusUpdate):
     """
     Update Race Status (UC-9)
@@ -796,7 +803,27 @@ def update_race_status(race_id: int, request: RaceStatusUpdate):
 # UC-4: READ RACE RESULTS
 # ============================================================================
 
-@app.get("/races/{race_id}/results", response_model=RaceResultDetailResponse)
+def _build_race_result_entry(result):
+    """Helper to build a race result classification entry"""
+    driver = db_manager.get_driver(result.driver_id)
+    team = db_manager.get_team(result.team_id) if result.team_id else None
+    
+    return {
+        "position": result.position,
+        "driver_id": result.driver_id,
+        "driver_name": driver.name if driver else f"Driver {result.driver_id}",
+        "team_id": result.team_id,
+        "team_name": team.name if team else "No Team",
+        "points": result.points,
+        "fastest_lap": result.fastest_lap,
+        "dnf_reason": result.dnf_reason,
+        "grid_position": result.grid_position,
+        "time_seconds": result.time_seconds,
+        "status": "DNF" if result.dnf_reason else "Finished"
+    }
+
+
+@app.get("/races/{race_id}/results", response_model=RaceResultDetailResponse, responses={404: {"description": "Race not found"}, 500: {"description": "Database error"}})
 def get_race_results(race_id: int):
     """
     Get Race Results (UC-4)
@@ -826,26 +853,11 @@ def get_race_results(race_id: int):
         fastest_lap_info = None
         
         for result in results:
-            driver = db_manager.get_driver(result.driver_id)
-            team = db_manager.get_team(result.team_id) if result.team_id else None
-            
-            entry = {
-                "position": result.position,
-                "driver_id": result.driver_id,
-                "driver_name": driver.name if driver else f"Driver {result.driver_id}",
-                "team_id": result.team_id,
-                "team_name": team.name if team else "No Team",
-                "points": result.points,
-                "fastest_lap": result.fastest_lap,
-                "dnf_reason": result.dnf_reason,
-                "grid_position": result.grid_position,
-                "time_seconds": result.time_seconds,
-                "status": "DNF" if result.dnf_reason else "Finished"
-            }
-            
+            entry = _build_race_result_entry(result)
             classification.append(entry)
             
             if result.fastest_lap and not fastest_lap_info:
+                driver = db_manager.get_driver(result.driver_id)
                 fastest_lap_info = {
                     "driver_name": driver.name if driver else f"Driver {result.driver_id}",
                     "time": result.time_seconds
@@ -873,7 +885,7 @@ def get_race_results(race_id: int):
 # RACE COMPLETION & STANDINGS UPDATE
 # ============================================================================
 
-@app.post("/races/{race_id}/complete")
+@app.post("/races/{race_id}/complete", responses={404: {"description": "Race not found"}, 400: {"description": "Invalid race state"}, 500: {"description": "Database error"}})
 def complete_race_and_update_standings(race_id: int):
     """
     Complete a race and automatically update championship standings.
@@ -934,7 +946,7 @@ def complete_race_and_update_standings(race_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to complete race: {str(e)}")
 
 
-@app.get("/championships/{championship_id}/next-race")
+@app.get("/championships/{championship_id}/next-race", responses={404: {"description": "Championship not found"}, 500: {"description": "Database error"}})
 def get_next_race(championship_id: int):
     """
     Get the next scheduled race in a championship.
@@ -987,10 +999,10 @@ def get_next_race(championship_id: int):
 # ADDITIONAL ENDPOINTS
 # ============================================================================
 
-@app.get("/championships")
+@app.get("/championships", responses={500: {"description": "Database error"}})
 def list_championships(
-    discipline: Optional[str] = Query(None, description="Filter by discipline"),
-    archived: bool = Query(False, description="Include archived championships")
+    discipline: Annotated[Optional[str], Query(description="Filter by discipline")] = None,
+    archived: Annotated[bool, Query(description="Include archived championships")] = False
 ):
     """List all championships with optional filtering"""
     try:
@@ -1029,15 +1041,15 @@ def list_championships(
 # HIRING & CONTRACT ENDPOINTS (UC-15, UC-16, UC-17, UC-18)
 # ============================================================================
 
-@app.get("/drivers/available", response_model=AvailableDriversResponse, tags=["Hiring"])
+@app.get("/drivers/available", response_model=AvailableDriversResponse, tags=["Hiring"], responses={500: {"description": "Database error"}})
 def get_available_drivers(
-    discipline: Optional[str] = Query(None, description="Filter by preferred discipline"),
-    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum average skill rating"),
-    max_salary: Optional[float] = Query(None, description="Maximum salary budget"),
-    sort_by: str = Query("rating", description="Sort field: rating, name, age, salary, career_points"),
-    sort_order: str = Query("desc", description="Sort direction: asc or desc"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+    discipline: Annotated[Optional[str], Query(description="Filter by preferred discipline")] = None,
+    min_rating: Annotated[float, Query(ge=0.0, le=100.0, description="Minimum average skill rating")] = 0.0,
+    max_salary: Annotated[Optional[float], Query(description="Maximum salary budget")] = None,
+    sort_by: Annotated[str, Query(description="Sort field: rating, name, age, salary, career_points")] = "rating",
+    sort_order: Annotated[str, Query(description="Sort direction: asc or desc")] = "desc",
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Results per page")] = 50
 ):
     """
     UC-15: Get Available Drivers for Hire
@@ -1077,14 +1089,14 @@ def get_available_drivers(
         raise HTTPException(status_code=500, detail=f"Error fetching available drivers: {str(e)}")
 
 
-@app.get("/staff/available", response_model=AvailableStaffResponse, tags=["Hiring"])
+@app.get("/staff/available", response_model=AvailableStaffResponse, tags=["Hiring"], responses={500: {"description": "Database error"}})
 def get_available_staff(
-    role: Optional[str] = Query(None, description="Filter by staff role"),
-    min_rating: float = Query(0.0, ge=0.0, le=100.0, description="Minimum skill rating"),
-    sort_by: str = Query("rating", description="Sort field: rating, name, role, salary"),
-    sort_order: str = Query("desc", description="Sort direction: asc or desc"),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=100, description="Results per page")
+    role: Annotated[Optional[str], Query(description="Filter by staff role")] = None,
+    min_rating: Annotated[float, Query(ge=0.0, le=100.0, description="Minimum skill rating")] = 0.0,
+    sort_by: Annotated[str, Query(description="Sort field: rating, name, role, salary")] = "rating",
+    sort_order: Annotated[str, Query(description="Sort direction: asc or desc")] = "desc",
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100, description="Results per page")] = 50
 ):
     """
     UC-17: Get Available Staff for Hire
@@ -1124,7 +1136,7 @@ def get_available_staff(
         raise HTTPException(status_code=500, detail=f"Error fetching available staff: {str(e)}")
 
 
-@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"])
+@app.post("/contracts/driver", response_model=DriverContractResponse, tags=["Hiring"], responses={400: {"description": "Invalid contract request"}, 500: {"description": "Database error"}})
 def sign_driver_contract(request: DriverContractRequest):
     """
     UC-16: Sign Driver Contract
@@ -1180,7 +1192,7 @@ def sign_driver_contract(request: DriverContractRequest):
         raise HTTPException(status_code=500, detail=f"Error signing driver contract: {str(e)}")
 
 
-@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"])
+@app.post("/contracts/staff", response_model=StaffContractResponse, tags=["Hiring"], responses={400: {"description": "Invalid contract request"}, 500: {"description": "Database error"}})
 def sign_staff_contract(request: StaffContractRequest):
     """
     UC-18: Sign Staff Contract
@@ -1231,7 +1243,7 @@ def sign_staff_contract(request: StaffContractRequest):
         raise HTTPException(status_code=500, detail=f"Error signing staff contract: {str(e)}")
 
 
-@app.post("/contracts/release", response_model=ContractReleaseResponse, tags=["Hiring"])
+@app.post("/contracts/release", response_model=ContractReleaseResponse, tags=["Hiring"], responses={400: {"description": "Invalid release request"}, 500: {"description": "Database error"}})
 def release_contract(request: ContractReleaseRequest):
     """
     Release Driver or Staff from Contract
@@ -1277,7 +1289,7 @@ def release_contract(request: ContractReleaseRequest):
 # PROGRESSION ENDPOINTS (UC-19)
 # ============================================================================
 
-@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"])
+@app.post("/progression/season", response_model=SeasonProgressionResponse, tags=["Progression"], responses={500: {"description": "Database error"}})
 def process_season_progression(request: SeasonProgressionRequest):
     """
     UC-19: Process Season-End Driver Progression
@@ -1306,8 +1318,7 @@ def process_season_progression(request: SeasonProgressionRequest):
     """
     try:
         results = progression_service.process_season_end_progression(
-            season=request.season,
-            championship_id=request.championship_id
+            season=request.season
         )
         
         # Convert results to response format

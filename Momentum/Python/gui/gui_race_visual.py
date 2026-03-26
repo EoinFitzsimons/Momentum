@@ -62,7 +62,7 @@ import re
 import time
 import threading
 import traceback as _traceback
-from typing import Any, List, Dict, Optional, cast
+from typing import Any, List, Dict, Optional, Tuple, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
@@ -71,6 +71,8 @@ from .props_placer import place_props, draw_props
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+CONTROL_LABEL_STYLE = "font-size: 16px; font-weight: bold; color: #FFFFFF;"
 
 
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
@@ -220,320 +222,281 @@ class CircuitGenerator:
         # 'routes' above. This dead code caused undefined-name mypy errors.)
 
     @staticmethod
-    def _process_instructions(instructions: Any, state: Dict[str, Any], routes: Dict[str, Any], is_point_to_point: bool = False):
-        start_x, start_y = 0, 0  # Track starts at origin
+    def _process_subinstructions(sub_instructions: List[Any]) -> List[TrackPoint]:
+        """Process nested route instructions (e.g., pit/joker) into standalone segments."""
+        sub_segments: List[TrackPoint] = []
+        sub_state = {
+            'segments': sub_segments,
+            'current_s': 0,
+            'current_x': 0,
+            'current_y': 0,
+            'current_theta': 0,
+            'total_angle': 0,
+            'target_length_m': None,
+        }
+        for instr in sub_instructions:
+            CircuitGenerator._process_instructions(
+                [instr],
+                sub_state,
+                {'main': sub_segments, 'joker': None, 'pit': None},
+                False,
+            )
+        if sub_segments:
+            CircuitGenerator._finalize_circuit(sub_segments)
+        return sub_segments
 
-        # Optionally solve closure exactly when requested in options attached
-        # to the instruction block: if the top-level 'solve_closure' key is
-        # present and true, we will attempt to adjust primitive multipliers
-        # so the composed sequence closes precisely. The caller may pass
-        # this flag via the `options` argument to `generate_with_routes`.
-        from RaceLogic import closure_solver
-
-        # helper to process a sub-instruction list into a fresh segments list
-        def process_subinstructions(sub_instructions):
-            sub_segments: List[TrackPoint] = []
-            sub_state = {
-                'segments': sub_segments,
-                'current_s': 0,
-                'current_x': 0,
-                'current_y': 0,
-                'current_theta': 0,
-                'total_angle': 0,
-                'target_length_m': None
-            }
-            for instr in sub_instructions:
-                CircuitGenerator._process_instructions([instr], sub_state, {'main': sub_segments, 'joker': None, 'pit': None})
-            # finalize subroute (do not rescale - keep generated geometry as-is)
-            if sub_segments:
-                CircuitGenerator._finalize_circuit(sub_segments)
-            return sub_segments
-
-        # Process all instructions
-        # If instructions is a dict with control flags, respect them
+    @staticmethod
+    def _extract_instruction_list(instructions: Any) -> Tuple[List[Any], bool]:
+        """Normalize instruction container and extract optional solve-closure flag."""
         solve_requested = False
         instruction_list: List[Any] = []
+
         if isinstance(instructions, dict) and instructions.get('solve_closure'):
-            # instructions provided as dict wrapper: {'solve_closure': True, 'instructions': [...]}
-            wrapper = instructions
-            wrapped_instructions = wrapper.get('instructions', [])
+            wrapped_instructions = instructions.get('instructions', [])
             instruction_list = cast(List[Any], wrapped_instructions) if isinstance(wrapped_instructions, list) else []
             solve_requested = True
         elif isinstance(instructions, list) and len(instructions) > 0:
             instruction_list = cast(List[Any], instructions)
-            # allow options via attached sentinel instruction dict at start
             if isinstance(instructions[0], dict) and instructions[0].get('solve_closure'):
                 solve_requested = True
         elif isinstance(instructions, list):
             instruction_list = cast(List[Any], instructions)
 
-        closure_solved = False
-        # Skip closure solver for point-to-point tracks
-        if solve_requested and not is_point_to_point:
-            try:
-                # Attempt closure solve; this mutates instruction angles/lengths
-                success, multipliers, diag = closure_solver.solve_closure(instruction_list)
-                if success:
-                    closure_solver.apply_multipliers_to_instructions(instruction_list, multipliers)
-                    closure_solved = True
-                else:
-                    print(f"Closure solver failed: {diag}")
-            except Exception as e:
-                print(f"Error running closure solver: {e}")
+        return instruction_list, solve_requested
 
-        for instruction in instruction_list:
-            # Normalize instruction forms: allow tuple legacy or dict
-            if isinstance(instruction, tuple) or isinstance(instruction, list):
-                # legacy tuple form: ('S', length) or ('C', angle_deg, radius, clothoid_len, k)
-                if instruction[0] == 'S':
-                    CircuitGenerator._add_straight(instruction[1], state)
-                elif instruction[0] == 'C':
-                    angle_deg, radius, clothoid_len, k = instruction[1:5]
-                    CircuitGenerator._add_corner(
-                        angle_deg * math.pi / 180, radius, clothoid_len, k, state)
-                else:
-                    # unknown tuple type - ignore
-                    continue
-            elif isinstance(instruction, dict):
-                typ = instruction.get('type')
-                if not typ:
-                    continue
-                typ = typ.upper()
-                if typ == 'S':
-                    CircuitGenerator._add_straight(int(instruction.get('length_m', 50)), state)
-                elif typ == 'C':
-                    angle = float(instruction.get('angle_deg', 45))
-                    radius = float(instruction.get('radius_m', 80))
-                    clothoid = int(instruction.get('clothoid_len', 50))
-                    k = float(instruction.get('k', 0.00009))
-                    CircuitGenerator._add_corner(angle * math.pi / 180, radius, clothoid, k, state)
-                elif typ in ('PIT', 'PIT_ENTRY', 'PIT_EXIT'):
-                    # PIT block: may contain nested instructions for pit lane geometry
-                    pit_instr = instruction.get('instructions')
-                    if pit_instr:
-                        pit_segments = process_subinstructions(pit_instr)
-                        routes['pit'] = pit_segments
-                    else:
-                        # fallback: simple straight pit lane
-                        pit_len = int(instruction.get('length_m', 60))
-                        pit_state = {'segments': [], 'current_s': 0, 'current_x': 0, 'current_y': 0, 'current_theta': state['current_theta'], 'total_angle': 0, 'target_length_m': None}
-                        CircuitGenerator._add_straight(pit_len, pit_state)
-                        routes['pit'] = pit_state['segments']
-                elif typ == 'JOKER':
-                    joker_instr = instruction.get('instructions')
-                    if joker_instr:
-                        joker_segments = process_subinstructions(joker_instr)
-                        routes['joker'] = joker_segments
-                    else:
-                        # nothing to do
-                        pass
-                else:
-                    # unknown dict type - ignore
-                    continue
+    @staticmethod
+    def _maybe_solve_closure(instruction_list: List[Any], solve_requested: bool, is_point_to_point: bool) -> bool:
+        """Run analytic closure solver when requested for circuit-style tracks."""
+        if not solve_requested or is_point_to_point:
+            return False
+
+        from RaceLogic import closure_solver
+
+        try:
+            success, multipliers, diag = closure_solver.solve_closure(instruction_list)
+            if success:
+                closure_solver.apply_multipliers_to_instructions(instruction_list, multipliers)
+                return True
+            print(f"Closure solver failed: {diag}")
+        except Exception as e:
+            print(f"Error running closure solver: {e}")
+        return False
+
+    @staticmethod
+    def _process_instruction_item(instruction: Any, state: Dict[str, Any], routes: Dict[str, Any]) -> None:
+        """Dispatch one normalized instruction item."""
+        if isinstance(instruction, tuple) or isinstance(instruction, list):
+            CircuitGenerator._process_legacy_instruction(instruction, state)
+            return
+        if isinstance(instruction, dict):
+            CircuitGenerator._process_dict_instruction(instruction, state, routes)
+
+    @staticmethod
+    def _process_legacy_instruction(instruction: Any, state: Dict[str, Any]) -> None:
+        """Handle legacy tuple/list instructions."""
+        if not instruction:
+            return
+        if instruction[0] == 'S':
+            CircuitGenerator._add_straight(instruction[1], state)
+            return
+        if instruction[0] == 'C':
+            angle_deg, radius, clothoid_len, k = instruction[1:5]
+            CircuitGenerator._add_corner(angle_deg * math.pi / 180, radius, clothoid_len, k, state)
+
+    @staticmethod
+    def _process_dict_instruction(instruction: Dict[str, Any], state: Dict[str, Any], routes: Dict[str, Any]) -> None:
+        """Handle dict-based instructions including nested route blocks."""
+        typ = instruction.get('type')
+        if not typ:
+            return
+        typ = str(typ).upper()
+
+        if typ == 'S':
+            CircuitGenerator._add_straight(int(instruction.get('length_m', 50)), state)
+            return
+        if typ == 'C':
+            angle = float(instruction.get('angle_deg', 45))
+            radius = float(instruction.get('radius_m', 80))
+            clothoid = int(instruction.get('clothoid_len', 50))
+            k = float(instruction.get('k', 0.00009))
+            CircuitGenerator._add_corner(angle * math.pi / 180, radius, clothoid, k, state)
+            return
+        if typ in ('PIT', 'PIT_ENTRY', 'PIT_EXIT'):
+            pit_instr = instruction.get('instructions')
+            if pit_instr:
+                routes['pit'] = CircuitGenerator._process_subinstructions(cast(List[Any], pit_instr))
             else:
-                # unsupported instruction format - ignore
-                continue
+                pit_len = int(instruction.get('length_m', 60))
+                pit_state = {
+                    'segments': [],
+                    'current_s': 0,
+                    'current_x': 0,
+                    'current_y': 0,
+                    'current_theta': state['current_theta'],
+                    'total_angle': 0,
+                    'target_length_m': None,
+                }
+                CircuitGenerator._add_straight(pit_len, pit_state)
+                routes['pit'] = pit_state['segments']
+            return
+        if typ == 'JOKER':
+            joker_instr = instruction.get('instructions')
+            if joker_instr:
+                routes['joker'] = CircuitGenerator._process_subinstructions(cast(List[Any], joker_instr))
 
-        # NOW: Calculate what we need to close the loop
-        # If closure solver already produced a closed sequence, skip heuristic
-        if closure_solved:
-            # compute gap for logging but skip adding corrective segments
-            dx = start_x - state['current_x']
-            dy = start_y - state['current_y']
-            distance_to_start = math.hypot(dx, dy)
-            angle_to_start = math.atan2(dy, dx)
+    @staticmethod
+    def _normalize_angle(angle: float) -> float:
+        """Normalize radians to [-pi, pi] for stable closure math."""
+        while angle > math.pi:
+            angle -= 2 * math.pi
+        while angle < -math.pi:
+            angle += 2 * math.pi
+        return angle
 
-            heading_error = angle_to_start - state['current_theta']
-            while heading_error > math.pi:
-                heading_error -= 2 * math.pi
-            while heading_error < -math.pi:
-                heading_error += 2 * math.pi
-
-            angle_deficit = 2 * math.pi - state['total_angle']
-
-            print(
-                f"  [CLOSURE solver] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
-        else:
-            dx = start_x - state['current_x']
-            dy = start_y - state['current_y']
-            distance_to_start = math.hypot(dx, dy)
-            angle_to_start = math.atan2(dy, dx)
+    @staticmethod
+    def _compute_closure_metrics(state: Dict[str, Any], start_x: float, start_y: float) -> Tuple[float, float, float]:
+        """Return (distance_to_start, heading_error, angle_deficit)."""
         dx = start_x - state['current_x']
         dy = start_y - state['current_y']
         distance_to_start = math.hypot(dx, dy)
         angle_to_start = math.atan2(dy, dx)
-
-        # Calculate heading error
-        heading_error = angle_to_start - state['current_theta']
-        while heading_error > math.pi:
-            heading_error -= 2 * math.pi
-        while heading_error < -math.pi:
-            heading_error += 2 * math.pi
-
-        # Calculate angle deficit (how much we need to turn to complete 360
-        # degrees)
+        heading_error = CircuitGenerator._normalize_angle(angle_to_start - state['current_theta'])
         angle_deficit = 2 * math.pi - state['total_angle']
+        return distance_to_start, heading_error, angle_deficit
 
-        # Skip closure calculation/printing for point-to-point tracks
+    @staticmethod
+    def _add_initial_closure_shape(state: Dict[str, Any], distance_to_start: float, angle_deficit: float) -> None:
+        """Add a coarse closure shape before iterative refinement."""
+        if abs(angle_deficit) > math.radians(120):
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.35, 110, 50, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * -0.15, 120, 52, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.15), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.80, 100, 48, 0.00009, state)
+            return
+        if abs(angle_deficit) > math.radians(60):
+            CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.6, 115, 52, 0.00009, state)
+            CircuitGenerator._add_straight(int(distance_to_start * 0.2), state)
+            CircuitGenerator._add_corner(angle_deficit * 0.4, 125, 54, 0.00009, state)
+            return
+        CircuitGenerator._add_straight(int(distance_to_start * 0.3), state)
+        CircuitGenerator._add_corner(angle_deficit, 130, 55, 0.00008, state)
+
+    @staticmethod
+    def _closure_iteration_metrics(state: Dict[str, Any], start_x: float, start_y: float) -> Tuple[float, float, float]:
+        """Return per-iteration closure metrics (gap distance, heading error rad/deg)."""
+        gap_dx = start_x - state['current_x']
+        gap_dy = start_y - state['current_y']
+        gap_dist = math.hypot(gap_dx, gap_dy)
+        gap_angle = math.atan2(gap_dy, gap_dx)
+        gap_heading_error = CircuitGenerator._normalize_angle(gap_angle - state['current_theta'])
+        heading_error_deg = abs(math.degrees(gap_heading_error))
+        return gap_dist, gap_heading_error, heading_error_deg
+
+    @staticmethod
+    def _should_stop_closure_iteration(iteration: int, gap_dist: float, prev_gap: float, heading_error_deg: float) -> bool:
+        """Return True if closure iteration should stop due to divergence or convergence."""
+        if gap_dist > prev_gap * 1.2:
+            print(
+                f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {prev_gap:.1f}m to {gap_dist:.1f}m)")
+            return True
+
+        if gap_dist < 100 and heading_error_deg < 20:
+            print(
+                f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+            return True
+
+        if gap_dist < 200 and heading_error_deg < 25:
+            print(
+                f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={gap_dist:.1f}m, heading={heading_error_deg:.1f}deg - final straight will handle it")
+            return True
+
+        return False
+
+    @staticmethod
+    def _closure_correction_factor(gap_dist: float, heading_error_deg: float) -> float:
+        """Compute proportional closure correction factor from distance and heading quality."""
+        if gap_dist > 300:
+            base_factor = 0.6
+        elif gap_dist > 150:
+            base_factor = 0.45
+        elif gap_dist > 75:
+            base_factor = 0.3
+        else:
+            base_factor = 0.2
+
+        if heading_error_deg < 5:
+            return base_factor * 0.3
+        if heading_error_deg < 15:
+            return base_factor * 0.5
+        if heading_error_deg < 30:
+            return base_factor * 0.7
+        return base_factor
+
+    @staticmethod
+    def _iterative_closure_refinement(state: Dict[str, Any], start_x: float, start_y: float) -> None:
+        """Refine closure with small heading corrections while avoiding divergence."""
+        prev_gap = float('inf')
+        for iteration in range(12):
+            gap_dist, gap_heading_error, heading_error_deg = CircuitGenerator._closure_iteration_metrics(
+                state,
+                start_x,
+                start_y,
+            )
+
+            print(
+                f"  [CLOSURE ITER {iteration}] Gap: {gap_dist:.1f}m, Heading error: {math.degrees(gap_heading_error):.1f}deg")
+
+            if CircuitGenerator._should_stop_closure_iteration(iteration, gap_dist, prev_gap, heading_error_deg):
+                break
+
+            correction_factor = CircuitGenerator._closure_correction_factor(gap_dist, heading_error_deg)
+
+            if abs(gap_heading_error) > math.radians(1):
+                CircuitGenerator._add_corner(gap_heading_error * correction_factor, 180, 60, 0.00006, state)
+
+            prev_gap = gap_dist
+
+    @staticmethod
+    def _apply_heuristic_closure(state: Dict[str, Any], start_x: float, start_y: float, distance_to_start: float, angle_deficit: float) -> None:
+        """Apply non-analytic closure correction for looped circuits."""
+        if abs(angle_deficit) <= 0.1 and distance_to_start <= 50:
+            return
+
+        CircuitGenerator._add_initial_closure_shape(state, distance_to_start, angle_deficit)
+        CircuitGenerator._iterative_closure_refinement(state, start_x, start_y)
+
+        final_gap_dist = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
+        print(f"  [CLOSURE FINAL] Gap before final straight: {final_gap_dist:.1f}m")
+        if final_gap_dist > 2:
+            CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
+
+    @staticmethod
+    def _process_instructions(instructions: Any, state: Dict[str, Any], routes: Dict[str, Any], is_point_to_point: bool = False):
+        start_x, start_y = 0, 0
+        instruction_list, solve_requested = CircuitGenerator._extract_instruction_list(instructions)
+        closure_solved = CircuitGenerator._maybe_solve_closure(instruction_list, solve_requested, is_point_to_point)
+
+        for instruction in instruction_list:
+            CircuitGenerator._process_instruction_item(instruction, state, routes)
+
+        distance_to_start, heading_error, angle_deficit = CircuitGenerator._compute_closure_metrics(state, start_x, start_y)
+
+        if closure_solved:
+            print(
+                f"  [CLOSURE solver] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
+
         if not is_point_to_point:
             print(
-                f"  [CLOSURE] Distance to start: {
-                    distance_to_start:.1f}m, Heading error: {
-                    math.degrees(heading_error):.1f}deg, Angle deficit: {
-                    math.degrees(angle_deficit):.1f}deg")
+                f"  [CLOSURE] Distance to start: {distance_to_start:.1f}m, Heading error: {math.degrees(heading_error):.1f}deg, Angle deficit: {math.degrees(angle_deficit):.1f}deg")
 
-        # Strategy: Add corners and straights to navigate back to start
-        # We need to balance: 1) Turn to complete 360 degrees, 2) Turn to point
-        # at start, 3) Cover remaining distance
-
-        # If closure was solved analytically, skip heuristic corrections
-        # Also skip for point-to-point tracks
         if not closure_solved and not is_point_to_point:
-            if abs(angle_deficit) > 0.1 or distance_to_start > 50:
-                # Split the angular deficit into interesting corners
-                if abs(angle_deficit) > math.radians(120):
-                    # Large angle: Create S-bend with 3 alternating corners
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.35, 110, 50, 0.00009, state)
+            CircuitGenerator._apply_heuristic_closure(state, start_x, start_y, distance_to_start, angle_deficit)
 
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * -0.15, 120, 52, 0.00009, state)
-
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.15), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.80, 100, 48, 0.00009, state)
-                elif abs(angle_deficit) > math.radians(60):
-                    # Medium angle: 2-corner S-bend
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.2), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.6, 115, 52, 0.00009, state)
-
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.2), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit * 0.4, 125, 54, 0.00009, state)
-                else:
-                    # Small angle: Single corner
-                    CircuitGenerator._add_straight(
-                        int(distance_to_start * 0.3), state)
-                    CircuitGenerator._add_corner(
-                        angle_deficit, 130, 55, 0.00008, state)
-
-                # Recalculate position after closure corners
-                final_dx = start_x - state['current_x']
-                final_dy = start_y - state['current_y']
-                final_angle = math.atan2(final_dy, final_dx)
-                final_heading_error = final_angle - state['current_theta']
-
-                while final_heading_error > math.pi:
-                    final_heading_error -= 2 * math.pi
-                while final_heading_error < -math.pi:
-                    final_heading_error += 2 * math.pi
-
-                # Iteratively refine closure - CORNERS ONLY to avoid overshooting
-                # Stop if gap starts increasing (diverging)
-                max_iterations = 12
-                prev_gap = float('inf')
-                for iteration in range(max_iterations):
-                    # Recalculate where we are relative to start
-                    gap_dx = start_x - state['current_x']
-                    gap_dy = start_y - state['current_y']
-                    gap_dist = math.hypot(gap_dx, gap_dy)
-                    gap_angle = math.atan2(gap_dy, gap_dx)
-                    gap_heading_error = gap_angle - state['current_theta']
-
-                    while gap_heading_error > math.pi:
-                        gap_heading_error -= 2 * math.pi
-                    while gap_heading_error < -math.pi:
-                        gap_heading_error += 2 * math.pi
-
-                    print(
-                        f"  [CLOSURE ITER {iteration}] Gap: {
-                            gap_dist:.1f}m, Heading error: {
-                            math.degrees(gap_heading_error):.1f}deg")
-
-                    # STOP if gap is increasing (diverging)
-                    if gap_dist > prev_gap * 1.2:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] DIVERGING - stopping iterations (gap increased from {
-                                prev_gap:.1f}m to {
-                                gap_dist:.1f}m)")
-                        break
-
-                    # Convergence check: if gap is small AND heading is reasonable, stop
-                    # Combined condition prevents risky corrections that could flip heading
-                    # Tighter thresholds when gap is very small to avoid heading
-                    # flips
-                    heading_error_deg = abs(math.degrees(gap_heading_error))
-                    if gap_dist < 100 and heading_error_deg < 20:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                                gap_dist:.1f}m, heading={
-                                heading_error_deg:.1f}deg - final straight will handle it")
-                        break
-                    if gap_dist < 200 and heading_error_deg < 25:
-                        print(
-                            f"  [CLOSURE ITER {iteration}] GOOD ENOUGH - gap={
-                                gap_dist:.1f}m, heading={
-                                heading_error_deg:.1f}deg - final straight will handle it")
-                        break
-
-                    # PROPORTIONAL CORRECTION based on BOTH gap distance AND heading error
-                    # Key insight: if heading is already good, be MORE conservative
-                    # with corrections
-
-                    # Base correction factor on gap distance
-                    if gap_dist > 300:
-                        base_factor = 0.6
-                    elif gap_dist > 150:
-                        base_factor = 0.45
-                    elif gap_dist > 75:
-                        base_factor = 0.3
-                    else:
-                        base_factor = 0.2
-
-                    # REDUCE correction if heading error is small (already pointing
-                    # the right way)
-                    if heading_error_deg < 5:
-                        correction_factor = base_factor * 0.3  # Very gentle - heading is good
-                    elif heading_error_deg < 15:
-                        correction_factor = base_factor * 0.5  # Gentle - heading is decent
-                    elif heading_error_deg < 30:
-                        correction_factor = base_factor * 0.7  # Moderate
-                    else:
-                        correction_factor = base_factor  # Full correction - heading is bad
-
-                    # Add corner to correct heading
-                    if abs(gap_heading_error) > math.radians(1):
-                        CircuitGenerator._add_corner(
-                            gap_heading_error * correction_factor, 180, 60, 0.00006, state)
-
-                    prev_gap = gap_dist
-
-                # Final straight to close remaining gap (ONLY for circuits)
-                if not is_point_to_point:
-                    final_gap_dist = math.hypot(
-                        start_x - state['current_x'],
-                        start_y - state['current_y'])
-                    print(
-                        f"  [CLOSURE FINAL] Gap before final straight: {
-                            final_gap_dist:.1f}m")
-
-                    if final_gap_dist > 2:
-                        # Add slightly more than the gap to ensure closure
-                        CircuitGenerator._add_straight(int(final_gap_dist) + 5, state)
-
-        # Skip final closure report for point-to-point tracks
         if not is_point_to_point:
-            final_gap = math.hypot(
-                start_x - state['current_x'],
-                start_y - state['current_y'])
+            final_gap = math.hypot(start_x - state['current_x'], start_y - state['current_y'])
             print(f"  [CLOSURE] Final gap after closure: {final_gap:.1f}m")
 
     @staticmethod
@@ -685,73 +648,71 @@ class TrackWidget(QWidget):
         self.camera_x = 0
         self.camera_y = 0
         self.camera_rotation = 0
-        
-        # Cache track bounds to avoid recalculating every frame
+        self._init_visual_caches()
+        self._init_grass_tile_cache()
+        self._init_animation_timer()
+        # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
+        self._infield_cache: Dict[tuple, QPixmap] = {}
+        # Cache for placed props keyed by same key as pixmap
+        self._infield_props_cache: Dict[tuple, list] = {}
+        self._normalize_track_arc_lengths()
+        # Diagnostic: recent large-jump history per car (time, prev_display, normalized_pos, delta)
+        self._telemetry_jumps: Dict[int, List[tuple]] = {}
+
+    def _init_visual_caches(self) -> None:
+        """Initialize cached rendering resources and asset paths."""
         self._cached_track_bounds = None
         self._cached_track_zoom = 1.0
-        
-        # Cache expensive visual elements
         self._cached_forest_pixmap = None
         self._cached_inner_infield_polygon = None
         self._cached_assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
         self._cached_forest_tile_path = os.path.join(self._cached_assets_dir, 'forest_tile.png')
         self._forest_tile_exists = os.path.exists(self._cached_forest_tile_path)
-        # Cache common disk-backed pixmaps to avoid stat/QPixmap creation each frame
         self._grass_tile_pixmap: Optional[QPixmap] = None
         self._grass_tile_mtime: Optional[int] = None
+
+    def _init_grass_tile_cache(self) -> None:
+        """Load optional grass tile texture and mtime metadata."""
         try:
             grass_path = os.path.join(self._cached_assets_dir, 'grass_tile.png')
-            if os.path.exists(grass_path):
-                gp = QPixmap(grass_path)
-                if not gp.isNull():
-                    self._grass_tile_pixmap = gp
-                    try:
-                        self._grass_tile_mtime = int(os.path.getmtime(grass_path))
-                    except Exception:
-                        self._grass_tile_mtime = None
+            if not os.path.exists(grass_path):
+                return
+            gp = QPixmap(grass_path)
+            if gp.isNull():
+                return
+            self._grass_tile_pixmap = gp
+            try:
+                self._grass_tile_mtime = int(os.path.getmtime(grass_path))
+            except Exception:
+                self._grass_tile_mtime = None
         except Exception:
-            # Non-fatal: if loading fails, leave caches empty and fallback to on-demand checks
             self._grass_tile_pixmap = None
             self._grass_tile_mtime = None
 
-        # Animation timer for smooth movement (interval derived from config)
+    def _init_animation_timer(self) -> None:
+        """Create animation timer with capped render frequency."""
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
         try:
-            # Cap rendering FPS to a sane maximum to avoid runaway CPU usage.
-            # The UI and most displays are happy at 60 FPS; allow higher
-            # values for benchmarking but clamp here to reduce CPU load.
             effective_fps = max(1, min(RENDER_FPS, 60))
             interval_ms = max(1, int(1000 / effective_fps))
         except Exception:
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
-        # Cache for generated infield pixmaps keyed by (w,h,seed,palette)
-        self._infield_cache: Dict[tuple, QPixmap] = {}
-        # Cache for placed props keyed by same key as pixmap
-        self._infield_props_cache: Dict[tuple, list] = {}
-        # Ensure track_points' arc-lengths match provided track_length.
-        # Some generators produce a track whose last point's `s` differs
-        # slightly from the authoritative database length. If so,
-        # scale the `s` values so visual mapping (engine position -> s)
-        # aligns correctly with the provided `track_length` used by
-        # the physics engine. This prevents mismatches that can skip
-        # short segments when mapping positions to track points.
+
+    def _normalize_track_arc_lengths(self) -> None:
+        """Rescale generated arc-length coordinates to authoritative track length."""
         try:
-            if self.track_points and self.track_length and len(self.track_points) > 1:
-                gen_length = float(self.track_points[-1].s)
-                if gen_length > 0.0:
-                    # If generator length and DB length differ by more than 1 metre,
-                    # rescale the s-values proportionally.
-                    if abs(gen_length - float(self.track_length)) > 1.0:
-                        scale = float(self.track_length) / gen_length
-                        for pt in self.track_points:
-                            pt.s = float(pt.s) * scale
+            if not (self.track_points and self.track_length and len(self.track_points) > 1):
+                return
+            gen_length = float(self.track_points[-1].s)
+            if gen_length <= 0.0 or abs(gen_length - float(self.track_length)) <= 1.0:
+                return
+            scale = float(self.track_length) / gen_length
+            for pt in self.track_points:
+                pt.s = float(pt.s) * scale
         except Exception:
-            # Non-fatal: if scaling fails, fall back to original values
             pass
-        # Diagnostic: recent large-jump history per car (time, prev_display, normalized_pos, delta)
-        self._telemetry_jumps: Dict[int, List[tuple]] = {}
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
         """Set camera mode and target car.
@@ -917,152 +878,135 @@ class TrackWidget(QWidget):
         - Must be thread-safe (check widget validity before accessing)
         - Uses Qt signals to ensure thread safety
         """
-        # === SAFETY CHECK 1: Widget may have been deleted/closed ===
-        try:
-            if not self.isVisible():
-                return  # Window was closed, stop updating
-        except RuntimeError:
-            # Widget has been deleted from memory
+        if not self._can_accept_realtime_updates():
             return
 
-        # === DEBUG: Track zero velocity (cars stopping) ===
         if velocity_mps < 0.1:
             print(
                 f"WARNING: Car {driver_id} has near-zero velocity: {
                     velocity_mps:.2f} m/s at pos={
                     position_m:.1f}m, lap={lap}")
 
-        # === SAFETY CHECK 2: Required attributes exist ===
-        if not hasattr(self, 'cars') or not self.cars or not hasattr(
-                self, 'track_points'):
+        car = self._find_car_by_driver_id(driver_id)
+        if car is None:
+            print(f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
+            self.update()
             return
 
-        # === FIND AND UPDATE THE MATCHING CAR ===
-        car_found = False
-        for car in self.cars:
-            if car.driver_id == driver_id:
-                car_found = True
-
-                # === POSITION MAPPING: Engine -> Visual Track ===
-                # The engine uses absolute position (meters from race start)
-                # The visual track is circular (0 to track_length)
-                # Arc-length directly maps to track point index (1m = 1 point)
-                if self.track_length > 0 and len(self.track_points) > 0:
-                    # Wrap position to track length (NO TELEPORTATION)
-                    normalized_pos = position_m % self.track_length
-
-                    # Direct arc-length to index mapping
-                    idx = int(normalized_pos)
-                    idx = max(0, min(idx, len(self.track_points) - 1))
-
-                    # Store previous position if missing
-                    if not hasattr(car, 'prev_s') or car.prev_s is None:
-                        car.prev_s = normalized_pos
-
-                    # Update position (store authoritative simulation position)
-                    # and set interpolation targets for smooth rendering on every update.
-                    prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
-                    # Set interpolation targets using previous displayed position
-                    # Do NOT overwrite `car.prev_s` with the new target here —
-                    # `_animate_cars` expects `car.prev_s` to hold the prior
-                    # position at `car.prev_update_time` so it can interpolate
-                    # smoothly to `car.target_s` over the span.
-                    try:
-                        # Capture previous displayed position for interpolation
-                        last = prev_display if prev_display is not None else normalized_pos
-                        raw_delta = abs(normalized_pos - last)
-                        if self.track_length and self.track_length > 0 and raw_delta > (self.track_length / 2):
-                            delta = self.track_length - raw_delta
-                        else:
-                            delta = raw_delta
-                        # (No logging here) - avoid noisy telemetry prints
-                    except Exception:
-                        delta = 0.0
-
-                    # Shift previous -> target timestamps and set targets
-                    # Preserve existing `car.prev_s` as the previous displayed
-                    # position so interpolation can occur on the GUI timer.
-                    car.prev_s = prev_display
-                    car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
-                    car.target_s = normalized_pos
-                    car.target_update_time = time.time()
-                    # Keep authoritative last-known position
-                    car.s = normalized_pos
-
-                    # Track movement direction for rotation (based on latest sim pos and previous display)
-                    prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
-                    car.movement_direction = normalized_pos - prev_s_val
-                    # Handle wrap-around
-                    if self.track_length and car.movement_direction < -self.track_length / 2:
-                        car.movement_direction += self.track_length
-                    elif self.track_length and car.movement_direction > self.track_length / 2:
-                        car.movement_direction -= self.track_length
-                else:
-                    # Fallback if track not loaded
-                    car.s = position_m
-
-                # Update car state
-                # Engine reports laps completed (0 = none). Convert to
-                # 1-based current lap for UI (current lap = laps_completed + 1)
-                car.lap = max(1, int(lap) + 1)
-                car.velocity_mps = velocity_mps
-
-                # === DEBUG TRACKING: Monitor which cars are updating ===
-                if not hasattr(self, '_update_count'):
-                    self._update_count: Dict[int, int] = {}
-                self._update_count[driver_id] = self._update_count.get(
-                    driver_id, 0) + 1
-
-                # Log every 60 frames (2 seconds at 30 FPS)
-                if self._update_count[driver_id] % 60 == 0:
-                    print(f"  [CAR UPDATE] {car.driver_name} (ID:{driver_id}): "
-                          f"{self._update_count[driver_id]} updates received, "
-                          f"position={car.s:.1f}m, lap={lap}")
-                break
-
-        if not car_found:
-            print(
-                f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
+        self._apply_realtime_position(car, position_m)
+        self._update_realtime_car_state(car, lap, velocity_mps)
+        self._record_realtime_update(driver_id, car, lap)
 
         # Trigger repaint
         self.update()
+
+    def _can_accept_realtime_updates(self) -> bool:
+        """Return whether this widget is still valid/visible for realtime updates."""
+        try:
+            if not self.isVisible():
+                return False
+        except RuntimeError:
+            return False
+
+        if not hasattr(self, 'cars') or not self.cars or not hasattr(self, 'track_points'):
+            return False
+        return True
+
+    def _find_car_by_driver_id(self, driver_id: int) -> Optional[Car]:
+        """Find a car by driver id from the active grid list."""
+        for car in self.cars:
+            if car.driver_id == driver_id:
+                return car
+        return None
+
+    def _apply_realtime_position(self, car: Car, position_m: float) -> None:
+        """Map engine position to visual track position and update interpolation state."""
+        if self.track_length <= 0 or len(self.track_points) <= 0:
+            car.s = position_m
+            return
+
+        normalized_pos = position_m % self.track_length
+        if not hasattr(car, 'prev_s') or car.prev_s is None:
+            car.prev_s = normalized_pos
+
+        prev_display = car.display_s if hasattr(car, 'display_s') and car.display_s is not None else getattr(car, 's', normalized_pos)
+
+        # Preserve previous display position; animation timer interpolates from prev -> target.
+        car.prev_s = prev_display
+        car.prev_update_time = getattr(car, 'target_update_time', time.time()) or time.time()
+        car.target_s = normalized_pos
+        car.target_update_time = time.time()
+        car.s = normalized_pos
+
+        # Keep heading smooth when crossing lap boundary by applying shortest wrap delta.
+        prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
+        movement = normalized_pos - prev_s_val
+        if self.track_length and movement < -self.track_length / 2:
+            movement += self.track_length
+        elif self.track_length and movement > self.track_length / 2:
+            movement -= self.track_length
+        car.movement_direction = movement
+
+    def _update_realtime_car_state(self, car: Car, lap: int, velocity_mps: float) -> None:
+        """Update non-positional realtime fields from the race engine."""
+        car.lap = max(1, int(lap) + 1)
+        car.velocity_mps = velocity_mps
+
+    def _record_realtime_update(self, driver_id: int, car: Car, lap: int) -> None:
+        """Track update frequency for coarse diagnostics without flooding logs."""
+        if not hasattr(self, '_update_count'):
+            self._update_count: Dict[int, int] = {}
+        self._update_count[driver_id] = self._update_count.get(driver_id, 0) + 1
+
+        if self._update_count[driver_id] % 60 == 0:
+            print(f"  [CAR UPDATE] {car.driver_name} (ID:{driver_id}): "
+                  f"{self._update_count[driver_id]} updates received, "
+                  f"position={car.s:.1f}m, lap={lap}")
 
     def _animate_cars(self):
         """Smoothly update car positions based on simulation time - just trigger repaint."""
         if not self.race_active:
             return
         now = time.time()
-        # Interpolate display_s for each car between prev and target positions
         for car in self.cars:
-            try:
-                if car.target_update_time and car.prev_update_time and car.target_update_time > car.prev_update_time:
-                    span = car.target_update_time - car.prev_update_time
-                    if span <= 0:
-                        t = 1.0
-                    else:
-                        t = min(1.0, max(0.0, (now - car.prev_update_time) / span))
-
-                    prev = car.prev_s if car.prev_s is not None else car.s
-                    target = car.target_s if car.target_s is not None else car.s
-                    # Shortest circular interpolation around track length
-                    if self.track_length and self.track_length > 0:
-                        delta = target - prev
-                        if delta > self.track_length / 2:
-                            delta -= self.track_length
-                        elif delta < -self.track_length / 2:
-                            delta += self.track_length
-                        disp = prev + delta * t
-                        # Normalize
-                        car.display_s = disp % self.track_length
-                    else:
-                        car.display_s = prev + (target - prev) * t
-                else:
-                    # No interpolation data; snap to authoritative position
-                    car.display_s = car.s
-            except Exception:
-                car.display_s = car.s
+            car.display_s = self._interpolate_display_s(car, now)
 
         self.update()
+
+    def _interpolate_display_s(self, car: Car, now: float) -> float:
+        """Compute displayed position using shortest-path interpolation on looped track."""
+        try:
+            if not self._has_interpolation_window(car):
+                return car.s
+            t = self._compute_interpolation_factor(car, now)
+            prev = car.prev_s if car.prev_s is not None else car.s
+            target = car.target_s if car.target_s is not None else car.s
+            if self.track_length and self.track_length > 0:
+                return self._interpolate_circular(prev, target, t)
+            return prev + (target - prev) * t
+        except Exception:
+            return car.s
+
+    def _has_interpolation_window(self, car: Car) -> bool:
+        return bool(
+            car.target_update_time
+            and car.prev_update_time
+            and car.target_update_time > car.prev_update_time
+        )
+
+    def _compute_interpolation_factor(self, car: Car, now: float) -> float:
+        span = car.target_update_time - car.prev_update_time
+        if span <= 0:
+            return 1.0
+        return min(1.0, max(0.0, (now - car.prev_update_time) / span))
+
+    def _interpolate_circular(self, prev: float, target: float, t: float) -> float:
+        delta = target - prev
+        if delta > self.track_length / 2:
+            delta -= self.track_length
+        elif delta < -self.track_length / 2:
+            delta += self.track_length
+        return (prev + delta * t) % self.track_length
 
     def mark_dnf(self, driver_id: int):
         """Mark car as DNF."""
@@ -1081,137 +1025,12 @@ class TrackWidget(QWidget):
         try:
             painter = QPainter(self)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-            # Background fill for areas outside the track
             painter.fillRect(self.rect(), QColor(28, 90, 36))
-
-            # (Forest layer will be drawn after camera/world transform so
-            # it correctly aligns with world coordinates.)
-
-            # Centre point for transformations
             center_x = self.width() // 2
             center_y = self.height() // 2
-
-            # Save painter state
             painter.save()
-
-            # Camera transform
-            if self.camera_mode == 'follow' and self.follow_car_id is not None:
-                # Find followed car
-                followed_car = None
-                for car in self.cars:
-                    if car.driver_id == self.follow_car_id:
-                        followed_car = car
-                        break
-
-                if followed_car and len(self.track_points) > 0 and self.track_length > 0:
-                    try:
-                        # Get car position - use binary search like _draw_cars does
-                        normalized_s = float(followed_car.s) % float(self.track_length)
-                        pt = self._point_at_s(normalized_s)
-                        if pt is None:
-                            pt = self.track_points[0]
-
-                        # CORRECT TRANSFORM ORDER FOR FOLLOW CAMERA:
-                        # 1. Translate viewport centre to canvas origin
-                        # 2. Rotate based on car heading direction (track angle)
-                        # 3. Scale (flip Y for screen coords)
-                        # 4. Translate world so car is at origin
-                        painter.translate(center_x, center_y)
-                        # Rotate track ahead to "up" on screen
-                        painter.rotate(math.degrees(pt.theta))
-                        painter.scale(
-                            self.camera_zoom, -self.camera_zoom)  # Zoom and flip Y
-                        painter.translate(-pt.x, -pt.y)  # Centre on car position
-                    except Exception as e:
-                        print(f"[CAMERA] Follow camera error: {e} - falling back to full view")
-                        painter.translate(center_x, center_y)
-                        painter.scale(1, -1)
-                        self.camera_mode = 'full'
-                else:
-                    # Fallback to full view if car not found or no track data
-                    if self.follow_car_id is not None:
-                        print(f"[CAMERA] Followed car {self.follow_car_id} not found or no track data - falling back to full view")
-                    painter.translate(center_x, center_y)
-                    painter.scale(1, -1)
-                    self.camera_mode = 'full'
-            else:
-                # Full track view with responsive zoom based on viewport size
-                painter.translate(center_x, center_y)
-                
-                # Use cached zoom calculation (only recalculate if track changes)
-                if self._cached_track_bounds is None and self.track_points:
-                    track_min_x = min(pt.x for pt in self.track_points)
-                    track_max_x = max(pt.x for pt in self.track_points)
-                    track_min_y = min(pt.y for pt in self.track_points)
-                    track_max_y = max(pt.y for pt in self.track_points)
-                    
-                    track_width = track_max_x - track_min_x
-                    track_height = track_max_y - track_min_y
-                    
-                    # Cache bounds for reuse
-                    self._cached_track_bounds = (track_width, track_height)
-                
-                # Calculate zoom using cached bounds
-                if self._cached_track_bounds:
-                    track_width, track_height = self._cached_track_bounds
-                    
-                    # Calculate zoom to fit track with padding
-                    padding_factor = 1.15  # 15% padding around track
-                    zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
-                    zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
-                    
-                    # Use the smaller zoom to ensure everything fits
-                    base_zoom = min(zoom_x, zoom_y)
-                    
-                    # Apply reasonable limits to zoom
-                    base_zoom = max(0.5, min(base_zoom, 2.5))
-                else:
-                    # Fallback if no track points or bounds
-                    base_zoom = 1.0
-                
-                painter.scale(base_zoom, -base_zoom)
-
-            # OPTIMIZED: Draw full-canvas forest (cached)
-            try:
-                painter.save()
-                if self._forest_tile_exists:
-                    ft_pix = QPixmap(self._cached_forest_tile_path)
-                    if not ft_pix.isNull():
-                        painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
-                # Skip random forest generation - too expensive for real-time rendering
-                painter.restore()
-            except Exception:
-                pass
-
-            # OPTIMIZED: Draw forest in inner infield (cached polygon)
-            try:
-                # Build inner infield polygon once and cache it
-                if self._cached_inner_infield_polygon is None and self.track_points:
-                    TRACK_WIDTH = 14
-                    inner_infield_points = []
-                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                    for pt in self.track_points:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                        inner_infield_points.append(QPointF(iix, iiy))
-                    if inner_infield_points:
-                        self._cached_inner_infield_polygon = QPolygonF(inner_infield_points)
-                
-                if self._cached_inner_infield_polygon:
-                    band_path = QPainterPath()
-                    band_path.addPolygon(self._cached_inner_infield_polygon)
-                    painter.save()
-                    painter.setClipPath(band_path)
-                    if self._forest_tile_exists:
-                        ft_pix = QPixmap(self._cached_forest_tile_path)
-                        if not ft_pix.isNull():
-                            painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width()*4), int(self.height()*4), ft_pix)
-                    painter.restore()
-            except Exception:
-                pass
+            self._apply_camera_transform(painter, center_x, center_y)
+            self._draw_world_forest_layers(painter)
 
             self._draw_runoff_areas(painter)  # Layer 2
             self._draw_grandstands(painter)    # Layer 3
@@ -1227,6 +1046,107 @@ class TrackWidget(QWidget):
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
             _traceback.print_exc()
+
+    def _apply_camera_transform(self, painter, center_x: int, center_y: int) -> None:
+        """Apply follow/full camera transform before world-space drawing."""
+        if self.camera_mode == 'follow' and self.follow_car_id is not None:
+            if self._try_apply_follow_camera(painter, center_x, center_y):
+                return
+            self._apply_full_view_fallback(painter, center_x, center_y)
+            return
+        self._apply_full_track_camera(painter, center_x, center_y)
+
+    def _try_apply_follow_camera(self, painter, center_x: int, center_y: int) -> bool:
+        followed_car = next((car for car in self.cars if car.driver_id == self.follow_car_id), None)
+        if followed_car is None or len(self.track_points) <= 0 or self.track_length <= 0:
+            if self.follow_car_id is not None:
+                print(f"[CAMERA] Followed car {self.follow_car_id} not found or no track data - falling back to full view")
+            return False
+        try:
+            normalized_s = float(followed_car.s) % float(self.track_length)
+            pt = self._point_at_s(normalized_s) or self.track_points[0]
+            painter.translate(center_x, center_y)
+            painter.rotate(math.degrees(pt.theta))
+            painter.scale(self.camera_zoom, -self.camera_zoom)
+            painter.translate(-pt.x, -pt.y)
+            return True
+        except Exception as e:
+            print(f"[CAMERA] Follow camera error: {e} - falling back to full view")
+            return False
+
+    def _apply_full_view_fallback(self, painter, center_x: int, center_y: int) -> None:
+        painter.translate(center_x, center_y)
+        painter.scale(1, -1)
+        self.camera_mode = 'full'
+
+    def _apply_full_track_camera(self, painter, center_x: int, center_y: int) -> None:
+        painter.translate(center_x, center_y)
+        base_zoom = self._compute_full_view_zoom()
+        painter.scale(base_zoom, -base_zoom)
+
+    def _compute_full_view_zoom(self) -> float:
+        """Compute fit-to-viewport zoom for full-track mode."""
+        if self._cached_track_bounds is None and self.track_points:
+            track_min_x = min(pt.x for pt in self.track_points)
+            track_max_x = max(pt.x for pt in self.track_points)
+            track_min_y = min(pt.y for pt in self.track_points)
+            track_max_y = max(pt.y for pt in self.track_points)
+            self._cached_track_bounds = (track_max_x - track_min_x, track_max_y - track_min_y)
+
+        if not self._cached_track_bounds:
+            return 1.0
+
+        track_width, track_height = self._cached_track_bounds
+        padding_factor = 1.15
+        zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
+        zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
+        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
+
+    def _draw_world_forest_layers(self, painter) -> None:
+        """Draw cached large forest and infield forest overlays in world space."""
+        self._draw_world_forest_tile(painter)
+        self._draw_world_inner_forest_band(painter)
+
+    def _draw_world_forest_tile(self, painter) -> None:
+        try:
+            painter.save()
+            if self._forest_tile_exists:
+                ft_pix = QPixmap(self._cached_forest_tile_path)
+                if not ft_pix.isNull():
+                    painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
+            painter.restore()
+        except Exception:
+            pass
+
+    def _draw_world_inner_forest_band(self, painter) -> None:
+        try:
+            if self._cached_inner_infield_polygon is None and self.track_points:
+                track_width = 14
+                inner_infield_points = []
+                inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+                for pt in self.track_points:
+                    normal_x = -math.sin(pt.theta)
+                    normal_y = math.cos(pt.theta)
+                    iix = pt.x - normal_x * (track_width - 2 + inner_shrink)
+                    iiy = pt.y - normal_y * (track_width - 2 + inner_shrink)
+                    inner_infield_points.append(QPointF(iix, iiy))
+                if inner_infield_points:
+                    self._cached_inner_infield_polygon = QPolygonF(inner_infield_points)
+
+            if not self._cached_inner_infield_polygon:
+                return
+
+            band_path = QPainterPath()
+            band_path.addPolygon(self._cached_inner_infield_polygon)
+            painter.save()
+            painter.setClipPath(band_path)
+            if self._forest_tile_exists:
+                ft_pix = QPixmap(self._cached_forest_tile_path)
+                if not ft_pix.isNull():
+                    painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width() * 4), int(self.height() * 4), ft_pix)
+            painter.restore()
+        except Exception:
+            pass
 
     def _draw_runoff_areas(self, painter):
         """Draw red asphalt runoff zones on outside of fast corners."""
@@ -1284,141 +1204,17 @@ class TrackWidget(QWidget):
             p = QPainter(pix)
             p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-            # Choose palette based on current track properties
             palette = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
-            base = palette.get('base', QColor(80, 160, 70))
-            # Slightly mute the base colour to remove neon appearance
-            try:
-                # stronger mute to avoid neon greens
-                muted_base = QColor(max(0, int(base.red() * 0.45)), max(0, int(base.green() * 0.5)), max(0, int(base.blue() * 0.45)))
-            except Exception:
-                muted_base = base
+            muted_base = self._compute_muted_base_color(palette)
             highlight = palette.get('highlight', QColor(95, 180, 85))
-            mole_col = palette.get('mole', QColor(40, 100, 30))
-            streak_col = palette.get('streak', QColor(70, 50, 30, 100))
-
-            # Use muted base fill to lower overall vibrancy
-            p.fillRect(0, 0, w, h, muted_base)
-
-            # Soft vertical gradient to add variation
-            grad = QLinearGradient(0, 0, 0, h)
-            grad.setColorAt(0.0, QColor(80, 150, 70, 70))
-            grad.setColorAt(1.0, QColor(55, 120, 50, 70))
-            p.fillRect(0, 0, w, h, grad)
-
-            # Tile a subtle grass texture if available to break the flat neon look
-            try:
-                # Use cached pixmap if available to avoid disk I/O each frame
-                tile_pix = self._grass_tile_pixmap
-                if tile_pix is not None and not tile_pix.isNull():
-                    # tile at native size for crisp low-poly look
-                    p.save()
-                    p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
-                    p.drawTiledPixmap(0, 0, w, h, tile_pix)
-                    p.restore()
-                    # apply a subtle tint over the tile to match the preset
-                    tint = palette.get('texture_tint')
-                    if tint is not None:
-                        # reduce tint alpha so tile shows through
-                        tint_col = QColor(tint.red(), tint.green(), tint.blue(), 50)
-                        p.fillRect(0, 0, w, h, tint_col)
-                    # apply soft occlusion near track edges by painting a translucent
-                    # radial/linear darkening; use occlusion parameter from preset
-                    occ = float(palette.get('occlusion', 0.08))
-                    if occ > 0:
-                        occ_col = QColor(0, 0, 0, int(occ * 255))
-                        # subtle vignette using gradient
-                        try:
-                            occ_grad = QLinearGradient(w/2, 0, w/2, h)
-                            occ_grad.setColorAt(0.0, QColor(0,0,0,0))
-                            occ_grad.setColorAt(0.5, QColor(0,0,0,int(occ*180)))
-                            occ_grad.setColorAt(1.0, QColor(0,0,0,int(occ*240)))
-                            p.fillRect(0, 0, w, h, occ_grad)
-                        except Exception:
-                            p.fillRect(0, 0, w, h, occ_col)
-            except Exception:
-                # Non-fatal; fall back to painted base
-                pass
-
             rnd = random.Random(seed)
 
-            # Layered translucent ellipses to create perceptual noise. Density
-            # scales with preset.
-            base_count = int(max(40, (w * h) // 8000))
-            count = int(base_count * max(0.6, palette.get('density_mult', 1.0)))
-            for i in range(count):
-                cx = rnd.uniform(0, w)
-                cy = rnd.uniform(0, h)
-                rw = rnd.uniform(w * 0.02, w * 0.12)
-                rh = rnd.uniform(h * 0.02, h * 0.12)
-                shade = rnd.randint(-20, 20)
-                # Use muted_base for noise so overall tone stays desaturated
-                r = max(30, min(255, muted_base.red() + shade))
-                g = max(30, min(255, muted_base.green() + shade))
-                b = max(30, min(255, muted_base.blue() + shade))
-                alpha = rnd.randint(18, 48)
-                col = QColor(r, g, b, alpha)
-                p.setBrush(QBrush(col))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
-
-            # Add small darker 'molehills' with higher contrast
-            mole_count = int(max(30, (w * h) // 20000) * palette.get('molehills_mult', 1.0))
-            for i in range(mole_count):
-                cx = rnd.uniform(0, w)
-                cy = rnd.uniform(0, h)
-                r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
-                col = mole_col if mole_col is not None else QColor(max(0, muted_base.red()-40), max(0, muted_base.green()-60), max(0, muted_base.blue()-40), rnd.randint(80, 160))
-                p.setBrush(QBrush(col))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
-
-            # Gentle dirt streaks (random thin lines) using preset streak color
-            p.setPen(QPen(streak_col, 1))
-            streak_count = int(max(20, (w * h) // 25000) * max(0.5, palette.get('density_mult', 1.0)))
-            for i in range(streak_count):
-                x1 = rnd.uniform(0, w)
-                y1 = rnd.uniform(0, h)
-                x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
-                y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
-                p.drawLine(int(x1), int(y1), int(x2), int(y2))
-
-            # Add visible mowing stripes (diagonal bands) to make infield read at-a-glance
-            try:
-                stripe_w = max(8, int(min(w, h) * 0.08))
-                stripe_alpha = 40 if palette.get('name') != 'dry' else 35
-                stripe_col_light = QColor(min(255, highlight.red()), min(255, highlight.green()), min(255, highlight.blue()), stripe_alpha)
-                stripe_col_dark = QColor(max(0, muted_base.red() - 18), max(0, muted_base.green() - 18), max(0, muted_base.blue() - 18), stripe_alpha)
-                # diagonal angle
-                angle = -18 * math.pi / 180
-                dx = math.cos(angle) * stripe_w * 0.6
-                dy = math.sin(angle) * stripe_w * 0.6
-                i = -w
-                toggle = True
-                while i < w * 2:
-                    col = stripe_col_light if toggle else stripe_col_dark
-                    p.setBrush(QBrush(col))
-                    # draw band as rectangle long enough
-                    p.setPen(Qt.PenStyle.NoPen)
-                    # compute polygon for band
-                    x0 = i
-                    y0 = 0
-                    band = [
-                        QPointF(x0, y0),
-                        QPointF(x0 + dx * 200, y0 + dy * 200),
-                        QPointF(x0 + dx * 200 + stripe_w * -math.sin(angle), y0 + dy * 200 + stripe_w * math.cos(angle)),
-                        QPointF(x0 + stripe_w * -math.sin(angle), y0 + stripe_w * math.cos(angle))
-                    ]
-                    path = QPainterPath()
-                    path.moveTo(band[0])
-                    for bp in band[1:]:
-                        path.lineTo(bp)
-                    path.closeSubpath()
-                    p.drawPath(path)
-                    toggle = not toggle
-                    i += stripe_w * 0.7
-            except Exception:
-                pass
+            self._paint_infield_base_layers(p, w, h, muted_base)
+            self._paint_infield_texture_overlay(p, w, h, palette)
+            self._paint_infield_noise(p, rnd, w, h, muted_base, palette)
+            self._paint_infield_molehills(p, rnd, w, h, muted_base, palette)
+            self._paint_infield_streaks(p, rnd, w, h, palette)
+            self._paint_infield_mowing_stripes(p, w, h, muted_base, highlight, palette)
 
             p.end()
             return pix
@@ -1427,6 +1223,156 @@ class TrackWidget(QWidget):
             p = QPixmap(max(2, w), max(2, h))
             p.fill(QColor(34, 139, 34))
             return p
+
+    def _compute_muted_base_color(self, palette: Dict[str, Any]) -> QColor:
+        """Return desaturated base color for infield painting."""
+        base = palette.get('base', QColor(80, 160, 70))
+        try:
+            return QColor(
+                max(0, int(base.red() * 0.45)),
+                max(0, int(base.green() * 0.5)),
+                max(0, int(base.blue() * 0.45)),
+            )
+        except Exception:
+            return base
+
+    def _paint_infield_base_layers(self, painter: QPainter, w: int, h: int, muted_base: QColor) -> None:
+        """Paint solid base and soft vertical gradient."""
+        painter.fillRect(0, 0, w, h, muted_base)
+        grad = QLinearGradient(0, 0, 0, h)
+        grad.setColorAt(0.0, QColor(80, 150, 70, 70))
+        grad.setColorAt(1.0, QColor(55, 120, 50, 70))
+        painter.fillRect(0, 0, w, h, grad)
+
+    def _paint_infield_texture_overlay(self, painter: QPainter, w: int, h: int, palette: Dict[str, Any]) -> None:
+        """Overlay grass tile and tint/occlusion when texture exists."""
+        try:
+            tile_pix = self._grass_tile_pixmap
+            if tile_pix is None or tile_pix.isNull():
+                return
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
+            painter.drawTiledPixmap(0, 0, w, h, tile_pix)
+            painter.restore()
+
+            tint = palette.get('texture_tint')
+            if tint is not None:
+                painter.fillRect(0, 0, w, h, QColor(tint.red(), tint.green(), tint.blue(), 50))
+
+            occ = float(palette.get('occlusion', 0.08))
+            if occ <= 0:
+                return
+            try:
+                occ_grad = QLinearGradient(w / 2, 0, w / 2, h)
+                occ_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
+                occ_grad.setColorAt(0.5, QColor(0, 0, 0, int(occ * 180)))
+                occ_grad.setColorAt(1.0, QColor(0, 0, 0, int(occ * 240)))
+                painter.fillRect(0, 0, w, h, occ_grad)
+            except Exception:
+                painter.fillRect(0, 0, w, h, QColor(0, 0, 0, int(occ * 255)))
+        except Exception:
+            pass
+
+    def _paint_infield_noise(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
+        """Paint translucent ellipse noise layer for turf variation."""
+        base_count = int(max(40, (w * h) // 8000))
+        count = int(base_count * max(0.6, palette.get('density_mult', 1.0)))
+        for _ in range(count):
+            cx = rnd.uniform(0, w)
+            cy = rnd.uniform(0, h)
+            rw = rnd.uniform(w * 0.02, w * 0.12)
+            rh = rnd.uniform(h * 0.02, h * 0.12)
+            shade = rnd.randint(-20, 20)
+            col = QColor(
+                max(30, min(255, muted_base.red() + shade)),
+                max(30, min(255, muted_base.green() + shade)),
+                max(30, min(255, muted_base.blue() + shade)),
+                rnd.randint(18, 48),
+            )
+            painter.setBrush(QBrush(col))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(cx - rw / 2), int(cy - rh / 2), int(rw), int(rh))
+
+    def _paint_infield_molehills(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
+        """Paint darker speckle dots/molehills."""
+        mole_col = palette.get('mole', QColor(40, 100, 30))
+        mole_count = int(max(30, (w * h) // 20000) * palette.get('molehills_mult', 1.0))
+        for _ in range(mole_count):
+            cx = rnd.uniform(0, w)
+            cy = rnd.uniform(0, h)
+            r0 = rnd.uniform(1, max(2, min(w, h) * 0.02))
+            col = mole_col if mole_col is not None else QColor(
+                max(0, muted_base.red() - 40),
+                max(0, muted_base.green() - 60),
+                max(0, muted_base.blue() - 40),
+                rnd.randint(80, 160),
+            )
+            painter.setBrush(QBrush(col))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(int(cx - r0), int(cy - r0), int(r0 * 2), int(r0 * 2))
+
+    def _paint_infield_streaks(self, painter: QPainter, rnd: random.Random, w: int, h: int, palette: Dict[str, Any]) -> None:
+        """Paint thin random dirt streaks."""
+        streak_col = palette.get('streak', QColor(70, 50, 30, 100))
+        painter.setPen(QPen(streak_col, 1))
+        streak_count = int(max(20, (w * h) // 25000) * max(0.5, palette.get('density_mult', 1.0)))
+        for _ in range(streak_count):
+            x1 = rnd.uniform(0, w)
+            y1 = rnd.uniform(0, h)
+            x2 = x1 + rnd.uniform(-w * 0.06, w * 0.06)
+            y2 = y1 + rnd.uniform(-h * 0.06, h * 0.06)
+            painter.drawLine(int(x1), int(y1), int(x2), int(y2))
+
+    def _paint_infield_mowing_stripes(
+        self,
+        painter: QPainter,
+        w: int,
+        h: int,
+        muted_base: QColor,
+        highlight: QColor,
+        palette: Dict[str, Any],
+    ) -> None:
+        """Paint diagonal mowing stripes for readability at race zoom."""
+        try:
+            stripe_w = max(8, int(min(w, h) * 0.08))
+            stripe_alpha = 40 if palette.get('name') != 'dry' else 35
+            stripe_col_light = QColor(
+                min(255, highlight.red()),
+                min(255, highlight.green()),
+                min(255, highlight.blue()),
+                stripe_alpha,
+            )
+            stripe_col_dark = QColor(
+                max(0, muted_base.red() - 18),
+                max(0, muted_base.green() - 18),
+                max(0, muted_base.blue() - 18),
+                stripe_alpha,
+            )
+            angle = -18 * math.pi / 180
+            dx = math.cos(angle) * stripe_w * 0.6
+            dy = math.sin(angle) * stripe_w * 0.6
+            x0 = -w
+            toggle = True
+            while x0 < w * 2:
+                col = stripe_col_light if toggle else stripe_col_dark
+                painter.setBrush(QBrush(col))
+                painter.setPen(Qt.PenStyle.NoPen)
+                band = [
+                    QPointF(x0, 0),
+                    QPointF(x0 + dx * 200, dy * 200),
+                    QPointF(x0 + dx * 200 + stripe_w * -math.sin(angle), dy * 200 + stripe_w * math.cos(angle)),
+                    QPointF(x0 + stripe_w * -math.sin(angle), stripe_w * math.cos(angle)),
+                ]
+                path = QPainterPath()
+                path.moveTo(band[0])
+                for bp in band[1:]:
+                    path.lineTo(bp)
+                path.closeSubpath()
+                painter.drawPath(path)
+                toggle = not toggle
+                x0 += stripe_w * 0.7
+        except Exception:
+            pass
 
     def _draw_joker(self, painter):
         """Draw an alternate 'joker' route if provided by the track data."""
@@ -1451,619 +1397,594 @@ class TrackWidget(QWidget):
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
         try:
-            # Use explicit pit geometry if provided, else fallback to main track_points
             points = self.pit_points if getattr(self, 'pit_points', None) else self.track_points
             if not points:
                 return
-
-            from PyQt6.QtGui import QPolygonF
-
-            # Build pit lane as filled polygon (s=0 to 300m)
-            pit_inner_points = []  # 22m offset from centerline
-            pit_outer_points = []  # 40m offset (18m wide pit lane)
-
-            for pt in points:
-                # pit geometry may be provided with its own s coordinates; draw full lane
-                normal_x = -math.sin(pt.theta)
-                normal_y = math.cos(pt.theta)
-
-                inner_x = pt.x + normal_x * 22
-                inner_y = pt.y + normal_y * 22
-                outer_x = pt.x + normal_x * 40
-                outer_y = pt.y + normal_y * 40
-
-                pit_inner_points.append((inner_x, inner_y))
-                pit_outer_points.append((outer_x, outer_y))
-
-            # Draw filled polygon
-            polygon = QPolygonF()
-            for pt in pit_inner_points:
-                polygon.append(QPointF(pt[0], pt[1]))
-            for pt in reversed(pit_outer_points):
-                polygon.append(QPointF(pt[0], pt[1]))
-
-            painter.setBrush(QBrush(QColor(110, 110, 110)))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawPolygon(polygon)
-
-            # Pit wall (inner edge)
-            painter.setPen(QPen(QColor(80, 80, 80), 2))
-            for i in range(len(pit_inner_points) - 1):
-                painter.drawLine(
-                    int(pit_inner_points[i][0]), int(pit_inner_points[i][1]),
-                    int(pit_inner_points[i + 1][0]
-                        ), int(pit_inner_points[i + 1][1])
-                )
-
-            # Pit boxes (10 boxes, 20m each, s=50 to 250)
-            painter.setPen(QPen(QColor(255, 255, 255), 2))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-
-            for box_idx in range(10):
-                box_s = 50 + box_idx * 20
-                # Find points at box start and end
-                for i, pt in enumerate(self.track_points):
-                    if abs(pt.s - box_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        # Draw box rectangle rotated to track angle
-                        painter.save()
-                        painter.translate(
-                            pt.x + normal_x * 31, pt.y + normal_y * 31)
-                        painter.rotate(math.degrees(pt.theta))
-                        painter.drawRect(-10, -8, 20, 16)
-                        painter.restore()
-                        break
-
-            # Pit entry chevrons (s=250-270)
-            painter.setPen(QPen(QColor(255, 255, 255), 3))
-            for stripe_idx in range(8):
-                stripe_s = 250 + stripe_idx * 2.5
-                for pt in self.track_points:
-                    if abs(pt.s - stripe_s) < 1:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        # Diagonal stripe from track edge to pit lane
-                        painter.drawLine(
-                            int(pt.x + normal_x * 14), int(pt.y + normal_y * 14),
-                            int(pt.x + normal_x * 26), int(pt.y + normal_y * 26)
-                        )
-                        break
-
-            # Pit exit green light marker (s=285)
-            # If pit_points provided they may have their own exit marker; otherwise leave as-is
-            if not getattr(self, 'pit_points', None):
-                for pt in self.track_points:
-                    if abs(pt.s - 285) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        painter.save()
-                        painter.setBrush(QBrush(QColor(0, 255, 0)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawEllipse(
-                            QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
-                        painter.restore()
-                        break
+            pit_inner_points, pit_outer_points = self._build_pit_lane_offsets(points)
+            self._draw_pit_lane_polygon(painter, pit_inner_points, pit_outer_points)
+            self._draw_pit_wall(painter, pit_inner_points)
+            self._draw_pit_boxes(painter)
+            self._draw_pit_entry_chevrons(painter)
+            self._draw_pit_exit_marker(painter)
 
         except Exception:
             pass
+
+    def _build_pit_lane_offsets(self, points: List[TrackPoint]) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
+        pit_inner_points: List[Tuple[float, float]] = []
+        pit_outer_points: List[Tuple[float, float]] = []
+        for pt in points:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            pit_inner_points.append((pt.x + normal_x * 22, pt.y + normal_y * 22))
+            pit_outer_points.append((pt.x + normal_x * 40, pt.y + normal_y * 40))
+        return pit_inner_points, pit_outer_points
+
+    def _draw_pit_lane_polygon(self, painter, pit_inner_points: List[Tuple[float, float]], pit_outer_points: List[Tuple[float, float]]) -> None:
+        polygon = QPolygonF()
+        for x, y in pit_inner_points:
+            polygon.append(QPointF(x, y))
+        for x, y in reversed(pit_outer_points):
+            polygon.append(QPointF(x, y))
+        painter.setBrush(QBrush(QColor(110, 110, 110)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawPolygon(polygon)
+
+    def _draw_pit_wall(self, painter, pit_inner_points: List[Tuple[float, float]]) -> None:
+        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        for i in range(len(pit_inner_points) - 1):
+            painter.drawLine(
+                int(pit_inner_points[i][0]),
+                int(pit_inner_points[i][1]),
+                int(pit_inner_points[i + 1][0]),
+                int(pit_inner_points[i + 1][1]),
+            )
+
+    def _draw_pit_boxes(self, painter) -> None:
+        painter.setPen(QPen(QColor(255, 255, 255), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for box_idx in range(10):
+            box_s = 50 + box_idx * 20
+            pt = self._find_track_point_near_s(box_s, tolerance=2)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.save()
+            painter.translate(pt.x + normal_x * 31, pt.y + normal_y * 31)
+            painter.rotate(math.degrees(pt.theta))
+            painter.drawRect(-10, -8, 20, 16)
+            painter.restore()
+
+    def _draw_pit_entry_chevrons(self, painter) -> None:
+        painter.setPen(QPen(QColor(255, 255, 255), 3))
+        for stripe_idx in range(8):
+            stripe_s = 250 + stripe_idx * 2.5
+            pt = self._find_track_point_near_s(stripe_s, tolerance=1)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.drawLine(
+                int(pt.x + normal_x * 14),
+                int(pt.y + normal_y * 14),
+                int(pt.x + normal_x * 26),
+                int(pt.y + normal_y * 26),
+            )
+
+    def _draw_pit_exit_marker(self, painter) -> None:
+        if getattr(self, 'pit_points', None):
+            return
+        pt = self._find_track_point_near_s(285, tolerance=2)
+        if pt is None:
+            return
+        normal_x = -math.sin(pt.theta)
+        normal_y = math.cos(pt.theta)
+        painter.save()
+        painter.setBrush(QBrush(QColor(0, 255, 0)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPointF(pt.x + normal_x * 31, pt.y + normal_y * 31), 3, 3)
+        painter.restore()
+
+    def _find_track_point_near_s(self, s_value: float, tolerance: float) -> Optional[TrackPoint]:
+        if not self.track_points:
+            return None
+        for pt in self.track_points:
+            if abs(pt.s - s_value) < tolerance:
+                return pt
+        return None
 
     def _draw_grandstands(self, painter):
         """Draw professional 3D grandstands facing the track."""
         try:
             if not self.track_points:
                 return
-
-            # Main straight grandstands (s=320, 380, 440 - left side)
-            grandstand_positions = [320, 380, 440]
-
-            for gs_s in grandstand_positions:
-                for pt in self.track_points:
-                    if abs(pt.s - gs_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        gs_x = pt.x - normal_x * 40  # LEFT side of track
-                        gs_y = pt.y - normal_y * 40
-
-                        painter.save()
-                        painter.translate(gs_x, gs_y)
-                        painter.rotate(
-                            math.degrees(
-                                pt.theta) +
-                            90)  # Face track
-
-                        # Tier 1: Ground level (concrete base)
-                        painter.setBrush(QBrush(QColor(100, 100, 100)))
-                        painter.setPen(QPen(QColor(80, 80, 80), 1))
-                        painter.drawRect(-20, 0, 40, 10)
-
-                        # Tier 2: Lower seating (blue)
-                        painter.setBrush(QBrush(QColor(60, 100, 180)))
-                        painter.setPen(QPen(QColor(50, 80, 150), 1))
-                        painter.drawRect(-19, -5, 38, 8)
-
-                        # Tier 3: Middle seating (lighter blue)
-                        painter.setBrush(QBrush(QColor(80, 120, 200)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawRect(-18, -10, 36, 8)
-
-                        # Tier 4: Upper seating (lightest blue)
-                        painter.setBrush(QBrush(QColor(100, 140, 220)))
-                        painter.drawRect(-17, -15, 34, 6)
-
-                        # Roof structure (overhangs)
-                        painter.setBrush(QBrush(QColor(200, 200, 200)))
-                        painter.setPen(QPen(QColor(180, 180, 180), 1))
-                        painter.drawRect(-22, -20, 44, 3)
-
-                        # Support columns (4 pillars)
-                        painter.setPen(QPen(QColor(90, 90, 90), 3))
-                        for pillar_x in [-18, -6, 6, 18]:
-                            painter.drawLine(pillar_x, -17, pillar_x, 10)
-
-                        # Seating rows (horizontal detail lines)
-                        painter.setPen(QPen(QColor(40, 70, 140), 1))
-                        for row_offset in [-13, -11, -9, -7, -3, -1, 1, 3]:
-                            painter.drawLine(-18, row_offset, 18, row_offset)
-
-                        painter.restore()
-                        break
-
-            # Corner grandstands (smaller, at high curvature points)
-            for i, pt in enumerate(self.track_points):
-                if abs(pt.curvature) > 0.006 and i % 50 == 0:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    # Position on inside of corner
-                    if pt.curvature > 0:
-                        gs_x = pt.x - normal_x * 35
-                        gs_y = pt.y - normal_y * 35
-                    else:
-                        gs_x = pt.x + normal_x * 35
-                        gs_y = pt.y + normal_y * 35
-
-                    painter.save()
-                    painter.translate(gs_x, gs_y)
-                    painter.rotate(math.degrees(pt.theta) + 90)
-
-                    # Smaller 3-tier grandstand
-                    painter.setBrush(QBrush(QColor(100, 100, 100)))
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.drawRect(-12, 0, 24, 8)
-
-                    painter.setBrush(QBrush(QColor(70, 110, 190)))
-                    painter.drawRect(-11, -4, 22, 6)
-
-                    painter.setBrush(QBrush(QColor(90, 130, 210)))
-                    painter.drawRect(-10, -8, 20, 6)
-
-                    painter.setBrush(QBrush(QColor(190, 190, 190)))
-                    painter.drawRect(-13, -11, 26, 2)
-
-                    painter.restore()
+            self._draw_main_straight_grandstands(painter)
+            self._draw_corner_grandstands(painter)
 
         except Exception:
             pass
+
+    def _draw_main_straight_grandstands(self, painter) -> None:
+        for gs_s in [320, 380, 440]:
+            pt = self._find_track_point_near_s(gs_s, tolerance=2)
+            if pt is None:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            self._draw_main_grandstand_block(painter, pt.x - normal_x * 40, pt.y - normal_y * 40, pt.theta)
+
+    def _draw_main_grandstand_block(self, painter, gs_x: float, gs_y: float, theta: float) -> None:
+        painter.save()
+        painter.translate(gs_x, gs_y)
+        painter.rotate(math.degrees(theta) + 90)
+
+        painter.setBrush(QBrush(QColor(100, 100, 100)))
+        painter.setPen(QPen(QColor(80, 80, 80), 1))
+        painter.drawRect(-20, 0, 40, 10)
+
+        painter.setBrush(QBrush(QColor(60, 100, 180)))
+        painter.setPen(QPen(QColor(50, 80, 150), 1))
+        painter.drawRect(-19, -5, 38, 8)
+
+        painter.setBrush(QBrush(QColor(80, 120, 200)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-18, -10, 36, 8)
+
+        painter.setBrush(QBrush(QColor(100, 140, 220)))
+        painter.drawRect(-17, -15, 34, 6)
+
+        painter.setBrush(QBrush(QColor(200, 200, 200)))
+        painter.setPen(QPen(QColor(180, 180, 180), 1))
+        painter.drawRect(-22, -20, 44, 3)
+
+        painter.setPen(QPen(QColor(90, 90, 90), 3))
+        for pillar_x in [-18, -6, 6, 18]:
+            painter.drawLine(pillar_x, -17, pillar_x, 10)
+
+        painter.setPen(QPen(QColor(40, 70, 140), 1))
+        for row_offset in [-13, -11, -9, -7, -3, -1, 1, 3]:
+            painter.drawLine(-18, row_offset, 18, row_offset)
+
+        painter.restore()
+
+    def _draw_corner_grandstands(self, painter) -> None:
+        for i, pt in enumerate(self.track_points):
+            if abs(pt.curvature) <= 0.006 or i % 50 != 0:
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            if pt.curvature > 0:
+                gs_x = pt.x - normal_x * 35
+                gs_y = pt.y - normal_y * 35
+            else:
+                gs_x = pt.x + normal_x * 35
+                gs_y = pt.y + normal_y * 35
+            self._draw_corner_grandstand_block(painter, gs_x, gs_y, pt.theta)
+
+    def _draw_corner_grandstand_block(self, painter, gs_x: float, gs_y: float, theta: float) -> None:
+        painter.save()
+        painter.translate(gs_x, gs_y)
+        painter.rotate(math.degrees(theta) + 90)
+
+        painter.setBrush(QBrush(QColor(100, 100, 100)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-12, 0, 24, 8)
+
+        painter.setBrush(QBrush(QColor(70, 110, 190)))
+        painter.drawRect(-11, -4, 22, 6)
+
+        painter.setBrush(QBrush(QColor(90, 130, 210)))
+        painter.drawRect(-10, -8, 20, 6)
+
+        painter.setBrush(QBrush(QColor(190, 190, 190)))
+        painter.drawRect(-13, -11, 26, 2)
+        painter.restore()
 
     def _draw_garages(self, painter):
         """Draw continuous professional paddock garage building."""
         try:
             if not self.track_points:
                 return
-
-            # Continuous building structure (s=10 to 280m)
-            # Layer 1: Building base segments
-            painter.setBrush(QBrush(QColor(140, 140, 140)))
-            painter.setPen(QPen(QColor(120, 120, 120), 1))
-
-            for i, pt in enumerate(self.track_points):
-                if 10 < pt.s < 280 and i % 3 == 0:
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    painter.save()
-                    painter.translate(
-                        pt.x + normal_x * 50, pt.y + normal_y * 50)
-                    painter.rotate(math.degrees(pt.theta))
-                    painter.drawRect(-6, 0, 12, 25)
-                    painter.restore()
-
-            # Layer 2: Team garage bays (10 bays)
-            team_colors = [
-                QColor(6, 0, 239),    # Blue
-                QColor(0, 210, 190),  # Teal
-                QColor(220, 0, 0),    # Red
-                QColor(245, 150, 0),  # Orange
-                QColor(0, 144, 255),  # Light Blue
-                QColor(182, 186, 189),  # Silver
-                QColor(53, 140, 117),  # Green
-                QColor(201, 45, 75),  # Pink
-                QColor(255, 220, 0),  # Yellow
-                QColor(100, 100, 100)  # Grey
-            ]
-
-            for bay_idx in range(10):
-                bay_s = 20 + bay_idx * 26
-                for pt in self.track_points:
-                    if abs(pt.s - bay_s) < 2:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-
-                        painter.save()
-                        painter.translate(
-                            pt.x + normal_x * 50, pt.y + normal_y * 50)
-                        painter.rotate(math.degrees(pt.theta))
-
-                        # Roof (light grey overhang)
-                        painter.setBrush(QBrush(QColor(180, 180, 180)))
-                        painter.setPen(Qt.PenStyle.NoPen)
-                        painter.drawRect(-15, -2, 30, 29)
-
-                        # Three garage door openings
-                        painter.setBrush(QBrush(QColor(40, 40, 40)))
-                        for door in range(3):
-                            painter.drawRect(-11 + door * 7, 5, 6, 18)
-
-                        # Team colour panel above doors
-                        painter.setBrush(QBrush(team_colors[bay_idx]))
-                        painter.drawRect(-12, 1, 24, 3)
-
-                        painter.restore()
-                        break
+            self._draw_garage_base_segments(painter)
+            self._draw_garage_bays(painter)
 
         except Exception:
             pass
 
+    def _draw_garage_base_segments(self, painter) -> None:
+        painter.setBrush(QBrush(QColor(140, 140, 140)))
+        painter.setPen(QPen(QColor(120, 120, 120), 1))
+        for i, pt in enumerate(self.track_points):
+            if not (10 < pt.s < 280 and i % 3 == 0):
+                continue
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            painter.save()
+            painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+            painter.rotate(math.degrees(pt.theta))
+            painter.drawRect(-6, 0, 12, 25)
+            painter.restore()
+
+    def _draw_garage_bays(self, painter) -> None:
+        team_colors = [
+            QColor(6, 0, 239),
+            QColor(0, 210, 190),
+            QColor(220, 0, 0),
+            QColor(245, 150, 0),
+            QColor(0, 144, 255),
+            QColor(182, 186, 189),
+            QColor(53, 140, 117),
+            QColor(201, 45, 75),
+            QColor(255, 220, 0),
+            QColor(100, 100, 100),
+        ]
+        for bay_idx in range(10):
+            pt = self._find_track_point_near_s(20 + bay_idx * 26, tolerance=2)
+            if pt is None:
+                continue
+            self._draw_single_garage_bay(painter, pt, team_colors[bay_idx])
+
+    def _draw_single_garage_bay(self, painter, pt: TrackPoint, team_color: QColor) -> None:
+        normal_x = -math.sin(pt.theta)
+        normal_y = math.cos(pt.theta)
+
+        painter.save()
+        painter.translate(pt.x + normal_x * 50, pt.y + normal_y * 50)
+        painter.rotate(math.degrees(pt.theta))
+
+        painter.setBrush(QBrush(QColor(180, 180, 180)))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRect(-15, -2, 30, 29)
+
+        painter.setBrush(QBrush(QColor(40, 40, 40)))
+        for door in range(3):
+            painter.drawRect(-11 + door * 7, 5, 6, 18)
+
+        painter.setBrush(QBrush(team_color))
+        painter.drawRect(-12, 1, 24, 3)
+        painter.restore()
+
     def _draw_track(self, painter):
         """Draw track with professional surface, smooth kerbs, checkered start/finish."""
         try:
-            if not self.track_points or len(self.track_points) < 2:
+            centerline = self._build_centerline_path()
+            if centerline is None:
                 return
 
-            TRACK_WIDTH = 14  # Half-width of track surface
-
-            # Build centerline path
-            centerline = QPainterPath()
-            centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
-
-            for i in range(1, len(self.track_points)):
-                pt = self.track_points[i]
-                centerline.lineTo(pt.x, pt.y)
-
-            centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
-
-            # === Infield fill: procedural blended turf with pixmap + props ===
-            try:
-                from PyQt6.QtGui import QPolygonF
-                # Build two polygons: the visible infield (slightly shrunk) which
-                # will receive the turf pixmap and props, and an outer polygon
-                # (expanded) used for the forest/vegetation band.
-                infield_points = []
-                inner_infield_points = []
-                outer_pts = []
-                # Increase inner shrink proportional to viewport so the
-                # generated infield pixmap stays well inside the outer band.
-                try:
-                    inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
-                    for pt in self.track_points:
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        # visible infield edge (just inside track edge)
-                        ix = pt.x - normal_x * (TRACK_WIDTH - 2)
-                        iy = pt.y - normal_y * (TRACK_WIDTH - 2)
-                        infield_points.append(QPointF(ix, iy))
-                        # inner shrink to ensure the turf pixmap doesn't overlap outer band
-                        iix = pt.x - normal_x * (TRACK_WIDTH - 2 + inner_shrink)
-                        iiy = pt.y - normal_y * (TRACK_WIDTH - 2 + inner_shrink)
-                        inner_infield_points.append(QPointF(iix, iiy))
-                        # outer band edge (outside track)
-                        forest_margin = max(20, int(min(self.width(), self.height()) * 0.06))
-                        ox = pt.x + normal_x * (TRACK_WIDTH + forest_margin)
-                        oy = pt.y + normal_y * (TRACK_WIDTH + forest_margin)
-                        outer_pts.append(QPointF(ox, oy))
-                except Exception:
-                    pass
-
-                if infield_points:
-                    poly = QPolygonF(infield_points)
-                    inner_poly = QPolygonF(inner_infield_points)
-                    outer_poly = QPolygonF(outer_pts) if outer_pts else None
-                    # Use inner_poly's bbox for the generated pixmap so it won't
-                    # cover the outer band we draw later.
-                    bbox = inner_poly.boundingRect()
-                    w = max(2, int(math.ceil(bbox.width())))
-                    h = max(2, int(math.ceil(bbox.height())))
-                    seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
-
-                    # include preset name and grass tile mtime so cache invalidates
-                    try:
-                        preset = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
-                        palette_name = preset.get('name', '')
-                    except Exception:
-                        palette_name = ''
-                    # Use cached grass tile mtime (avoid stat() every paint)
-                    tile_mtime = self._grass_tile_mtime
-
-                    key = (w, h, seed, palette_name, tile_mtime)
-                    pix = self._infield_cache.get(key)
-                    if pix is None:
-                        try:
-                            pix = self._generate_infield_pixmap(bbox, w, h, seed)
-                        except Exception:
-                            pix = QPixmap(max(1, w), max(1, h))
-                            pix.fill(QColor(100, 160, 100))
-                        self._infield_cache[key] = pix
-
-                        # Place props deterministically and cache them using inner polygon
-                        try:
-                            world_pts = [(pt.x(), pt.y()) for pt in inner_infield_points]
-                            props = place_props(world_pts, seed=seed, density=0.00035)
-                        except Exception:
-                            props = []
-                        self._infield_props_cache[key] = props
-
-                    # Draw the pixmap clipped to the infield polygon
-                    painter.save()
-                    painter.setPen(Qt.PenStyle.NoPen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    # Translate to bbox origin, then unflip Y and position pixmap
-                    painter.translate(bbox.x(), bbox.y())
-                    # Because the main painter has Y flipped (scale(..., -...)),
-                    # draw the pixmap in local top-left coords by flipping back
-                    # and translating by -h so the pixmap's top aligns correctly.
-                    painter.save()
-                    painter.scale(1, -1)
-                    painter.translate(0, -h)
-                    local_poly = QPolygonF()
-                    for p in inner_infield_points:
-                        local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
-                    clip_path = QPainterPath()
-                    clip_path.addPolygon(local_poly)
-                    painter.setClipPath(clip_path)
-                    # We intentionally do not draw the turf pixmap here so the
-                    # previously-rendered forest (bottom layer) shows through.
-                    # Leave area transparent; draw props on top.
-                    # Draw placed props in the same unflipped local space
-                    try:
-                        props = self._infield_props_cache.get(key, [])
-                        if props:
-                            try:
-                                draw_props(painter, props, offset_x=bbox.x(), offset_y=bbox.y())
-                            except Exception:
-                                for prop in props:
-                                    x = prop.get('x', 0) - bbox.x()
-                                    y = prop.get('y', 0) - bbox.y()
-                                    s = prop.get('size', 8.0)
-                                    painter.setPen(Qt.PenStyle.NoPen)
-                                    painter.setBrush(QBrush(QColor(34, 120, 34)))
-                                    painter.drawEllipse(int(x - s/2), int(y - s/2), int(s), int(s))
-                    except Exception:
-                        pass
-                    painter.restore()
-                    painter.restore()
-
-                    # Draw an outer forest band if we were able to compute it.
-                    try:
-                        if outer_poly is not None:
-                            band_path = QPainterPath()
-                            band_path.addPolygon(outer_poly)
-                            inner_path = QPainterPath()
-                            inner_path.addPolygon(inner_poly)
-                            band_path = band_path.subtracted(inner_path)
-                            painter.save()
-                            painter.setClipPath(band_path)
-                            # Tile the grass texture into the band when available (use cached pixmap)
-                            try:
-                                tile_pix = self._grass_tile_pixmap
-                                if tile_pix is not None and not tile_pix.isNull():
-                                    # draw a slightly expanded tiled area to cover edges
-                                    painter.drawTiledPixmap(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, tile_pix)
-                                    painter.fillRect(int(bbox.x()) - w, int(bbox.y()) - h, int(bbox.width()) + w * 2, int(bbox.height()) + h * 2, QColor(60, 120, 60, 40))
-                                else:
-                                    painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
-                            except Exception:
-                                painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
-                            painter.restore()
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # REMOVED: Duplicate forest rendering (already drawn earlier, this was causing massive lag)
-            # The inner infield forest is already rendered in the optimized section above
-            
-            surface = getattr(self, 'track_surface', '') or ''
-            base_colors = {
-                'asphalt': (85, 85, 85),
-                'tarmac': (85, 85, 85),
-                'concrete': (100, 100, 100),
-                'gravel': (120, 90, 50),
-                'mixed': (80, 75, 70),
-                'dirt': (110, 80, 45)
-            }
-            r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
-            grip_val = getattr(self, 'surface_grip', None)
-            try:
-                if grip_val is not None:
-                    gv = float(grip_val)
-                    if gv > 1.0:
-                        gv = min(1.0, gv / 20.0)
-                    # adjust brightness slightly based on grip (higher grip -> lighter)
-                    factor = 0.75 + 0.25 * gv
-                    r = int(max(0, min(255, r * factor)))
-                    g = int(max(0, min(255, g * factor)))
-                    b = int(max(0, min(255, b * factor)))
-            except Exception:
-                pass
-            painter.setPen(
-                QPen(
-                    QColor(r, g, b),
-                    TRACK_WIDTH * 2,
-                    Qt.PenStyle.SolidLine,
-                    Qt.PenCapStyle.RoundCap,
-                    Qt.PenJoinStyle.RoundJoin))
-            painter.drawPath(centerline)
-
-            # LAYER 7: Racing line (darker worn surface)
-            painter.setPen(
-                QPen(
-                    QColor(
-                        45,
-                        45,
-                        45),
-                    TRACK_WIDTH * 1.2,
-                    Qt.PenStyle.SolidLine,
-                    Qt.PenCapStyle.RoundCap,
-                    Qt.PenJoinStyle.RoundJoin))
-            painter.drawPath(centerline)
-
-            # LAYER 9: Track edges (clean white lines)
-            painter.setPen(QPen(QColor(240, 240, 240), 1))
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            for i in range(0, len(self.track_points) - 1):
-                pt = self.track_points[i]
-                next_pt = self.track_points[i + 1]
-                normal_x = -math.sin(pt.theta)
-                normal_y = math.cos(pt.theta)
-                next_normal_x = -math.sin(next_pt.theta)
-                next_normal_y = math.cos(next_pt.theta)
-                # Left edge
-                painter.drawLine(
-                    int(pt.x -
-                        normal_x *
-                        TRACK_WIDTH), int(pt.y -
-                                          normal_y *
-                                          TRACK_WIDTH),
-                    int(next_pt.x -
-                        next_normal_x *
-                        TRACK_WIDTH), int(next_pt.y -
-                                          next_normal_y *
-                                          TRACK_WIDTH)
-                )
-                # Right edge
-                painter.drawLine(
-                    int(pt.x +
-                        normal_x *
-                        TRACK_WIDTH), int(pt.y +
-                                          normal_y *
-                                          TRACK_WIDTH),
-                    int(next_pt.x +
-                        next_normal_x *
-                        TRACK_WIDTH), int(next_pt.y +
-                                          next_normal_y *
-                                          TRACK_WIDTH)
-                )
-
-            # LAYER 10: SMOOTH STRIPED KERBS on INSIDE (apex)
-            # Build continuous kerb paths for each corner
-            current_corner = []
-            in_corner = False
-
-            for i, pt in enumerate(self.track_points):
-                if abs(pt.curvature) > 0.003:
-                    current_corner.append(pt)
-                    in_corner = True
-                elif in_corner and len(current_corner) > 5:
-                    # Draw smooth kerb for this corner
-                    first_curv = current_corner[0].curvature
-                    kerb_offset = 12  # Inside edge
-
-                    segment_length = 0
-                    stripe_toggle = True
-
-                    for j in range(len(current_corner) - 1):
-                        pt = current_corner[j]
-                        next_pt = current_corner[j + 1]
-
-                        normal_x = -math.sin(pt.theta)
-                        normal_y = math.cos(pt.theta)
-                        next_normal_x = -math.sin(next_pt.theta)
-                        next_normal_y = math.cos(next_pt.theta)
-
-                        # Calculate segment distance
-                        dx = next_pt.x - pt.x
-                        dy = next_pt.y - pt.y
-                        dist = math.sqrt(dx * dx + dy * dy)
-                        segment_length += dist
-
-                        # Toggle stripe every 5m
-                        if segment_length > 5:
-                            stripe_toggle = not stripe_toggle
-                            segment_length = 0
-
-                        colour = QColor(
-                            221, 45, 74) if stripe_toggle else QColor(
-                            255, 255, 255)
-                        painter.setPen(QPen(colour, 4))
-
-                        if first_curv > 0:  # Left turn - kerb on LEFT
-                            painter.drawLine(
-                                int(pt.x - normal_x * kerb_offset),
-                                int(pt.y - normal_y * kerb_offset),
-                                int(next_pt.x - next_normal_x * kerb_offset),
-                                int(next_pt.y - next_normal_y * kerb_offset)
-                            )
-                        else:  # Right turn - kerb on RIGHT
-                            painter.drawLine(
-                                int(pt.x + normal_x * kerb_offset),
-                                int(pt.y + normal_y * kerb_offset),
-                                int(next_pt.x + next_normal_x * kerb_offset),
-                                int(next_pt.y + next_normal_y * kerb_offset)
-                            )
-
-                    current_corner = []
-                    in_corner = False
-
-            # LAYER 11: Centerline (subtle dashed)
-            painter.setPen(
-                QPen(
-                    QColor(
-                        200,
-                        200,
-                        200),
-                    0.5,
-                    Qt.PenStyle.DashLine))
-            painter.drawPath(centerline)
-
-            # LAYER 12: START/FINISH LINE at s=0 (proper checkered flag)
-            for pt in self.track_points:
-                if pt.s < 5:  # At start of lap
-                    normal_x = -math.sin(pt.theta)
-                    normal_y = math.cos(pt.theta)
-
-                    painter.save()
-                    # Move the finish line to the right of the screen (world +X) by 200 units
-                    # and rotate it 90 degrees relative to the track heading so
-                    # it appears perpendicular
-                    painter.translate(pt.x + 200, pt.y)
-                    painter.rotate(math.degrees(pt.theta) + 90)
-                    painter.setPen(Qt.PenStyle.NoPen)
-
-                    # Bold checkered pattern - 8 squares across track width
-                    square_size = 3.5
-                    for col in range(8):
-                        if col % 2 == 0:
-                            painter.setBrush(QBrush(QColor(255, 255, 255)))
-                        else:
-                            painter.setBrush(QBrush(QColor(0, 0, 0)))
-                        painter.drawRect(
-                            int(col * square_size - TRACK_WIDTH),
-                            int(-square_size),
-                            int(square_size),
-                            int(square_size * 2)
-                        )
-
-                    painter.restore()
-                    break
+            track_width = 14
+            self._draw_track_infield(painter, track_width)
+            self._draw_track_surface_and_racing_line(painter, centerline, track_width)
+            self._draw_track_edges(painter, track_width)
+            self._draw_corner_kerbs(painter)
+            self._draw_track_centerline_overlay(painter, centerline)
+            self._draw_start_finish_line(painter, track_width)
 
         except Exception as e:
             print(f"ERROR in _draw_track: {e}")
 
         # Cached props are already drawn within the infield pixmap block
         # to ensure correct orientation and clipping. Avoid duplicate drawing here.
+
+    def _build_centerline_path(self) -> Optional[QPainterPath]:
+        """Return closed centerline path for the current track."""
+        if not self.track_points or len(self.track_points) < 2:
+            return None
+        centerline = QPainterPath()
+        centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
+        for pt in self.track_points[1:]:
+            centerline.lineTo(pt.x, pt.y)
+        centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+        return centerline
+
+    def _build_infield_points(self, track_width: int) -> Tuple[List[QPointF], List[QPointF], List[QPointF]]:
+        """Build visible infield, inner infield and outer band point lists."""
+        infield_points: List[QPointF] = []
+        inner_infield_points: List[QPointF] = []
+        outer_points: List[QPointF] = []
+
+        inner_shrink = max(48, int(min(self.width(), self.height()) * 0.14))
+        forest_margin = max(20, int(min(self.width(), self.height()) * 0.06))
+        for pt in self.track_points:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            infield_points.append(QPointF(pt.x - normal_x * (track_width - 2), pt.y - normal_y * (track_width - 2)))
+            inner_infield_points.append(
+                QPointF(
+                    pt.x - normal_x * (track_width - 2 + inner_shrink),
+                    pt.y - normal_y * (track_width - 2 + inner_shrink),
+                )
+            )
+            outer_points.append(
+                QPointF(
+                    pt.x + normal_x * (track_width + forest_margin),
+                    pt.y + normal_y * (track_width + forest_margin),
+                )
+            )
+        return infield_points, inner_infield_points, outer_points
+
+    def _build_infield_cache_key(self, w: int, h: int, seed: int) -> Tuple[Any, ...]:
+        """Return infield cache key including palette and texture revision."""
+        try:
+            preset = select_preset(getattr(self, 'track_surface', ''), getattr(self, 'surface_grip', None), seed)
+            palette_name = preset.get('name', '')
+        except Exception:
+            palette_name = ''
+        tile_mtime = self._grass_tile_mtime
+        return (w, h, seed, palette_name, tile_mtime)
+
+    def _ensure_infield_assets(self, key: Tuple[Any, ...], bbox: Any, w: int, h: int, seed: int, inner_infield_points: List[QPointF]) -> None:
+        """Populate cached infield pixmap and props for a cache key."""
+        if self._infield_cache.get(key) is None:
+            try:
+                pix = self._generate_infield_pixmap(bbox, w, h, seed)
+            except Exception:
+                pix = QPixmap(max(1, w), max(1, h))
+                pix.fill(QColor(100, 160, 100))
+            self._infield_cache[key] = pix
+
+        if self._infield_props_cache.get(key) is None:
+            try:
+                world_pts = [(pt.x(), pt.y()) for pt in inner_infield_points]
+                props = place_props(world_pts, seed=seed, density=0.00035)
+            except Exception:
+                props = []
+            self._infield_props_cache[key] = props
+
+    def _draw_infield_props_clipped(
+        self,
+        painter,
+        bbox: Any,
+        h: int,
+        inner_infield_points: List[QPointF],
+        key: Tuple[Any, ...],
+    ) -> None:
+        """Draw cached infield props clipped to the inner infield polygon."""
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.translate(bbox.x(), bbox.y())
+        painter.save()
+        painter.scale(1, -1)
+        painter.translate(0, -h)
+
+        local_poly = QPolygonF()
+        for p in inner_infield_points:
+            local_poly.append(QPointF(p.x() - bbox.x(), p.y() - bbox.y()))
+        clip_path = QPainterPath()
+        clip_path.addPolygon(local_poly)
+        painter.setClipPath(clip_path)
+
+        props = self._infield_props_cache.get(key, [])
+        if props:
+            try:
+                draw_props(painter, props, offset_x=bbox.x(), offset_y=bbox.y())
+            except Exception:
+                self._draw_fallback_props(painter, props, bbox)
+
+        painter.restore()
+        painter.restore()
+
+    def _draw_fallback_props(self, painter, props: List[Dict[str, Any]], bbox: Any) -> None:
+        """Fallback prop renderer if shared prop drawing fails."""
+        for prop in props:
+            x = prop.get('x', 0) - bbox.x()
+            y = prop.get('y', 0) - bbox.y()
+            s = prop.get('size', 8.0)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(34, 120, 34)))
+            painter.drawEllipse(int(x - s / 2), int(y - s / 2), int(s), int(s))
+
+    def _draw_outer_forest_band(self, painter, outer_poly: Optional[QPolygonF], inner_poly: QPolygonF, bbox: Any, w: int, h: int) -> None:
+        """Draw outer vegetation band between outer and inner polygons."""
+        if outer_poly is None:
+            return
+
+        band_path = QPainterPath()
+        band_path.addPolygon(outer_poly)
+        inner_path = QPainterPath()
+        inner_path.addPolygon(inner_poly)
+        band_path = band_path.subtracted(inner_path)
+
+        painter.save()
+        painter.setClipPath(band_path)
+        try:
+            tile_pix = self._grass_tile_pixmap
+            if tile_pix is not None and not tile_pix.isNull():
+                painter.drawTiledPixmap(
+                    int(bbox.x()) - w,
+                    int(bbox.y()) - h,
+                    int(bbox.width()) + w * 2,
+                    int(bbox.height()) + h * 2,
+                    tile_pix,
+                )
+                painter.fillRect(
+                    int(bbox.x()) - w,
+                    int(bbox.y()) - h,
+                    int(bbox.width()) + w * 2,
+                    int(bbox.height()) + h * 2,
+                    QColor(60, 120, 60, 40),
+                )
+            else:
+                painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+        except Exception:
+            painter.fillPath(band_path, QBrush(QColor(70, 120, 70)))
+        painter.restore()
+
+    def _draw_track_infield(self, painter, track_width: int) -> None:
+        """Render infield props and outer vegetation band."""
+        try:
+            infield_points, inner_infield_points, outer_points = self._build_infield_points(track_width)
+            if not infield_points:
+                return
+
+            inner_poly = QPolygonF(inner_infield_points)
+            outer_poly = QPolygonF(outer_points) if outer_points else None
+            bbox = inner_poly.boundingRect()
+            w = max(2, int(math.ceil(bbox.width())))
+            h = max(2, int(math.ceil(bbox.height())))
+            seed = int(self.track_length) if getattr(self, 'track_length', None) is not None else 0
+            key = self._build_infield_cache_key(w, h, seed)
+
+            self._ensure_infield_assets(key, bbox, w, h, seed, inner_infield_points)
+            self._draw_infield_props_clipped(painter, bbox, h, inner_infield_points, key)
+            self._draw_outer_forest_band(painter, outer_poly, inner_poly, bbox, w, h)
+        except Exception:
+            pass
+
+    def _resolve_track_surface_color(self) -> Tuple[int, int, int]:
+        """Resolve track base color, adjusted by grip where available."""
+        surface = getattr(self, 'track_surface', '') or ''
+        base_colors = {
+            'asphalt': (85, 85, 85),
+            'tarmac': (85, 85, 85),
+            'concrete': (100, 100, 100),
+            'gravel': (120, 90, 50),
+            'mixed': (80, 75, 70),
+            'dirt': (110, 80, 45),
+        }
+        r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
+        grip_val = getattr(self, 'surface_grip', None)
+        try:
+            if grip_val is not None:
+                gv = float(grip_val)
+                if gv > 1.0:
+                    gv = min(1.0, gv / 20.0)
+                factor = 0.75 + 0.25 * gv
+                r = int(max(0, min(255, r * factor)))
+                g = int(max(0, min(255, g * factor)))
+                b = int(max(0, min(255, b * factor)))
+        except Exception:
+            pass
+        return r, g, b
+
+    def _draw_track_surface_and_racing_line(self, painter, centerline: QPainterPath, track_width: int) -> None:
+        """Draw surface base and darker racing line."""
+        r, g, b = self._resolve_track_surface_color()
+        painter.setPen(
+            QPen(
+                QColor(r, g, b),
+                track_width * 2,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.drawPath(centerline)
+
+        painter.setPen(
+            QPen(
+                QColor(45, 45, 45),
+                track_width * 1.2,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+        )
+        painter.drawPath(centerline)
+
+    def _draw_track_edges(self, painter, track_width: int) -> None:
+        """Draw left and right white edge lines."""
+        painter.setPen(QPen(QColor(240, 240, 240), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for i in range(0, len(self.track_points) - 1):
+            pt = self.track_points[i]
+            next_pt = self.track_points[i + 1]
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            next_normal_x = -math.sin(next_pt.theta)
+            next_normal_y = math.cos(next_pt.theta)
+            painter.drawLine(
+                int(pt.x - normal_x * track_width),
+                int(pt.y - normal_y * track_width),
+                int(next_pt.x - next_normal_x * track_width),
+                int(next_pt.y - next_normal_y * track_width),
+            )
+            painter.drawLine(
+                int(pt.x + normal_x * track_width),
+                int(pt.y + normal_y * track_width),
+                int(next_pt.x + next_normal_x * track_width),
+                int(next_pt.y + next_normal_y * track_width),
+            )
+
+    def _draw_single_corner_kerb(self, painter, corner_points: List[TrackPoint], kerb_offset: int) -> None:
+        """Draw striped kerb for one detected corner segment."""
+        first_curv = corner_points[0].curvature
+        segment_length = 0.0
+        stripe_toggle = True
+
+        for j in range(len(corner_points) - 1):
+            pt = corner_points[j]
+            next_pt = corner_points[j + 1]
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            next_normal_x = -math.sin(next_pt.theta)
+            next_normal_y = math.cos(next_pt.theta)
+
+            dist = math.sqrt((next_pt.x - pt.x) ** 2 + (next_pt.y - pt.y) ** 2)
+            segment_length += dist
+            if segment_length > 5:
+                stripe_toggle = not stripe_toggle
+                segment_length = 0.0
+
+            colour = QColor(221, 45, 74) if stripe_toggle else QColor(255, 255, 255)
+            painter.setPen(QPen(colour, 4))
+
+            if first_curv > 0:
+                painter.drawLine(
+                    int(pt.x - normal_x * kerb_offset),
+                    int(pt.y - normal_y * kerb_offset),
+                    int(next_pt.x - next_normal_x * kerb_offset),
+                    int(next_pt.y - next_normal_y * kerb_offset),
+                )
+            else:
+                painter.drawLine(
+                    int(pt.x + normal_x * kerb_offset),
+                    int(pt.y + normal_y * kerb_offset),
+                    int(next_pt.x + next_normal_x * kerb_offset),
+                    int(next_pt.y + next_normal_y * kerb_offset),
+                )
+
+    def _draw_corner_kerbs(self, painter) -> None:
+        """Detect corner runs and draw inside apex kerbs."""
+        current_corner: List[TrackPoint] = []
+        kerb_offset = 12
+        for pt in self.track_points:
+            if abs(pt.curvature) > 0.003:
+                current_corner.append(pt)
+                continue
+            if len(current_corner) > 5:
+                self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
+            current_corner = []
+
+        if len(current_corner) > 5:
+            self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
+
+    def _draw_track_centerline_overlay(self, painter, centerline: QPainterPath) -> None:
+        """Draw subtle dashed centerline overlay."""
+        painter.setPen(QPen(QColor(200, 200, 200), 0.5, Qt.PenStyle.DashLine))
+        painter.drawPath(centerline)
+
+    def _draw_start_finish_line(self, painter, track_width: int) -> None:
+        """Draw checkered start/finish marker near s=0."""
+        for pt in self.track_points:
+            if pt.s >= 5:
+                continue
+            painter.save()
+            painter.translate(pt.x + 200, pt.y)
+            painter.rotate(math.degrees(pt.theta) + 90)
+            painter.setPen(Qt.PenStyle.NoPen)
+            square_size = 3.5
+            for col in range(8):
+                painter.setBrush(QBrush(QColor(255, 255, 255) if col % 2 == 0 else QColor(0, 0, 0)))
+                painter.drawRect(
+                    int(col * square_size - track_width),
+                    int(-square_size),
+                    int(square_size),
+                    int(square_size * 2),
+                )
+            painter.restore()
+            break
 
     def _draw_cars(self, painter):
         """Draw cars at current positions."""
@@ -2076,108 +1997,7 @@ class TrackWidget(QWidget):
                 try:
                     if car.dnf:
                         continue
-
-                    # Find track point at car's arc-length
-                    if self.track_length > 0 and len(self.track_points) > 0:
-                        # === STEP 1: MODULO WRAPPING ===
-                        # This is CRITICAL for preventing teleportation!
-                        # When car.s exceeds track_length, it wraps back to 0
-                        # Example: If track is 6000m and car.s = 6100m,
-                        # normalized_s = 100m
-                        # Use interpolated display position if present
-                        display_pos = getattr(car, 'display_s', None)
-                        normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
-
-                        # === STEP 2: FIND MATCHING TRACK POINT ===
-                        # CRITICAL FIX: Track points were rescaled, so their .s values
-                        # don't match array indices. Must search for closest .s value!
-                        # Binary search for the track point with .s closest to
-                        # normalized_s
-                        pt = self._point_at_s(normalized_s)
-                        if pt is None:
-                            continue
-
-                        # === STEP 3: LATERAL POSITIONING (SIDE-BY-SIDE RACING) ===
-                        # Spread cars across track width to simulate racing lines
-                        # Grid position determines if car is on left or right
-                        # side of track
-
-                        # Base offset: Grid position (odd = left, even = right)
-                        # This creates pairs of cars side-by-side at the start
-                        grid_position = car.driver_id % 2  # 0 or 1
-                        base_offset = (grid_position - 0.5) * \
-                            6  # -3 or +3 pixels
-
-                        # Dynamic offset: Small variation during racing
-                        # Much smaller than before to keep cars ON the track
-                        lap_progress = (normalized_s / self.track_length)
-                        dynamic_offset = math.sin(
-                            lap_progress * 6 * math.pi + car.driver_id * 0.7) * 2
-
-                        total_lateral_offset = base_offset + dynamic_offset
-
-                        # === STEP 4: CALCULATE PERPENDICULAR OFFSET ===
-                        # Track angle (theta) points along the track direction
-                        # To move sideways, we rotate 90 degrees (pi/2 radians)
-                        track_angle = pt.theta
-                        offset_x = pt.x + total_lateral_offset * \
-                            math.cos(track_angle + math.pi / 2)
-                        offset_y = pt.y + total_lateral_offset * \
-                            math.sin(track_angle + math.pi / 2)
-
-                        # === STEP 5: DRAW CAR (actual 5m length) ===
-                        # Calculate rotation based on ACTUAL MOVEMENT, not just
-                        # track angle
-                        if hasattr(car, 'movement_direction') and abs(
-                                car.movement_direction) > 0.1:
-                            # Car is moving - use direction of motion
-                            # Positive movement = forward, negative = backward
-                            # (shouldn't happen)
-                            movement_angle = track_angle if car.movement_direction > 0 else track_angle + math.pi
-                        else:
-                            # Car stationary - use track direction
-                            movement_angle = track_angle
-
-                        # Draw detailed single seater car using appearance manager
-                        painter.save()
-                        painter.translate(offset_x, offset_y)
-                        # Rotate car to face track direction; base sprite points along +X
-                        painter.rotate(math.degrees(movement_angle) + 90)
-
-                        # Get livery for this driver (fallback: build from driver colour)
-                        livery = self.appearance_manager.get_livery(car.driver_id)
-                        if not livery:
-                            primary = car.colour
-                            secondary = QColor(min(255, primary.red() + 30),
-                                               min(255, primary.green() + 30),
-                                               min(255, primary.blue() + 30))
-                            trim = QColor(255, 255, 255)
-                            livery = Livery(primary, secondary, trim, f"Driver {car.driver_id}", car.driver_id)
-
-                        # Calculate steering angle based on lateral offset change (simulates cornering)
-                        # Scale the dynamic offset to a reasonable steering angle (-15 to +15 degrees)
-                        steering_angle = dynamic_offset * 2.5  # amplify the sine wave motion
-
-                        # Render detailed Formula car with slimmer scale and steering
-                        VehicleRenderer.render_single_seater_car(
-                            painter, livery, scale=1.5, steering_angle=steering_angle
-                        )
-
-                        painter.restore()
-                        # Highlight player's car with a subtle halo
-                        try:
-                            if getattr(self, 'player_driver_id', None) is not None and car.driver_id == getattr(self, 'player_driver_id', None):
-                                painter.save()
-                                halo_pen = QPen(QColor(255, 215, 0, 200))
-                                halo_pen.setWidth(4)
-                                painter.setPen(halo_pen)
-                                painter.setBrush(Qt.BrushStyle.NoBrush)
-                                # Draw a circular halo around the car position
-                                painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
-                                painter.restore()
-                        except Exception:
-                            # Non-fatal: highlighting should not break rendering
-                            pass
+                    if self._draw_single_car(painter, car):
                         cars_drawn += 1
                 except Exception as e:
                     print(
@@ -2192,6 +2012,79 @@ class TrackWidget(QWidget):
                     f"WARNING: Only drew {cars_drawn}/{active_cars} active cars")
         except Exception as e:
             print(f"ERROR in _draw_cars: {e}")
+
+    def _draw_single_car(self, painter, car: Car) -> bool:
+        """Draw one active car and return whether it was rendered."""
+        state = self._resolve_car_draw_state(car)
+        if state is None:
+            return False
+        offset_x, offset_y, movement_angle, steering_angle = state
+
+        painter.save()
+        painter.translate(offset_x, offset_y)
+        painter.rotate(math.degrees(movement_angle) + 90)
+        livery = self._resolve_car_livery(car)
+        VehicleRenderer.render_single_seater_car(painter, livery, scale=1.5, steering_angle=steering_angle)
+        painter.restore()
+        self._draw_player_halo_if_needed(painter, car, offset_x, offset_y)
+        return True
+
+    def _resolve_car_draw_state(self, car: Car) -> Optional[Tuple[float, float, float, float]]:
+        """Resolve world-space draw coordinates and orientation for a car."""
+        display_pos = getattr(car, 'display_s', None)
+        normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
+        pt = self._point_at_s(normalized_s)
+        if pt is None:
+            return None
+
+        grid_position = car.driver_id % 2
+        base_offset = (grid_position - 0.5) * 6
+        lap_progress = normalized_s / self.track_length
+        dynamic_offset = math.sin(lap_progress * 6 * math.pi + car.driver_id * 0.7) * 2
+        total_lateral_offset = base_offset + dynamic_offset
+
+        track_angle = pt.theta
+        offset_x = pt.x + total_lateral_offset * math.cos(track_angle + math.pi / 2)
+        offset_y = pt.y + total_lateral_offset * math.sin(track_angle + math.pi / 2)
+        movement_angle = self._resolve_car_movement_angle(car, track_angle)
+        steering_angle = dynamic_offset * 2.5
+        return offset_x, offset_y, movement_angle, steering_angle
+
+    def _resolve_car_movement_angle(self, car: Car, track_angle: float) -> float:
+        """Use movement direction when available to orient rendered car."""
+        if hasattr(car, 'movement_direction') and abs(car.movement_direction) > 0.1:
+            return track_angle if car.movement_direction > 0 else track_angle + math.pi
+        return track_angle
+
+    def _resolve_car_livery(self, car: Car) -> Livery:
+        """Return cached livery or build a simple fallback from driver color."""
+        livery = self.appearance_manager.get_livery(car.driver_id)
+        if livery:
+            return livery
+        primary = car.colour
+        secondary = QColor(
+            min(255, primary.red() + 30),
+            min(255, primary.green() + 30),
+            min(255, primary.blue() + 30),
+        )
+        return Livery(primary, secondary, QColor(255, 255, 255), f"Driver {car.driver_id}", car.driver_id)
+
+    def _draw_player_halo_if_needed(self, painter, car: Car, offset_x: float, offset_y: float) -> None:
+        """Highlight the player-controlled car with a halo ring."""
+        try:
+            if getattr(self, 'player_driver_id', None) is None:
+                return
+            if car.driver_id != getattr(self, 'player_driver_id', None):
+                return
+            painter.save()
+            halo_pen = QPen(QColor(255, 215, 0, 200))
+            halo_pen.setWidth(4)
+            painter.setPen(halo_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
+            painter.restore()
+        except Exception:
+            pass
 
 
 class RaceWindow(QMainWindow):
@@ -2366,8 +2259,7 @@ class RaceWindow(QMainWindow):
 
         # Pace control
         pace_label_top = QLabel("Race Pace: Balanced (50%)")
-        pace_label_top.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        pace_label_top.setStyleSheet(CONTROL_LABEL_STYLE)
         pace_label_top.setMinimumHeight(22)
         self.pace_value_label = pace_label_top
         player_layout.addWidget(pace_label_top)
@@ -2391,8 +2283,7 @@ class RaceWindow(QMainWindow):
 
         # Overtake aggressiveness
         overtake_label_top = QLabel("Overtaking: Moderate (50%)")
-        overtake_label_top.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        overtake_label_top.setStyleSheet(CONTROL_LABEL_STYLE)
         overtake_label_top.setMinimumHeight(22)
         self.overtake_value_label = overtake_label_top
         player_layout.addWidget(overtake_label_top)
@@ -2628,393 +2519,405 @@ class RaceWindow(QMainWindow):
     def _load_data(self):
         """Load drivers and track from database."""
         try:
-            # Initialise database
-            try:
-                from database.database_manager import DatabaseManager
-                self.db = DatabaseManager()
-            except Exception as e:
-                self.info_label.setText(f"Database connection failed: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Database initialisation failed: {e}")
-                _traceback.print_exc()
+            if not self._init_database():
                 return
-
-            # Load drivers
-            try:
-                loaded_drivers = self._load_race_drivers()
-                if not loaded_drivers:
-                    self.info_label.setText("Error: No drivers in database")
-                    self.start_btn.setEnabled(False)
-                    print("ERROR: No drivers found in database")
-                    return
-
-                # Use configured number of drivers for race grid.
-                self.drivers = loaded_drivers[:RACE_GRID_SIZE] if len(
-                    loaded_drivers) >= RACE_GRID_SIZE else loaded_drivers
-
-                print(f"Loaded {len(self.drivers)} drivers")
-                if self.drivers:
-                    print(
-                        f"First driver: id={
-                            self.drivers[0].id}, name={
-                            self.drivers[0].name}")
-
-                placeholder_count = sum(
-                    1 for d in self.drivers
-                    if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
-                )
-                if placeholder_count > 0:
-                    print(
-                        f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
-                        "Run scripts/seed_career_mode.py for realistic Faker data."
-                    )
-
-                # Prepare deterministic driver colours (shared between cars, standings, livery)
-                # Extended palette for up to 16 drivers
-                palette = [
-                    QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
-                    QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
-                    QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
-                    QColor(200, 200, 255), QColor(180, 120, 60), QColor(120, 60, 180),
-                    QColor(60, 180, 120), QColor(255, 200, 100), QColor(100, 200, 255),
-                    QColor(200, 100, 255)
-                ]
-                # Ensure palette covers the configured grid size; repeat if needed
-                if RACE_GRID_SIZE > len(palette):
-                    repeat = (RACE_GRID_SIZE // len(palette)) + 1
-                    palette = (palette * repeat)[:RACE_GRID_SIZE]
-                self.driver_colours = {}
-                for i, driver in enumerate(self.drivers):
-                    self.driver_colours[driver.id] = palette[i % len(palette)]
-
-                # Initialise vehicle liveries immediately after loading drivers
-                # so they're ready for grid display
-                try:
-                    teams_dict = {}
-                    for driver in self.drivers:
-                        if driver.current_team_id and driver.current_team_id not in teams_dict:
-                            team = self.db.get_team(driver.current_team_id)
-                            if team:
-                                teams_dict[driver.current_team_id] = team
-
-                    for driver in self.drivers:
-                        team = teams_dict.get(driver.current_team_id) if driver.current_team_id else None
-                        # Build livery directly from driver colour palette (no teams phase)
-                        primary = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-                        secondary = QColor(min(255, primary.red() + 30),
-                                           min(255, primary.green() + 30),
-                                           min(255, primary.blue() + 30))
-                        trim = QColor(255, 255, 255)
-                        livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
-                        # Override palette to match driver colour
-                        livery.primary_color = primary
-                        livery.secondary_color = secondary
-                        livery.trim_color = trim
-                        self.appearance_manager.driver_liveries[driver.id] = livery
-                    print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
-                except Exception as e:
-                    print(f"ERROR: Livery initialisation failed: {e}")
-                    _traceback.print_exc()
-
-            except Exception as e:
-                self.info_label.setText(f"Failed to load drivers: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Failed to load drivers: {e}")
-                _traceback.print_exc()
+            if not self._load_and_prepare_drivers():
                 return
-
-            # Load track - prefer database-backed tracks, create default if missing
-            try:
-                # Use requested track id if provided by launcher/setup
-                try:
-                    req_id = getattr(self, '_initial_track_id', None)
-                    self.track = self.db.get_simple_track(req_id)
-                except Exception:
-                    self.track = self.db.get_simple_track()
-                print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
-            except Exception as e:
-                # Fallback: recreate the previous hard-coded simple track
-                from dataclasses import dataclass
-
-                @dataclass
-                class SimpleTrack:
-                    name: str
-                    length_km: float
-                    turns: int = 12
-                    left_turns: int = 6
-                    right_turns: int = 6
-                    elevation_change_m: float = 15.0
-                    avg_corner_radius_m: float = 40.0
-                    min_corner_radius_m: float = 20.0
-                    max_corner_radius_m: float = 80.0
-                    tightest_corner_radius_m: float = 20.0
-                    longest_straight_m: float = 800.0
-                    shortest_straight_m: float = 150.0
-                    avg_speed_kmh: float = 180.0
-                    top_speed_kmh: float = 280.0
-                    surface: str = "asphalt"
-                    surface_type: str = "asphalt"
-                    surface_grip: float = 12.0
-                    surface_abrasiveness: float = 8.0
-                    climate: str = "temperate"
-                    drs_zones: int = 2
-
-                self.track = SimpleTrack(name="Test Circuit", length_km=4.5)
-                print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
-
-            # Generate circuit (use closure solver to produce exact-first-pass geometry)
-            try:
-                print(f"Generating circuit for {self.track.length_km}km track (closure solver enabled)...")
-                # Build instruction list matching the legacy generator pattern
-                circuit_instructions = [
-                    ('S', int(600 * (self.track.length_km / 6.0))),
-                    ('C', 45, 170, 60, 0.00008),
-                    ('S', int(400 * (self.track.length_km / 6.0))),
-                    ('C', 65, 95, 50, 0.0001),
-                    ('S', int(220 * (self.track.length_km / 6.0))),
-                    ('C', -55, 100, 52, 0.0001),
-                    ('S', int(350 * (self.track.length_km / 6.0))),
-                    ('C', 155, 48, 42, 0.00014),
-                    ('S', int(550 * (self.track.length_km / 6.0))),
-                    ('C', -65, 145, 58, 0.00009),
-                    ('S', int(380 * (self.track.length_km / 6.0))),
-                    ('C', 55, 115, 54, 0.00009),
-                    ('S', int(180 * (self.track.length_km / 6.0))),
-                    ('C', 60, 90, 50, 0.0001),
-                    ('S', int(300 * (self.track.length_km / 6.0))),
-                    ('C', -50, 135, 56, 0.00009),
-                    ('S', int(160 * (self.track.length_km / 6.0))),
-                    ('C', 50, 135, 56, 0.00009),
-                    ('S', int(320 * (self.track.length_km / 6.0))),
-                ]
-                wrapper = {'solve_closure': True, 'instructions': circuit_instructions}
-                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
-                track_points = routes.get('main')
-                if not track_points:
-                    self.info_label.setText(
-                        "Error: Failed to generate circuit")
-                    self.start_btn.setEnabled(False)
-                    print("ERROR: Circuit generation returned empty list")
-                    return
-
-                # USE DATABASE TRACK LENGTH - this is the authoritative value
-                # The generated track points should wrap around this length
-                # using modulo
-                track_length = self.track.length_km * 1000  # Convert km to meters
-                print(
-                    f"Generated circuit with {
-                        len(track_points)} points, using database length: {
-                        track_length:.0f}m")
-
-                # Store track_points for passing to engine
-                self.track_points = track_points
-            except Exception as e:
-                self.info_label.setText(f"Circuit generation failed: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Circuit generation failed: {e}")
-                _traceback.print_exc()
+            self._load_track_with_fallback()
+            track_points, track_length = self._generate_circuit_geometry()
+            if track_points is None or track_length is None:
                 return
-
-            # Create track widget
-            try:
-                self.track_widget = TrackWidget(
-                    track_points,
-                    track_length,
-                    self.appearance_manager,
-                    track_surface=getattr(self.track, 'surface', 'asphalt'),
-                    surface_grip=getattr(self.track, 'surface_grip', None)
-                )
-
-                # Clear loading message and add track widget
-                while self.left_layout.count():
-                    item = self.left_layout.takeAt(0)
-                    if item is None:
-                        continue
-                    widget = item.widget()
-                    if widget is not None:
-                        widget.deleteLater()
-                self.left_layout.addWidget(self.track_widget)
-                print("Track widget created and added to layout")
-            except Exception as e:
-                self.info_label.setText(f"Failed to create track display: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Track widget creation failed: {e}")
-                _traceback.print_exc()
+            if not self._create_and_mount_track_widget(track_points, track_length):
                 return
-
-            # Create cars with grid alignment
-            try:
-                cars = []
-
-                # Starting grid: Stagger cars along track direction (not side-to-side)
-                # Formation: 2 cars per row, 15m spacing between rows.
-                # The UI historically filled the grid from the back which made
-                # the first driver end up at the highest grid number. To be
-                # explicit: assign grid numbers descending (e.g. 20..1) so the
-                # grid is filled from the rear forwards and recorded start
-                # positions match that ordering.
-                total_drivers = len(self.drivers)
-                grid_spacing = 15.0  # meters between rows
-                gridpos_map = {}
-
-                for i, driver in enumerate(self.drivers):
-                    # Assign grid number descending so first loop gets highest number
-                    grid_number = total_drivers - i
-                    # Compute row index (0-based) from grid_number (two cars per row)
-                    row = (grid_number - 1) // 2
-                    start_position = row * grid_spacing
-
-                    # Assign colour to this driver from precomputed palette
-                    car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-
-                    cars.append(Car(
-                        driver_id=driver.id,
-                        driver_name=driver.name,
-                        s=start_position,  # Staggered start positions (by row)
-                        colour=car_colour,
-                        total_time=0.0,
-                        avg_lap_time=60.0,
-                        last_lap=0
-                    ))
-
-                    # Remember which driver was assigned to which grid number
-                    try:
-                        gridpos_map[int(grid_number)] = int(driver.id)
-                    except Exception:
-                        gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
-
-                self.track_widget.set_cars(cars)
-                print(f"Created {len(cars)} cars at start line")
-                print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
-                # Build canonical starting grid list where index 0 = start pos 1
-                try:
-                    self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
-                    print(f"Starting grid recorded (pos1..posN): {self._starting_grid}")
-                except Exception:
-                    # Fallback to simple driver order if anything goes wrong
-                    try:
-                        self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
-                    except Exception:
-                        self._starting_grid = []
-
-                # Detect if the recorded grid is exactly the reverse of the
-                # driver ordering (i.e. filled in the opposite direction).
-                # If so, flip it so start positions map to the expected order.
-                try:
-                    ordered_ids = [getattr(d, 'id', None) for d in self.drivers]
-                    if self._starting_grid == ordered_ids[::-1]:
-                        # Rebuild cars and starting grid using ascending grid numbers
-                        cars = []
-                        gridpos_map = {}
-                        for i, driver in enumerate(self.drivers):
-                            grid_number = i + 1
-                            row = (grid_number - 1) // 2
-                            start_position = row * grid_spacing
-                            car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
-                            cars.append(Car(
-                                driver_id=driver.id,
-                                driver_name=driver.name,
-                                s=start_position,
-                                colour=car_colour,
-                                total_time=0.0,
-                                avg_lap_time=60.0,
-                                last_lap=0
-                            ))
-                            try:
-                                gridpos_map[int(grid_number)] = int(driver.id)
-                            except Exception:
-                                gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
-
-                        # Apply corrected cars to track widget
-                        try:
-                            self.track_widget.set_cars(cars)
-                        except Exception:
-                            pass
-
-                        # Recompute starting grid (pos1..posN)
-                        try:
-                            self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
-                        except Exception:
-                            self._starting_grid = ordered_ids
-                        print("Detected reversed grid order; flipped to ascending start positions")
-                        # Ensure the authoritative starting grid reflects the actual
-                        # visual car ordering used by the track widget. The engine and
-                        # the visualiser both publish positions; derive start positions
-                        # from the cars' `s` values (highest `s` == P1 at start).
-                        try:
-                            tw_cars = getattr(self.track_widget, 'cars', None)
-                            if tw_cars:
-                                # Sort cars by `s` descending so the largest `s` (front
-                                # of the grid) maps to P1. Some track widgets place
-                                # the front-of-grid at higher `s` values; using
-                                # reverse=True ensures the computed starting grid
-                                # matches the visual placement.
-                                sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
-                                self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
-                                print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-            except Exception as e:
-                self.info_label.setText(f"Failed to create cars: {e}")
-                self.start_btn.setEnabled(False)
-                print(f"ERROR: Car creation failed: {e}")
-                _traceback.print_exc()
+            if not self._create_cars_and_start_grid():
                 return
-
-            # Initialise standings table (row order = position)
-            try:
-                self.standings_table.setRowCount(len(self.drivers))
-
-                # If we recorded a canonical starting grid earlier, use it so
-                # the table rows map directly to start positions (row 0 == P1).
-                # This prevents the UI showing row 0 as a different grid number
-                # than what the engine reports at race start.
-                if hasattr(self, '_starting_grid') and self._starting_grid:
-                    for i, did in enumerate(self._starting_grid):
-                        # Find driver object by id
-                        driver = next((d for d in self.drivers if getattr(d, 'id', None) == did), None)
-                        driver_name = driver.name if driver is not None else f"Driver {did}"
-                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}' (start pos {i+1})")
-                        # Column 0: colour/position indicator (empty for now)
-                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None) if driver else did)
-                        # Column 1: Driver name
-                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None) if driver else did)
-                        # Column 2: Lap (1-based)
-                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None) if driver else did)
-                        # Column 3: Gap
-                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None) if driver else did)
-                    print("Standings table initialized from starting grid")
-                else:
-                    # Fallback: use the current drivers list order
-                    for i, driver in enumerate(self.drivers):
-                        driver_name = driver.name
-                        print(f"[STANDINGS INIT] Row {i}: Setting driver name to '{driver_name}'")
-                        self._set_standings_item(i, 0, QTableWidgetItem(""), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 1, QTableWidgetItem(driver_name), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 2, QTableWidgetItem("1"), getattr(driver, 'id', None))
-                        self._set_standings_item(i, 3, QTableWidgetItem("-"), getattr(driver, 'id', None))
-                    print("Standings table initialized")
-                # NOTE: do not overwrite previously-computed self._starting_grid here
-                # — it is authoritative for start→finish comparisons later.
-
-            # If anything goes wrong while initializing the standings, log
-            # a warning and continue — standings are non-critical for race
-            # operation.
-            except Exception as e:
-                print(f"WARNING: Standings table initialisation failed: {e}")
-                # Non-critical, continue
-
-            self.info_label.setText(
-                f"{len(self.drivers)} drivers | {self.track.name} ({self.track.length_km:.2f}km)")
-            print("Data loading complete - ready to race")
+            self._init_standings_table_safe()
+            self._set_load_data_ready_message()
 
         except Exception as e:
             self.info_label.setText(f"Unexpected error: {e}")
             self.start_btn.setEnabled(False)
             print(f"ERROR: Unexpected error in _load_data: {e}")
             _traceback.print_exc()
+
+    def _init_database(self) -> bool:
+        """Initialize database manager for race data loading."""
+        try:
+            from database.database_manager import DatabaseManager
+            self.db = DatabaseManager()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Database connection failed: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Database initialisation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _load_and_prepare_drivers(self) -> bool:
+        """Load race drivers and initialize colours/liveries."""
+        try:
+            loaded_drivers = self._load_race_drivers()
+            if not loaded_drivers:
+                self.info_label.setText("Error: No drivers in database")
+                self.start_btn.setEnabled(False)
+                print("ERROR: No drivers found in database")
+                return False
+
+            self.drivers = loaded_drivers[:RACE_GRID_SIZE] if len(loaded_drivers) >= RACE_GRID_SIZE else loaded_drivers
+            print(f"Loaded {len(self.drivers)} drivers")
+            if self.drivers:
+                print(f"First driver: id={self.drivers[0].id}, name={self.drivers[0].name}")
+            self._log_placeholder_driver_warning()
+            self._prepare_driver_colours()
+            self._init_driver_liveries_safe()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to load drivers: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Failed to load drivers: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _log_placeholder_driver_warning(self) -> None:
+        """Log warning if placeholder names are present in active grid."""
+        placeholder_count = sum(
+            1 for d in self.drivers
+            if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
+        )
+        if placeholder_count <= 0:
+            return
+        print(
+            f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
+            "Run scripts/seed_career_mode.py for realistic Faker data."
+        )
+
+    def _prepare_driver_colours(self) -> None:
+        """Create deterministic per-driver colour map for visuals."""
+        palette = [
+            QColor(255, 50, 50), QColor(50, 150, 255), QColor(50, 255, 50),
+            QColor(255, 255, 50), QColor(255, 150, 50), QColor(200, 50, 255),
+            QColor(50, 255, 255), QColor(255, 150, 150), QColor(150, 255, 150),
+            QColor(200, 200, 255), QColor(180, 120, 60), QColor(120, 60, 180),
+            QColor(60, 180, 120), QColor(255, 200, 100), QColor(100, 200, 255),
+            QColor(200, 100, 255),
+        ]
+        if RACE_GRID_SIZE > len(palette):
+            repeat = (RACE_GRID_SIZE // len(palette)) + 1
+            palette = (palette * repeat)[:RACE_GRID_SIZE]
+        self.driver_colours = {}
+        for i, driver in enumerate(self.drivers):
+            self.driver_colours[driver.id] = palette[i % len(palette)]
+
+    def _init_driver_liveries_safe(self) -> None:
+        """Initialize driver liveries; non-fatal on failure."""
+        try:
+            db = self.db
+            if db is None:
+                return
+            teams_dict: Dict[int, Any] = {}
+            for driver in self.drivers:
+                if driver.current_team_id and driver.current_team_id not in teams_dict:
+                    team = db.get_team(driver.current_team_id)
+                    if team:
+                        teams_dict[driver.current_team_id] = team
+
+            for driver in self.drivers:
+                primary = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+                secondary = QColor(
+                    min(255, primary.red() + 30),
+                    min(255, primary.green() + 30),
+                    min(255, primary.blue() + 30),
+                )
+                livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
+                livery.primary_color = primary
+                livery.secondary_color = secondary
+                livery.trim_color = QColor(255, 255, 255)
+                self.appearance_manager.driver_liveries[driver.id] = livery
+            print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
+        except Exception as e:
+            print(f"ERROR: Livery initialisation failed: {e}")
+            _traceback.print_exc()
+
+    def _load_track_with_fallback(self) -> None:
+        """Load track from database, falling back to a local simple track."""
+        db = self.db
+        if db is None:
+            self.track = self._make_fallback_track()
+            print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
+            return
+        try:
+            try:
+                req_id = getattr(self, '_initial_track_id', None)
+                self.track = db.get_simple_track(req_id)
+            except Exception:
+                self.track = db.get_simple_track()
+            print(f"Loaded track: {self.track.name} ({self.track.length_km:.2f}km)")
+        except Exception:
+            self.track = self._make_fallback_track()
+            print(f"Loaded fallback track: {self.track.name} ({self.track.length_km:.2f}km)")
+
+    def _make_fallback_track(self) -> Any:
+        """Construct fallback track model compatible with visual/sim code."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class SimpleTrack:
+            name: str
+            length_km: float
+            turns: int = 12
+            left_turns: int = 6
+            right_turns: int = 6
+            elevation_change_m: float = 15.0
+            avg_corner_radius_m: float = 40.0
+            min_corner_radius_m: float = 20.0
+            max_corner_radius_m: float = 80.0
+            tightest_corner_radius_m: float = 20.0
+            longest_straight_m: float = 800.0
+            shortest_straight_m: float = 150.0
+            avg_speed_kmh: float = 180.0
+            top_speed_kmh: float = 280.0
+            surface: str = "asphalt"
+            surface_type: str = "asphalt"
+            surface_grip: float = 12.0
+            surface_abrasiveness: float = 8.0
+            climate: str = "temperate"
+            drs_zones: int = 2
+
+        return SimpleTrack(name="Test Circuit", length_km=4.5)
+
+    def _build_legacy_circuit_instructions(self) -> List[Tuple[Any, ...]]:
+        """Build legacy instruction pattern scaled by loaded track length."""
+        track = self.track
+        length_km = getattr(track, 'length_km', 4.5)
+        return [
+            ('S', int(600 * (length_km / 6.0))),
+            ('C', 45, 170, 60, 0.00008),
+            ('S', int(400 * (length_km / 6.0))),
+            ('C', 65, 95, 50, 0.0001),
+            ('S', int(220 * (length_km / 6.0))),
+            ('C', -55, 100, 52, 0.0001),
+            ('S', int(350 * (length_km / 6.0))),
+            ('C', 155, 48, 42, 0.00014),
+            ('S', int(550 * (length_km / 6.0))),
+            ('C', -65, 145, 58, 0.00009),
+            ('S', int(380 * (length_km / 6.0))),
+            ('C', 55, 115, 54, 0.00009),
+            ('S', int(180 * (length_km / 6.0))),
+            ('C', 60, 90, 50, 0.0001),
+            ('S', int(300 * (length_km / 6.0))),
+            ('C', -50, 135, 56, 0.00009),
+            ('S', int(160 * (length_km / 6.0))),
+            ('C', 50, 135, 56, 0.00009),
+            ('S', int(320 * (length_km / 6.0))),
+        ]
+
+    def _is_drag_discipline(self) -> bool:
+        """Return True when the active race discipline is drag racing."""
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        return discipline == 'DRAG_ACCELERATION'
+
+    def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
+        """Build a point-to-point drag strip profile (mostly straight, slight bend)."""
+        total_m = max(350, int(track_length_m))
+        first_straight = max(180, int(total_m * 0.58))
+        second_straight = max(120, total_m - first_straight - 70)
+
+        return [
+            {'type': 'S', 'length_m': first_straight},
+            {'type': 'C', 'angle_deg': 7, 'radius_m': 850, 'clothoid_len': 55, 'k': 0.00006},
+            {'type': 'S', 'length_m': second_straight},
+        ]
+
+    def _generate_circuit_geometry(self) -> Tuple[Optional[List[TrackPoint]], Optional[float]]:
+        """Generate circuit geometry and return points with authoritative track length."""
+        try:
+            track = self.track
+            track_km = getattr(track, 'length_km', 4.5)
+            print(f"Generating circuit for {track_km}km track (closure solver enabled)...")
+            track_length = track_km * 1000
+
+            if self._is_drag_discipline():
+                instructions = self._build_drag_strip_instructions(track_length)
+                wrapper = {'instructions': instructions}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': True})
+            else:
+                wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+
+            track_points = routes.get('main')
+            if not track_points:
+                self.info_label.setText("Error: Failed to generate circuit")
+                self.start_btn.setEnabled(False)
+                print("ERROR: Circuit generation returned empty list")
+                return None, None
+            print(f"Generated circuit with {len(track_points)} points, using database length: {track_length:.0f}m")
+            self.track_points = track_points
+            return track_points, track_length
+        except Exception as e:
+            self.info_label.setText(f"Circuit generation failed: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Circuit generation failed: {e}")
+            _traceback.print_exc()
+            return None, None
+
+    def _create_and_mount_track_widget(self, track_points: List[TrackPoint], track_length: float) -> bool:
+        """Create TrackWidget and replace loading placeholder in left panel."""
+        try:
+            self.track_widget = TrackWidget(
+                track_points,
+                track_length,
+                self.appearance_manager,
+                track_surface=getattr(self.track, 'surface', 'asphalt'),
+                surface_grip=getattr(self.track, 'surface_grip', None),
+            )
+            while self.left_layout.count():
+                item = self.left_layout.takeAt(0)
+                if item is None:
+                    continue
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
+            self.left_layout.addWidget(self.track_widget)
+            print("Track widget created and added to layout")
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to create track display: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Track widget creation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _build_starting_cars(self, ascending: bool = False) -> Tuple[List[Car], Dict[int, Any]]:
+        """Create grid cars and map from grid position to driver id."""
+        cars: List[Car] = []
+        gridpos_map: Dict[int, Any] = {}
+        total_drivers = len(self.drivers)
+        grid_spacing = 15.0
+        for i, driver in enumerate(self.drivers):
+            grid_number = (i + 1) if ascending else (total_drivers - i)
+            row = (grid_number - 1) // 2
+            start_position = row * grid_spacing
+            car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+            cars.append(Car(
+                driver_id=driver.id,
+                driver_name=driver.name,
+                s=start_position,
+                colour=car_colour,
+                total_time=0.0,
+                avg_lap_time=60.0,
+                last_lap=0,
+            ))
+            try:
+                gridpos_map[int(grid_number)] = int(driver.id)
+            except Exception:
+                gridpos_map[int(grid_number)] = getattr(driver, 'id', None)
+        return cars, gridpos_map
+
+    def _record_starting_grid_from_map(self, gridpos_map: Dict[int, Any], total_drivers: int) -> None:
+        """Build canonical starting grid list where index 0 corresponds to P1."""
+        try:
+            self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+            print(f"Starting grid recorded (pos1..posN): {self._starting_grid}")
+        except Exception:
+            try:
+                self._starting_grid = [getattr(d, 'id', None) for d in self.drivers]
+            except Exception:
+                self._starting_grid = []
+
+    def _maybe_fix_reversed_grid_order(self) -> None:
+        """Flip grid assignment if canonical grid is reverse of driver ordering."""
+        try:
+            ordered_ids = [getattr(d, 'id', None) for d in self.drivers]
+            if self._starting_grid != ordered_ids[::-1]:
+                return
+            total_drivers = len(self.drivers)
+            cars, gridpos_map = self._build_starting_cars(ascending=True)
+            tw = self.track_widget
+            if tw is None:
+                return
+            try:
+                tw.set_cars(cars)
+            except Exception:
+                pass
+            try:
+                self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
+            except Exception:
+                self._starting_grid = ordered_ids
+            print("Detected reversed grid order; flipped to ascending start positions")
+            self._recompute_grid_from_track_widget_positions()
+        except Exception:
+            pass
+
+    def _recompute_grid_from_track_widget_positions(self) -> None:
+        """Derive starting grid from visual car placement to keep UI/engine aligned."""
+        try:
+            tw_cars = getattr(self.track_widget, 'cars', None)
+            if not tw_cars:
+                return
+            sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
+            self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
+            print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
+        except Exception:
+            pass
+
+    def _create_cars_and_start_grid(self) -> bool:
+        """Create race cars and initialize canonical starting grid."""
+        try:
+            tw = self.track_widget
+            if tw is None:
+                self.info_label.setText("Failed to create cars: Track widget unavailable")
+                self.start_btn.setEnabled(False)
+                print("ERROR: Car creation failed: Track widget unavailable")
+                return False
+            total_drivers = len(self.drivers)
+            cars, gridpos_map = self._build_starting_cars(ascending=False)
+            tw.set_cars(cars)
+            print(f"Created {len(cars)} cars at start line")
+            print(f"Car details: {[(c.driver_name, c.driver_id) for c in cars]}")
+            self._record_starting_grid_from_map(gridpos_map, total_drivers)
+            self._maybe_fix_reversed_grid_order()
+            return True
+        except Exception as e:
+            self.info_label.setText(f"Failed to create cars: {e}")
+            self.start_btn.setEnabled(False)
+            print(f"ERROR: Car creation failed: {e}")
+            _traceback.print_exc()
+            return False
+
+    def _init_standings_row(self, row: int, driver_name: str, driver_id: Any, extra: str = "") -> None:
+        """Initialize one standings row with default lap/gap values."""
+        print(f"[STANDINGS INIT] Row {row}: Setting driver name to '{driver_name}'{extra}")
+        self._set_standings_item(row, 0, QTableWidgetItem(""), driver_id)
+        self._set_standings_item(row, 1, QTableWidgetItem(driver_name), driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem("1"), driver_id)
+        self._set_standings_item(row, 3, QTableWidgetItem("-"), driver_id)
+
+    def _init_standings_table_safe(self) -> None:
+        """Initialize standings table rows; non-fatal on failure."""
+        try:
+            self.standings_table.setRowCount(len(self.drivers))
+            if hasattr(self, '_starting_grid') and self._starting_grid:
+                for i, did in enumerate(self._starting_grid):
+                    driver = next((d for d in self.drivers if getattr(d, 'id', None) == did), None)
+                    driver_name = driver.name if driver is not None else f"Driver {did}"
+                    driver_id = getattr(driver, 'id', None) if driver else did
+                    self._init_standings_row(i, driver_name, driver_id, f" (start pos {i + 1})")
+                print("Standings table initialized from starting grid")
+                return
+
+            for i, driver in enumerate(self.drivers):
+                self._init_standings_row(i, driver.name, getattr(driver, 'id', None))
+            print("Standings table initialized")
+        except Exception as e:
+            print(f"WARNING: Standings table initialisation failed: {e}")
+
+    def _set_load_data_ready_message(self) -> None:
+        """Set final ready message after successful data load."""
+        track = self.track
+        track_name = getattr(track, 'name', 'Unknown Track')
+        track_km = float(getattr(track, 'length_km', 0.0))
+        self.info_label.setText(f"{len(self.drivers)} drivers | {track_name} ({track_km:.2f}km)")
+        print("Data loading complete - ready to race")
 
     # _auto_start_race method removed: user must click Start Race manually
 
@@ -3143,6 +3046,10 @@ class RaceWindow(QMainWindow):
 
     def _start_race(self):
         """Start the race simulation."""
+        self._start_race_impl()
+
+    def _start_race_impl(self):
+        """Race-start implementation split from entrypoint to keep orchestration clear."""
         if not self.drivers or not self.track:
             self.info_label.setText("Error: No drivers or track loaded")
             print("ERROR: Cannot start race - no drivers or track")
@@ -3189,309 +3096,276 @@ class RaceWindow(QMainWindow):
             self._animation_started = False
         print("[RACE START] Waiting for simulation to send first position data...")
 
-        def race_runner():
-            try:
-                self.stop_event = threading.Event()
-                print("Race thread started")
+        self._launch_race_thread()
 
-                def event_callback(event: dict):
-                    try:
-                        event_type = event.get("type")
+    def _launch_race_thread(self) -> None:
+        """Launch simulation thread and attach event callback bridge."""
 
-                        if event_type == "position_update":
-                            # === AUTO-START ANIMATION ON FIRST DATA ===
-                            # Prevents freeze where animation waits for data
-                            if not self._animation_started:
-                                # Request animation start on the GUI thread via
-                                # event_signal
-                                print(
-                                    "[ANIMATION] First position data received - requesting animation start on main thread")
-                                try:
-                                    # Emit a simple string command handled by
-                                    # _on_event
-                                    self.emitter.event_signal.emit(
-                                        "start_animation")
-                                except Exception as e:
-                                    print(
-                                        f"[ERROR] Failed to request animation start: {e}")
-                                self._animation_started = True
-                                self.info_label.setText("Race in progress...")
-
-                            # Real-time position updates at 30 FPS
-                            frame = event.get("frame", 0)
-                            race_time = event.get("time", 0.0)
-                            positions = event.get("positions", [])
-
-                            # Print status every 30 frames (once per second)
-                            if frame % 30 == 0 and positions:
-                                print(f"[{race_time:.1f}s] ", end="")
-                                for p in positions[:3]:  # Top 3
-                                    print(
-                                        f"P{
-                                            p['position']}: {
-                                            p['driver_name']} (L{
-                                            p['lap']}, {
-                                            p['racing_mode']}) ",
-                                        end="")
-                                print()
-
-                            # Update all car positions on track AND standings
-                            # table
-                            for pos_data in positions:
-                                driver_id = pos_data.get("driver_id") if isinstance(
-                                    pos_data, dict) else None
-                                try:
-                                    if driver_id is None:
-                                        continue
-
-                                    # Update player telemetry if this is the
-                                    # player's driver
-                                    if driver_id == self.player_driver_id:
-                                        velocity_mps = pos_data.get(
-                                            "velocity_mps", 0.0)
-                                        push_intensity = pos_data.get(
-                                            "push_intensity", 0.7)
-                                        push_fatigue = pos_data.get(
-                                            "push_fatigue", 0.0)
-                                        tire_condition = pos_data.get(
-                                            "tire_condition", 1.0)
-
-                                        self.player_telemetry['speed_kph'] = velocity_mps * 3.6
-                                        self.player_telemetry['push_intensity'] = push_intensity
-                                        self.player_telemetry['push_fatigue'] = push_fatigue
-                                        self.player_telemetry['tire_condition'] = tire_condition
-
-                                        # Update telemetry display (thread-safe
-                                        # via signal)
-                                        self.emitter.event_signal.emit(
-                                            f"telemetry_update|{
-                                                velocity_mps *
-                                                3.6:.1f}|{
-                                                push_intensity:.2f}|{
-                                                push_fatigue:.2f}|{
-                                                tire_condition:.2f}")
-
-                                    # Update track widget with position
-                                    if self.track_widget and pos_data.get(
-                                            "running", True):
-                                        # position_m from engine is already lap-relative (0 to track_length)
-                                        # DO NOT subtract lap * track_length
-                                        # (causes negative positions!)
-                                        position_m = pos_data.get(
-                                            "position_m", 0.0)
-                                        lap = pos_data.get("lap", 0)
-                                        velocity_mps = pos_data.get(
-                                            "velocity_mps", 0.0)
-
-                                        # Update car position
-                                        if hasattr(self.track_widget,
-                                                   'update_car_realtime'):
-                                            self.track_widget.update_car_realtime(
-                                                driver_id=driver_id,
-                                                position_m=position_m,
-                                                lap=lap,
-                                                velocity_mps=velocity_mps
-                                            )
-                                        else:
-                                            # Fallback to old method
-                                            self.track_widget.update_car_position(
-                                                driver_id=driver_id,
-                                                lap=lap,
-                                                position=pos_data.get(
-                                                    "position", 1),
-                                                total_time=race_time
-                                            )
-
-                                    # Update standings table via signal
-                                    # (thread-safe)
-                                    position = pos_data.get("position", 0)
-                                    lap = pos_data.get("lap", 0)
-                                    push_intensity = pos_data.get(
-                                        "push_intensity", 0.7)
-                                    gap_ahead = pos_data.get("gap_ahead", 0.0)
-                                    position_m = pos_data.get(
-                                        "position_m", 0.0)
-                                    if frame % 30 == 0:  # Update table once per second
-                                        # Include timing + position for live
-                                        # gaps and ordering
-                                        self.emitter.event_signal.emit(
-                                            f"standings_update|{driver_id}|{position}|{lap}|{
-                                                push_intensity:.2f}|{
-                                                gap_ahead:.2f}|{
-                                                position_m:.2f}|{
-                                                race_time:.2f}"
-                                        )
-
-                                except Exception as e:
-                                    print(
-                                        f"ERROR updating position for driver {driver_id}: {e}")
-
-                        elif event_type == "dnf":
-                            driver_id = event.get("driver_id")
-                            driver_name = event.get(
-                                "driver_name", f"Driver {driver_id}")
-                            reason = event.get("reason", "unknown")
-                            laps_completed = int(event.get("lap", 0))
-                            # Convert to 1-based display lap
-                            lap = max(1, laps_completed + 1)
-                            print(
-                                f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
-
-                            # Ask GUI thread to mark DNF (avoid touching
-                            # widgets from race thread)
-                            try:
-                                if driver_id is not None:
-                                    self.emitter.event_signal.emit(
-                                        f"mark_dnf|{driver_id}")
-                            except Exception:
-                                pass
-
-                            # Request GUI thread to handle DNF for any player-controlled
-                            # car (selected driver or teammate in player team).
-                            try:
-                                controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
-                                player_id = getattr(self, 'player_driver_id', None)
-                                if player_id is not None:
-                                    controlled_ids.add(player_id)
-                                if driver_id in controlled_ids:
-                                    self.emitter.event_signal.emit(
-                                        f"player_dnf|{driver_id}|{lap}|{reason}")
-                            except Exception:
-                                pass
-                            # Mark in standings and rebuild table so DNF
-                            # appears immediately
-                            if driver_id is not None:
-                                existing = self._race_state.get(driver_id, {
-                                    'name': driver_name,
-                                    'position': event.get('position', 0),
-                                    'lap': lap,
-                                    'time': event.get('race_time', 0.0),
-                                    'distance': 0.0,
-                                    'gap_ahead': 0.0
-                                })
-                                existing['dnf'] = True
-                                existing['lap'] = lap
-                                self._race_state[driver_id] = existing
-                                self._rebuild_standings_table()
-
-                        elif event_type == "race_finished":
-                            total_laps = event.get("total_laps", 0)
-                            race_time = event.get("race_time", 0.0)
-                            print(
-                                f"\nRace finished! {total_laps} laps in {
-                                    race_time:.1f}s")
-
-                            # Store collision log for display
-                            collision_log = event.get('collision_log', [])
-                            self._collision_log = collision_log
-                            if collision_log:
-                                print(
-                                    f"Race simulation complete, {
-                                        len(
-                                            event.get(
-                                                'results',
-                                                []))} results, {
-                                        len(collision_log)} collisions")
-                            else:
-                                print(
-                                    f"Race simulation complete, {len(event.get('results', []))} results")
-
-                            # Emit actual results to the GUI reliably.
-                            # Ensure we always emit a (possibly empty) results list
-                            # so the GUI can build final standings and show the
-                            # Start→Finish summary dialog.
-                            try:
-                                results_payload = event.get('results', []) if isinstance(event, dict) else []
-                                # Emit on GUI thread via signal
-                                try:
-                                    self.emitter.race_finished.emit(results_payload)
-                                except Exception as ex:
-                                    print(f"ERROR: failed to emit race_finished: {ex}")
-                                    try:
-                                        _traceback.print_exc()
-                                    except Exception:
-                                        pass
-                                    # Best-effort fallback: emit empty list
-                                    try:
-                                        self.emitter.race_finished.emit([])
-                                    except Exception:
-                                        pass
-                            except Exception as e:
-                                print(f"ERROR preparing results payload for emit: {e}")
-                                try:
-                                    _traceback.print_exc()
-                                except Exception:
-                                    pass
-
-                    except Exception as e:
-                        print(f"ERROR in event_callback: {e}")
-                        _traceback.print_exc()
-
-                print(
-                    "Starting simulate_race with comprehensive engine via RaceContext...")
-                # Get track_points safely
-                track_pts = getattr(self, 'track_points', None)
-
-                # Build a minimal teams dictionary if possible (empty dict is
-                # acceptable)
-                teams = {}
-                try:
-                    db_any = cast(Any, self.db)
-                    get_team_fn = getattr(db_any, 'get_team', None)
-                    if callable(get_team_fn):
-                        team_ids = {
-                            d.current_team_id for d in self.drivers if d.current_team_id}
-                        for team_id in team_ids:
-                            team = get_team_fn(team_id)
-                            if team:
-                                teams[team_id] = team
-                except Exception:
-                    teams = {}
-
-                # Create RaceContext and populate track_conditions for
-                # discipline adapter
-                context = RaceContext(
-                    discipline=RacingDiscipline[self._initial_discipline],
-                    track=self.track,
-                    drivers=self.drivers,
-                    teams=teams,
-                    total_laps=3,
-                    event_callback=event_callback
-                )
-
-                # Populate track_conditions keys expected by SingleSeaterEngine
-                tc = context.track_conditions
-                tc['player_driver_id'] = self.player_driver_id
-                tc['player_team_driver_ids'] = list(self.player_team_driver_ids)
-                tc['player_overrides'] = self.player_overrides
-                tc['track_points'] = track_pts
-                tc['realtime_speed'] = 5.0
-                tc['stop_event'] = self.stop_event
-                tc['tuning_preset'] = self.tuning_preset
-
-                results = simulate_race(
-                    context=context, verbose=True, db=cast(
-                        Any, self.db))
-
-                print(
-                    f"Race simulation complete, {
-                        len(results) if results else 0} results")
-
-                # Don't save from race thread - database is in main thread
-                # Results will be saved via race_finished event if needed
-
-            except Exception as e:
-                error_msg = f"Race error: {e}"
-                print(f"ERROR in race_runner: {e}")
-                _traceback.print_exc()
-                try:
-                    self.emitter.event_signal.emit(error_msg)
-                except Exception:
-                    pass
-
-        self.race_thread = threading.Thread(target=race_runner, daemon=True)
+        self.race_thread = threading.Thread(target=self._race_runner, daemon=True)
         self.race_thread.start()
         print("Race thread launched")
+
+    def _race_runner(self) -> None:
+        """Worker-thread entrypoint for race simulation."""
+        try:
+            self.stop_event = threading.Event()
+            print("Race thread started")
+            self._run_simulation_with_callback()
+        except Exception as e:
+            error_msg = f"Race error: {e}"
+            print(f"ERROR in race_runner: {e}")
+            _traceback.print_exc()
+            try:
+                self.emitter.event_signal.emit(error_msg)
+            except Exception:
+                pass
+
+    def _run_simulation_with_callback(self) -> None:
+        """Build context and execute simulation using thread event bridge."""
+        print("Starting simulate_race with comprehensive engine via RaceContext...")
+        track_pts = getattr(self, 'track_points', None)
+        teams = self._build_race_teams_map()
+        context = self._build_race_context(self._event_callback_from_race_thread, track_pts, teams)
+        results = simulate_race(context=context, verbose=True, db=cast(Any, self.db))
+        print(f"Race simulation complete, {len(results) if results else 0} results")
+
+    def _build_race_teams_map(self) -> Dict[int, Any]:
+        """Resolve team objects for current race entrants."""
+        teams: Dict[int, Any] = {}
+        try:
+            db_any = cast(Any, self.db)
+            get_team_fn = getattr(db_any, 'get_team', None)
+            if not callable(get_team_fn):
+                return teams
+            team_ids = {d.current_team_id for d in self.drivers if d.current_team_id}
+            for team_id in team_ids:
+                team = get_team_fn(team_id)
+                if team:
+                    teams[team_id] = team
+        except Exception:
+            return {}
+        return teams
+
+    def _build_race_context(self, event_callback: Any, track_pts: Any, teams: Dict[int, Any]) -> RaceContext:
+        """Construct race context and populate adapter-specific conditions."""
+        context = RaceContext(
+            discipline=RacingDiscipline[self._initial_discipline],
+            track=self.track,
+            drivers=self.drivers,
+            teams=teams,
+            total_laps=3,
+            event_callback=event_callback,
+        )
+        tc = context.track_conditions
+        tc['player_driver_id'] = self.player_driver_id
+        tc['player_team_driver_ids'] = list(self.player_team_driver_ids)
+        tc['player_overrides'] = self.player_overrides
+        tc['track_points'] = track_pts
+        tc['realtime_speed'] = 5.0
+        tc['stop_event'] = self.stop_event
+        tc['tuning_preset'] = self.tuning_preset
+        return context
+
+    def _event_callback_from_race_thread(self, event: dict) -> None:
+        """Bridge simulation events to GUI-thread-safe signals."""
+        try:
+            event_type = event.get("type")
+            if event_type == "position_update":
+                self._handle_thread_position_update_event(event)
+                return
+            if event_type == "dnf":
+                self._handle_thread_dnf_event(event)
+                return
+            if event_type == "race_finished":
+                self._handle_thread_race_finished_event(event)
+                return
+        except Exception as e:
+            print(f"ERROR in event_callback: {e}")
+            _traceback.print_exc()
+
+    def _handle_thread_position_update_event(self, event: dict) -> None:
+        """Process realtime position payload in worker thread."""
+        self._maybe_start_animation_from_thread()
+        frame = int(event.get("frame", 0))
+        race_time = float(event.get("time", 0.0))
+        positions = event.get("positions", [])
+        self._log_position_frame_snapshot(frame, race_time, positions)
+        for pos_data in positions:
+            self._process_single_thread_position_update(pos_data, frame, race_time)
+
+    def _maybe_start_animation_from_thread(self) -> None:
+        """Request animation start once, when first position packet arrives."""
+        if self._animation_started:
+            return
+        print("[ANIMATION] First position data received - requesting animation start on main thread")
+        try:
+            self.emitter.event_signal.emit("start_animation")
+            self.emitter.event_signal.emit("Race in progress...")
+        except Exception as e:
+            print(f"[ERROR] Failed to request animation start: {e}")
+        self._animation_started = True
+
+    def _log_position_frame_snapshot(self, frame: int, race_time: float, positions: Any) -> None:
+        """Log top-3 snapshot once per second for runtime visibility."""
+        if frame % 30 != 0 or not positions:
+            return
+        print(f"[{race_time:.1f}s] ", end="")
+        for p in positions[:3]:
+            print(
+                f"P{p['position']}: {p['driver_name']} (L{p['lap']}, {p['racing_mode']}) ",
+                end="",
+            )
+        print()
+
+    def _process_single_thread_position_update(self, pos_data: Any, frame: int, race_time: float) -> None:
+        """Apply one driver's realtime update and emit table/telemetry signals."""
+        if not isinstance(pos_data, dict):
+            return
+        driver_id = pos_data.get("driver_id")
+        if driver_id is None:
+            return
+        try:
+            self._emit_player_telemetry_if_needed(driver_id, pos_data)
+            self._update_track_widget_realtime(driver_id, pos_data, race_time)
+            self._emit_standings_update_if_due(driver_id, pos_data, frame, race_time)
+        except Exception as e:
+            print(f"ERROR updating position for driver {driver_id}: {e}")
+
+    def _emit_player_telemetry_if_needed(self, driver_id: int, pos_data: Dict[str, Any]) -> None:
+        """Store player telemetry and emit formatted telemetry update signal."""
+        if driver_id != self.player_driver_id:
+            return
+        velocity_mps = float(pos_data.get("velocity_mps", 0.0))
+        push_intensity = float(pos_data.get("push_intensity", 0.7))
+        push_fatigue = float(pos_data.get("push_fatigue", 0.0))
+        tire_condition = float(pos_data.get("tire_condition", 1.0))
+        self.player_telemetry['speed_kph'] = velocity_mps * 3.6
+        self.player_telemetry['push_intensity'] = push_intensity
+        self.player_telemetry['push_fatigue'] = push_fatigue
+        self.player_telemetry['tire_condition'] = tire_condition
+        self.emitter.event_signal.emit(
+            f"telemetry_update|{velocity_mps * 3.6:.1f}|{push_intensity:.2f}|{push_fatigue:.2f}|{tire_condition:.2f}"
+        )
+
+    def _update_track_widget_realtime(self, driver_id: int, pos_data: Dict[str, Any], race_time: float) -> None:
+        """Update track widget position for a running car."""
+        if not self.track_widget or not pos_data.get("running", True):
+            return
+        position_m = float(pos_data.get("position_m", 0.0))
+        lap = int(pos_data.get("lap", 0))
+        velocity_mps = float(pos_data.get("velocity_mps", 0.0))
+        if hasattr(self.track_widget, 'update_car_realtime'):
+            self.track_widget.update_car_realtime(
+                driver_id=driver_id,
+                position_m=position_m,
+                lap=lap,
+                velocity_mps=velocity_mps,
+            )
+            return
+        self.track_widget.update_car_position(
+            driver_id=driver_id,
+            lap=lap,
+            position=pos_data.get("position", 1),
+            total_time=race_time,
+        )
+
+    def _emit_standings_update_if_due(self, driver_id: int, pos_data: Dict[str, Any], frame: int, race_time: float) -> None:
+        """Emit live standings payload at 1Hz to reduce GUI churn."""
+        if frame % 30 != 0:
+            return
+        position = int(pos_data.get("position", 0))
+        lap = int(pos_data.get("lap", 0))
+        push_intensity = float(pos_data.get("push_intensity", 0.7))
+        gap_ahead = float(pos_data.get("gap_ahead", 0.0))
+        position_m = float(pos_data.get("position_m", 0.0))
+        self.emitter.event_signal.emit(
+            f"standings_update|{driver_id}|{position}|{lap}|{push_intensity:.2f}|{gap_ahead:.2f}|{position_m:.2f}|{race_time:.2f}"
+        )
+
+    def _handle_thread_dnf_event(self, event: dict) -> None:
+        """Handle DNF updates from simulation worker thread."""
+        driver_id = event.get("driver_id")
+        driver_name = event.get("driver_name", f"Driver {driver_id}")
+        reason = event.get("reason", "unknown")
+        laps_completed = int(event.get("lap", 0))
+        lap = max(1, laps_completed + 1)
+        print(f"[DNF] {driver_name} DNF on lap {lap}: {reason}")
+        self._emit_mark_dnf_signal(driver_id)
+        self._emit_player_dnf_if_controlled(driver_id, lap, reason)
+        self._update_race_state_dnf_snapshot(driver_id, driver_name, lap, event)
+
+    def _emit_mark_dnf_signal(self, driver_id: Any) -> None:
+        """Signal GUI thread to mark DNF on track/standings."""
+        try:
+            if driver_id is not None:
+                self.emitter.event_signal.emit(f"mark_dnf|{driver_id}")
+        except Exception:
+            pass
+
+    def _emit_player_dnf_if_controlled(self, driver_id: Any, lap: int, reason: str) -> None:
+        """Emit player_dnf event for selected driver or teammate control group."""
+        try:
+            controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
+            player_id = getattr(self, 'player_driver_id', None)
+            if player_id is not None:
+                controlled_ids.add(player_id)
+            if driver_id in controlled_ids:
+                self.emitter.event_signal.emit(f"player_dnf|{driver_id}|{lap}|{reason}")
+        except Exception:
+            pass
+
+    def _update_race_state_dnf_snapshot(self, driver_id: Any, driver_name: str, lap: int, event: dict) -> None:
+        """Keep race-state DNF flag in sync for subsequent table rebuilds."""
+        if driver_id is None:
+            return
+        existing = self._race_state.get(driver_id, {
+            'name': driver_name,
+            'position': event.get('position', 0),
+            'lap': lap,
+            'time': event.get('race_time', 0.0),
+            'distance': 0.0,
+            'gap_ahead': 0.0,
+        })
+        existing['dnf'] = True
+        existing['lap'] = lap
+        self._race_state[driver_id] = existing
+
+    def _handle_thread_race_finished_event(self, event: dict) -> None:
+        """Store completion diagnostics and emit race-finished payload."""
+        total_laps = int(event.get("total_laps", 0))
+        race_time = float(event.get("race_time", 0.0))
+        print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
+        collision_log = event.get('collision_log', [])
+        self._collision_log = collision_log
+        result_count = len(event.get('results', []))
+        if collision_log:
+            print(f"Race simulation complete, {result_count} results, {len(collision_log)} collisions")
+        else:
+            print(f"Race simulation complete, {result_count} results")
+        self._emit_race_finished_results(event)
+
+    def _emit_race_finished_results(self, event: dict) -> None:
+        """Emit race_finished signal with robust fallback behavior."""
+        try:
+            results_payload = event.get('results', []) if isinstance(event, dict) else []
+            try:
+                self.emitter.race_finished.emit(results_payload)
+            except Exception as ex:
+                print(f"ERROR: failed to emit race_finished: {ex}")
+                try:
+                    _traceback.print_exc()
+                except Exception:
+                    pass
+                try:
+                    self.emitter.race_finished.emit([])
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"ERROR preparing results payload for emit: {e}")
+            try:
+                _traceback.print_exc()
+            except Exception:
+                pass
 
     def _stop_race(self):
         """Stop the race simulation."""
@@ -3539,6 +3413,7 @@ class RaceWindow(QMainWindow):
         config = {
             'championship_id': self._championship_id,
             'race_id': self._race_id,
+            'mode': getattr(self, '_game_mode', 'championship'),
         }
         self.next_race.emit(config)
         print(f"[NEXT RACE] Emitted next_race signal with config: {config}")
@@ -3558,583 +3433,368 @@ class RaceWindow(QMainWindow):
 
     def _on_position_update(self, data: dict):
         """Handle position update from simulation."""
-        
-
         try:
             if not self.track_widget:
                 return
-
-            self.track_widget.update_car_position(
-                data['driver_id'],
-                data['lap'],
-                data['position'],
-                data['total_time']
-            )
-
-            # Update standings table: find row by driver id
-            for row in range(self.standings_table.rowCount()):
-                name_item = self.standings_table.item(row, 1)
-                if not name_item:
-                    continue
-                driver_name = name_item.text()
-                driver = next(
-                    (d for d in self.drivers if d.name == driver_name), None)
-                if driver and driver.id == data['driver_id']:
-                    # If this driver was marked DNF, avoid overwriting the
-                    # standings row and explicitly show 'DNF' as the gap.
-                    race_entry = self._race_state.get(driver.id, {})
-                    if race_entry.get('dnf', False):
-                        try:
-                            # Position / lap become dashes; gap shows DNF
-                            self._set_standings_item(row, 0, QTableWidgetItem("-"), driver.id)
-                            self._set_standings_item(row, 2, QTableWidgetItem("-"), driver.id)
-                            self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver.id)
-                        except Exception:
-                            pass
-                        break
-
-                    # Column 0 = position
-                    self._set_standings_item(
-                        row, 0, QTableWidgetItem(str(data['position'])), driver.id)
-                    # Column 2 = lap
-                    self._set_standings_item(
-                        row, 2, QTableWidgetItem(str(data['lap'])), driver.id)
-
-                    # Highlight player-controlled driver cell background (guard
-                    # against missing item)
-                    name_cell = self.standings_table.item(row, 1)
-                    if name_cell is not None:
-                        if driver.id == self.player_driver_id:
-                            name_cell.setBackground(
-                                QColor(255, 215, 0))  # Gold
-                            name_cell.setForeground(
-                                QColor(0, 0, 0))  # Dark text on gold
-                        else:
-                            # normal background (dark)
-                            name_cell.setBackground(QColor(37, 38, 39))
-                    break
+            self._apply_track_widget_position_update(data)
+            self._apply_standings_position_update(data)
         except Exception as e:
             print(f"ERROR in _on_position_update: {e}")
 
+    def _apply_track_widget_position_update(self, data: dict) -> None:
+        """Apply one position update to track widget."""
+        tw = self.track_widget
+        if tw is None:
+            return
+        tw.update_car_position(
+            data['driver_id'],
+            data['lap'],
+            data['position'],
+            data['total_time'],
+        )
+
+    def _find_standings_row_for_driver(self, driver_id: int) -> Optional[int]:
+        """Find standings row index that corresponds to driver id."""
+        for row in range(self.standings_table.rowCount()):
+            name_item = self.standings_table.item(row, 1)
+            if not name_item:
+                continue
+            driver_name = name_item.text()
+            driver = next((d for d in self.drivers if d.name == driver_name), None)
+            if driver and driver.id == driver_id:
+                return row
+        return None
+
+    def _apply_dnf_row_state(self, row: int, driver_id: int) -> None:
+        """Set standings cells for a retired driver."""
+        try:
+            self._set_standings_item(row, 0, QTableWidgetItem("-"), driver_id)
+            self._set_standings_item(row, 2, QTableWidgetItem("-"), driver_id)
+            self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver_id)
+        except Exception:
+            pass
+
+    def _style_standings_name_cell(self, row: int, driver_id: int) -> None:
+        """Apply player/highlight styling for standings name cell."""
+        name_cell = self.standings_table.item(row, 1)
+        if name_cell is None:
+            return
+        if driver_id == self.player_driver_id:
+            name_cell.setBackground(QColor(255, 215, 0))
+            name_cell.setForeground(QColor(0, 0, 0))
+            return
+        name_cell.setBackground(QColor(37, 38, 39))
+
+    def _apply_standings_position_update(self, data: dict) -> None:
+        """Update standings row for a single realtime position update."""
+        driver_id = data['driver_id']
+        row = self._find_standings_row_for_driver(driver_id)
+        if row is None:
+            return
+
+        race_entry = self._race_state.get(driver_id, {})
+        if race_entry.get('dnf', False):
+            self._apply_dnf_row_state(row, driver_id)
+            return
+
+        self._set_standings_item(row, 0, QTableWidgetItem(str(data['position'])), driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem(str(data['lap'])), driver_id)
+        self._style_standings_name_cell(row, driver_id)
+
     def _on_race_finished(self, results: list):
         """Handle race finish."""
-        # Ensure results_sorted is always defined for downstream reporting
         results_sorted: list = []
         try:
             print(f"Race finished event received with {len(results)} results")
-
-            # Display collision summary if available
-            if hasattr(self, '_collision_log') and self._collision_log:
-                print(
-                    f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
-                for i, collision in enumerate(self._collision_log, 1):
-                    print(
-                        f"  {i}. Lap {
-                            collision.get(
-                                'lap',
-                                '?')}: {
-                            collision.get(
-                                'description',
-                                'Unknown incident')}")
-                print("")
-
-            self.info_label.setText("Race finished!")
-            self.start_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
-            try:
-                if hasattr(self, 'player_status_label'):
-                    self.player_status_label.hide()
-                    # Re-enable player controls on race finish
-                    try:
-                        if hasattr(self, 'pace_slider'):
-                            self.pace_slider.setEnabled(True)
-                        if hasattr(self, 'overtake_slider'):
-                            self.overtake_slider.setEnabled(True)
-                        if hasattr(self, 'camera_full_btn'):
-                            self.camera_full_btn.setEnabled(True)
-                        if hasattr(self, 'camera_follow_btn'):
-                            self.camera_follow_btn.setEnabled(True)
-                        if hasattr(self, 'push_gauge'):
-                            self.push_gauge.setEnabled(True)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            # Stop animation
-            if self.track_widget:
-                self.track_widget.stop_animation()
-
-            # Update final standings
+            self._log_collision_summary_if_available()
+            self._reset_ui_for_race_finished()
             if not results:
                 print("WARNING: No results to display")
                 return
-
-            results_sorted = sorted(
-                results, key=lambda r: r.get(
-                    'position', 999))
-            leader_time = results_sorted[0].get(
-                'time_seconds', 0) if results_sorted else 0
-
-            for i, result in enumerate(results_sorted):
-                try:
-                    driver_id = result.get('driver_id')
-                    driver = next(
-                        (d for d in self.drivers if d.id == driver_id), None)
-                    if driver:
-                        time_seconds = result.get('time_seconds', 0)
-                        gap = time_seconds - leader_time if i > 0 else 0
-
-                        self._set_standings_item(
-                            i, 0, QTableWidgetItem(str(i + 1)), driver.id)
-                        self._set_standings_item(
-                            i, 1, QTableWidgetItem(driver.name), driver.id)
-
-                        # Show leader's total time, gaps for everyone else
-                        if i == 0:
-                            # Format leader time as MM:SS.ms
-                            minutes = int(leader_time // 60)
-                            seconds = leader_time % 60
-                            time_display = f"{minutes}:{seconds:06.3f}"
-                            self._set_standings_item(i, 3, QTableWidgetItem(time_display), driver.id)
-                        else:
-                            self._set_standings_item(i, 3, QTableWidgetItem(
-                                f"+{gap:.2f}s" if gap > 0 else "-"), driver.id)
-
-                        # Highlight player-controlled driver in leaderboard
-                        # (guard against missing item)
-                        name_cell = self.standings_table.item(i, 1)
-                        if name_cell is not None:
-                            if driver.id == self.player_driver_id:
-                                name_cell.setBackground(
-                                    QColor(255, 215, 0))  # Gold
-                                name_cell.setForeground(
-                                    QColor(0, 0, 0))  # Dark text on gold
-                            else:
-                                name_cell.setBackground(QColor(37, 38, 39))
-                except Exception as e:
-                    print(f"ERROR updating standings row {i}: {e}")
-
+            results_sorted = self._sorted_results_by_position(results)
+            self._render_final_standings(results_sorted)
         except Exception as e:
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
 
-        # Save race results to database if in championship mode
+        self._save_race_results_if_needed(results_sorted)
+        self._show_position_change_summary_safe(results_sorted)
+        self._enable_next_race_if_championship_mode()
+
+    def _log_collision_summary_if_available(self) -> None:
+        """Print collision summary block when incidents were recorded."""
+        if not hasattr(self, '_collision_log') or not self._collision_log:
+            return
+        print(f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
+        for i, collision in enumerate(self._collision_log, 1):
+            lap = collision.get('lap', '?')
+            description = collision.get('description', 'Unknown incident')
+            print(f"  {i}. Lap {lap}: {description}")
+        print("")
+
+    def _reset_ui_for_race_finished(self) -> None:
+        """Reset race controls and stop animation once race completes."""
+        self.info_label.setText("Race finished!")
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
         try:
-            if self._championship_id and self._race_id and results_sorted:
-                from database.models import RaceResult
-                
-                for result in results_sorted:
-                    driver_id = result.get('driver_id')
-                    position = result.get('position')
-                    points = result.get('points', 0)
-                    fastest_lap = result.get('fastest_lap', False)
-                    dnf_reason = result.get('dnf_reason')
-                    grid_position = result.get('grid_position', position)
-                    
-                    # Get team_id from driver's current_team_id
-                    driver = next((d for d in self.drivers if d.id == driver_id), None)
-                    team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
-                    
-                    # Skip saving if team_id is required but missing
-                    if team_id is None:
-                        print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
-                        continue
-                    
-                    race_result = RaceResult(
-                        id=None,  # Will be auto-generated on insert
-                        race_id=self._race_id,
-                        driver_id=driver_id,
-                        team_id=team_id,
-                        position=position,
-                        points=points,
-                        fastest_lap=fastest_lap,
-                        dnf_reason=dnf_reason,
-                        grid_position=grid_position
-                    )
-                    
-                    try:
-                        if self.db is not None:
-                            self.db.save_race_result(race_result)
-                    except Exception as e:
-                        print(f"WARNING: Could not save result for driver {driver_id}: {e}")
-                
-                print(f"[RACE FINISHED] Saved {len(results_sorted)} race results to database")
+            if hasattr(self, 'player_status_label'):
+                self.player_status_label.hide()
+        except Exception:
+            pass
+        self._set_player_controls_enabled(True)
+        if self.track_widget:
+            self.track_widget.stop_animation()
+
+    def _set_player_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable player interaction controls as a group."""
+        try:
+            if hasattr(self, 'pace_slider'):
+                self.pace_slider.setEnabled(enabled)
+            if hasattr(self, 'overtake_slider'):
+                self.overtake_slider.setEnabled(enabled)
+            if hasattr(self, 'camera_full_btn'):
+                self.camera_full_btn.setEnabled(enabled)
+            if hasattr(self, 'camera_follow_btn'):
+                self.camera_follow_btn.setEnabled(enabled)
+            if hasattr(self, 'push_gauge'):
+                self.push_gauge.setEnabled(enabled)
+        except Exception:
+            pass
+
+    def _sorted_results_by_position(self, results: list) -> list:
+        """Return race results sorted by finishing position."""
+        return sorted(results, key=lambda r: r.get('position', 999))
+
+    def _render_final_standings(self, results_sorted: list) -> None:
+        """Render final leaderboard rows and timing/gap values."""
+        leader_time = results_sorted[0].get('time_seconds', 0) if results_sorted else 0
+        for i, result in enumerate(results_sorted):
+            self._render_final_standings_row(i, result, leader_time)
+
+    def _render_final_standings_row(self, row_index: int, result: dict, leader_time: float) -> None:
+        """Render one final standings row with player highlighting."""
+        try:
+            driver_id = result.get('driver_id')
+            driver = next((d for d in self.drivers if d.id == driver_id), None)
+            if not driver:
+                return
+
+            self._set_standings_item(row_index, 0, QTableWidgetItem(str(row_index + 1)), driver.id)
+            self._set_standings_item(row_index, 1, QTableWidgetItem(driver.name), driver.id)
+            self._set_standings_item(
+                row_index,
+                3,
+                QTableWidgetItem(self._build_final_time_display(row_index, result, leader_time)),
+                driver.id,
+            )
+            self._style_standings_name_cell(row_index, driver.id)
+        except Exception as e:
+            print(f"ERROR updating standings row {row_index}: {e}")
+
+    def _build_final_time_display(self, row_index: int, result: dict, leader_time: float) -> str:
+        """Format leader total time or follower gap display string."""
+        if row_index == 0:
+            minutes = int(leader_time // 60)
+            seconds = leader_time % 60
+            return f"{minutes}:{seconds:06.3f}"
+        time_seconds = result.get('time_seconds', 0)
+        gap = time_seconds - leader_time
+        return f"+{gap:.2f}s" if gap > 0 else "-"
+
+    def _save_race_results_if_needed(self, results_sorted: list) -> None:
+        """Persist race results in championship mode."""
+        if not (self._championship_id and self._race_id and results_sorted):
+            return
+        try:
+            saved_count = 0
+            for result in results_sorted:
+                if self._save_single_race_result(result):
+                    saved_count += 1
+            print(f"[RACE FINISHED] Saved {saved_count} race results to database")
         except Exception as e:
             print(f"WARNING: Error saving race results: {e}")
 
-        # Show a post-race position change summary including DNFs
+    def _save_single_race_result(self, result: dict) -> bool:
+        """Save one race result record; return True on success."""
+        from database.models import RaceResult
+        from services.championship_service import ChampionshipService
+
+        driver_id = result.get('driver_id')
+        driver = next((d for d in self.drivers if d.id == driver_id), None)
+        team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
+        if team_id is None:
+            print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
+            return False
+
+        discipline = str(getattr(self, '_initial_discipline', 'SINGLE_SEATER') or 'SINGLE_SEATER')
+        position = int(result.get('position', 0) or 0)
+        fastest_lap = bool(result.get('fastest_lap', False))
+        dnf_reason = result.get('dnf_reason')
+
+        points = 0
+        if dnf_reason is None and position > 0 and self.db is not None:
+            points = ChampionshipService(self.db).calculate_points(
+                position=position,
+                discipline=discipline,
+                fastest_lap=fastest_lap,
+            )
+
+        race_result = RaceResult(
+            id=None,
+            race_id=self._race_id,
+            driver_id=driver_id,
+            team_id=team_id,
+            position=position,
+            points=points,
+            fastest_lap=fastest_lap,
+            dnf_reason=dnf_reason,
+            grid_position=result.get('grid_position', result.get('position')),
+        )
+        try:
+            if self.db is not None:
+                self.db.save_race_result(race_result)
+                return True
+        except Exception as e:
+            print(f"WARNING: Could not save result for driver {driver_id}: {e}")
+        return False
+
+    def _show_position_change_summary_safe(self, results_sorted: list) -> None:
+        """Display post-race position summary while keeping flow fail-safe."""
         try:
             self._show_position_change_summary(results_sorted)
         except Exception as e:
             print(f"ERROR showing position change summary: {e}")
-        
-        # Enable "Next Race" button if in championship mode
-        if self._championship_id:
-            self.next_race_btn.setEnabled(True)
-            print("[RACE FINISHED] Next Race button enabled (championship mode)")
+
+    def _enable_next_race_if_championship_mode(self) -> None:
+        """Enable next-race navigation in championship mode."""
+        if not self._championship_id:
+            return
+        self.next_race_btn.setEnabled(True)
+        print("[RACE FINISHED] Next Race button enabled (championship mode)")
 
     def _show_position_change_summary(self, results_sorted: list):
+        """Display a post-race start-vs-finish summary dialog."""
+        try:
+            self._show_position_change_summary_impl(results_sorted)
+        except Exception as e:
+            print(f"Error building position change summary: {e}")
+
+    def _show_position_change_summary_impl(self, results_sorted: list):
         """Display a modal dialog that compares starting grid to final positions.
 
         Columns: StartPos, FinishPos, Driver, Change, Status
         """
+        if not hasattr(self, '_starting_grid') or not self._starting_grid:
+            print("No starting grid recorded; skipping position-change summary")
+            return
+        start_pos = self._build_summary_start_positions(results_sorted)
+        rows = self._build_summary_rows(results_sorted, start_pos)
+        self._show_summary_table_dialog(rows)
+
+    def _normalize_driver_id(self, driver_id: Any) -> Any:
+        """Normalize driver id keys to int when possible."""
         try:
-            if not hasattr(self, '_starting_grid') or not self._starting_grid:
-                print("No starting grid recorded; skipping position-change summary")
-                return
+            return int(driver_id)
+        except Exception:
+            return driver_id
 
+    def _build_summary_start_positions(self, results_sorted: list) -> Dict[Any, int]:
+        """Build start-position mapping from recorded grid and engine hints."""
+        start_pos: Dict[Any, int] = {}
 
-            # Build starting positions map.
-            # Use the recorded `_starting_grid` (captured when the race began)
-            # as the authoritative source. However, double-check against the
-            # track widget's car ordering (by `s`) to detect a reversed mapping
-            # that can occasionally reappear; if we can derive a consistent
-            # ordering from the visual cars, prefer that ordering (P1..PN).
-            start_pos = {}
+        for idx, did in enumerate(getattr(self, '_starting_grid', []) or []):
+            if did is None:
+                continue
+            start_pos[self._normalize_driver_id(did)] = idx + 1
+
+        for res in results_sorted:
+            did = res.get('driver_id')
+            if did is None:
+                continue
+            gp = res.get('grid_position') or res.get('grid')
+            if gp is None:
+                continue
             try:
-                if hasattr(self, '_starting_grid') and self._starting_grid:
-                    # If track widget provides a reliable car ordering, prefer
-                    # that to correct any accidental reversal of `self._starting_grid`.
-                    try:
-                        tw_cars = getattr(self.track_widget, 'cars', None)
-                        if tw_cars:
-                            tw_ids: List[int] = []
-                            for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0)):
-                                did = getattr(c, 'driver_id', None)
-                                if did is None:
-                                    continue
-                                try:
-                                    tw_ids.append(int(did))
-                                except Exception:
-                                    continue
-                            # If the sets match but the orders differ, prefer the
-                            # visual ordering (P1..PN). This fixes cases where the
-                            # recorded grid was reversed relative to the track widget.
-                            # If the visual ordering contains the same drivers as
-                            # the recorded starting grid, prefer the visual ordering
-                            # as the authoritative start positions. This forces the
-                            # UI Start column to match the track widget layout.
-                            starting_grid_ids: List[int] = []
-                            for grid_id in self._starting_grid:
-                                if grid_id is None:
-                                    continue
-                                try:
-                                    starting_grid_ids.append(int(grid_id))
-                                except Exception:
-                                    continue
-                            if set(tw_ids) == set(starting_grid_ids):
-                                if tw_ids != starting_grid_ids:
-                                    print("Correcting starting grid order from visual track widget")
-                                else:
-                                    print("Using visual track widget ordering as authoritative for starting grid")
-                                self._starting_grid = tw_ids
-                    except Exception:
-                        pass
-
-                    # `_starting_grid` is a list where index 0 == start pos 1
-                    for idx, did in enumerate(self._starting_grid):
-                        if did is None:
-                            continue
-                        try:
-                            start_pos[int(did)] = idx + 1
-                        except Exception:
-                            start_pos[did] = idx + 1
+                start_pos[self._normalize_driver_id(did)] = int(gp)
             except Exception:
-                start_pos = {}
-
-            # Prefer engine-provided grid positions when available.
-            # The engine's `grid_position`/`grid` is authoritative for start
-            # ordering; override the GUI-recorded `_starting_grid` when the
-            # engine supplies explicit values. If the engine does not provide
-            # grid info, fall back to the GUI-recorded starting grid.
-            for res in results_sorted:
-                did = res.get('driver_id')
-                if did is None:
-                    continue
                 try:
-                    key = int(did)
-                except Exception:
-                    key = did
-                gp = res.get('grid_position') or res.get('grid')
-                if gp is not None:
-                    try:
-                        start_pos[key] = int(gp)
-                    except Exception:
-                        try:
-                            start_pos[key] = int(float(gp))
-                        except Exception:
-                            pass
-
-            # If the track widget provides a full ordering and its set of
-            # drivers matches the race results, force the start_pos mapping
-            # to follow the visual ordering. This makes the Start column
-            # in the summary match the track widget (visual grid) exactly
-            # regardless of engine-provided `grid_position` values.
-            try:
-                tw_cars = getattr(self.track_widget, 'cars', None)
-                if tw_cars:
-                    tw_ids: List[int] = []
-                    for c in sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True):
-                        did = getattr(c, 'driver_id', None)
-                        if did is None:
-                            continue
-                        try:
-                            tw_ids.append(int(did))
-                        except Exception:
-                            continue
-                    result_ids: List[int] = []
-                    for res in results_sorted:
-                        rid = res.get('driver_id')
-                        if rid is None:
-                            continue
-                        try:
-                            result_ids.append(int(rid))
-                        except Exception:
-                            continue
-                    if set(tw_ids) == set(result_ids):
-                        # Rebuild start_pos using visual ordering (P1..PN)
-                        start_pos = {}
-                        for idx, did in enumerate(tw_ids):
-                            start_pos[did] = idx + 1
-                        print("[DEBUG] Overrode start_pos with visual track ordering")
-            except Exception:
-                pass
-
-            # Build rows: finish_pos, driver_id, driver_name, status
-            rows = []
-            for res in results_sorted:
-                did = res.get('driver_id')
-                finish = res.get('position') or 999
-                name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
-                status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
-                start = start_pos.get(did, None)
-                change = start - finish if start is not None else 0
-                rows.append((start, finish, name, change, status))
-
-            # Sort rows so Start position (P1) appears at the top of the table.
-            # Drivers without a known start position appear after those with one.
-            rows = sorted(rows, key=lambda r: (r[0] is None, r[0] if r[0] is not None else 9999))
-
-            # Create modal dialog with table
-            dlg = QDialog(self)
-            dlg.setWindowTitle("Race Position Changes")
-            dlg_layout = QVBoxLayout()
-
-            # Header with clearer styling
-            info = QLabel("<h2>Start → Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
-            info.setTextFormat(Qt.TextFormat.RichText)
-            dlg_layout.addWidget(info)
-
-            # Create a horizontal split: left = plot & filters, right = results table
-            from PyQt6.QtWidgets import QSplitter, QListWidget, QListWidgetItem
-            splitter = QSplitter()
-
-            # Left pane: plot canvas (matplotlib) + filter list
-            left_widget = QWidget()
-            left_layout = QVBoxLayout(left_widget)
-
-            # Try to import matplotlib; if unavailable, show explanatory label
-            use_plot = True
-            canvas = None
-            fig = None
-            ax = None
-            try:
-                from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-                from matplotlib.figure import Figure
-                from PyQt6.QtWidgets import QListWidget, QListWidgetItem
-                
-                fig = Figure(figsize=(6, 3), dpi=100)
-                canvas = FigureCanvas(fig)
-                ax = fig.add_subplot(111)
-                ax.invert_yaxis()  # position 1 at top
-                ax.set_ylabel('Position')
-                ax.set_xlabel('Distance (m)')
-                ax.set_title('Positions Over Time')
-                left_layout.addWidget(canvas)
-                print("[RACE RESULTS] matplotlib plot initialized successfully")
-            except ImportError as e:
-                use_plot = False
-                print(f"[RACE RESULTS] matplotlib not available: {e}")
-                print("[RACE RESULTS] Install matplotlib for position plots: pip install matplotlib")
-                # Add placeholder message
-                no_plot_label = QLabel("📊 Position plot unavailable\n\nInstall matplotlib to see position changes over time:\npip install matplotlib")
-                no_plot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                no_plot_label.setStyleSheet("color: #999; padding: 40px; font-size: 12px;")
-                left_layout.addWidget(no_plot_label)
-            except Exception as e:
-                use_plot = False
-                print(f"[RACE RESULTS] matplotlib error: {e}")
-                import traceback
-                traceback.print_exc()
-
-            if use_plot and canvas and fig and ax:
-                # Filter list to show/hide drivers
-                filter_label = QLabel('Show drivers:')
-                left_layout.addWidget(filter_label)
-                filter_list = QListWidget()
-                filter_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-                try:
-                    filter_list.setMinimumHeight(140)
+                    start_pos[self._normalize_driver_id(did)] = int(float(gp))
                 except Exception:
                     pass
-                # Populate with drivers found in results_sorted (use driver names)
-                driver_map = {}
-                for res in results_sorted:
-                    did = res.get('driver_id')
-                    name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
-                    driver_map[did] = name
-                    item = QListWidgetItem(name)
-                    item.setData(Qt.ItemDataRole.UserRole, did)
-                    item.setSelected(True)
-                    filter_list.addItem(item)
-                try:
-                    filter_list.selectAll()
-                except Exception:
-                    pass
-                left_layout.addWidget(filter_list)
 
-                def redraw_plot():
-                    try:
-                        if not ax or not fig or not canvas:
-                            return
-                        ax.clear()
-                        ax.invert_yaxis()
-                        ax.set_ylabel('Position')
-                        ax.set_xlabel('Distance (m)')
-                        ax.set_title('Positions Over Time')
-                        # For each selected driver, plot its time-series
-                        for idx in range(filter_list.count()):
-                            it = filter_list.item(idx)
-                            if it is None:
-                                continue
-                            if not it.isSelected():
-                                continue
-                            did = it.data(Qt.ItemDataRole.UserRole)
-                            hist = getattr(self, '_position_history', {}).get(did, None)
-                            if hist:
-                                # history stored as (distance_m, position)
-                                xs = [t for (t, p) in hist]
-                                ys = [p for (t, p) in hist]
-                                ax.plot(xs, ys, label=driver_map.get(did, str(did)))
-                            else:
-                                # No history available: show flat line at final pos
-                                final = next((r.get('position') for r in results_sorted if r.get('driver_id') == did), None)
-                                if final is not None:
-                                    max_dist = max((h[-1][0] for h in getattr(self, '_position_history', {}).values() if h), default=1000)
-                                    ax.plot([0, max_dist], [final, final], '--', label=driver_map.get(did, str(did)))
-                        try:
-                            ax.legend(bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0., fontsize='small')
-                            try:
-                                fig.subplots_adjust(right=0.72, bottom=0.12)
-                            except Exception:
-                                pass
-                        except Exception:
-                            ax.legend(loc='upper right', fontsize='small', ncol=1)
-                        try:
-                            fig.tight_layout()
-                        except Exception:
-                            pass
-                        try:
-                            canvas.draw()
-                        except Exception:
-                            pass
-                    except Exception as e:
-                        print(f"ERROR drawing positions plot: {e}")
+        return start_pos
 
-                filter_list.itemSelectionChanged.connect(redraw_plot)
-                # Initial draw
-                redraw_plot()
+    def _build_summary_rows(self, results_sorted: list, start_pos: Dict[Any, int]) -> List[Tuple[Optional[int], int, str, int, str]]:
+        """Build start-vs-finish rows sorted by race finish order."""
+        rows: List[Tuple[Optional[int], int, str, int, str]] = []
+        for res in results_sorted:
+            did = res.get('driver_id')
+            did_key = self._normalize_driver_id(did)
+            finish = int(res.get('position') or 999)
+            name = res.get('driver_name') or next((d.name for d in self.drivers if d.id == did), str(did))
+            status = 'DNF' if res.get('dnf_reason') else 'FINISHED'
+            start = start_pos.get(did_key)
+            change = (start - finish) if start is not None else 0
+            rows.append((start, finish, name, change, status))
 
-            else:
-                left_layout.addWidget(QLabel('matplotlib not available — install matplotlib to see position plot.'))
+        # Default to result order (finish position) so the table reads like race standings.
+        rows.sort(key=lambda r: (r[1], r[0] if r[0] is not None else 9999))
+        return rows
 
-            # Note: add the results table first so it appears on the left side
-            # of the splitter. The plot/filter pane will be added after so it
-            # appears on the right and does not get overly compressed.
+    def _show_summary_table_dialog(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> None:
+        """Show a compact position-change dialog with table-only content."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Race Position Changes")
+        dlg_layout = QVBoxLayout()
 
-            # Right pane: results table (added first to splitter)
-            table = QTableWidget()
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
-            table.setRowCount(len(rows))
-            for r, row in enumerate(rows):
-                start, finish, name, change, status = row
-                table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
-                table.setItem(r, 1, QTableWidgetItem(str(finish)))
-                table.setItem(r, 2, QTableWidgetItem(name))
-                table.setItem(r, 3, QTableWidgetItem(f"{change:+d}"))
-                status_item = QTableWidgetItem(status)
-                if status == 'DNF':
-                    status_item.setBackground(QColor(220, 40, 40))
-                    status_item.setForeground(QColor(255, 255, 255))
-                table.setItem(r, 4, status_item)
+        info = QLabel("<h2>Start -> Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
+        info.setTextFormat(Qt.TextFormat.RichText)
+        dlg_layout.addWidget(info)
 
-            table.resizeColumnsToContents()
-            try:
-                # Make the Driver column stretch and keep others sized to contents
-                hdr = table.horizontalHeader()
-                if isinstance(hdr, QHeaderView):
-                    hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-                    hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-                    hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-                table.setAlternatingRowColors(True)
-            except Exception:
-                pass
-            # Add table to splitter first (index 0)
-            splitter.addWidget(table)
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
+        table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            start, finish, name, change, status = row
+            table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
+            table.setItem(r, 1, QTableWidgetItem(str(finish)))
+            table.setItem(r, 2, QTableWidgetItem(name))
+            table.setItem(r, 3, QTableWidgetItem(f"{change:+d}"))
+            status_item = QTableWidgetItem(status)
+            if status == 'DNF':
+                status_item.setBackground(QColor(220, 40, 40))
+                status_item.setForeground(QColor(255, 255, 255))
+            table.setItem(r, 4, status_item)
 
-            # Ensure the plot/filter pane has a usable minimum width so it
-            # remains visible when the table is large.
-            try:
-                if left_widget is not None:
-                    left_widget.setMinimumWidth(360)
-                # If canvas exists, ensure a reasonable min size
-                try:
-                    if canvas is not None:
-                        canvas.setMinimumSize(360, 260)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+        table.resizeColumnsToContents()
+        hdr = table.horizontalHeader()
+        if isinstance(hdr, QHeaderView):
+            hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        table.setAlternatingRowColors(True)
+        dlg_layout.addWidget(table)
 
-            # Now add the plot/filter pane (index 1)
-            splitter.addWidget(left_widget)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        dlg_layout.addWidget(close_btn)
 
-            # Give the results table the majority of horizontal space but allow
-            # the plot pane to remain usable.
-            splitter.setStretchFactor(0, 2)
-            splitter.setStretchFactor(1, 1)
-            dlg_layout.addWidget(splitter)
+        try:
+            pref_w, pref_h = get_preferred_window_size()
+            dlg_w = int(pref_w * 0.65)
+            dlg_h = int(pref_h * 0.5)
+            dlg.setMinimumSize(dlg_w, dlg_h)
+            dlg.resize(dlg_w, dlg_h)
+        except Exception:
+            pass
 
-            # Resize dialog to a consistent application-scale size so the
-            # position-change summary matches the main UI resolution.
-            try:
-                pref_w, pref_h = get_preferred_window_size()
-                dlg_w = int(pref_w * 0.75)
-                dlg_h = int(pref_h * 0.55)
-                dlg.setMinimumSize(dlg_w, dlg_h)
-                dlg.resize(dlg_w, dlg_h)
-                # Set table min width and left_widget min width relative to dialog
-                try:
-                    table.setMinimumWidth(int(dlg_w * 0.55))
-                    left_widget.setMinimumWidth(int(dlg_w * 0.35))
-                except Exception:
-                    pass
-            except Exception:
-                pass
-
-            close_btn = QPushButton("Close")
-            close_btn.clicked.connect(dlg.accept)
-            dlg_layout.addWidget(close_btn)
-
-            dlg.setLayout(dlg_layout)
-            dlg.setModal(True)
-            dlg.exec()
-        except Exception as e:
-            print(f"Error building position change summary: {e}")
+        dlg.setLayout(dlg_layout)
+        dlg.setModal(True)
+        dlg.exec()
 
     def _on_event(self, message: str):
         """
@@ -4155,277 +3815,332 @@ class RaceWindow(QMainWindow):
         Means: Driver 5 is P1, lap 3, push 0.72, 0.45s gap to car ahead,
         at position 19,234.5m and race time 185.4s.
         """
-        # Handle explicit GUI commands first
         if message == "start_animation":
-            try:
-                if self.track_widget:
-                    self.track_widget.start_animation()
-                    print("[ANIMATION] Animation timer started (main thread)")
-            except Exception as e:
-                print(f"ERROR starting animation in GUI thread: {e}")
+            self._handle_start_animation_event()
             return
 
-        # Handle telemetry update
         if message.startswith("telemetry_update|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 5:
-                    speed_kph = float(parts[1])
-                    push_intensity = float(parts[2])
-                    push_fatigue = float(parts[3])
-                    tire_condition = float(parts[4])
-
-                    # Update speed label
-                    self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
-
-                    # Update push gauge
-                    push_percent = int(push_intensity * 100)
-                    self.push_gauge.setValue(push_percent)
-
-                    # Update fatigue label with colour warning
-                    fatigue_percent = int(push_fatigue * 100)
-                    self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
-                    if push_fatigue > 0.7:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: bold;")
-                    elif push_fatigue > 0.4:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: normal;")
-                    else:
-                        self.fatigue_label.setStyleSheet(
-                            "font-size: 14px; color: #B9F2FF;")
-
-                    # Update tire label with colour coding
-                    tire_percent = int(tire_condition * 100)
-                    self.tire_label.setText(f"Tire: {tire_percent}%")
-                    if tire_condition < 0.3:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A; font-weight: bold;")
-                    elif tire_condition < 0.6:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #DD2D4A;")
-                    else:
-                        self.tire_label.setStyleSheet(
-                            "font-size: 14px; color: #B9F2FF;")
-
-            except Exception as e:
-                print(f"Error updating telemetry display: {e}")
-                _traceback.print_exc()
+            self._handle_telemetry_event(message)
             return
 
-        # Handle mark_dnf command emitted from simulation thread (run on GUI
-        # thread)
         if message.startswith("mark_dnf|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 2:
-                    did = int(parts[1])
-                    tw = getattr(self, 'track_widget', None)
-                    if tw is not None and hasattr(tw, 'mark_dnf'):
-                        try:
-                            print(f"[GUI EVENT] Received mark_dnf for driver {did}")
-                            tw.mark_dnf(did)
-                            # If the followed car crashed while in follow mode,
-                            # switch to full track view so user can watch the rest
-                            # of the race instead of a broken follow camera.
-                            try:
-                                if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
-                                    tw.set_camera_mode('full')
-                                    print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
-                            except Exception:
-                                pass
-
-                            # Update internal race state so the standings show DNF
-                            try:
-                                if not hasattr(self, '_race_state'):
-                                    self._race_state = {}
-                                entry = self._race_state.get(did)
-                                if entry is not None:
-                                    entry['dnf'] = True
-                                else:
-                                    # Create minimal entry so standings can display DNF
-                                    name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
-                                    self._race_state[did] = {
-                                        'name': name,
-                                        'position': None,
-                                        'lap': None,
-                                        'time': 0.0,
-                                        'distance': 0.0,
-                                        'gap_ahead': 0.0,
-                                        'dnf': True,
-                                        'total_progress': 0.0
-                                    }
-                                # Rebuild the standings table immediately
-                                try:
-                                    self._rebuild_standings_table()
-                                except Exception:
-                                    pass
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            self._handle_mark_dnf_event(message)
             return
 
-        # Handle player/team DNF UI request.
         if message.startswith("player_dnf|"):
-            try:
-                parts = message.split("|")
-                if len(parts) >= 2:
-                    did = int(parts[1])
-                    controlled_ids = set(getattr(self, 'player_team_driver_ids', []) or [])
-                    player_id = getattr(self, 'player_driver_id', None)
-                    if player_id is not None:
-                        controlled_ids.add(player_id)
-
-                    if did in controlled_ids:
-                        print(f"[GUI EVENT] Received player_dnf for controlled driver {did}")
-                        try:
-                            if hasattr(self, 'player_status_label'):
-                                if did == player_id:
-                                    self.player_status_label.setText("PRIMARY CAR RETIRED")
-                                else:
-                                    self.player_status_label.setText("TEAM CAR RETIRED")
-                                self.player_status_label.show()
-                        except Exception:
-                            pass
-
-                        try:
-                            if not hasattr(self, '_race_state'):
-                                self._race_state = {}
-                            entry = self._race_state.get(did)
-                            if entry is not None:
-                                entry['dnf'] = True
-                            else:
-                                name = next((d.name for d in self.drivers if getattr(d, 'id', None) == did), f"Driver {did}")
-                                self._race_state[did] = {
-                                    'name': name,
-                                    'position': None,
-                                    'lap': None,
-                                    'time': 0.0,
-                                    'distance': 0.0,
-                                    'gap_ahead': 0.0,
-                                    'dnf': True,
-                                    'total_progress': 0.0
-                                }
-
-                            active_controlled = False
-                            for cid in controlled_ids:
-                                c_entry = self._race_state.get(cid)
-                                if c_entry is None:
-                                    active_controlled = True
-                                    break
-                                if not bool(c_entry.get('dnf', False)):
-                                    active_controlled = True
-                                    break
-
-                            if not active_controlled:
-                                try:
-                                    if hasattr(self, 'player_status_label'):
-                                        self.player_status_label.setText("TEAM RETIRED")
-                                    if hasattr(self, 'pace_slider'):
-                                        self.pace_slider.setEnabled(False)
-                                    if hasattr(self, 'overtake_slider'):
-                                        self.overtake_slider.setEnabled(False)
-                                    if hasattr(self, 'camera_full_btn'):
-                                        self.camera_full_btn.setEnabled(False)
-                                    if hasattr(self, 'camera_follow_btn'):
-                                        self.camera_follow_btn.setEnabled(False)
-                                    if hasattr(self, 'push_gauge'):
-                                        self.push_gauge.setEnabled(False)
-                                except Exception:
-                                    pass
-
-                            try:
-                                self._rebuild_standings_table()
-                            except Exception:
-                                pass
-                        except Exception:
-                            pass
-            except Exception:
-                pass
+            self._handle_player_dnf_event(message)
             return
-        # Check if this is a standings update
+
         if message.startswith("standings_update|"):
+            self._handle_standings_update_event(message)
+            return
+
+        self.info_label.setText(message)
+
+    def _handle_start_animation_event(self) -> None:
+        """Start track animation when first simulation data is ready."""
+        try:
+            if self.track_widget:
+                self.track_widget.start_animation()
+                print("[ANIMATION] Animation timer started (main thread)")
+        except Exception as e:
+            print(f"ERROR starting animation in GUI thread: {e}")
+
+    def _set_fatigue_label_style(self, push_fatigue: float) -> None:
+        """Apply fatigue color/warning style by fatigue threshold."""
+        if push_fatigue > 0.7:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+        elif push_fatigue > 0.4:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: normal;")
+        else:
+            self.fatigue_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+
+    def _set_tire_label_style(self, tire_condition: float) -> None:
+        """Apply tire condition style by wear threshold."""
+        if tire_condition < 0.3:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+        elif tire_condition < 0.6:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A;")
+        else:
+            self.tire_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+
+    def _handle_telemetry_event(self, message: str) -> None:
+        """Update player telemetry panel from event payload."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 5:
+                return
+
+            speed_kph = float(parts[1])
+            push_intensity = float(parts[2])
+            push_fatigue = float(parts[3])
+            tire_condition = float(parts[4])
+
+            self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
+            self.push_gauge.setValue(int(push_intensity * 100))
+
+            fatigue_percent = int(push_fatigue * 100)
+            self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
+            self._set_fatigue_label_style(push_fatigue)
+
+            tire_percent = int(tire_condition * 100)
+            self.tire_label.setText(f"Tire: {tire_percent}%")
+            self._set_tire_label_style(tire_condition)
+        except Exception as e:
+            print(f"Error updating telemetry display: {e}")
+            _traceback.print_exc()
+
+    def _ensure_race_state(self) -> None:
+        """Ensure race-state container exists before state updates."""
+        if not hasattr(self, '_race_state'):
+            self._race_state = {}
+
+    def _driver_name_by_id(self, driver_id: int) -> str:
+        """Resolve driver display name from current race entrants."""
+        return next((d.name for d in self.drivers if getattr(d, 'id', None) == driver_id), f"Driver {driver_id}")
+
+    def _mark_driver_dnf_in_state(self, driver_id: int) -> None:
+        """Mark a driver as DNF in race state, creating minimal row when missing."""
+        self._ensure_race_state()
+        entry = self._race_state.get(driver_id)
+        if entry is not None:
+            entry['dnf'] = True
+            return
+
+        self._race_state[driver_id] = {
+            'name': self._driver_name_by_id(driver_id),
+            'position': None,
+            'lap': None,
+            'time': 0.0,
+            'distance': 0.0,
+            'gap_ahead': 0.0,
+            'dnf': True,
+            'total_progress': 0.0,
+        }
+
+    def _refresh_standings_safe(self) -> None:
+        """Rebuild standings while keeping event handlers fail-safe."""
+        try:
+            self._rebuild_standings_table()
+        except Exception:
+            pass
+
+    def _handle_mark_dnf_event(self, message: str) -> None:
+        """Process generic DNF command emitted from simulation thread."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 2:
+                return
+            did = int(parts[1])
+            tw = getattr(self, 'track_widget', None)
+            if tw is None or not hasattr(tw, 'mark_dnf'):
+                return
+
+            print(f"[GUI EVENT] Received mark_dnf for driver {did}")
+            tw.mark_dnf(did)
             try:
-                parts = message.split("|")
-                driver_id = int(parts[1])
-                race_position = int(parts[2])
-                # Normalize engine-reported laps-completed to 1-based
-                # current lap for display (current lap = laps_completed + 1)
-                lap = max(1, int(parts[3]) + 1)
-                push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
-                gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
-                position_m = float(parts[6]) if len(parts) > 6 else 0.0
-                race_time = float(parts[7]) if len(parts) > 7 else 0.0
-
-                if not hasattr(self, '_driver_push_intensity'):
-                    self._driver_push_intensity = {}
-
-                driver = next(
-                    (d for d in self.drivers if d.id == driver_id), None)
-                if driver:
-                    # Preserve any existing DNF flag - do not clear it here
-                    existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
-                    dnf_flag = existing.get('dnf', False)
-                    self._race_state[driver_id] = {
-                        'name': driver.name,
-                        'position': race_position,
-                        'lap': lap,
-                        'time': race_time,
-                        'distance': position_m,
-                        'gap_ahead': gap_ahead,
-                        'dnf': dnf_flag
-                    }
-                    self._driver_push_intensity[driver_id] = push_intensity
-
-                # Record time-series for position plotting (used in post-race
-                # position-over-time chart). Use a simple list of (time, pos).
-                try:
-                    if not hasattr(self, '_position_history'):
-                        self._position_history = {}
-                    hist = self._position_history.get(driver_id)
-                    if hist is None:
-                        hist = []
-                        self._position_history[driver_id] = hist
-                    # Append tuple of (total_distance_m, race_position)
-                    try:
-                        track_obj = getattr(self, 'track', None)
-                        track_length_m = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
-                    except Exception:
-                        track_length_m = 6350.0
-                    try:
-                        total_distance = (max(1, int(lap)) - 1) * track_length_m + position_m
-                    except Exception:
-                        # Fallback to race_time if distance unavailable
-                        total_distance = race_time
-                    hist.append((total_distance, race_position))
-                except Exception:
-                    pass
-
-                self._rebuild_standings_table()
-
+                if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
+                    tw.set_camera_mode('full')
+                    print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
             except Exception:
                 pass
-        else:
-            self.info_label.setText(message)
+
+            self._mark_driver_dnf_in_state(did)
+            self._refresh_standings_safe()
+        except Exception:
+            pass
+
+    def _controlled_driver_ids(self) -> set:
+        """Return the set of drivers controlled by player team/selection."""
+        controlled = set(getattr(self, 'player_team_driver_ids', []) or [])
+        player_id = getattr(self, 'player_driver_id', None)
+        if player_id is not None:
+            controlled.add(player_id)
+        return controlled
+
+    def _has_active_controlled_driver(self, controlled_ids: set) -> bool:
+        """Return True if at least one controlled driver is still not DNF."""
+        self._ensure_race_state()
+        for cid in controlled_ids:
+            c_entry = self._race_state.get(cid)
+            if c_entry is None:
+                return True
+            if not bool(c_entry.get('dnf', False)):
+                return True
+        return False
+
+    def _disable_player_controls(self) -> None:
+        """Disable player-control widgets once whole controlled team retires."""
+        try:
+            if hasattr(self, 'player_status_label'):
+                self.player_status_label.setText("TEAM RETIRED")
+            if hasattr(self, 'pace_slider'):
+                self.pace_slider.setEnabled(False)
+            if hasattr(self, 'overtake_slider'):
+                self.overtake_slider.setEnabled(False)
+            if hasattr(self, 'camera_full_btn'):
+                self.camera_full_btn.setEnabled(False)
+            if hasattr(self, 'camera_follow_btn'):
+                self.camera_follow_btn.setEnabled(False)
+            if hasattr(self, 'push_gauge'):
+                self.push_gauge.setEnabled(False)
+        except Exception:
+            pass
+
+    def _handle_player_dnf_event(self, message: str) -> None:
+        """Process DNF updates for controlled cars and reflect UI state."""
+        try:
+            parts = message.split("|")
+            if len(parts) < 2:
+                return
+            did = int(parts[1])
+            controlled_ids = self._controlled_driver_ids()
+            player_id = getattr(self, 'player_driver_id', None)
+            if did not in controlled_ids:
+                return
+
+            print(f"[GUI EVENT] Received player_dnf for controlled driver {did}")
+            try:
+                if hasattr(self, 'player_status_label'):
+                    self.player_status_label.setText("PRIMARY CAR RETIRED" if did == player_id else "TEAM CAR RETIRED")
+                    self.player_status_label.show()
+            except Exception:
+                pass
+
+            self._mark_driver_dnf_in_state(did)
+            if not self._has_active_controlled_driver(controlled_ids):
+                self._disable_player_controls()
+            self._refresh_standings_safe()
+        except Exception:
+            pass
+
+    def _update_race_state_from_standings(
+        self,
+        driver_id: int,
+        race_position: int,
+        lap: int,
+        race_time: float,
+        position_m: float,
+        gap_ahead: float,
+        push_intensity: float,
+    ) -> None:
+        """Merge standings payload into race state and push-intensity cache."""
+        if not hasattr(self, '_driver_push_intensity'):
+            self._driver_push_intensity = {}
+
+        driver = next((d for d in self.drivers if d.id == driver_id), None)
+        if not driver:
+            return
+
+        existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
+        dnf_flag = existing.get('dnf', False)
+        self._ensure_race_state()
+        self._race_state[driver_id] = {
+            'name': driver.name,
+            'position': race_position,
+            'lap': lap,
+            'time': race_time,
+            'distance': position_m,
+            'gap_ahead': gap_ahead,
+            'dnf': dnf_flag,
+        }
+        self._driver_push_intensity[driver_id] = push_intensity
+
+    def _record_position_history(self, driver_id: int, lap: int, position_m: float, race_position: int, race_time: float) -> None:
+        """Append race position history for post-race plotting."""
+        try:
+            if not hasattr(self, '_position_history'):
+                self._position_history = {}
+            hist = self._position_history.get(driver_id)
+            if hist is None:
+                hist = []
+                self._position_history[driver_id] = hist
+
+            try:
+                track_obj = getattr(self, 'track', None)
+                track_length_m = (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+            except Exception:
+                track_length_m = 6350.0
+
+            try:
+                total_distance = (max(1, int(lap)) - 1) * track_length_m + position_m
+            except Exception:
+                total_distance = race_time
+            hist.append((total_distance, race_position))
+        except Exception:
+            pass
+
+    def _handle_standings_update_event(self, message: str) -> None:
+        """Process live standings payload and refresh table."""
+        try:
+            parts = message.split("|")
+            driver_id = int(parts[1])
+            race_position = int(parts[2])
+            lap = max(1, int(parts[3]) + 1)
+            push_intensity = float(parts[4]) if len(parts) > 4 else 0.7
+            gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
+            position_m = float(parts[6]) if len(parts) > 6 else 0.0
+            race_time = float(parts[7]) if len(parts) > 7 else 0.0
+
+            self._update_race_state_from_standings(
+                driver_id,
+                race_position,
+                lap,
+                race_time,
+                position_m,
+                gap_ahead,
+                push_intensity,
+            )
+            self._record_position_history(driver_id, lap, position_m, race_position, race_time)
+            self._rebuild_standings_table()
+        except Exception:
+            pass
 
     def _rebuild_standings_table(self):
         """Rebuild the standings table with live gaps and proper lapped classification."""
+        self._rebuild_standings_table_impl()
+
+    def _rebuild_standings_table_impl(self) -> None:
+        """Implementation body extracted to keep entrypoint complexity low."""
         if not hasattr(self, '_race_state'):
             return
 
+        track_length = self._current_track_length_m()
+        standings_list = self._build_standings_entries(track_length)
+        if not standings_list:
+            return
+
+        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
+
+        finished_drivers, lapped_drivers, dnf_drivers, leader_lap = self._classify_standings_entries(standings_list)
+        all_classified = finished_drivers + lapped_drivers + dnf_drivers
+
+        self._ensure_standings_row_count(len(all_classified))
+        cumulative_gap = 0.0
+        for row, entry in enumerate(all_classified):
+            cumulative_gap = self._render_standings_row(
+                row,
+                entry,
+                cumulative_gap,
+                leader_lap,
+                lapped_drivers,
+                dnf_drivers,
+            )
+
+        self._maybe_log_standings_debug(finished_drivers, lapped_drivers, leader_lap)
+        self._resize_standings_height()
+
+    def _current_track_length_m(self) -> float:
+        """Return current track length in meters with fallback."""
         track_obj = getattr(self, 'track', None)
-        track_length = (track_obj.length_km *
-                        1000.0) if track_obj is not None else 6350.0
-        standings_list = []
+        return (track_obj.length_km * 1000.0) if track_obj is not None else 6350.0
+
+    def _build_standings_entries(self, track_length: float) -> List[Dict[str, Any]]:
+        """Build standings list enriched with total progress and race metadata."""
+        standings_list: List[Dict[str, Any]] = []
         for did, data in self._race_state.items():
-            # Use (lap - 1) so that lap=1 (first racing lap) corresponds to
-            # progress starting at 0
             lap_for_progress = max(0, int(data.get('lap', 1)) - 1)
-            total_progress = lap_for_progress * track_length + \
-                (data.get('distance', 0.0) % track_length)
+            total_progress = lap_for_progress * track_length + (data.get('distance', 0.0) % track_length)
             standings_list.append({
                 'driver_id': did,
                 'name': data['name'],
@@ -4435,133 +4150,139 @@ class RaceWindow(QMainWindow):
                 'distance': data.get('distance', 0.0),
                 'gap_ahead': data.get('gap_ahead', 0.0),
                 'dnf': data.get('dnf', False),
-                'total_progress': total_progress
+                'total_progress': total_progress,
             })
+        return standings_list
 
-        if not standings_list:
-            return
-
-        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
-
-        leader = standings_list[0]
-        leader_lap = leader['lap']
-        cumulative_gap = 0.0
-        
-        # CLASSIFICATION: Separate finished drivers from lapped drivers
-        finished_drivers = []
-        lapped_drivers = []
-        dnf_drivers = []
-        
+    def _classify_standings_entries(self, standings_list: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], int]:
+        """Split standings into finished, lapped, and DNF buckets."""
+        leader_lap = int(standings_list[0]['lap']) if standings_list else 0
+        finished_drivers: List[Dict[str, Any]] = []
+        lapped_drivers: List[Dict[str, Any]] = []
+        dnf_drivers: List[Dict[str, Any]] = []
         for entry in standings_list:
             if entry['dnf']:
                 dnf_drivers.append(entry)
-            elif entry['lap'] < leader_lap:
-                # Lapped driver (on fewer laps than leader)
+                continue
+            if entry['lap'] < leader_lap:
                 lapped_drivers.append(entry)
-            else:
-                # Finished driver (on same or more laps as leader)
-                finished_drivers.append(entry)
-        
-        # Recalculate positions: finished drivers get P1, P2, P3...
-        # Lapped drivers go after all finishers with "+X laps" notation
-        all_classified = finished_drivers + lapped_drivers + dnf_drivers
+                continue
+            finished_drivers.append(entry)
+        return finished_drivers, lapped_drivers, dnf_drivers, leader_lap
 
-        # Resize table row count to match data (only when changed)
-        row_count = len(all_classified)
-        if row_count != getattr(self, '_last_standings_row_count', 0):
-            self.standings_table.setRowCount(row_count)
-            self._last_standings_row_count = row_count
-        for row, entry in enumerate(all_classified):
-            colour_item = QTableWidgetItem()
-            if entry['driver_id'] in self.driver_colours:
-                colour = self.driver_colours[entry['driver_id']]
-                colour_item.setBackground(colour)
-                colour_item.setText("  ")
-            self._set_standings_item(row, 0, colour_item, entry['driver_id'])
+    def _ensure_standings_row_count(self, row_count: int) -> None:
+        """Resize standings table rows only when row count changes."""
+        if row_count == getattr(self, '_last_standings_row_count', 0):
+            return
+        self.standings_table.setRowCount(row_count)
+        self._last_standings_row_count = row_count
 
-            driver_name = entry['name']
-            push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
-            if push_int < 0.25:
-                symbol = "(-)"
-            elif push_int < 0.75:
-                symbol = "(=)"
-            else:
-                symbol = "(+)"
-            self._set_standings_item(
-                row, 1, QTableWidgetItem(f"{symbol} {driver_name}"), entry['driver_id'])
-            # Highlight the player-controlled driver row/cell
-            name_item = self.standings_table.item(row, 1)
-            if name_item is not None:
-                if entry['driver_id'] == getattr(
-                        self, 'player_driver_id', None):
-                    name_item.setBackground(
-                        QColor(255, 215, 0))  # Gold for player
-                    name_item.setForeground(
-                        QColor(0, 0, 0))  # Dark text on gold
-                else:
-                    name_item.setBackground(QColor(37, 38, 39))
+    def _render_standings_row(
+        self,
+        row: int,
+        entry: Dict[str, Any],
+        cumulative_gap: float,
+        leader_lap: int,
+        lapped_drivers: List[Dict[str, Any]],
+        dnf_drivers: List[Dict[str, Any]],
+    ) -> float:
+        """Render one row and return updated cumulative time gap."""
+        driver_id = entry['driver_id']
+        self._set_standings_item(row, 0, self._build_colour_item(driver_id), driver_id)
+        self._set_standings_item(row, 1, self._build_driver_name_item(entry), driver_id)
+        self._style_standings_name_cell(row, driver_id)
+        self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), driver_id)
+        gap_text, new_cumulative = self._compute_gap_text(
+            row,
+            entry,
+            cumulative_gap,
+            leader_lap,
+            lapped_drivers,
+            dnf_drivers,
+        )
+        self._set_standings_item(row, 3, QTableWidgetItem(gap_text), driver_id)
+        return new_cumulative
 
-            self._set_standings_item(row, 2, QTableWidgetItem(str(entry['lap'])), entry['driver_id'])
+    def _build_colour_item(self, driver_id: int) -> QTableWidgetItem:
+        """Create leading colour-cell item for a standings row."""
+        colour_item = QTableWidgetItem()
+        if driver_id in self.driver_colours:
+            colour_item.setBackground(self.driver_colours[driver_id])
+            colour_item.setText("  ")
+        return colour_item
 
-            # Column 3: Gap or Classification
-            if entry.get('dnf', False):
-                gap_text = "DNF"
-            elif entry in dnf_drivers:
-                gap_text = "DNF"
-            elif row == 0:
-                gap_text = "LEADER"
-            elif entry in lapped_drivers:
-                # Lapped driver - show lap deficit
-                lap_deficit = leader_lap - entry['lap']
-                gap_text = f"+{lap_deficit}L"
-            else:
-                # Finished driver - show time gap
-                raw_gap = entry.get('gap_ahead', 0.0)
-                if raw_gap >= 1000.0:
-                    # Gap encoded as 999+N means N laps (from engine)
-                    laps_behind = int(raw_gap - 999.0)
-                    if laps_behind > 0:
-                        gap_text = f"+{laps_behind}L"
-                    else:
-                        cumulative_gap += max(raw_gap - 999.0, 0.0)
-                        gap_text = f"+{cumulative_gap:.1f}s" if cumulative_gap > 0.1 else "-"
-                else:
-                    # Normal time gap accumulation
-                    cumulative_gap += max(raw_gap, 0.0)
-                    if cumulative_gap < 0.1:
-                        gap_text = "-"
-                    else:
-                        gap_text = f"+{cumulative_gap:.1f}s"
+    def _build_driver_name_item(self, entry: Dict[str, Any]) -> QTableWidgetItem:
+        """Build display name with aggression symbol."""
+        push_int = self._driver_push_intensity.get(entry['driver_id'], 0.7)
+        if push_int < 0.25:
+            symbol = "(-)"
+        elif push_int < 0.75:
+            symbol = "(=)"
+        else:
+            symbol = "(+)"
+        return QTableWidgetItem(f"{symbol} {entry['name']}")
 
-            self._set_standings_item(row, 3, QTableWidgetItem(gap_text), entry['driver_id'])
+    def _compute_gap_text(
+        self,
+        row: int,
+        entry: Dict[str, Any],
+        cumulative_gap: float,
+        leader_lap: int,
+        lapped_drivers: List[Dict[str, Any]],
+        dnf_drivers: List[Dict[str, Any]],
+    ) -> Tuple[str, float]:
+        """Return formatted gap text and updated cumulative gap value."""
+        if entry.get('dnf', False) or entry in dnf_drivers:
+            return "DNF", cumulative_gap
+        if row == 0:
+            return "LEADER", cumulative_gap
+        if entry in lapped_drivers:
+            lap_deficit = leader_lap - entry['lap']
+            return f"+{lap_deficit}L", cumulative_gap
 
-        # Debug log every few seconds
+        raw_gap = entry.get('gap_ahead', 0.0)
+        if raw_gap >= 1000.0:
+            laps_behind = int(raw_gap - 999.0)
+            if laps_behind > 0:
+                return f"+{laps_behind}L", cumulative_gap
+            cumulative_gap += max(raw_gap - 999.0, 0.0)
+        else:
+            cumulative_gap += max(raw_gap, 0.0)
+
+        if cumulative_gap < 0.1:
+            return "-", cumulative_gap
+        return f"+{cumulative_gap:.1f}s", cumulative_gap
+
+    def _maybe_log_standings_debug(
+        self,
+        finished_drivers: List[Dict[str, Any]],
+        lapped_drivers: List[Dict[str, Any]],
+        leader_lap: int,
+    ) -> None:
+        """Print compact periodic standings debug output."""
         if not hasattr(self, '_last_standings_log'):
-            self._last_standings_log = 0
-        import time
-        if time.time() - self._last_standings_log > 3.0:
-            self._last_standings_log = time.time()
-            print("\n  [STANDINGS] Current order (CORRECTED CLASSIFICATION):")
-            # Show first 5 finished drivers
-            for i, entry in enumerate(finished_drivers[:5]):
-                print(
-                    f"    P{
-                        i +
-                        1}: {
-                        entry['name']} (L{
-                        entry['lap']}, gap={
-                        entry.get(
-                            'gap_ahead',
-                            0.0):.1f}s)")
-            # Show lapped drivers separately
-            if lapped_drivers:
-                print("    --- LAPPED ---")
-                for entry in lapped_drivers[:3]:
-                    lap_deficit = leader_lap - entry['lap']
-                    print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
+            self._last_standings_log = 0.0
+        now = time.time()
+        if now - self._last_standings_log <= 3.0:
+            return
+        self._last_standings_log = now
+        print("\n  [STANDINGS] Current order (CORRECTED CLASSIFICATION):")
+        self._log_finished_drivers_debug(finished_drivers)
+        self._log_lapped_drivers_debug(lapped_drivers, leader_lap)
 
-        # Adjust table height to fit all rows (no scrolling)
-        self._resize_standings_height()
+    def _log_finished_drivers_debug(self, finished_drivers: List[Dict[str, Any]]) -> None:
+        """Log top finished drivers with live gap metadata."""
+        for i, entry in enumerate(finished_drivers[:5]):
+            print(f"    P{i + 1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
+
+    def _log_lapped_drivers_debug(self, lapped_drivers: List[Dict[str, Any]], leader_lap: int) -> None:
+        """Log top lapped drivers with lap deficit markers."""
+        if not lapped_drivers:
+            return
+        print("    --- LAPPED ---")
+        for entry in lapped_drivers[:3]:
+            lap_deficit = leader_lap - entry['lap']
+            print(f"    +{lap_deficit}L: {entry['name']} (L{entry['lap']})")
 
 
     def _set_standings_item(self, row: int, col: int, item: QTableWidgetItem, driver_id: Optional[int] = None):
@@ -4572,29 +4293,9 @@ class RaceWindow(QMainWindow):
         instead of allowing other code to overwrite the cell.
         """
         try:
-            if driver_id is not None and hasattr(self, '_race_state'):
-                entry = self._race_state.get(driver_id, {})
-                if entry.get('dnf', False):
-                    # Gap column (3) should explicitly show 'DNF', pos/lap -> '-'
-                    if col == 3:
-                        self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
-                    elif col in (0, 2):
-                        self.standings_table.setItem(row, col, QTableWidgetItem("-"))
-                    else:
-                        # For other columns (e.g. name) just set the item but grey it
-                        self.standings_table.setItem(row, col, item)
-
-                    # Grey out name cell for clarity
-                    try:
-                        name_cell = self.standings_table.item(row, 1)
-                        if name_cell is not None:
-                            name_cell.setBackground(QColor(80, 80, 80))
-                            name_cell.setForeground(QColor(200, 200, 200))
-                    except Exception:
-                        pass
-                    return
-
-            # Default behaviour: set the supplied item
+            if self._is_dnf_driver(driver_id):
+                self._set_dnf_standings_item(row, col, item)
+                return
             self.standings_table.setItem(row, col, item)
         except Exception:
             try:
@@ -4602,6 +4303,34 @@ class RaceWindow(QMainWindow):
                 self.standings_table.setItem(row, col, item)
             except Exception:
                 pass
+
+    def _is_dnf_driver(self, driver_id: Optional[int]) -> bool:
+        """Return True when the target row belongs to a DNF driver."""
+        if driver_id is None or not hasattr(self, '_race_state'):
+            return False
+        entry = self._race_state.get(driver_id, {})
+        return bool(entry.get('dnf', False))
+
+    def _set_dnf_standings_item(self, row: int, col: int, item: QTableWidgetItem) -> None:
+        """Write DNF-safe placeholders and muted styling."""
+        if col == 3:
+            self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
+        elif col in (0, 2):
+            self.standings_table.setItem(row, col, QTableWidgetItem("-"))
+        else:
+            self.standings_table.setItem(row, col, item)
+        self._apply_dnf_name_cell_style(row)
+
+    def _apply_dnf_name_cell_style(self, row: int) -> None:
+        """Apply greyed-out style to DNF name cell."""
+        try:
+            name_cell = self.standings_table.item(row, 1)
+            if name_cell is None:
+                return
+            name_cell.setBackground(QColor(80, 80, 80))
+            name_cell.setForeground(QColor(200, 200, 200))
+        except Exception:
+            pass
 
     def _resize_standings_height(self):
         """Resize standings table to its contents to avoid scrollbars."""
@@ -4642,8 +4371,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             colour = f"#{r:02X}{g:02X}{b:02X}"
-            self.pace_value_label.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+            self.pace_value_label.setStyleSheet(CONTROL_LABEL_STYLE)
             # Update slider styling: sub-page shows selected colour
             self.pace_slider.setStyleSheet(
                 "QSlider::groove:horizontal { height: 8px; background: #2E2E2E; border-radius: 4px; }"
@@ -4679,8 +4407,7 @@ class RaceWindow(QMainWindow):
             g = int(low[1] + (high[1] - low[1]) * t)
             b = int(low[2] + (high[2] - low[2]) * t)
             colour = f"#{r:02X}{g:02X}{b:02X}"
-            self.overtake_value_label.setStyleSheet(
-                "font-size: 16px; font-weight: bold; color: #FFFFFF;")
+            self.overtake_value_label.setStyleSheet(CONTROL_LABEL_STYLE)
             style = (
                 "QSlider::groove:horizontal { "
                 "height: 8px; background: #2E2E2E; "
@@ -4727,75 +4454,78 @@ class RaceWindow(QMainWindow):
         else:
             self.player_driver_id = None
 
-        # Ensure the player driver is present in the drivers list used for
-        # creating cars and the standings. `set_player_driver` may be called
-        # after the race window has already loaded its data, so we need to
-        # reconcile the lists and rebuild the visible cars/standings when
-        # necessary.
-        try:
-            existing = getattr(self, 'drivers', None)
-            if driver and existing is not None:
-                present = any(getattr(d, 'id', None) == driver.id for d in existing)
-                if not present:
-                    # Keep total count constant: if we've already selected the
-                    # maximum (e.g. 16), replace the last entry; otherwise append.
-                    if len(existing) >= 16:
-                        existing[-1] = driver
-                    else:
-                        existing.append(driver)
-
-                # If cars/standings were already created, rebuild them so the
-                # player shows up on the grid and in the table.
-                if getattr(self, 'track_widget', None) is not None:
-                    # Recreate cars using the same logic as in _load_data
-                    cars = []
-                    for i, drv in enumerate(self.drivers):
-                        row = i // 2
-                        grid_spacing = 15.0
-                        start_position = row * grid_spacing
-                        drv_id_raw = getattr(drv, 'id', 0)
-                        try:
-                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
-                        except Exception:
-                            drv_id = 0
-                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
-                        cars.append(Car(
-                            driver_id=drv_id,
-                            driver_name=getattr(drv, 'name', ''),
-                            s=start_position,
-                            colour=car_colour,
-                            total_time=0.0,
-                            avg_lap_time=60.0,
-                            last_lap=0
-                        ))
-                    # Push updated cars to the track widget
-                    try:
-                        tw = getattr(self, 'track_widget', None)
-                        if tw is not None:
-                            tw.set_cars(cars)
-                            print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
-                        else:
-                            print("[RACE WINDOW] Track widget not available to set cars")
-                    except Exception:
-                        print("[RACE WINDOW] Failed to set rebuilt cars")
-
-                    # Update standings table names to match new drivers list
-                    try:
-                        self.standings_table.setRowCount(len(self.drivers))
-                        for i, drv in enumerate(self.drivers):
-                            self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
-                        print("[RACE WINDOW] Standings updated to include player driver")
-                    except Exception:
-                        print("[RACE WINDOW] Failed to update standings table")
-        except Exception:
-            # Non-fatal: log and continue
-            print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
+        # Keep entrant list and visuals consistent when player selection changes.
+        self._ensure_player_driver_in_grid(driver)
 
         # Refresh team-controlled driver ids after driver assignment.
         try:
             self._rebuild_player_team_driver_ids()
         except Exception:
             pass
+
+    def _build_cars_from_drivers(self) -> List[Car]:
+        """Create grid cars from current entrant list using stable grid spacing."""
+        cars: List[Car] = []
+        for i, drv in enumerate(getattr(self, 'drivers', []) or []):
+            row = i // 2
+            grid_spacing = 15.0
+            start_position = row * grid_spacing
+            drv_id_raw = getattr(drv, 'id', 0)
+            try:
+                drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
+            except Exception:
+                drv_id = 0
+            car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
+            cars.append(Car(
+                driver_id=drv_id,
+                driver_name=getattr(drv, 'name', ''),
+                s=start_position,
+                colour=car_colour,
+                total_time=0.0,
+                avg_lap_time=60.0,
+                last_lap=0
+            ))
+        return cars
+
+    def _refresh_standings_names(self) -> None:
+        """Refresh standings names to match current entrant order."""
+        self.standings_table.setRowCount(len(getattr(self, 'drivers', []) or []))
+        for i, drv in enumerate(self.drivers):
+            self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
+
+    def _refresh_grid_visuals(self) -> bool:
+        """Rebuild cars + table rows after entrant list changes.
+
+        Returns True when cars are pushed to the track widget.
+        """
+        tw = getattr(self, 'track_widget', None)
+        if tw is None:
+            return False
+
+        cars = self._build_cars_from_drivers()
+        tw.set_cars(cars)
+        self._refresh_standings_names()
+        return True
+
+    def _ensure_player_driver_in_grid(self, driver) -> None:
+        """Ensure selected player driver is present in entrants, then refresh visuals."""
+        try:
+            existing = getattr(self, 'drivers', None)
+            if not driver or existing is None:
+                return
+
+            present = any(getattr(d, 'id', None) == driver.id for d in existing)
+            if not present:
+                if len(existing) >= RACE_GRID_SIZE:
+                    existing[-1] = driver
+                else:
+                    existing.append(driver)
+
+            if self._refresh_grid_visuals():
+                print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+                print("[RACE WINDOW] Standings updated to include player driver")
+        except Exception:
+            print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
 
     def set_player_team(self, team):
         """Set the player team so strategy controls apply to all team cars."""
@@ -4811,54 +4541,37 @@ class RaceWindow(QMainWindow):
             self.player_team_id = None
 
         # Ensure all cars from the selected team are present on the race grid.
-        try:
-            if self.player_team_id is not None and self.db is not None and getattr(self, 'drivers', None) is not None:
-                team_drivers = self.db.get_drivers_by_team(self.player_team_id)
-                present_ids = {int(getattr(d, 'id')) for d in self.drivers if getattr(d, 'id', None) is not None}
-                changed = False
-                replace_idx = max(0, len(self.drivers) - 1)
-                for team_driver in team_drivers:
-                    td_id = getattr(team_driver, 'id', None)
-                    if td_id is None or int(td_id) in present_ids:
-                        continue
-                    if len(self.drivers) < RACE_GRID_SIZE:
-                        self.drivers.append(team_driver)
-                    else:
-                        self.drivers[replace_idx] = team_driver
-                        replace_idx = max(0, replace_idx - 1)
-                    present_ids.add(int(td_id))
-                    changed = True
-
-                if changed and getattr(self, 'track_widget', None) is not None:
-                    cars = []
-                    for i, drv in enumerate(self.drivers):
-                        row = i // 2
-                        grid_spacing = 15.0
-                        start_position = row * grid_spacing
-                        drv_id_raw = getattr(drv, 'id', 0)
-                        try:
-                            drv_id = int(drv_id_raw) if drv_id_raw is not None else 0
-                        except Exception:
-                            drv_id = 0
-                        car_colour = self.driver_colours.get(drv_id, QColor(200, 200, 200))
-                        cars.append(Car(
-                            driver_id=drv_id,
-                            driver_name=getattr(drv, 'name', ''),
-                            s=start_position,
-                            colour=car_colour,
-                            total_time=0.0,
-                            avg_lap_time=60.0,
-                            last_lap=0
-                        ))
-                    self.track_widget.set_cars(cars)
-                    self.standings_table.setRowCount(len(self.drivers))
-                    for i, drv in enumerate(self.drivers):
-                        self.standings_table.setItem(i, 1, QTableWidgetItem(getattr(drv, 'name', '')))
-                    print("[RACE WINDOW] Rebuilt grid to include all team cars")
-        except Exception:
-            print("[RACE WINDOW] Warning: couldn't ensure team cars in driver list")
+        self._ensure_team_drivers_in_grid()
 
         self._rebuild_player_team_driver_ids()
+
+    def _ensure_team_drivers_in_grid(self) -> None:
+        """Ensure all contracted drivers for player team are present in entrants."""
+        try:
+            if self.player_team_id is None or self.db is None or getattr(self, 'drivers', None) is None:
+                return
+
+            team_drivers = self.db.get_drivers_by_team(self.player_team_id)
+            present_ids = {int(getattr(d, 'id')) for d in self.drivers if getattr(d, 'id', None) is not None}
+            changed = False
+            replace_idx = max(0, len(self.drivers) - 1)
+
+            for team_driver in team_drivers:
+                td_id = getattr(team_driver, 'id', None)
+                if td_id is None or int(td_id) in present_ids:
+                    continue
+                if len(self.drivers) < RACE_GRID_SIZE:
+                    self.drivers.append(team_driver)
+                else:
+                    self.drivers[replace_idx] = team_driver
+                    replace_idx = max(0, replace_idx - 1)
+                present_ids.add(int(td_id))
+                changed = True
+
+            if changed and self._refresh_grid_visuals():
+                print("[RACE WINDOW] Rebuilt grid to include all team cars")
+        except Exception:
+            print("[RACE WINDOW] Warning: couldn't ensure team cars in driver list")
 
     def _rebuild_player_team_driver_ids(self):
         """Recompute controlled team-car IDs from current entrants."""
@@ -4886,21 +4599,17 @@ class RaceWindow(QMainWindow):
     def _set_camera_mode(self, mode: str):
         """Set camera mode: 'full' or 'follow'."""
         self.camera_mode = mode
-        if self.track_widget:
-            # Determine which car to follow
-            follow_id = None
-            if mode == 'follow':
-                # Prefer selected player driver, fallback to any controlled team car
-                if hasattr(self, 'player_driver_id') and self.player_driver_id is not None:
-                    follow_id = self.player_driver_id
-                elif hasattr(self, 'player_team_driver_ids') and self.player_team_driver_ids:
-                    follow_id = self.player_team_driver_ids[0]
-                else:
-                    print("[CAMERA] No player driver set - cannot follow")
-                    self.camera_mode = 'full'
-                    follow_id = None
-            
-            self.track_widget.set_camera_mode(mode, follow_id)
+        follow_id = None
+        if mode == 'follow':
+            follow_id = self._resolve_follow_driver_id()
+            if follow_id is None:
+                print("[CAMERA] No player driver set - cannot follow")
+                self.camera_mode = 'full'
+                mode = 'full'
+
+        tw = getattr(self, 'track_widget', None)
+        if tw is not None:
+            tw.set_camera_mode(mode, follow_id)
 
         # Update button styles
         if mode == 'full':
@@ -4914,6 +4623,17 @@ class RaceWindow(QMainWindow):
 
         print(f"[CAMERA] Switched to {mode} mode (follow_id: {follow_id})")
 
+    def _resolve_follow_driver_id(self) -> Optional[int]:
+        """Resolve which driver to follow in camera mode.
+
+        Priority: explicit player driver, then any controlled team car.
+        """
+        if hasattr(self, 'player_driver_id') and self.player_driver_id is not None:
+            return self.player_driver_id
+        if hasattr(self, 'player_team_driver_ids') and self.player_team_driver_ids:
+            return self.player_team_driver_ids[0]
+        return None
+
     def set_display_mode(self, mode: str):
         """Set display mode: 'windowed', 'borderless', or 'fullscreen'."""
         self.display_mode = mode
@@ -4921,57 +4641,63 @@ class RaceWindow(QMainWindow):
         available = screen_obj.availableGeometry() if screen_obj else None
 
         if mode == "windowed":
-            # Ensure frameless disabled for normal windowed mode
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
-            self.showNormal()
-            self.setGeometry(100, 100, 1600, 900)
-            print("[INFO] Race window: windowed mode (1600x900)")
-
+            self._apply_windowed_mode()
         elif mode == "borderless":
-            # Enable frameless for borderless-windowed fullscreen
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-            if available is not None:
-                try:
-                    self.setMinimumSize(0, 0)
-                except Exception:
-                    pass
-                try:
-                    for w in self.findChildren(QWidget):
-                        try:
-                            w.setMinimumSize(0, 0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                try:
-                    self.setMaximumSize(available.width(), available.height())
-                except Exception:
-                    pass
-                self.setGeometry(available)
-            self.showMaximized()
-            print("[INFO] Race window: borderless windowed fullscreen")
-
+            self._apply_borderless_mode(available)
         elif mode == "fullscreen":
-            # Use native fullscreen; ensure frameless is disabled so system handles fullscreen
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
-            # Clamp maximum size to available geometry before fullscreen request
-            if available is not None:
-                try:
-                    for w in self.findChildren(QWidget):
-                        try:
-                            w.setMinimumSize(0, 0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                try:
-                    self.setMaximumSize(available.width(), available.height())
-                except Exception:
-                    pass
-            self.showFullScreen()
-            print("[INFO] Race window: exclusive fullscreen")
+            self._apply_fullscreen_mode(available)
 
         self.show()
+
+    def _reset_child_min_sizes(self) -> None:
+        """Clear size constraints so window mode switches don't fight widget minimums."""
+        try:
+            for w in self.findChildren(QWidget):
+                try:
+                    w.setMinimumSize(0, 0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _apply_max_size_from_rect(self, rect) -> None:
+        """Clamp window max size to the provided screen rectangle."""
+        if rect is None:
+            return
+        try:
+            self.setMaximumSize(rect.width(), rect.height())
+        except Exception:
+            pass
+
+    def _apply_windowed_mode(self) -> None:
+        """Switch to standard resizable windowed mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
+        self.showNormal()
+        self.setGeometry(100, 100, 1600, 900)
+        print("[INFO] Race window: windowed mode (1600x900)")
+
+    def _apply_borderless_mode(self, available) -> None:
+        """Switch to borderless-windowed fullscreen mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        if available is not None:
+            try:
+                self.setMinimumSize(0, 0)
+            except Exception:
+                pass
+            self._reset_child_min_sizes()
+            self._apply_max_size_from_rect(available)
+            self.setGeometry(available)
+        self.showMaximized()
+        print("[INFO] Race window: borderless windowed fullscreen")
+
+    def _apply_fullscreen_mode(self, available) -> None:
+        """Switch to native exclusive fullscreen mode."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
+        if available is not None:
+            self._reset_child_min_sizes()
+            self._apply_max_size_from_rect(available)
+        self.showFullScreen()
+        print("[INFO] Race window: exclusive fullscreen")
 
     def keyPressEvent(self, a0: Optional[QKeyEvent]):
         """Handle keyboard events."""
