@@ -29,9 +29,9 @@ def test_get_surface_for_unknown_discipline_defaults_to_asphalt():
 
 @pytest.mark.unit
 def test_get_grip_level_maps_known_and_unknown_surfaces():
-    assert TrackSurfaceService.get_grip_level("asphalt") == 1.0
-    assert TrackSurfaceService.get_grip_level("gravel") == 0.6
-    assert TrackSurfaceService.get_grip_level("does_not_exist") == 0.9
+    assert TrackSurfaceService.get_grip_level("asphalt") == pytest.approx(1.0)
+    assert TrackSurfaceService.get_grip_level("gravel") == pytest.approx(0.6)
+    assert TrackSurfaceService.get_grip_level("does_not_exist") == pytest.approx(0.9)
 
 
 @pytest.mark.unit
