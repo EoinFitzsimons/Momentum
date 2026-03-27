@@ -938,7 +938,7 @@ class TrackWidget(QWidget):
             car.s = position_m
             return
 
-        normalized_pos = position_m % self.track_length
+        normalized_pos = self._normalize_track_position(position_m)
         if not hasattr(car, 'prev_s') or car.prev_s is None:
             car.prev_s = normalized_pos
 
@@ -953,12 +953,24 @@ class TrackWidget(QWidget):
 
         # Keep heading smooth when crossing lap boundary by applying shortest wrap delta.
         prev_s_val = car.prev_s if car.prev_s is not None else normalized_pos
-        movement = normalized_pos - prev_s_val
+        car.movement_direction = self._compute_track_movement_delta(prev_s_val, normalized_pos)
+
+    def _normalize_track_position(self, position_m: float) -> float:
+        """Normalize incoming engine position for current track type."""
+        if self.is_drag_track:
+            return max(0.0, min(float(position_m), float(self.track_length)))
+        return position_m % self.track_length
+
+    def _compute_track_movement_delta(self, prev_s: float, current_s: float) -> float:
+        """Compute movement delta, wrapping only for looped circuits."""
+        movement = current_s - prev_s
+        if self.is_drag_track:
+            return movement
         if self.track_length and movement < -self.track_length / 2:
             movement += self.track_length
         elif self.track_length and movement > self.track_length / 2:
             movement -= self.track_length
-        car.movement_direction = movement
+        return movement
 
     def _update_realtime_car_state(self, car: Car, lap: int, velocity_mps: float) -> None:
         """Update non-positional realtime fields from the race engine."""
@@ -994,7 +1006,7 @@ class TrackWidget(QWidget):
             t = self._compute_interpolation_factor(car, now)
             prev = car.prev_s if car.prev_s is not None else car.s
             target = car.target_s if car.target_s is not None else car.s
-            if self.track_length and self.track_length > 0:
+            if self.track_length and self.track_length > 0 and not self.is_drag_track:
                 return self._interpolate_circular(prev, target, t)
             return prev + (target - prev) * t
         except Exception:
@@ -2033,25 +2045,38 @@ class TrackWidget(QWidget):
         painter.drawPath(centerline)
 
     def _draw_start_finish_line(self, painter, track_width: int) -> None:
-        """Draw checkered start/finish marker near s=0."""
-        for pt in self.track_points:
-            if pt.s >= 5:
-                continue
-            painter.save()
-            painter.translate(pt.x + 200, pt.y)
-            painter.rotate(math.degrees(pt.theta) + 90)
-            painter.setPen(Qt.PenStyle.NoPen)
-            square_size = 3.5
-            for col in range(8):
-                painter.setBrush(QBrush(QColor(255, 255, 255) if col % 2 == 0 else QColor(0, 0, 0)))
-                painter.drawRect(
-                    int(col * square_size - track_width),
-                    int(-square_size),
-                    int(square_size),
-                    int(square_size * 2),
-                )
-            painter.restore()
-            break
+        """Draw checkered marker: start/finish for loops, finish-only for drag strips."""
+        if not self.track_points:
+            return
+
+        if self.is_drag_track:
+            target_s = max(0.0, float(self.track_length) - 1.0)
+            pt = self._find_track_point_near_s(target_s, tolerance=4)
+            if pt is None:
+                pt = self.track_points[-1]
+        else:
+            pt = None
+            for candidate in self.track_points:
+                if candidate.s < 5:
+                    pt = candidate
+                    break
+            if pt is None:
+                pt = self.track_points[0]
+
+        painter.save()
+        painter.translate(pt.x, pt.y)
+        painter.rotate(math.degrees(pt.theta) + 90)
+        painter.setPen(Qt.PenStyle.NoPen)
+        square_size = 3.5
+        for col in range(8):
+            painter.setBrush(QBrush(QColor(255, 255, 255) if col % 2 == 0 else QColor(0, 0, 0)))
+            painter.drawRect(
+                int(col * square_size - track_width),
+                int(-square_size),
+                int(square_size),
+                int(square_size * 2),
+            )
+        painter.restore()
 
     def _draw_cars(self, painter):
         """Draw cars at current positions."""
