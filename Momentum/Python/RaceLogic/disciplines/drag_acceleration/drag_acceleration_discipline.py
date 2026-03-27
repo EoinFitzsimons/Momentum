@@ -545,14 +545,14 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         progress = max(0.0, min(1.0, progress))
         active_set = set(active_ids)
+        strip_distance_m = self._resolve_visual_drag_distance(context)
         positions = []
         for idx, entry in enumerate(entries, 1):
             driver = entry['driver']
             result = entry.get('result', {})
             driver_id = int(driver.id)
             is_active = driver_id in active_set
-            pace_scale = max(0.15, 1.0 - (idx - 1) * 0.035)
-            distance = self.DRAG_DISTANCE_M * progress * pace_scale
+            distance = strip_distance_m * progress
             velocity_mps = 0.0
             if running and is_active:
                 velocity_mps = 70.0 * progress
@@ -582,6 +582,19 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             'time': float(race_time),
             'positions': positions,
         })
+
+    def _resolve_visual_drag_distance(self, context: RaceContext) -> float:
+        """Return strip distance used by GUI position packets."""
+        track = getattr(context, 'track', None)
+        length_km = getattr(track, 'length_km', None)
+        if length_km is not None:
+            try:
+                length_m = float(length_km) * 1000.0
+                if length_m > 50.0:
+                    return length_m
+            except (TypeError, ValueError):
+                pass
+        return float(self.DRAG_DISTANCE_M)
 
     def _emit_drag_race_finished(self, context: RaceContext, results: List[RaceResult], race_time: float) -> None:
         """Emit race_finished payload for GUI handlers."""
