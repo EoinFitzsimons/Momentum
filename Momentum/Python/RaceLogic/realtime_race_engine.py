@@ -90,6 +90,10 @@ class DriverState:
     tire_condition: float = 1.0     # 1.0=new tires, 0.0=completely worn
     fuel_load: float = 1.0          # 1.0=full tank, 0.0=empty
     tire_compound: str = "medium"  # soft, medium, hard, rain
+    in_pit_lane: bool = False
+    pit_time_remaining_s: float = 0.0
+    pit_stops_completed: int = 0
+    last_pit_eval_lap: int = -1
 
     # Performance modifiers
     in_slipstream: bool = False     # Currently benefiting from draft
@@ -194,6 +198,15 @@ class RealtimeRaceEngine:
         # Incident probabilities (per timestep) - Now track-aware
         self.BASE_INCIDENT_RATE = 0.0000002  # Base rate for normal driving
         self.OVERTAKE_INCIDENT_MULTIPLIER = 3.0  # Multiplier during overtakes
+
+        # Pit strategy and service model
+        self.PIT_LANE_SPEED_MPS = 22.0
+        self.PIT_SERVICE_BASE_SECONDS = 4.0
+        self.PIT_LANE_TRANSIT_SECONDS = 11.0
+        self.PIT_TIRE_RESET = 0.94
+        self.PIT_FUEL_GAIN = 0.40
+        self.PIT_TIRE_THRESHOLD = 0.42
+        self.PIT_MIN_LAPS_REMAINING = 3
 
     def simulate_race(
         self,
@@ -339,6 +352,9 @@ class RealtimeRaceEngine:
         event_callback: Optional[Callable[[Dict[str, Any]], None]],
     ) -> None:
         """Run AI, physics, degradation, and incident checks for one driver."""
+        if self._update_driver_pit_cycle(state, race_state, track_length_m, timestep, event_callback):
+            return
+
         self._update_racing_mode(state, race_state)
         speed_mps = self._calculate_speed(state, track_length_m)
         if not np.isfinite(speed_mps):
@@ -355,6 +371,115 @@ class RealtimeRaceEngine:
         if self._check_incident(state, race_state):
             state.running = False
             self._emit_driver_dnf_event_if_needed(driver_id, state)
+
+    def _pit_strategy_enabled_for_track(self) -> bool:
+        """Return whether this discipline should run pit strategy logic."""
+        track_obj = getattr(self.track_map, 'track', None) if self.track_map is not None else None
+        discipline = str(getattr(track_obj, 'primary_discipline', '') or '').upper()
+        return discipline not in {'DRAG_ACCELERATION', 'SPRINT_RALLYCROSS'}
+
+    def _update_driver_pit_cycle(
+        self,
+        state: DriverState,
+        race_state: RaceState,
+        track_length_m: float,
+        timestep: float,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> bool:
+        """Handle pit entry/service/exit; return True when frame was consumed by pit logic."""
+        if not self._pit_strategy_enabled_for_track():
+            return False
+
+        if not state.in_pit_lane:
+            if self._should_start_pit_stop(state, race_state):
+                self._enter_pit_lane(state, event_callback)
+                return True
+            return False
+
+        state.prev_position_m = state.position_m
+        state.position_m += self.PIT_LANE_SPEED_MPS * timestep
+        state.velocity_mps = self.PIT_LANE_SPEED_MPS
+        prev_lap = int(state.prev_position_m // track_length_m)
+        curr_lap = int(state.position_m // track_length_m)
+        if curr_lap > prev_lap:
+            self._complete_lap(state, race_state)
+
+        state.total_time += timestep
+        state.push_intensity = min(state.push_intensity, 0.45)
+        state.pit_time_remaining_s = max(0.0, state.pit_time_remaining_s - timestep)
+        if state.pit_time_remaining_s <= 0.0:
+            self._exit_pit_lane(state, event_callback)
+        return True
+
+    def _should_start_pit_stop(self, state: DriverState, race_state: RaceState) -> bool:
+        """Decide pit stops once per lap using tire/fuel and mandatory-stop heuristics."""
+        if state.last_pit_eval_lap == state.lap:
+            return False
+        state.last_pit_eval_lap = state.lap
+
+        laps_remaining = race_state.total_laps - state.lap
+        if state.lap <= 0 or laps_remaining < self.PIT_MIN_LAPS_REMAINING:
+            return False
+
+        # Hard triggers
+        if state.tire_condition <= self.PIT_TIRE_THRESHOLD:
+            return True
+        if state.fuel_load <= 0.14:
+            return True
+
+        # One mandatory stop for longer races if none taken yet
+        if race_state.total_laps >= 20 and state.pit_stops_completed == 0:
+            mandatory_window_lap = int(race_state.total_laps * 0.55)
+            if state.lap >= mandatory_window_lap and state.tire_condition < 0.72:
+                return True
+
+        # Simple undercut behavior in traffic
+        in_traffic_window = 0.8 < state.gap_ahead < 2.5
+        if in_traffic_window and state.tire_condition < 0.65 and self.rng.random() < 0.20:
+            return True
+
+        return False
+
+    def _enter_pit_lane(
+        self,
+        state: DriverState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> None:
+        """Start pit phase and emit telemetry event."""
+        service_variance = float(self.rng.uniform(-0.7, 0.7))
+        total_pit_time = self.PIT_LANE_TRANSIT_SECONDS + self.PIT_SERVICE_BASE_SECONDS + service_variance
+        state.in_pit_lane = True
+        state.pit_time_remaining_s = max(6.0, total_pit_time)
+        state.racing_mode = RacingMode.MANAGE
+        if event_callback:
+            event_callback({
+                "type": "pit_entry",
+                "driver_id": state.driver_id,
+                "driver_name": state.driver_name,
+                "lap": state.lap,
+                "pit_time_remaining_s": state.pit_time_remaining_s,
+            })
+
+    def _exit_pit_lane(
+        self,
+        state: DriverState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> None:
+        """Apply service effects and emit pit exit telemetry."""
+        state.in_pit_lane = False
+        state.pit_time_remaining_s = 0.0
+        state.pit_stops_completed += 1
+        state.tire_condition = max(state.tire_condition, self.PIT_TIRE_RESET)
+        state.fuel_load = min(1.0, state.fuel_load + self.PIT_FUEL_GAIN)
+        state.tire_compound = 'hard' if state.tire_condition < 0.5 else 'medium'
+        if event_callback:
+            event_callback({
+                "type": "pit_exit",
+                "driver_id": state.driver_id,
+                "driver_name": state.driver_name,
+                "lap": state.lap,
+                "pit_stops_completed": state.pit_stops_completed,
+            })
 
     def _advance_driver_position(
         self,
@@ -1552,6 +1677,9 @@ class RealtimeRaceEngine:
                 "push_fatigue": state.push_fatigue,
                 "tire_condition": state.tire_condition,
                 "fuel_load": state.fuel_load,
+                "in_pit_lane": state.in_pit_lane,
+                "pit_time_remaining_s": state.pit_time_remaining_s,
+                "pit_stops_completed": state.pit_stops_completed,
                 "gap_ahead": state.gap_ahead,
                 "gap_behind": state.gap_behind,
                 "running": state.running
@@ -1640,6 +1768,7 @@ class RealtimeRaceEngine:
             "dnf_reason": state.dnf_reason,
             "best_lap_time": state.best_lap_time if state.best_lap_time < 999 else None,
             "average_lap_time": average_lap_time,
+            "pit_stops": state.pit_stops_completed,
             "status": status,
             "lapped": lapped,
         }

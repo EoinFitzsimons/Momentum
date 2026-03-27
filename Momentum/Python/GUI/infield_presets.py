@@ -52,33 +52,52 @@ PRESETS = {
 }
 
 
+def _normalize_grip_to_legacy_scale(surface_grip: Optional[float]) -> Optional[float]:
+    """Normalize grip to legacy 0..20 scale used by preset thresholds."""
+    if surface_grip is None:
+        return None
+    try:
+        grip = float(surface_grip)
+    except Exception:
+        return None
+    if grip <= 1.0:
+        grip *= 20.0
+    return grip
+
+
+def _surface_to_preset(surface: str) -> Optional[str]:
+    """Return direct preset mapping for known surface keywords."""
+    if 'snow' in surface or 'ice' in surface or 'wet' in surface:
+        return 'wet'
+    if 'dirt' in surface or 'gravel' in surface or 'sand' in surface:
+        return 'dry'
+    if 'concrete' in surface or 'mixed' in surface:
+        return 'autumn'
+    return None
+
+
 def select_preset(surface: str, surface_grip: Optional[float] = None, seed: Optional[int] = None) -> Dict:
     """Choose a preset based on surface and grip.
 
     Rules (simple heuristics):
-    - If surface contains 'dirt' or 'gravel' -> 'dry'
-    - If surface contains 'concrete' -> 'autumn' (less greenery)
-    - If surface indicates mixed/wet or grip < 6 -> 'wet'
-    - Otherwise prefer 'lush'
+    - dirt/gravel/sand/snow/ice bias toward drier or wetter terrain tones
+    - concrete and mixed favor sparse vegetation tones
+    - grip values can be either 0..1 or legacy 0..20 and are normalized
+    - otherwise prefer lush vegetation
     """
     s = (surface or '').lower()
     preset = 'lush'
     try:
-        if 'dirt' in s or 'gravel' in s:
-            preset = 'dry'
-        elif 'concrete' in s or 'mixed' in s:
-            preset = 'autumn'
-        elif 'wet' in s:
-            preset = 'wet'
-        elif surface_grip is not None:
-            try:
-                g = float(surface_grip)
-                if g < 6:
+        surface_preset = _surface_to_preset(s)
+        if surface_preset is not None:
+            preset = surface_preset
+        else:
+            g = _normalize_grip_to_legacy_scale(surface_grip)
+            if g is not None:
+                if g < 7:
                     preset = 'wet'
-                elif g < 10:
+                elif g < 11:
                     preset = 'dry'
-            except Exception:
-                pass
     except Exception:
         preset = 'lush'
 

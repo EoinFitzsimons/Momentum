@@ -22,6 +22,7 @@ Date: January 2026
 """
 
 import random
+import time
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
@@ -100,13 +101,13 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
     def simulate_race(self, context: RaceContext) -> List[RaceResult]:
         """
-        Simulate drag racing event (single quarter-mile runs)
+        Simulate drag racing event as a single-elimination knockout tournament.
 
-        Format: Time-trial qualification
-        - Each driver gets one 402m run
-        - Fastest elapsed time wins
-        - Positions determined by time ranking
-        - Top 8 finishers get championship points
+        Format:
+        - One representative per team (best raw speed)
+        - Qualifying run to seed bracket
+        - Head-to-head elimination rounds until one winner remains
+        - Emits position/race_finished events for GUI integration
 
         Args:
             context: RaceContext with drivers, track, conditions
@@ -114,35 +115,499 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         Returns:
             List of dicts (compatible with RaceResult) sorted by position (1-8 get points)
         """
-        results = []
+        entrants = self._select_team_representatives(context)
+        if not entrants:
+            return []
 
-        # Simulate each driver's single run
-        for i, driver in enumerate(context.drivers):
-            team = context.teams.get(driver.current_team_id)
+        qualified = self._run_drag_qualifying(entrants, context)
+        self._emit_drag_bracket_seeded(context, qualified)
+
+        frame = 0
+        race_time = 0.0
+        realtime_speed = self._extract_realtime_speed(context)
+        stop_event = self._extract_stop_event(context)
+        self._emit_drag_position_update(
+            context,
+            qualified,
+            frame=frame,
+            race_time=race_time,
+            progress=0.0,
+            running=False,
+            active_ids=[],
+        )
+
+        competitors, eliminated, race_time, frame = self._run_knockout_bracket(
+            qualified,
+            context,
+            race_time,
+            frame,
+            realtime_speed,
+            stop_event,
+        )
+        ranking_entries, final_results = self._build_drag_ranking_and_results(qualified, competitors, eliminated)
+
+        final_race_time = max(
+            (float(r.get('time_seconds', 0.0)) for r in final_results if r.get('time_seconds') not in (None, float('inf'))),
+            default=0.0,
+        )
+        self._emit_drag_position_update(
+            context,
+            ranking_entries,
+            frame=frame + 20,
+            race_time=max(race_time, final_race_time),
+            progress=1.0,
+            running=False,
+            active_ids=[],
+        )
+        self._emit_drag_race_finished(context, final_results, max(race_time, final_race_time))
+        return final_results
+
+    def _run_drag_qualifying(self, entrants: List[Dict[str, Any]], context: RaceContext) -> List[Dict[str, Any]]:
+        """Run one qualifying pass per entrant and return seeded order."""
+        qualified = []
+        for entrant in entrants:
+            run_result = self._simulate_single_run(entrant['driver'], entrant['team'], context)
+            qualified.append({'driver': entrant['driver'], 'team': entrant['team'], 'result': run_result})
+        qualified.sort(key=lambda e: e['result'].get('time_seconds', float('inf')))
+        return qualified
+
+    def _run_knockout_bracket(
+        self,
+        qualified: List[Dict[str, Any]],
+        context: RaceContext,
+        race_time: float,
+        frame: int,
+        realtime_speed: float,
+        stop_event: Any,
+    ):
+        """Execute elimination rounds and return survivors/eliminations/time/frame."""
+        competitors = qualified
+        eliminated: List[Dict[str, Any]] = []
+        round_idx = 1
+
+        while len(competitors) > 1:
+            next_round, i, race_time, frame, aborted = self._run_knockout_round(
+                competitors,
+                context,
+                round_idx,
+                race_time,
+                frame,
+                realtime_speed,
+                stop_event,
+                eliminated,
+            )
+
+            if aborted:
+                while i < len(competitors):
+                    next_round.append(competitors[i])
+                    i += 1
+                competitors = next_round
+                break
+
+            competitors = next_round
+            frame += 10
+            self._emit_drag_position_update(
+                context,
+                competitors,
+                frame=frame,
+                race_time=race_time,
+                progress=0.0,
+                running=False,
+                active_ids=[],
+            )
+            round_idx += 1
+
+        return competitors, eliminated, race_time, frame
+
+    def _run_knockout_round(
+        self,
+        competitors: List[Dict[str, Any]],
+        context: RaceContext,
+        round_idx: int,
+        race_time: float,
+        frame: int,
+        realtime_speed: float,
+        stop_event: Any,
+        eliminated: List[Dict[str, Any]],
+    ):
+        """Run one bracket round and return round state plus abort flag."""
+        next_round: List[Dict[str, Any]] = []
+        i = 0
+        while i < len(competitors):
+            if stop_event is not None and stop_event.is_set():
+                return next_round, i, race_time, frame, True
+            if i == len(competitors) - 1:
+                next_round.append(competitors[i])
+                i += 1
+                continue
+
+            left = competitors[i]
+            right = competitors[i + 1]
+            heat_idx = (i // 2) + 1
+            winner, loser, heat_time, frame = self._run_head_to_head_showdown(
+                left,
+                right,
+                context,
+                frame=frame,
+                race_time=race_time,
+                realtime_speed=realtime_speed,
+                stop_event=stop_event,
+            )
+            race_time += heat_time
+
+            # Reconstruct lane-ordered result payloads from winner/loser entries.
+            winner_id = int(getattr(winner.get('driver'), 'id', 0) or 0)
+            left_id = int(getattr(left.get('driver'), 'id', 0) or 0)
+            if winner_id == left_id:
+                left_entry, right_entry = winner, loser
+            else:
+                left_entry, right_entry = loser, winner
+
+            self._emit_drag_heat_result(context, round_idx, heat_idx, left_entry, right_entry, winner, race_time)
+            next_round.append(winner)
+            loser['eliminated_round'] = round_idx
+            eliminated.append(loser)
+            i += 2
+
+        return next_round, i, race_time, frame, False
+
+    def _build_drag_ranking_and_results(
+        self,
+        qualified: List[Dict[str, Any]],
+        competitors: List[Dict[str, Any]],
+        eliminated: List[Dict[str, Any]],
+    ):
+        """Build final ranking entries and result payload."""
+        if not competitors:
+            competitors = qualified[:1]
+
+        champion = competitors[0]
+        ranking_entries = [champion]
+        eliminated.sort(
+            key=lambda e: (
+                -int(e.get('eliminated_round', 0)),
+                float(e.get('result', {}).get('time_seconds', float('inf'))),
+            )
+        )
+        ranking_entries.extend(eliminated)
+
+        final_results: List[RaceResult] = []
+        for pos, entry in enumerate(ranking_entries, 1):
+            result = dict(entry['result'])
+            result['position'] = pos
+            if pos == 1:
+                result['status'] = 'WINNER'
+            elif result.get('dnf_reason'):
+                result['status'] = 'DNF'
+            else:
+                result['status'] = 'ELIMINATED'
+            final_results.append(result)
+        return ranking_entries, final_results
+
+    def _extract_realtime_speed(self, context: RaceContext) -> float:
+        """Read realtime speed from track conditions and clamp for watchability."""
+        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        raw = tc.get('realtime_speed', 1.0) if isinstance(tc, dict) else 1.0
+        try:
+            speed = float(raw)
+        except Exception:
+            speed = 1.0
+        speed = max(0.25, min(2.0, speed))
+        return speed
+
+    def _extract_stop_event(self, context: RaceContext):
+        """Read optional stop event from track conditions."""
+        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        if isinstance(tc, dict):
+            return tc.get('stop_event')
+        return None
+
+    def _extract_player_driver_id(self, context: RaceContext) -> Optional[int]:
+        """Read selected player driver id from context track conditions."""
+        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        if not isinstance(tc, dict):
+            return None
+        raw = tc.get('player_driver_id')
+        try:
+            return int(raw) if raw is not None else None
+        except Exception:
+            return None
+
+    def _select_team_representatives(self, context: RaceContext) -> List[Dict[str, Any]]:
+        """Pick one best driver per team for drag knockout brackets."""
+        best_by_team = self._best_driver_by_team(context.drivers)
+        self._override_with_selected_player(best_by_team, context)
+        entrants = self._build_drag_entrants(best_by_team, context)
+        entrants.sort(key=lambda e: float(getattr(e['driver'], 'raw_speed', getattr(e['driver'], 'speed', 50.0)) or 50.0), reverse=True)
+        return entrants[:16]
+
+    def _best_driver_by_team(self, drivers: List[Driver]) -> Dict[int, Driver]:
+        """Select highest-speed driver for each team."""
+        best_by_team: Dict[int, Driver] = {}
+        for driver in drivers:
+            team_id = int(getattr(driver, 'current_team_id', 0) or 0)
+            if team_id <= 0:
+                continue
+            prev = best_by_team.get(team_id)
+            if prev is None or self._driver_speed(driver) > self._driver_speed(prev):
+                best_by_team[team_id] = driver
+        return best_by_team
+
+    def _driver_speed(self, driver: Driver) -> float:
+        """Return comparable speed score for bracket seeding."""
+        return float(getattr(driver, 'raw_speed', getattr(driver, 'speed', 50.0)) or 50.0)
+
+    def _override_with_selected_player(self, best_by_team: Dict[int, Driver], context: RaceContext) -> None:
+        """Force selected player to represent their team when available."""
+        player_driver_id = self._extract_player_driver_id(context)
+        if player_driver_id is None:
+            return
+        selected = next((d for d in context.drivers if int(getattr(d, 'id', 0) or 0) == player_driver_id), None)
+        if selected is None:
+            return
+        selected_team_id = int(getattr(selected, 'current_team_id', 0) or 0)
+        if selected_team_id > 0:
+            best_by_team[selected_team_id] = selected
+
+    def _build_drag_entrants(self, best_by_team: Dict[int, Driver], context: RaceContext) -> List[Dict[str, Any]]:
+        """Build entrant payload with driver-team pairs for simulation."""
+        entrants: List[Dict[str, Any]] = []
+        for team_id, driver in best_by_team.items():
+            team = context.teams.get(team_id)
             if team is None:
                 team = Team(
-                    id=driver.current_team_id,
-                    name=f"Team {driver.current_team_id}",
+                    id=team_id,
+                    name=f"Team {team_id}",
                     nationality="USA",
                     discipline="drag",
                     tier="tier1",
                     budget=50.0,
                     founded_year=2020,
-                    team_principal="Unknown"
+                    team_principal="Unknown",
                 )
+            entrants.append({'driver': driver, 'team': team})
+        return entrants
 
-            # Simulate single run
-            run_result = self._simulate_single_run(driver, team, context)
-            results.append(run_result)
+    def _emit_drag_bracket_seeded(self, context: RaceContext, qualified: List[Dict[str, Any]]) -> None:
+        """Emit initial bracket seed order for GUI knockout tree rendering."""
+        cb = getattr(context, 'event_callback', None)
+        if not callable(cb):
+            return
+        seeds: List[Dict[str, Any]] = []
+        for idx, entry in enumerate(qualified, 1):
+            driver = entry.get('driver')
+            if driver is None:
+                continue
+            seeds.append({
+                'seed': idx,
+                'driver_id': int(getattr(driver, 'id', 0) or 0),
+                'driver_name': str(getattr(driver, 'name', f"Driver {idx}")),
+            })
+        cb({
+            'type': 'drag_bracket_seeded',
+            'seeds': seeds,
+            'entrant_count': len(seeds),
+        })
 
-        # Sort by elapsed time (fastest first), handling DNF (infinite time)
-        results.sort(key=lambda r: r.get('time_seconds', float('inf')))
+    def _emit_drag_heat_result(
+        self,
+        context: RaceContext,
+        round_idx: int,
+        heat_idx: int,
+        left_entry: Dict[str, Any],
+        right_entry: Dict[str, Any],
+        winner: Dict[str, Any],
+        race_time: float,
+    ) -> None:
+        """Emit one completed heat result for GUI bracket updates."""
+        cb = getattr(context, 'event_callback', None)
+        if not callable(cb):
+            return
+        left_driver = left_entry.get('driver')
+        right_driver = right_entry.get('driver')
+        winner_driver = winner.get('driver')
+        left_result = left_entry.get('result', {})
+        right_result = right_entry.get('result', {})
+        cb({
+            'type': 'drag_heat_result',
+            'round_index': int(round_idx),
+            'heat_index': int(heat_idx),
+            'left_id': int(getattr(left_driver, 'id', 0) or 0),
+            'left_name': str(getattr(left_driver, 'name', 'TBD')),
+            'left_time_s': left_result.get('time_seconds'),
+            'left_reaction_ms': left_result.get('reaction_time_ms'),
+            'left_trap_kmh': left_result.get('trap_speed_kmh'),
+            'right_id': int(getattr(right_driver, 'id', 0) or 0),
+            'right_name': str(getattr(right_driver, 'name', 'TBD')),
+            'right_time_s': right_result.get('time_seconds'),
+            'right_reaction_ms': right_result.get('reaction_time_ms'),
+            'right_trap_kmh': right_result.get('trap_speed_kmh'),
+            'winner_id': int(getattr(winner_driver, 'id', 0) or 0),
+            'winner_name': str(getattr(winner_driver, 'name', 'TBD')),
+            'race_time': float(race_time),
+        })
 
-        # Update positions
-        for i, result in enumerate(results):
-            result['position'] = i + 1
+    def _is_dnf_result(self, result: Dict[str, Any]) -> bool:
+        """Return whether a run result represents a failed pass."""
+        if result.get('dnf_reason'):
+            return True
+        t = result.get('time_seconds')
+        return t is None or t == float('inf')
 
-        return results
+    def _run_head_to_head(self, left: Dict[str, Any], right: Dict[str, Any], context: RaceContext):
+        """Simulate one elimination pairing and return winner/loser entries."""
+        left_result = self._simulate_single_run(left['driver'], left['team'], context)
+        right_result = self._simulate_single_run(right['driver'], right['team'], context)
+        left_entry = {'driver': left['driver'], 'team': left['team'], 'result': left_result}
+        right_entry = {'driver': right['driver'], 'team': right['team'], 'result': right_result}
+
+        left_dnf = self._is_dnf_result(left_result)
+        right_dnf = self._is_dnf_result(right_result)
+        if left_dnf and not right_dnf:
+            return right_entry, left_entry
+        if right_dnf and not left_dnf:
+            return left_entry, right_entry
+        if left_dnf and right_dnf:
+            if float(left_result.get('reaction_time_ms', 9999.0)) <= float(right_result.get('reaction_time_ms', 9999.0)):
+                return left_entry, right_entry
+            return right_entry, left_entry
+
+        if float(left_result.get('time_seconds', float('inf'))) <= float(right_result.get('time_seconds', float('inf'))):
+            return left_entry, right_entry
+        return right_entry, left_entry
+
+    def _run_head_to_head_showdown(
+        self,
+        left: Dict[str, Any],
+        right: Dict[str, Any],
+        context: RaceContext,
+        frame: int,
+        race_time: float,
+        realtime_speed: float,
+        stop_event: Any,
+    ):
+        """Animate and resolve a single 1v1 drag heat."""
+        winner, loser = self._run_head_to_head(left, right, context)
+        left_id = int(left['driver'].id)
+        right_id = int(right['driver'].id)
+        heat_entries = [left, right]
+
+        left_time = float(left['result'].get('time_seconds', 6.5))
+        right_time = float(right['result'].get('time_seconds', 6.5))
+        if left_time == float('inf'):
+            left_time = 7.5
+        if right_time == float('inf'):
+            right_time = 7.5
+        heat_duration = max(left_time, right_time, 5.5)
+        heat_frames = max(90, int(heat_duration * 30))
+
+        print(
+            f"[DRAG HEAT] {left['driver'].name} vs {right['driver'].name} -> "
+            f"winner: {winner['driver'].name}"
+        )
+
+        for step in range(heat_frames + 1):
+            if stop_event is not None and stop_event.is_set():
+                break
+            progress = step / float(heat_frames)
+            # Ease-out motion gives a stronger launch feel.
+            eased = 1.0 - ((1.0 - progress) ** 1.45)
+            self._emit_drag_position_update(
+                context,
+                heat_entries,
+                frame=frame,
+                race_time=race_time + progress * heat_duration,
+                progress=eased,
+                running=step < heat_frames,
+                active_ids=[left_id, right_id],
+            )
+            frame += 1
+            if step < heat_frames:
+                target_sleep = (1.0 / 30.0) / realtime_speed
+                time.sleep(target_sleep)
+
+        return winner, loser, heat_duration, frame
+
+    def _emit_drag_position_update(
+        self,
+        context: RaceContext,
+        entries: List[Dict[str, Any]],
+        frame: int,
+        race_time: float,
+        progress: float,
+        running: bool,
+        active_ids: List[int],
+    ) -> None:
+        """Emit synthetic realtime packets so GUI can animate drag races."""
+        cb = getattr(context, 'event_callback', None)
+        if not callable(cb):
+            return
+
+        progress = max(0.0, min(1.0, progress))
+        active_set = set(active_ids)
+        strip_distance_m = self._resolve_visual_drag_distance(context)
+        positions = []
+        for idx, entry in enumerate(entries, 1):
+            driver = entry['driver']
+            result = entry.get('result', {})
+            driver_id = int(driver.id)
+            is_active = driver_id in active_set
+            distance = strip_distance_m * progress
+            velocity_mps = 0.0
+            if running and is_active:
+                velocity_mps = 70.0 * progress
+            positions.append({
+                'driver_id': driver_id,
+                'driver_name': driver.name,
+                'position': idx,
+                'lap': 1,
+                'position_m': distance,
+                'velocity_mps': velocity_mps,
+                'racing_mode': 'attack',
+                'push_intensity': 0.95,
+                'push_fatigue': min(1.0, progress * 0.5),
+                'tire_condition': 0.98,
+                'fuel_load': 0.98,
+                'gap_ahead': 0.0 if idx == 1 else float(idx - 1) * 0.12,
+                'gap_behind': 0.0,
+                'running': running and is_active and not self._is_dnf_result(result),
+                'in_pit_lane': False,
+                'pit_time_remaining_s': 0.0,
+                'pit_stops_completed': 0,
+            })
+
+        cb({
+            'type': 'position_update',
+            'frame': int(frame),
+            'time': float(race_time),
+            'positions': positions,
+        })
+
+    def _resolve_visual_drag_distance(self, context: RaceContext) -> float:
+        """Return strip distance used by GUI position packets."""
+        track = getattr(context, 'track', None)
+        length_km = getattr(track, 'length_km', None)
+        if length_km is not None:
+            try:
+                length_m = float(length_km) * 1000.0
+                if length_m > 50.0:
+                    return length_m
+            except (TypeError, ValueError):
+                pass
+        return float(self.DRAG_DISTANCE_M)
+
+    def _emit_drag_race_finished(self, context: RaceContext, results: List[RaceResult], race_time: float) -> None:
+        """Emit race_finished payload for GUI handlers."""
+        cb = getattr(context, 'event_callback', None)
+        if not callable(cb):
+            return
+        cb({
+            'type': 'race_finished',
+            'total_laps': 1,
+            'race_time': float(race_time),
+            'results': results,
+            'collision_log': [],
+        })
 
     def _simulate_single_run(self, driver: Driver, team: Team, context: RaceContext) -> RaceResult:
         """
@@ -189,6 +654,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Total elapsed time (in milliseconds for precision)
         total_elapsed_ms = reaction_time_ms + accel_0_100_ms + accel_100_trap_ms
+        total_elapsed_ms *= self._player_time_multiplier(context, int(getattr(driver, 'id', 0) or 0))
 
         # Convert to seconds for RaceResult
         total_elapsed_s = total_elapsed_ms / 1000.0
@@ -206,6 +672,42 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             "reaction_time_ms": reaction_time_ms,
             "trap_speed_kmh": trap_speed_kmh
         }
+
+    def _player_time_multiplier(self, context: RaceContext, driver_id: int) -> float:
+        """Convert UI pace/overtake overrides to a drag elapsed-time multiplier."""
+        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        if not isinstance(tc, dict):
+            return 1.0
+
+        controlled_ids = set()
+        player_driver_id = tc.get('player_driver_id')
+        try:
+            if player_driver_id is not None:
+                controlled_ids.add(int(player_driver_id))
+        except Exception:
+            pass
+
+        for item in tc.get('player_team_driver_ids', []) or []:
+            try:
+                controlled_ids.add(int(item))
+            except Exception:
+                continue
+
+        if driver_id not in controlled_ids:
+            return 1.0
+
+        overrides = tc.get('player_overrides', {})
+        if not isinstance(overrides, dict):
+            return 1.0
+
+        pace = float(overrides.get('pace', 0.7) or 0.7)
+        overtake = float(overrides.get('overtake', 0.5) or 0.5)
+        pace = max(0.0, min(1.0, pace))
+        overtake = max(0.0, min(1.0, overtake))
+        push = max(0.0, min(1.0, 0.55 * pace + 0.45 * overtake))
+
+        # 1.08x at minimum push -> 0.90x at maximum push.
+        return 1.08 - (0.18 * push)
 
     def _calculate_reaction_time(self, driver: Driver, context: RaceContext) -> float:
         """
@@ -232,7 +734,9 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Reaction time attribute modifier (0-100 scale)
         # Higher reaction_time = faster reflexes
-        reaction_attr = getattr(driver, 'reaction_time', 50.0)
+        reaction_attr = getattr(driver, 'reaction_time', None)
+        if reaction_attr is None:
+            reaction_attr = getattr(driver, 'reactions', 50.0)
         reaction_factor = (reaction_attr / 50.0) - 1.0  # -1.0 to +1.0 range
         reaction_delta = reaction_factor * 80.0  # ±80ms from baseline
 
