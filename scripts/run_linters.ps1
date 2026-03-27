@@ -15,6 +15,7 @@ param(
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $RepoRoot = Resolve-Path "$ScriptRoot\.." | Select-Object -ExpandProperty Path
 $Target = Join-Path $RepoRoot "Momentum\Python"
+$FlakeConfig = Join-Path $Target ".flake8"
 $LogDir = Join-Path $RepoRoot "logs"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
 $Timestamp = (Get-Date).ToString('yyyyMMdd_HHmmss')
@@ -58,7 +59,14 @@ if (-not $flakeAvailable -and -not $mypyAvailable) {
 # Run flake8 if available
 if ($flakeAvailable) {
     Write-Host "Running flake8 on $Target ..."
-    & flake8 $Target 2>&1 | Tee-Object -FilePath $FlakeLog
+    if (Test-Path $FlakeConfig) {
+        Write-Host "Using flake8 config: $FlakeConfig"
+        & flake8 --config $FlakeConfig $Target 2>&1 | Tee-Object -FilePath $FlakeLog
+    }
+    else {
+        Write-Warning "No .flake8 found at $FlakeConfig; running with default flake8 settings."
+        & flake8 $Target 2>&1 | Tee-Object -FilePath $FlakeLog
+    }
     $flakeExit = $LASTEXITCODE
     Write-Host "flake8 exit code: $flakeExit — log: $FlakeLog"
 } else {
