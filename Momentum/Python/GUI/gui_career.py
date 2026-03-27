@@ -8,8 +8,6 @@ Implements a dedicated career HQ flow:
 - Start the next scheduled race from HQ
 """
 
-from typing import Optional
-
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
@@ -64,7 +62,10 @@ class CareerTeamSelectionDialog(QDialog):
         title.setStyleSheet("font-size: 22px; font-weight: 700; color: #B9F2FF;")
         layout.addWidget(title)
 
-        subtitle = QLabel("Your team is locked for this career. Staff and car progression happen between races.")
+        subtitle = QLabel(
+            "Your team is locked for this career. Staff and car "
+            "progression happen between races."
+        )
         subtitle.setStyleSheet("color: #CCCCCC;")
         layout.addWidget(subtitle)
 
@@ -333,7 +334,8 @@ class CareerWindow(QMainWindow):
             return
         self.header_label.setText(f"Career HQ - {self.championship.name}")
         self.subheader_label.setText(
-            f"Discipline: {_player_label(self.championship.discipline)} | Season {self.championship.current_season}"
+            f"Discipline: {_player_label(self.championship.discipline)} | "
+            f"Season {self.championship.current_season}"
         )
 
         self.team_name_label.setText(f"Team: {self.owned_team.name}")
@@ -381,14 +383,23 @@ class CareerWindow(QMainWindow):
         self.staff_table.setRowCount(len(staff))
         for row, member in enumerate(staff):
             self.staff_table.setItem(row, 0, QTableWidgetItem(str(member.name)))
-            self.staff_table.setItem(row, 1, QTableWidgetItem(_player_label(member.role)))
+            self.staff_table.setItem(
+                row,
+                1,
+                QTableWidgetItem(_player_label(member.role)),
+            )
             self.staff_table.setItem(row, 2, QTableWidgetItem(f"{float(member.rating):.1f}"))
 
     def _load_car_panel(self):
         if not self.owned_team:
             return
-        self.car_ops_label.setText(f"Operations Rating: {self.owned_team.operations_rating:.1f}")
-        self.car_strategy_label.setText(f"Strategy Profile: {_player_label(self.owned_team.strategy_profile)}")
+        self.car_ops_label.setText(
+            f"Operations Rating: {self.owned_team.operations_rating:.1f}"
+        )
+        self.car_strategy_label.setText(
+            "Strategy Profile: "
+            f"{_player_label(self.owned_team.strategy_profile)}"
+        )
 
         facilities = self.db.get_facility_upgrades(self.owned_team.id)
         if not facilities:
@@ -416,7 +427,9 @@ class CareerWindow(QMainWindow):
             if self.next_race is None and race['status'] == 'scheduled':
                 self.next_race = race
 
-        self.start_next_btn.setEnabled(self.next_race is not None and self.selected_driver is not None)
+        self.start_next_btn.setEnabled(
+            self.next_race is not None and self.selected_driver is not None
+        )
         if self.next_race is None:
             self.start_next_btn.setText("Season Complete")
         else:
@@ -455,7 +468,11 @@ class CareerWindow(QMainWindow):
             "in-progress",
         )
         if not success:
-            QMessageBox.warning(self, "Status Update Failed", f"Could not update race status: {error_msg}")
+            QMessageBox.warning(
+                self,
+                "Status Update Failed",
+                f"Could not update race status: {error_msg}",
+            )
             return
 
         config = {
