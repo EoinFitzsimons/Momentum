@@ -52,6 +52,9 @@ from PyQt6.QtWidgets import (
     QDialog,
     QListWidget,
     QListWidgetItem,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QSplitter,
 )
 import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
@@ -133,6 +136,7 @@ class Car:
     target_s: Optional[float] = None
     prev_update_time: float = 0.0
     target_update_time: float = 0.0
+    active: bool = True
 
 
 class EventEmitter(QObject):
@@ -141,6 +145,7 @@ class EventEmitter(QObject):
         dict)  # {driver_id: {lap, position, total_time}}
     race_finished = pyqtSignal(list)
     event_signal = pyqtSignal(str)
+    generic_event = pyqtSignal(dict)
 
 
 class CircuitGenerator:
@@ -251,10 +256,10 @@ class CircuitGenerator:
         solve_requested = False
         instruction_list: List[Any] = []
 
-        if isinstance(instructions, dict) and instructions.get('solve_closure'):
+        if isinstance(instructions, dict):
             wrapped_instructions = instructions.get('instructions', [])
             instruction_list = cast(List[Any], wrapped_instructions) if isinstance(wrapped_instructions, list) else []
-            solve_requested = True
+            solve_requested = bool(instructions.get('solve_closure'))
         elif isinstance(instructions, list) and len(instructions) > 0:
             instruction_list = cast(List[Any], instructions)
             if isinstance(instructions[0], dict) and instructions[0].get('solve_closure'):
@@ -623,7 +628,8 @@ class TrackWidget(QWidget):
                  appearance_manager: VehicleAppearanceManager,
                  track_surface: str = "asphalt", surface_grip: Optional[float] = None,
                  pit_points: Optional[List[TrackPoint]] = None,
-                 joker_points: Optional[List[TrackPoint]] = None):
+                 joker_points: Optional[List[TrackPoint]] = None,
+                 is_drag_track: bool = False):
         super().__init__()
         self.track_points = track_points
         self.track_length = track_length
@@ -632,6 +638,7 @@ class TrackWidget(QWidget):
         # Optional alternate routes (pit lane, joker lap)
         self.pit_points = pit_points
         self.joker_points = joker_points
+        self.is_drag_track = bool(is_drag_track)
         self.cars: List[Car] = []
         # Remove fixed minimum size - let layout determine size
         # self.setMinimumSize(1400, 900)
@@ -724,8 +731,8 @@ class TrackWidget(QWidget):
         self.camera_mode = mode
         if mode == 'follow' and follow_car_id is not None:
             self.follow_car_id = int(follow_car_id)
-            self.camera_zoom = 3.0  # 3x zoom for follow camera
-            print(f"[CAMERA] Set follow_car_id to {self.follow_car_id} (zoom: 3.0x)")
+            self.camera_zoom = 5.0 if self.is_drag_track else 3.0
+            print(f"[CAMERA] Set follow_car_id to {self.follow_car_id} (zoom: {self.camera_zoom:.1f}x)")
         else:
             self.follow_car_id = None
             if mode == 'full':
@@ -849,12 +856,13 @@ class TrackWidget(QWidget):
                 car.target_s = sim_pos
                 car.target_update_time = now
                 car.s = sim_pos
+                car.active = True
 
                 car.last_lap = lap
                 break
 
     def update_car_realtime(self, driver_id: int,
-                            position_m: float, lap: int, velocity_mps: float):
+                            position_m: float, lap: int, velocity_mps: float, running: bool = True):
         """
         *** CRITICAL FUNCTION: Real-time car position updates from race engine ***
 
@@ -881,7 +889,7 @@ class TrackWidget(QWidget):
         if not self._can_accept_realtime_updates():
             return
 
-        if velocity_mps < 0.1:
+        if running and velocity_mps < 0.1:
             print(
                 f"WARNING: Car {driver_id} has near-zero velocity: {
                     velocity_mps:.2f} m/s at pos={
@@ -890,6 +898,11 @@ class TrackWidget(QWidget):
         car = self._find_car_by_driver_id(driver_id)
         if car is None:
             print(f"  [ERROR] update_car_realtime: Unknown driver_id={driver_id}")
+            self.update()
+            return
+
+        car.active = bool(running)
+        if not running:
             self.update()
             return
 
@@ -1100,7 +1113,10 @@ class TrackWidget(QWidget):
         padding_factor = 1.15
         zoom_x = (self.width() * 0.95) / (track_width * padding_factor) if track_width > 0 else 1.0
         zoom_y = (self.height() * 0.95) / (track_height * padding_factor) if track_height > 0 else 1.0
-        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
+        zoom = max(0.5, min(min(zoom_x, zoom_y), 2.5))
+        if self.is_drag_track:
+            zoom = min(4.0, zoom * 1.85)
+        return zoom
 
     def _draw_world_forest_layers(self, painter) -> None:
         """Draw cached large forest and infield forest overlays in world space."""
@@ -1398,7 +1414,8 @@ class TrackWidget(QWidget):
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
         try:
-            points = self.pit_points if getattr(self, 'pit_points', None) else self.track_points
+            # Draw pit lane only when explicit pit geometry exists.
+            points = self.pit_points if getattr(self, 'pit_points', None) else None
             if not points:
                 return
             pit_inner_points, pit_outer_points = self._build_pit_lane_offsets(points)
@@ -2047,6 +2064,8 @@ class TrackWidget(QWidget):
                 try:
                     if car.dnf:
                         continue
+                    if not getattr(car, 'active', True):
+                        continue
                     if self._draw_single_car(painter, car):
                         cars_drawn += 1
                 except Exception as e:
@@ -2055,9 +2074,9 @@ class TrackWidget(QWidget):
                             car.driver_id} (s={
                             car.s:.1f}): {e}")
 
-            # Debug: Print if not all cars are being drawn
-            if cars_drawn < len([c for c in self.cars if not c.dnf]):
-                active_cars = len([c for c in self.cars if not c.dnf])
+            # Debug: Print only if some intended-to-be-visible cars were skipped.
+            active_cars = len([c for c in self.cars if not c.dnf and getattr(c, 'active', True)])
+            if cars_drawn < active_cars:
                 print(
                     f"WARNING: Only drew {cars_drawn}/{active_cars} active cars")
         except Exception as e:
@@ -2225,6 +2244,12 @@ class RaceWindow(QMainWindow):
             self.emitter.position_update.connect(self._on_position_update)
             self.emitter.race_finished.connect(self._on_race_finished)
             self.emitter.event_signal.connect(self._on_event)
+            self.emitter.generic_event.connect(self._on_generic_event)
+
+            # Drag knockout tree state
+            self._drag_round_nodes: Dict[int, QTreeWidgetItem] = {}
+            self._drag_heat_items: Dict[Tuple[int, int], QTreeWidgetItem] = {}
+            self._drag_time_metrics: Dict[int, Dict[str, Any]] = {}
 
             # Vehicle appearance manager for rendering detailed cars
             self.appearance_manager = VehicleAppearanceManager()
@@ -2245,21 +2270,46 @@ class RaceWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        self.main_splitter = splitter
+        layout.addWidget(splitter, 1)
+        try:
+            screen = QApplication.primaryScreen()
+            screen_w = int(screen.availableGeometry().width()) if screen is not None else 1920
+        except Exception:
+            screen_w = 1920
+
+        requested_sidebar = self._compute_sidebar_width()
+        min_track_width = max(760, int(screen_w * 0.56))
+        max_sidebar_for_track = max(480, screen_w - min_track_width)
+        sidebar_width = max(480, min(requested_sidebar, max_sidebar_for_track))
+        sidebar_content_width = max(440, sidebar_width - 28)
 
         # Left: Track display (MUCH BIGGER)
         # Annotate type so static checkers know this will be a TrackWidget
         self.track_widget: Optional["TrackWidget"] = None  # Will be created after track loads
         left_container = QWidget()
+        left_container.setMinimumWidth(min_track_width)
         self.left_layout = QVBoxLayout(left_container)
         self.left_layout.addWidget(QLabel("Loading track..."))
-        layout.addWidget(left_container, 1)  # Track gets all remaining space
+        splitter.addWidget(left_container)
 
-        # Right: Controls and standings - fixed width to avoid layout churn
+        # Right: Controls and standings - widened for readability
         right_container = QWidget()
-        right_container.setFixedWidth(430)
+        right_container.setFixedWidth(sidebar_width)
+        right_container.setMinimumWidth(sidebar_width)
+        right_container.setMaximumWidth(sidebar_width)
         right_panel = QVBoxLayout(right_container)
-        right_panel.setContentsMargins(10, 10, 10, 10)  # Compact margins
-        layout.addWidget(right_container)
+        right_panel.setContentsMargins(14, 14, 14, 14)
+        right_panel.setSpacing(10)
+        splitter.addWidget(right_container)
+
+        left_w = max(400, screen_w - sidebar_width)
+        splitter.setSizes([left_w, sidebar_width])
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 0)
 
         # Title
         title = QLabel("<h1>Race Control</h1>")
@@ -2501,8 +2551,9 @@ class RaceWindow(QMainWindow):
         menu_layout.addWidget(self.menu_btn)
         right_panel.addLayout(menu_layout)
 
-        # Standings table (fixed widths to avoid reflow and scrolling)
-        right_panel.addWidget(QLabel("<h2>Live Standings</h2>"))
+        # Standings / bracket area
+        self.standings_section_label = QLabel("<h2>Live Standings</h2>")
+        right_panel.addWidget(self.standings_section_label)
         self.standings_table = QTableWidget()
         self.standings_table.setColumnCount(4)
         self.standings_table.setHorizontalHeaderLabels(["", "Driver", "Lap", "Gap"])
@@ -2510,14 +2561,14 @@ class RaceWindow(QMainWindow):
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Expanding
         )
-        # Match right panel width (430) minus margins for stable layout
-        self.standings_table.setFixedWidth(410)
+        # Match right panel width minus margins for stable layout
+        self.standings_table.setFixedWidth(sidebar_content_width)
         header = self.standings_table.horizontalHeader()
         if header is not None:
             self.standings_table.setColumnWidth(0, 32)   # color chip
-            self.standings_table.setColumnWidth(1, 240)  # driver name width budget
+            self.standings_table.setColumnWidth(1, max(420, sidebar_content_width - 180))  # driver name width budget
             self.standings_table.setColumnWidth(2, 48)   # lap number
-            self.standings_table.setColumnWidth(3, 88)   # gap like "+888:888"
+            self.standings_table.setColumnWidth(3, 95)   # gap like "+888:888"
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
             header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -2535,6 +2586,65 @@ class RaceWindow(QMainWindow):
             standings_vheader.setVisible(False)
         self._last_standings_row_count = 0
         right_panel.addWidget(self.standings_table, 1)  # Stretch factor 1 - grows to fill space
+
+        self.knockout_tree = QTreeWidget()
+        self.knockout_tree.setColumnCount(4)
+        self.knockout_tree.setHeaderLabels(["Heat", "Matchup", "Winner", "ET"])
+        self.knockout_tree.setFixedWidth(sidebar_content_width)
+        self.knockout_tree.setRootIsDecorated(True)
+        self.knockout_tree.setAlternatingRowColors(True)
+        self.knockout_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.knockout_tree.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.knockout_tree.setStyleSheet("QTreeWidget::item { height: 28px; font-size: 12px; }")
+        tree_header = self.knockout_tree.header()
+        if isinstance(tree_header, QHeaderView):
+            self.knockout_tree.setColumnWidth(0, 62)
+            self.knockout_tree.setColumnWidth(2, 150)
+            self.knockout_tree.setColumnWidth(3, 102)
+            tree_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            tree_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            tree_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+            tree_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+            tree_header.setStretchLastSection(False)
+        right_panel.addWidget(self.knockout_tree, 1)
+
+        self.drag_time_table = QTableWidget()
+        self.drag_time_table.setColumnCount(7)
+        self.drag_time_table.setHorizontalHeaderLabels(["Driver", "Runs", "Last ET", "Best ET", "Avg ET", "Avg RT", "Best Trap"])
+        self.drag_time_table.setFixedWidth(sidebar_content_width)
+        self.drag_time_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.drag_time_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.drag_time_table.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.drag_time_table.setMinimumHeight(260)
+        self.drag_time_table.setMaximumHeight(420)
+        dtt_vheader = self.drag_time_table.verticalHeader()
+        if isinstance(dtt_vheader, QHeaderView):
+            dtt_vheader.setDefaultSectionSize(26)
+        dtt_header = self.drag_time_table.horizontalHeader()
+        if isinstance(dtt_header, QHeaderView):
+            self.drag_time_table.setColumnWidth(1, 52)
+            self.drag_time_table.setColumnWidth(2, 76)
+            self.drag_time_table.setColumnWidth(3, 76)
+            self.drag_time_table.setColumnWidth(4, 76)
+            self.drag_time_table.setColumnWidth(5, 76)
+            self.drag_time_table.setColumnWidth(6, 88)
+            dtt_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            dtt_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+            dtt_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+            dtt_header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+            dtt_header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+            dtt_header.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+            dtt_header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        right_panel.addWidget(self.drag_time_table)
+
+        if self._is_drag_discipline():
+            self.standings_section_label.setText("<h2>Knockout Bracket</h2>")
+            self.standings_table.hide()
+            self.knockout_tree.show()
+            self.drag_time_table.show()
+        else:
+            self.knockout_tree.hide()
+            self.drag_time_table.hide()
 
         # Apply dark Momentum palette for race HUD and visuals (restoring
         # darker theme)
@@ -2566,6 +2676,17 @@ class RaceWindow(QMainWindow):
             QWidget#TrackWidget { background-color: #1A1A1A; border: 1px solid rgba(185,242,255,0.04); }
         """)
 
+    def _compute_sidebar_width(self) -> int:
+        """Compute responsive sidebar width for race HUD readability."""
+        try:
+            screen = QApplication.primaryScreen()
+            if screen is not None:
+                screen_w = int(screen.availableGeometry().width())
+                return max(560, min(760, int(screen_w * 0.34)))
+        except Exception:
+            pass
+        return 640
+
     def _load_data(self):
         """Load drivers and track from database."""
         try:
@@ -2582,6 +2703,7 @@ class RaceWindow(QMainWindow):
             if not self._create_cars_and_start_grid():
                 return
             self._init_standings_table_safe()
+            self._init_drag_knockout_tree_safe()
             self._set_load_data_ready_message()
 
         except Exception as e:
@@ -2767,14 +2889,13 @@ class RaceWindow(QMainWindow):
         return discipline == 'DRAG_ACCELERATION'
 
     def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
-        """Build a point-to-point drag strip profile (mostly straight, slight bend)."""
+        """Build a point-to-point drag strip profile (straight strip)."""
         total_m = max(350, int(track_length_m))
-        first_straight = max(180, int(total_m * 0.58))
-        second_straight = max(120, total_m - first_straight - 70)
+        first_straight = max(180, int(total_m * 0.50))
+        second_straight = max(120, total_m - first_straight)
 
         return [
             {'type': 'S', 'length_m': first_straight},
-            {'type': 'C', 'angle_deg': 7, 'radius_m': 850, 'clothoid_len': 55, 'k': 0.00006},
             {'type': 'S', 'length_m': second_straight},
         ]
 
@@ -2823,6 +2944,7 @@ class RaceWindow(QMainWindow):
                 surface_grip=getattr(self.track, 'surface_grip', None),
                 pit_points=getattr(self, 'pit_points', None),
                 joker_points=getattr(self, 'joker_points', None),
+                is_drag_track=self._is_drag_discipline(),
             )
             while self.left_layout.count():
                 item = self.left_layout.takeAt(0)
@@ -2847,6 +2969,7 @@ class RaceWindow(QMainWindow):
         gridpos_map: Dict[int, Any] = {}
         total_drivers = len(self.drivers)
         grid_spacing = 15.0
+        show_on_grid = not self._is_drag_discipline()
         for i, driver in enumerate(self.drivers):
             grid_number = (i + 1) if ascending else (total_drivers - i)
             row = (grid_number - 1) // 2
@@ -2860,6 +2983,7 @@ class RaceWindow(QMainWindow):
                 total_time=0.0,
                 avg_lap_time=60.0,
                 last_lap=0,
+                active=show_on_grid,
             ))
             try:
                 gridpos_map[int(grid_number)] = int(driver.id)
@@ -2965,6 +3089,297 @@ class RaceWindow(QMainWindow):
         except Exception as e:
             print(f"WARNING: Standings table initialisation failed: {e}")
 
+    def _init_drag_knockout_tree_safe(self) -> None:
+        """Initialize drag knockout tree with current entrants as provisional seed order."""
+        if not self._is_drag_discipline() or not hasattr(self, 'knockout_tree'):
+            return
+        try:
+            provisional = []
+            for idx, drv in enumerate(getattr(self, 'drivers', []) or []):
+                provisional.append({
+                    'seed': idx + 1,
+                    'driver_id': int(getattr(drv, 'id', 0) or 0),
+                    'driver_name': str(getattr(drv, 'name', f"Driver {idx + 1}")),
+                })
+            self._rebuild_drag_knockout_tree(provisional)
+            self._init_drag_time_board(provisional)
+        except Exception as e:
+            print(f"WARNING: Drag bracket initialisation failed: {e}")
+
+    def _init_drag_time_board(self, seeds: List[Dict[str, Any]]) -> None:
+        """Initialize per-driver drag timing metrics and table rows."""
+        if not self._is_drag_discipline() or not hasattr(self, 'drag_time_table'):
+            return
+        self._drag_time_metrics = {}
+        for seed in seeds:
+            did = int(seed.get('driver_id', 0) or 0)
+            if did <= 0:
+                continue
+            self._drag_time_metrics[did] = {
+                'name': str(seed.get('driver_name', f"Driver {did}")),
+                'runs': 0,
+                'last_et': None,
+                'best_et': None,
+                'total_et': 0.0,
+                'total_rt': 0.0,
+                'best_trap': None,
+            }
+        self._refresh_drag_time_board()
+
+    def _refresh_drag_time_board(self) -> None:
+        """Rebuild drag timing table from current metrics."""
+        table = getattr(self, 'drag_time_table', None)
+        if table is None:
+            return
+        items = self._sorted_drag_time_metrics()
+        table.setRowCount(len(items))
+        for row, (_, data) in enumerate(items):
+            self._render_drag_time_row(table, row, data)
+
+    def _sorted_drag_time_metrics(self) -> List[Tuple[int, Dict[str, Any]]]:
+        """Return drag timing metrics sorted by best ET, then runs, then name."""
+        items = list(self._drag_time_metrics.items())
+        def _sort_key(item: Tuple[int, Dict[str, Any]]) -> Tuple[float, int, str]:
+            data = item[1]
+            best = data.get('best_et')
+            best_key = float(best) if isinstance(best, (int, float)) else float('inf')
+            runs = -int(data.get('runs', 0) or 0)
+            name = str(data.get('name', '')).lower()
+            return (best_key, runs, name)
+        items.sort(key=_sort_key)
+        return items
+
+    def _render_drag_time_row(self, table: QTableWidget, row: int, data: Dict[str, Any]) -> None:
+        """Render one row in the drag timing board."""
+        runs = int(data.get('runs', 0) or 0)
+        last_et = data.get('last_et')
+        best_et = data.get('best_et')
+        total_et = float(data.get('total_et', 0.0) or 0.0)
+        total_rt = float(data.get('total_rt', 0.0) or 0.0)
+        best_trap = data.get('best_trap')
+        avg_et = (total_et / runs) if runs > 0 else None
+        avg_rt = (total_rt / runs) if runs > 0 else None
+
+        table.setItem(row, 0, QTableWidgetItem(str(data.get('name', 'Driver'))))
+        table.setItem(row, 1, QTableWidgetItem(str(runs)))
+        table.setItem(row, 2, QTableWidgetItem(self._format_optional_seconds(last_et)))
+        table.setItem(row, 3, QTableWidgetItem(self._format_optional_seconds(best_et)))
+        table.setItem(row, 4, QTableWidgetItem(self._format_optional_seconds(avg_et)))
+        table.setItem(row, 5, QTableWidgetItem(self._format_optional_ms(avg_rt)))
+        table.setItem(row, 6, QTableWidgetItem(self._format_optional_kmh(best_trap)))
+
+    def _format_optional_seconds(self, value: Any) -> str:
+        if isinstance(value, (int, float)):
+            return f"{float(value):.3f}s"
+        return "-"
+
+    def _format_optional_ms(self, value: Any) -> str:
+        if isinstance(value, (int, float)):
+            return f"{float(value):.1f}ms"
+        return "-"
+
+    def _format_optional_kmh(self, value: Any) -> str:
+        if isinstance(value, (int, float)):
+            return f"{float(value):.1f}km/h"
+        return "-"
+
+    def _update_drag_driver_time_metric(self, driver_id: int, driver_name: str, et: Any, reaction: Any, trap: Any) -> None:
+        """Update one driver's timing aggregate from a completed heat."""
+        if driver_id <= 0:
+            return
+        metric = self._get_or_create_drag_metric(driver_id, driver_name)
+        et_val = self._coerce_et(et)
+        rt_val = self._coerce_numeric(reaction)
+        trap_val = self._coerce_positive_numeric(trap)
+        self._apply_et_metric(metric, et_val)
+        self._apply_rt_metric(metric, rt_val)
+        self._apply_trap_metric(metric, trap_val)
+
+    def _get_or_create_drag_metric(self, driver_id: int, driver_name: str) -> Dict[str, Any]:
+        """Return existing driver timing metric row or create a default one."""
+        metric = self._drag_time_metrics.get(driver_id)
+        if metric is None:
+            metric = {
+                'name': driver_name,
+                'runs': 0,
+                'last_et': None,
+                'best_et': None,
+                'total_et': 0.0,
+                'total_rt': 0.0,
+                'best_trap': None,
+            }
+            self._drag_time_metrics[driver_id] = metric
+        return metric
+
+    def _coerce_numeric(self, value: Any) -> Optional[float]:
+        if isinstance(value, (int, float)):
+            return float(value)
+        return None
+
+    def _coerce_positive_numeric(self, value: Any) -> Optional[float]:
+        num = self._coerce_numeric(value)
+        if num is None or num <= 0:
+            return None
+        return num
+
+    def _coerce_et(self, value: Any) -> Optional[float]:
+        num = self._coerce_numeric(value)
+        if num is None or num == float('inf'):
+            return None
+        return num
+
+    def _apply_et_metric(self, metric: Dict[str, Any], et_val: Optional[float]) -> None:
+        if et_val is None:
+            return
+        metric['runs'] = int(metric.get('runs', 0) or 0) + 1
+        metric['last_et'] = et_val
+        metric['total_et'] = float(metric.get('total_et', 0.0) or 0.0) + et_val
+        best_et = metric.get('best_et')
+        metric['best_et'] = et_val if best_et is None else min(float(best_et), et_val)
+
+    def _apply_rt_metric(self, metric: Dict[str, Any], rt_val: Optional[float]) -> None:
+        if rt_val is None:
+            return
+        metric['total_rt'] = float(metric.get('total_rt', 0.0) or 0.0) + rt_val
+
+    def _apply_trap_metric(self, metric: Dict[str, Any], trap_val: Optional[float]) -> None:
+        if trap_val is None:
+            return
+        best_trap = metric.get('best_trap')
+        metric['best_trap'] = trap_val if best_trap is None else max(float(best_trap), trap_val)
+
+    def _rebuild_drag_knockout_tree(self, seeds: List[Dict[str, Any]]) -> None:
+        """Build the full knockout tree from seed list."""
+        tree = getattr(self, 'knockout_tree', None)
+        if tree is None:
+            return
+
+        tree.clear()
+        self._drag_round_nodes = {}
+        self._drag_heat_items = {}
+
+        entrants = list(seeds)
+        if len(entrants) % 2 == 1:
+            entrants = entrants[:-1]
+        if not entrants:
+            return
+        self._populate_drag_knockout_rounds(tree, entrants)
+
+    def _populate_drag_knockout_rounds(self, tree: QTreeWidget, entrants: List[Dict[str, Any]]) -> None:
+        """Populate knockout rounds and per-heat nodes."""
+        round_idx = 1
+        current_size = len(entrants)
+        while current_size >= 2:
+            round_node = QTreeWidgetItem([f"Round {round_idx}", "", "", ""])
+            tree.addTopLevelItem(round_node)
+            self._drag_round_nodes[round_idx] = round_node
+            heat_count = current_size // 2
+            for heat_idx in range(1, heat_count + 1):
+                left_name, right_name = self._drag_heat_lane_labels(round_idx, heat_idx, entrants)
+                heat_item = QTreeWidgetItem([f"H{heat_idx}", f"{left_name} vs {right_name}", "TBD", "-"])
+                round_node.addChild(heat_item)
+                self._drag_heat_items[(round_idx, heat_idx)] = heat_item
+            round_node.setExpanded(True)
+            current_size = heat_count
+            round_idx += 1
+
+    def _drag_heat_lane_labels(self, round_idx: int, heat_idx: int, entrants: List[Dict[str, Any]]) -> Tuple[str, str]:
+        """Return left/right lane labels for a heat."""
+        if round_idx != 1:
+            return "TBD", "TBD"
+        li = (heat_idx - 1) * 2
+        ri = li + 1
+        left_name = str(entrants[li].get('driver_name', 'TBD')) if li < len(entrants) else "TBD"
+        right_name = str(entrants[ri].get('driver_name', 'TBD')) if ri < len(entrants) else "TBD"
+        return left_name, right_name
+
+    def _apply_drag_heat_to_tree(self, event: Dict[str, Any]) -> None:
+        """Update one heat node and propagate winner placeholder to next round."""
+        if not self._is_drag_discipline():
+            return
+        try:
+            round_idx, heat_idx = self._parse_drag_heat_index(event)
+            if round_idx <= 0 or heat_idx <= 0:
+                return
+            item = self._drag_heat_items.get((round_idx, heat_idx))
+            if item is None:
+                return
+
+            left_name, right_name, winner_name = self._drag_heat_names(event)
+            left_et_text, right_et_text = self._drag_heat_et_text(event)
+            self._render_drag_heat_item(item, left_name, right_name, winner_name, left_et_text, right_et_text)
+            self._highlight_drag_winner_if_player(item, event)
+            self._propagate_drag_winner_to_next_round(round_idx, heat_idx, winner_name)
+            self._update_drag_time_metrics_from_event(event, left_name, right_name)
+            self._refresh_drag_time_board()
+        except Exception:
+            pass
+
+    def _parse_drag_heat_index(self, event: Dict[str, Any]) -> Tuple[int, int]:
+        """Extract round/heat indices from drag event payload."""
+        round_idx = int(event.get('round_index', 0) or 0)
+        heat_idx = int(event.get('heat_index', 0) or 0)
+        return round_idx, heat_idx
+
+    def _drag_heat_names(self, event: Dict[str, Any]) -> Tuple[str, str, str]:
+        """Extract lane and winner names from drag event payload."""
+        left_name = str(event.get('left_name', 'TBD'))
+        right_name = str(event.get('right_name', 'TBD'))
+        winner_name = str(event.get('winner_name', 'TBD'))
+        return left_name, right_name, winner_name
+
+    def _drag_heat_et_text(self, event: Dict[str, Any]) -> Tuple[str, str]:
+        """Format per-lane elapsed time text for the bracket row."""
+        left_et = event.get('left_time_s')
+        right_et = event.get('right_time_s')
+        left_et_text = self._format_drag_heat_et(left_et)
+        right_et_text = self._format_drag_heat_et(right_et)
+        return left_et_text, right_et_text
+
+    def _format_drag_heat_et(self, value: Any) -> str:
+        """Format one elapsed-time value for a drag heat lane."""
+        if isinstance(value, (int, float)) and value != float('inf'):
+            return f"{float(value):.3f}s"
+        return "DNF"
+
+    def _render_drag_heat_item(self, item: QTreeWidgetItem, left_name: str, right_name: str, winner_name: str, left_et: str, right_et: str) -> None:
+        """Render a single heat row in the knockout tree."""
+        matchup = f"{left_name} vs {right_name}"
+        item.setText(1, matchup)
+        item.setText(2, winner_name)
+        item.setText(3, f"{left_et} / {right_et}")
+        item.setToolTip(1, matchup)
+        item.setToolTip(2, winner_name)
+        item.setToolTip(3, f"Left lane: {left_et} | Right lane: {right_et}")
+
+    def _highlight_drag_winner_if_player(self, item: QTreeWidgetItem, event: Dict[str, Any]) -> None:
+        """Highlight heat row when player driver wins the matchup."""
+        if int(event.get('winner_id', 0) or 0) != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        for col in range(4):
+            item.setBackground(col, QColor(255, 215, 0, 70))
+
+    def _propagate_drag_winner_to_next_round(self, round_idx: int, heat_idx: int, winner_name: str) -> None:
+        """Push winner name into next-round matchup placeholder."""
+        next_round = round_idx + 1
+        next_heat = (heat_idx + 1) // 2
+        next_item = self._drag_heat_items.get((next_round, next_heat))
+        if next_item is None:
+            return
+        prev_match = next_item.text(1)
+        if (heat_idx % 2) == 1:
+            next_item.setText(1, f"{winner_name} vs TBD")
+            return
+        left_slot = prev_match.split(" vs ")[0] if " vs " in prev_match else "TBD"
+        next_item.setText(1, f"{left_slot} vs {winner_name}")
+
+    def _update_drag_time_metrics_from_event(self, event: Dict[str, Any], left_name: str, right_name: str) -> None:
+        """Update both lane drivers in the drag timing board from heat result payload."""
+        left_id = int(event.get('left_id', 0) or 0)
+        right_id = int(event.get('right_id', 0) or 0)
+        self._update_drag_driver_time_metric(left_id, left_name, event.get('left_time_s'), event.get('left_reaction_ms'), event.get('left_trap_kmh'))
+        self._update_drag_driver_time_metric(right_id, right_name, event.get('right_time_s'), event.get('right_reaction_ms'), event.get('right_trap_kmh'))
+
     def _set_load_data_ready_message(self) -> None:
         """Set final ready message after successful data load."""
         track = self.track
@@ -2981,7 +3396,11 @@ class RaceWindow(QMainWindow):
             return []
 
         # Use existing contracted drivers only; do not mutate contracts here.
-        contracted = self._get_contracted_discipline_drivers(self._initial_discipline, RACE_GRID_SIZE)
+        limit = RACE_GRID_SIZE
+        if str(self._initial_discipline).upper() == 'DRAG_ACCELERATION':
+            # Drag uses one representative per team and bracket-friendly grids.
+            limit = min(16, RACE_GRID_SIZE)
+        contracted = self._get_contracted_discipline_drivers(self._initial_discipline, limit)
         if contracted:
             return contracted
 
@@ -2996,17 +3415,39 @@ class RaceWindow(QMainWindow):
 
         norm = (discipline or "").lower().replace(" ", "_")
         with self.db.get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT d.id
-                FROM drivers d
-                JOIN teams t ON t.id = d.current_team_id
-                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
-                ORDER BY d.speed DESC, d.id ASC
-                LIMIT ?
-                """,
-                (norm, int(limit))
-            ).fetchall()
+            if norm == 'drag_acceleration':
+                rows = conn.execute(
+                    """
+                    WITH ranked AS (
+                        SELECT d.id,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY d.current_team_id
+                                   ORDER BY d.speed DESC, d.reactions DESC, d.id ASC
+                               ) AS rn
+                        FROM drivers d
+                        JOIN teams t ON t.id = d.current_team_id
+                        WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                    )
+                    SELECT id
+                    FROM ranked
+                    WHERE rn = 1
+                    ORDER BY id ASC
+                    LIMIT ?
+                    """,
+                    (norm, int(limit))
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT d.id
+                    FROM drivers d
+                    JOIN teams t ON t.id = d.current_team_id
+                    WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                    ORDER BY d.speed DESC, d.id ASC
+                    LIMIT ?
+                    """,
+                    (norm, int(limit))
+                ).fetchall()
 
         out = []
         for row in rows:
@@ -3148,6 +3589,7 @@ class RaceWindow(QMainWindow):
         # Animation will auto-start when first position update arrives
         if not hasattr(self, '_animation_started'):
             self._animation_started = False
+        self._race_finished_emitted = False
         print("[RACE START] Waiting for simulation to send first position data...")
 
         self._launch_race_thread()
@@ -3182,6 +3624,29 @@ class RaceWindow(QMainWindow):
         context = self._build_race_context(self._event_callback_from_race_thread, track_pts, teams)
         results = simulate_race(context=context, verbose=True, db=cast(Any, self.db))
         print(f"Race simulation complete, {len(results) if results else 0} results")
+        self._emit_race_finished_fallback_if_needed(results, context)
+
+    def _emit_race_finished_fallback_if_needed(self, results: Any, context: Any) -> None:
+        """Emit synthetic race_finished when adapter paths skip event callbacks."""
+        if getattr(self, '_race_finished_emitted', False):
+            return
+        try:
+            race_time = 0.0
+            for item in (results or []):
+                t = getattr(item, 'time_seconds', None)
+                if t is None and isinstance(item, dict):
+                    t = item.get('time_seconds')
+                if t is not None:
+                    race_time = max(race_time, float(t))
+            self._handle_thread_race_finished_event({
+                'type': 'race_finished',
+                'total_laps': int(getattr(context, 'total_laps', 1) or 1),
+                'race_time': race_time,
+                'results': results or [],
+                'collision_log': [],
+            })
+        except Exception:
+            pass
 
     def _build_race_teams_map(self) -> Dict[int, Any]:
         """Resolve team objects for current race entrants."""
@@ -3232,6 +3697,9 @@ class RaceWindow(QMainWindow):
                 return
             if event_type == "race_finished":
                 self._handle_thread_race_finished_event(event)
+                return
+            if event_type in {"drag_bracket_seeded", "drag_heat_result"}:
+                self.emitter.generic_event.emit(event)
                 return
         except Exception as e:
             print(f"ERROR in event_callback: {e}")
@@ -3303,18 +3771,22 @@ class RaceWindow(QMainWindow):
 
     def _update_track_widget_realtime(self, driver_id: int, pos_data: Dict[str, Any], race_time: float) -> None:
         """Update track widget position for a running car."""
-        if not self.track_widget or not pos_data.get("running", True):
+        if not self.track_widget:
             return
         position_m = float(pos_data.get("position_m", 0.0))
         lap = int(pos_data.get("lap", 0))
         velocity_mps = float(pos_data.get("velocity_mps", 0.0))
+        running = bool(pos_data.get("running", True))
         if hasattr(self.track_widget, 'update_car_realtime'):
             self.track_widget.update_car_realtime(
                 driver_id=driver_id,
                 position_m=position_m,
                 lap=lap,
                 velocity_mps=velocity_mps,
+                running=running,
             )
+            return
+        if not running:
             return
         self.track_widget.update_car_position(
             driver_id=driver_id,
@@ -3386,6 +3858,7 @@ class RaceWindow(QMainWindow):
 
     def _handle_thread_race_finished_event(self, event: dict) -> None:
         """Store completion diagnostics and emit race-finished payload."""
+        self._race_finished_emitted = True
         total_laps = int(event.get("total_laps", 0))
         race_time = float(event.get("race_time", 0.0))
         print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
@@ -3566,7 +4039,12 @@ class RaceWindow(QMainWindow):
                 print("WARNING: No results to display")
                 return
             results_sorted = self._sorted_results_by_position(results)
-            self._render_final_standings(results_sorted)
+            if self._is_drag_discipline():
+                winner = results_sorted[0] if results_sorted else {}
+                winner_name = str(winner.get('driver_name', 'Unknown Winner'))
+                self.info_label.setText(f"Race finished! Winner: {winner_name}")
+            else:
+                self._render_final_standings(results_sorted)
         except Exception as e:
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
@@ -3744,7 +4222,44 @@ class RaceWindow(QMainWindow):
             return
         start_pos = self._build_summary_start_positions(results_sorted)
         rows = self._build_summary_rows(results_sorted, start_pos)
-        self._show_summary_table_dialog(rows)
+        summary = self._build_post_race_summary(results_sorted, start_pos, rows)
+        self._show_summary_table_dialog(rows, results_sorted, summary)
+
+    def _build_post_race_summary(
+        self,
+        results_sorted: list,
+        start_pos: Dict[Any, int],
+        rows: List[Tuple[Optional[int], int, str, int, str]],
+    ) -> Dict[str, Any]:
+        """Build headline metrics used by the post-race summary dialog."""
+        winner = results_sorted[0] if results_sorted else {}
+        winner_name = str(winner.get('driver_name', 'Unknown'))
+        winner_time = float(winner.get('time_seconds', 0.0) or 0.0)
+        dnfs = sum(1 for r in results_sorted if r.get('dnf_reason'))
+
+        player_finish = None
+        player_change = None
+        if self.player_driver_id is not None:
+            for r in results_sorted:
+                if int(r.get('driver_id', -1)) == int(self.player_driver_id):
+                    player_finish = int(r.get('position', 0) or 0)
+                    p_start = start_pos.get(self._normalize_driver_id(self.player_driver_id))
+                    if p_start is not None and player_finish > 0:
+                        player_change = int(p_start) - int(player_finish)
+                    break
+
+        biggest_gain = max(rows, key=lambda x: x[3], default=None)
+        biggest_loss = min(rows, key=lambda x: x[3], default=None)
+
+        return {
+            'winner_name': winner_name,
+            'winner_time': winner_time,
+            'dnfs': dnfs,
+            'player_finish': player_finish,
+            'player_change': player_change,
+            'biggest_gain': biggest_gain,
+            'biggest_loss': biggest_loss,
+        }
 
     def _normalize_driver_id(self, driver_id: Any) -> Any:
         """Normalize driver id keys to int when possible."""
@@ -3796,20 +4311,81 @@ class RaceWindow(QMainWindow):
         rows.sort(key=lambda r: (r[1], r[0] if r[0] is not None else 9999))
         return rows
 
-    def _show_summary_table_dialog(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> None:
-        """Show a compact position-change dialog with table-only content."""
+    def _show_summary_table_dialog(
+        self,
+        rows: List[Tuple[Optional[int], int, str, int, str]],
+        results_sorted: list,
+        summary: Dict[str, Any],
+    ) -> None:
+        """Show a richer post-race summary dialog with highlights and result tables."""
         dlg = QDialog(self)
-        dlg.setWindowTitle("Race Position Changes")
+        dlg.setWindowTitle("Race Summary")
         dlg_layout = QVBoxLayout()
 
-        info = QLabel("<h2>Start -> Finish</h2><p>Positive = gained positions. DNFs are highlighted.</p>")
-        info.setTextFormat(Qt.TextFormat.RichText)
-        dlg_layout.addWidget(info)
+        dlg_layout.addWidget(self._build_post_race_header_label(summary))
+        dlg_layout.addWidget(self._build_post_race_highlights_label(summary))
+        dlg_layout.addWidget(self._build_position_change_table(rows))
+        dlg_layout.addWidget(self._build_detail_title_label())
+        dlg_layout.addWidget(self._build_detailed_results_table(results_sorted))
 
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dlg.accept)
+        dlg_layout.addWidget(close_btn)
+
+        try:
+            pref_w, pref_h = get_preferred_window_size()
+            dlg_w = int(pref_w * 0.82)
+            dlg_h = int(pref_h * 0.74)
+            dlg.setMinimumSize(dlg_w, dlg_h)
+            dlg.resize(dlg_w, dlg_h)
+        except Exception:
+            pass
+
+        dlg.setLayout(dlg_layout)
+        dlg.setModal(True)
+        dlg.exec()
+
+    def _build_post_race_header_label(self, summary: Dict[str, Any]) -> QLabel:
+        """Build top headline label for post-race summary."""
+        winner_time = float(summary.get('winner_time', 0.0) or 0.0)
+        minutes = int(winner_time // 60)
+        seconds = winner_time % 60
+        winner_time_text = f"{minutes}:{seconds:06.3f}" if winner_time > 0 else "-"
+        player_finish = summary.get('player_finish')
+        player_change = summary.get('player_change')
+        player_line = "Player: n/a"
+        if player_finish is not None:
+            delta = f" ({player_change:+d})" if player_change is not None else ""
+            player_line = f"Player: P{int(player_finish)}{delta}"
+
+        info = QLabel(
+            "<h2>Post-Race Summary</h2>"
+            f"<p><b>Winner:</b> {summary.get('winner_name', 'Unknown')} | "
+            f"<b>Time:</b> {winner_time_text} | "
+            f"<b>DNFs:</b> {int(summary.get('dnfs', 0) or 0)} | "
+            f"<b>{player_line}</b></p>"
+            "<p>Positive change means positions gained from start.</p>"
+        )
+        info.setTextFormat(Qt.TextFormat.RichText)
+        return info
+
+    def _build_post_race_highlights_label(self, summary: Dict[str, Any]) -> QLabel:
+        """Build single-line highlight summary label."""
+        gain = summary.get('biggest_gain')
+        loss = summary.get('biggest_loss')
+        gain_text = f"{gain[2]} ({gain[3]:+d})" if gain else "n/a"
+        loss_text = f"{loss[2]} ({loss[3]:+d})" if loss else "n/a"
+        highlights = QLabel(f"Highlights: Biggest gain - {gain_text} | Biggest loss - {loss_text}")
+        highlights.setStyleSheet("font-size: 13px; font-weight: bold; color: #F5F5F5;")
+        return highlights
+
+    def _build_position_change_table(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> QTableWidget:
+        """Build start/finish delta table for summary dialog."""
         table = QTableWidget()
         table.setColumnCount(5)
         table.setHorizontalHeaderLabels(["Start", "Finish", "Driver", "Change", "Status"])
         table.setRowCount(len(rows))
+
         for r, row in enumerate(rows):
             start, finish, name, change, status = row
             table.setItem(r, 0, QTableWidgetItem(str(start) if start is not None else "-"))
@@ -3831,24 +4407,68 @@ class RaceWindow(QMainWindow):
             hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
             hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         table.setAlternatingRowColors(True)
-        dlg_layout.addWidget(table)
+        return table
 
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(dlg.accept)
-        dlg_layout.addWidget(close_btn)
+    def _build_detail_title_label(self) -> QLabel:
+        """Build detailed results section title label."""
+        detail_title = QLabel("<h3>Detailed Results</h3>")
+        detail_title.setTextFormat(Qt.TextFormat.RichText)
+        return detail_title
 
-        try:
-            pref_w, pref_h = get_preferred_window_size()
-            dlg_w = int(pref_w * 0.65)
-            dlg_h = int(pref_h * 0.5)
-            dlg.setMinimumSize(dlg_w, dlg_h)
-            dlg.resize(dlg_w, dlg_h)
-        except Exception:
-            pass
+    def _build_detailed_results_table(self, results_sorted: list) -> QTableWidget:
+        """Build detailed results table with drag-specific telemetry columns."""
+        detail = QTableWidget()
+        detail.setColumnCount(7)
+        detail.setHorizontalHeaderLabels(["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"])
+        detail.setRowCount(len(results_sorted))
+        leader_time = float(results_sorted[0].get('time_seconds', 0.0) or 0.0) if results_sorted else 0.0
 
-        dlg.setLayout(dlg_layout)
-        dlg.setModal(True)
-        dlg.exec()
+        for row_idx, res in enumerate(results_sorted):
+            pos, name, time_text, gap_text, reaction_text, trap_text, status = self._format_detail_row(res, row_idx, leader_time)
+            detail.setItem(row_idx, 0, QTableWidgetItem(str(pos)))
+            detail.setItem(row_idx, 1, QTableWidgetItem(name))
+            detail.setItem(row_idx, 2, QTableWidgetItem(time_text))
+            detail.setItem(row_idx, 3, QTableWidgetItem(gap_text))
+            detail.setItem(row_idx, 4, QTableWidgetItem(reaction_text))
+            detail.setItem(row_idx, 5, QTableWidgetItem(trap_text))
+            status_item = QTableWidgetItem(status)
+            if status == 'DNF':
+                status_item.setBackground(QColor(220, 40, 40))
+                status_item.setForeground(QColor(255, 255, 255))
+            detail.setItem(row_idx, 6, status_item)
+
+        detail_hdr = detail.horizontalHeader()
+        if isinstance(detail_hdr, QHeaderView):
+            detail_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+            detail_hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            detail_hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+            detail_hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            detail_hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+            detail_hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+            detail_hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+        detail.setAlternatingRowColors(True)
+        detail.setMinimumHeight(240)
+        return detail
+
+    def _format_detail_row(self, res: Dict[str, Any], row_idx: int, leader_time: float) -> Tuple[int, str, str, str, str, str, str]:
+        """Format a single detailed result row payload."""
+        pos = int(res.get('position', row_idx + 1) or (row_idx + 1))
+        name = str(res.get('driver_name', f"Driver {pos}"))
+        time_s = res.get('time_seconds')
+        reaction = res.get('reaction_time_ms')
+        trap = res.get('trap_speed_kmh')
+        status = 'DNF' if res.get('dnf_reason') else str(res.get('status', 'FINISHED'))
+
+        if isinstance(time_s, (int, float)) and time_s != float('inf'):
+            time_text = f"{float(time_s):.3f}s"
+            gap_text = "-" if row_idx == 0 else f"+{max(0.0, float(time_s) - leader_time):.3f}s"
+        else:
+            time_text = "DNF"
+            gap_text = "-"
+
+        reaction_text = f"{float(reaction):.1f} ms" if isinstance(reaction, (int, float)) else "-"
+        trap_text = f"{float(trap):.1f} km/h" if isinstance(trap, (int, float)) and float(trap) > 0 else "-"
+        return pos, name, time_text, gap_text, reaction_text, trap_text, status
 
     def _on_event(self, message: str):
         """
@@ -3890,6 +4510,19 @@ class RaceWindow(QMainWindow):
             return
 
         self.info_label.setText(message)
+
+    def _on_generic_event(self, event: dict) -> None:
+        """Handle structured non-string events from simulation adapters."""
+        if not isinstance(event, dict):
+            return
+        event_type = event.get('type')
+        if event_type == 'drag_bracket_seeded':
+            seeds = event.get('seeds', [])
+            if isinstance(seeds, list):
+                self._rebuild_drag_knockout_tree(seeds)
+            return
+        if event_type == 'drag_heat_result':
+            self._apply_drag_heat_to_tree(event)
 
     def _handle_start_animation_event(self) -> None:
         """Start track animation when first simulation data is ready."""
@@ -4517,9 +5150,17 @@ class RaceWindow(QMainWindow):
         except Exception:
             pass
 
+        # Drag races are easiest to read in follow mode by default.
+        try:
+            if driver and self._is_drag_discipline() and getattr(self, 'track_widget', None) is not None:
+                self._set_camera_mode('follow')
+        except Exception:
+            pass
+
     def _build_cars_from_drivers(self) -> List[Car]:
         """Create grid cars from current entrant list using stable grid spacing."""
         cars: List[Car] = []
+        show_on_grid = not self._is_drag_discipline()
         for i, drv in enumerate(getattr(self, 'drivers', []) or []):
             row = i // 2
             grid_spacing = 15.0
@@ -4537,7 +5178,8 @@ class RaceWindow(QMainWindow):
                 colour=car_colour,
                 total_time=0.0,
                 avg_lap_time=60.0,
-                last_lap=0
+                last_lap=0,
+                active=show_on_grid
             ))
         return cars
 
@@ -4567,19 +5209,53 @@ class RaceWindow(QMainWindow):
             existing = getattr(self, 'drivers', None)
             if not driver or existing is None:
                 return
-
-            present = any(getattr(d, 'id', None) == driver.id for d in existing)
-            if not present:
-                if len(existing) >= RACE_GRID_SIZE:
-                    existing[-1] = driver
-                else:
-                    existing.append(driver)
-
-            if self._refresh_grid_visuals():
-                print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
-                print("[RACE WINDOW] Standings updated to include player driver")
+            if self._is_drag_discipline():
+                self._sync_drag_player_driver_in_grid(existing, driver)
+                return
+            self._sync_standard_player_driver_in_grid(existing, driver)
         except Exception:
             print("[RACE WINDOW] Warning: couldn't ensure player driver in driver list")
+
+    def _sync_drag_player_driver_in_grid(self, existing: List[Any], driver: Any) -> None:
+        """Keep drag entrant list aligned with selected player driver."""
+        driver_id = int(getattr(driver, 'id', 0) or 0)
+        team_id = int(getattr(driver, 'current_team_id', 0) or 0)
+        if driver_id <= 0:
+            return
+        if any(int(getattr(d, 'id', 0) or 0) == driver_id for d in existing):
+            return
+
+        replaced = self._replace_drag_team_representative(existing, team_id, driver)
+        if not replaced and existing:
+            existing[-1] = driver
+
+        if self._refresh_grid_visuals():
+            self._init_drag_knockout_tree_safe()
+            print(f"[RACE WINDOW] Drag roster synced to selected player: {driver.name} (ID: {driver.id})")
+
+    def _replace_drag_team_representative(self, existing: List[Any], team_id: int, driver: Any) -> bool:
+        """Replace current team representative in drag entrant list."""
+        if team_id <= 0:
+            return False
+        for idx, entrant in enumerate(existing):
+            entrant_team = int(getattr(entrant, 'current_team_id', 0) or 0)
+            if entrant_team == team_id:
+                existing[idx] = driver
+                return True
+        return False
+
+    def _sync_standard_player_driver_in_grid(self, existing: List[Any], driver: Any) -> None:
+        """Ensure selected player driver is present for non-drag disciplines."""
+        present = any(getattr(d, 'id', None) == driver.id for d in existing)
+        if not present:
+            if len(existing) >= RACE_GRID_SIZE:
+                existing[-1] = driver
+            else:
+                existing.append(driver)
+
+        if self._refresh_grid_visuals():
+            print(f"[RACE WINDOW] Rebuilt cars to include player: {driver.name} (ID: {driver.id})")
+            print("[RACE WINDOW] Standings updated to include player driver")
 
     def set_player_team(self, team):
         """Set the player team so strategy controls apply to all team cars."""
@@ -4603,6 +5279,9 @@ class RaceWindow(QMainWindow):
         """Ensure all contracted drivers for player team are present in entrants."""
         try:
             if self.player_team_id is None or self.db is None or getattr(self, 'drivers', None) is None:
+                return
+            if self._is_drag_discipline():
+                # Drag uses a fixed one-driver-per-team bracket roster.
                 return
 
             team_drivers = self.db.get_drivers_by_team(self.player_team_id)
