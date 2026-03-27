@@ -1153,6 +1153,7 @@ class TrackWidget(QWidget):
         try:
             if not self.track_points:
                 return
+            style = self._resolve_surface_visual_profile()
             TRACK_WIDTH = 14
             for i in range(0, len(self.track_points) - 1):
                 pt = self.track_points[i]
@@ -1169,7 +1170,7 @@ class TrackWidget(QWidget):
                     runoff_inner = TRACK_WIDTH + 1
                     runoff_outer = TRACK_WIDTH + 9
 
-                    painter.setPen(QPen(QColor(220, 90, 90), 8))  # Red asphalt
+                    painter.setPen(QPen(style['runoff_color'], 8))
                     if pt.curvature > 0:  # Left turn - runoff on right
                         mid_offset = (runoff_inner + runoff_outer) / 2
                         painter.drawLine(
@@ -1834,36 +1835,84 @@ class TrackWidget(QWidget):
 
     def _resolve_track_surface_color(self) -> Tuple[int, int, int]:
         """Resolve track base color, adjusted by grip where available."""
-        surface = getattr(self, 'track_surface', '') or ''
-        base_colors = {
-            'asphalt': (85, 85, 85),
-            'tarmac': (85, 85, 85),
-            'concrete': (100, 100, 100),
-            'gravel': (120, 90, 50),
-            'mixed': (80, 75, 70),
-            'dirt': (110, 80, 45),
-        }
-        r, g, b = base_colors.get(surface.lower(), (85, 85, 85))
+        style = self._resolve_surface_visual_profile()
+        base = style['lane_color']
+        return base.red(), base.green(), base.blue()
+
+    def _normalize_surface_grip(self) -> Optional[float]:
+        """Normalize grip values to 0..1 regardless of storage scale."""
         grip_val = getattr(self, 'surface_grip', None)
+        if grip_val is None:
+            return None
         try:
-            if grip_val is not None:
-                gv = float(grip_val)
-                if gv > 1.0:
-                    gv = min(1.0, gv / 20.0)
-                factor = 0.75 + 0.25 * gv
-                r = int(max(0, min(255, r * factor)))
-                g = int(max(0, min(255, g * factor)))
-                b = int(max(0, min(255, b * factor)))
+            gv = float(grip_val)
         except Exception:
-            pass
-        return r, g, b
+            return None
+        if gv > 1.0:
+            gv = gv / 20.0
+        return max(0.0, min(1.0, gv))
+
+    def _resolve_surface_visual_profile(self) -> Dict[str, QColor]:
+        """Resolve lane, line, edge, and runoff colors by surface/grip."""
+        surface = getattr(self, 'track_surface', '') or ''
+        base_profiles: Dict[str, Dict[str, QColor]] = {
+            'asphalt': {
+                'lane_color': QColor(85, 85, 85),
+                'line_color': QColor(45, 45, 45),
+                'edge_color': QColor(240, 240, 240),
+                'runoff_color': QColor(220, 90, 90),
+            },
+            'tarmac': {
+                'lane_color': QColor(85, 85, 85),
+                'line_color': QColor(45, 45, 45),
+                'edge_color': QColor(240, 240, 240),
+                'runoff_color': QColor(220, 90, 90),
+            },
+            'concrete': {
+                'lane_color': QColor(110, 110, 110),
+                'line_color': QColor(70, 70, 70),
+                'edge_color': QColor(225, 225, 225),
+                'runoff_color': QColor(200, 140, 85),
+            },
+            'gravel': {
+                'lane_color': QColor(128, 101, 64),
+                'line_color': QColor(95, 75, 48),
+                'edge_color': QColor(230, 220, 200),
+                'runoff_color': QColor(165, 128, 82),
+            },
+            'mixed': {
+                'lane_color': QColor(95, 88, 80),
+                'line_color': QColor(62, 58, 54),
+                'edge_color': QColor(230, 225, 215),
+                'runoff_color': QColor(190, 120, 95),
+            },
+            'dirt': {
+                'lane_color': QColor(120, 82, 50),
+                'line_color': QColor(95, 65, 40),
+                'edge_color': QColor(235, 220, 190),
+                'runoff_color': QColor(160, 105, 75),
+            },
+        }
+        profile = dict(base_profiles.get(surface.lower(), base_profiles['asphalt']))
+
+        grip_norm = self._normalize_surface_grip()
+        if grip_norm is not None:
+            darken = 0.75 + 0.25 * grip_norm
+            profile['lane_color'] = QColor(
+                int(max(0, min(255, profile['lane_color'].red() * darken))),
+                int(max(0, min(255, profile['lane_color'].green() * darken))),
+                int(max(0, min(255, profile['lane_color'].blue() * darken))),
+            )
+            if grip_norm < 0.7:
+                profile['line_color'] = QColor(35, 35, 35)
+        return profile
 
     def _draw_track_surface_and_racing_line(self, painter, centerline: QPainterPath, track_width: int) -> None:
         """Draw surface base and darker racing line."""
-        r, g, b = self._resolve_track_surface_color()
+        style = self._resolve_surface_visual_profile()
         painter.setPen(
             QPen(
-                QColor(r, g, b),
+                style['lane_color'],
                 track_width * 2,
                 Qt.PenStyle.SolidLine,
                 Qt.PenCapStyle.RoundCap,
@@ -1874,7 +1923,7 @@ class TrackWidget(QWidget):
 
         painter.setPen(
             QPen(
-                QColor(45, 45, 45),
+                style['line_color'],
                 track_width * 1.2,
                 Qt.PenStyle.SolidLine,
                 Qt.PenCapStyle.RoundCap,
@@ -1885,7 +1934,8 @@ class TrackWidget(QWidget):
 
     def _draw_track_edges(self, painter, track_width: int) -> None:
         """Draw left and right white edge lines."""
-        painter.setPen(QPen(QColor(240, 240, 240), 1))
+        style = self._resolve_surface_visual_profile()
+        painter.setPen(QPen(style['edge_color'], 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         for i in range(0, len(self.track_points) - 1):
             pt = self.track_points[i]
@@ -2745,6 +2795,8 @@ class RaceWindow(QMainWindow):
                 routes = CircuitGenerator.generate_with_routes(wrapper, options={})
 
             track_points = routes.get('main')
+            self.pit_points = routes.get('pit')
+            self.joker_points = routes.get('joker')
             if not track_points:
                 self.info_label.setText("Error: Failed to generate circuit")
                 self.start_btn.setEnabled(False)
@@ -2769,6 +2821,8 @@ class RaceWindow(QMainWindow):
                 self.appearance_manager,
                 track_surface=getattr(self.track, 'surface', 'asphalt'),
                 surface_grip=getattr(self.track, 'surface_grip', None),
+                pit_points=getattr(self, 'pit_points', None),
+                joker_points=getattr(self, 'joker_points', None),
             )
             while self.left_layout.count():
                 item = self.left_layout.takeAt(0)
