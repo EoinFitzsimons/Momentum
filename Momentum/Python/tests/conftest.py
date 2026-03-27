@@ -1,172 +1,149 @@
-"""
-Pytest Configuration and Fixtures
+"""Shared fixtures for Momentum backend test suite.
 
-Provides reusable fixtures for all test suites including:
-- Test database instances
-- Sample driver/team/track data
-- Simulation engine instances
-- Mock API responses
+This suite is intentionally deterministic and report-friendly:
+- Isolated temporary SQLite database per test
+- Explicitly seeded reference data
+- API client fixture patched to test DB
 """
+
+from __future__ import annotations
+
+import sys
+import tempfile
+from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
-import sys
-import os
-from pathlib import Path
-import tempfile
-import shutil
+from fastapi.testclient import TestClient
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Ensure imports resolve from Momentum/Python
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from database.database_manager import DatabaseManager
-from database.models import Driver, Team, Track, Championship, Race, RaceResult
+from database.models import Championship, Driver, Team, Track
+from services.championship_service import ChampionshipService
+from services.team_service import TeamService
 
 
 @pytest.fixture(scope="function")
-def test_db():
-    """Create temporary test database for isolation"""
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
-        db_path = os.path.join(tmpdir, "test_momentum.db")
-        db = DatabaseManager(db_path)
-        # init_database is called automatically in __init__
+def test_db() -> Iterator[DatabaseManager]:
+    """Create an isolated temporary SQLite database for each test."""
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+        db_path = Path(temp_dir) / "momentum_test.db"
+        db = DatabaseManager(str(db_path))
         yield db
-        # Cleanup happens automatically with temp directory
 
 
 @pytest.fixture(scope="function")
-def seeded_db(test_db):
-    """Database with sample data"""
-    # Populate minimal baseline data expected by integration tests.
-    if len(test_db.get_all_drivers()) == 0:
-        with test_db.get_connection() as conn:
-            for i in range(1, 11):
-                conn.execute(
-                    """
-                    INSERT INTO drivers (name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (f"Seed Driver {i}", "GBR", "1995-01-01", 60 + i, 55 + i, 50 + i, "SINGLE_SEATER"),
-                )
+def seeded_db(test_db: DatabaseManager):
+    """Seed deterministic teams, tracks, and drivers for stable tests."""
+    team_ids = []
+    for idx in range(3):
+        team_id = test_db.create_team(
+            Team(
+                id=0,
+                name=f"Team {idx + 1}",
+                nationality="GBR",
+                discipline="SINGLE_SEATER",
+                tier="TIER_1",
+                budget=50_000_000 + idx * 1_000_000,
+                headquarters="Silverstone",
+                team_principal=f"Principal {idx + 1}",
+            )
+        )
+        team_ids.append(team_id)
 
-            for i in range(1, 6):
-                conn.execute(
-                    """
-                    INSERT INTO teams (name, nationality, discipline, tier, budget, operations_rating)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (f"Seed Team {i}", "GBR", "SINGLE_SEATER", "TIER_1", 50_000_000.0, 70.0 + i),
-                )
+    track_specs = [
+        ("Alpha Circuit", "SINGLE_SEATER", "asphalt"),
+        ("Beta Raceway", "SPRINT_RALLYCROSS", "asphalt"),
+        ("Gamma Park", "SINGLE_SEATER", "asphalt"),
+    ]
+    track_ids = []
+    for name, discipline, surface in track_specs:
+        track_id = test_db.create_track(
+            Track(
+                id=0,
+                name=name,
+                country="UK",
+                primary_discipline=discipline,
+                length_km=4.5,
+                turns=12,
+                avg_speed_kmh=175.0,
+                longest_straight_m=800.0,
+                tightest_corner_radius_m=35.0,
+                left_turns=6,
+                right_turns=6,
+                drs_zones=1,
+                surface=surface,
+            )
+        )
+        track_ids.append(track_id)
 
-            for i in range(1, 4):
-                conn.execute(
-                    """
-                    INSERT INTO tracks (name, country, primary_discipline, surface, length_km, turns, avg_speed_kmh)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (f"Seed Circuit {i}", "UK", "SINGLE_SEATER", "asphalt", 4.0 + i * 0.2, 10 + i, 170.0),
-                )
-            conn.commit()
+    driver_ids = []
+    for idx in range(6):
+        driver_id = test_db.create_driver(
+            Driver(
+                id=0,
+                name=f"Driver {idx + 1}",
+                nationality="GBR",
+                birth_date="1998-01-01",
+                speed=70 + idx,
+                racecraft=68 + idx,
+                consistency=65 + idx,
+                preferred_discipline="SINGLE_SEATER",
+                current_team_id=team_ids[idx % len(team_ids)],
+            )
+        )
+        driver_ids.append(driver_id)
 
-    return test_db
-
-
-@pytest.fixture
-def sample_drivers(seeded_db):
-    """Get sample drivers from seeded database"""
-    return seeded_db.get_all_drivers()[:5]
-
-
-@pytest.fixture
-def sample_teams(seeded_db):
-    """Get sample teams from seeded database"""
-    return seeded_db.get_teams_by_discipline("SINGLE_SEATER")[:5]
-
-
-@pytest.fixture
-def sample_tracks(seeded_db):
-    """Get sample tracks from seeded database"""
-    return seeded_db.get_all_tracks()[:5]
-
-
-@pytest.fixture
-def test_driver():
-    """Create a single test driver"""
-    return Driver(
-        id=1,
-        name="Test Driver",
-        nationality="Test Country",
-        birth_date="1996-01-01",
-        speed=85,
-        racecraft=80,
-        consistency=75,
-        pressure=70,
-        reactions=88,
-        adaptability=72,
-        fitness=80,
-        preferred_discipline="SINGLE_SEATER",
-    )
+    return {
+        "db": test_db,
+        "team_ids": team_ids,
+        "track_ids": track_ids,
+        "driver_ids": driver_ids,
+    }
 
 
-@pytest.fixture
-def test_team():
-    """Create a single test team"""
-    return Team(
-        id=1,
-        nationality="Test Country",
-        discipline="SINGLE_SEATER",
-        tier="TIER_1",
-        budget=50000000,
-        name="Test Team",
-        headquarters="Test City",
-    )
+@pytest.fixture(scope="function")
+def seeded_championship(seeded_db):
+    """Create a championship season with scheduled races using seeded tracks."""
+    db: DatabaseManager = seeded_db["db"]
+    service = ChampionshipService(db)
 
-
-@pytest.fixture
-def test_track():
-    """Create a single test track"""
-    return Track(
-        id=1,
-        name="Test Circuit",
-        country="Test Country",
-        primary_discipline="SINGLE_SEATER",
-        length_km=5.5,
-        turns=15,
-        surface_grip=1.0,
-        surface_abrasiveness=8.0,
-    )
-
-
-@pytest.fixture
-def test_championship(seeded_db):
-    """Create a test championship"""
-    drivers = seeded_db.list_drivers()[:20]
-    teams = seeded_db.list_teams()[:10]
-    
     championship = Championship(
         id=0,
         name="Test Championship",
-        discipline="SINGLE_SEATER",
-        season_length=10,
-        points_system="standard",
+        discipline="SPRINT_RALLYCROSS",
+        season_length=3,
+        points_system="SPRINT_RALLYCROSS",
         current_season=1,
     )
-    
-    champ_id = seeded_db.create_championship(championship)
-    return seeded_db.get_championship(champ_id)
+
+    champ_id, race_ids = service.create_championship_season(
+        championship=championship,
+        tracks=seeded_db["track_ids"],
+        start_date=__import__("datetime").datetime(2026, 1, 1),
+    )
+
+    return {
+        "db": db,
+        "service": service,
+        "championship_id": champ_id,
+        "race_ids": race_ids,
+        "seed": seeded_db,
+    }
 
 
-# Markers for test categorization
-def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "unit: mark test as unit test (no external dependencies)"
-    )
-    config.addinivalue_line(
-        "markers", "integration: mark test as integration test"
-    )
-    config.addinivalue_line(
-        "markers", "performance: mark test as performance/benchmark test"
-    )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow (> 1 second)"
-    )
+@pytest.fixture(scope="function")
+def api_client(seeded_db, monkeypatch):
+    """Return FastAPI TestClient with simulation services patched to test DB."""
+    import simulation
+
+    db: DatabaseManager = seeded_db["db"]
+    monkeypatch.setattr(simulation, "db_manager", db)
+    monkeypatch.setattr(simulation, "championship_service", ChampionshipService(db))
+    monkeypatch.setattr(simulation, "team_service", TeamService(db))
+
+    return TestClient(simulation.app)

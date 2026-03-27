@@ -12,22 +12,18 @@ Provides:
 """
 
 import sys
-import os
 import logging
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QTableWidget, QTableWidgetItem, QComboBox, QGroupBox,
-    QDialog, QLineEdit, QSpinBox, QTextEdit, QMessageBox, QHeaderView,
-    QProgressBar, QListWidget, QListWidgetItem, QScrollArea, QFormLayout
+    QDialog, QLineEdit, QSpinBox, QTextEdit, QMessageBox, QHeaderView
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QFont, QColor, QIcon
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QFont, QColor
 from typing import Optional, List, Dict, Any, Tuple
 from database.database_manager import DatabaseManager
-from services.championship_service import ChampionshipService, POINTS_SYSTEMS
+from services.championship_service import ChampionshipService
 from database.models import Championship, Race
 from datetime import datetime
 
@@ -152,17 +148,26 @@ class ChampionshipSelectionDialog(QDialog):
         
         create_btn = QPushButton(CREATE_CHAMPIONSHIP_TEXT)
         create_btn.clicked.connect(self.create_championship)
-        create_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #B9F2FF; color: #353839; font-weight: bold; }")
+        create_btn.setStyleSheet(
+            "QPushButton { padding: 10px; background-color: #B9F2FF; "
+            "color: #353839; font-weight: bold; }"
+        )
         buttons_layout.addWidget(create_btn)
 
         delete_btn = QPushButton("Delete Championship")
         delete_btn.clicked.connect(self.delete_championship)
-        delete_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #8B0000; color: white; font-weight: bold; }")
+        delete_btn.setStyleSheet(
+            "QPushButton { padding: 10px; background-color: #8B0000; "
+            "color: white; font-weight: bold; }"
+        )
         buttons_layout.addWidget(delete_btn)
         
         select_btn = QPushButton("Select Championship")
         select_btn.clicked.connect(self.select_championship)
-        select_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #DD2D4A; color: white; font-weight: bold; }")
+        select_btn.setStyleSheet(
+            "QPushButton { padding: 10px; background-color: #DD2D4A; "
+            "color: white; font-weight: bold; }"
+        )
         buttons_layout.addWidget(select_btn)
         
         cancel_btn = QPushButton("Cancel")
@@ -362,7 +367,10 @@ class CreateChampionshipDialog(QDialog):
         
         create_btn = QPushButton("Create Championship")
         create_btn.clicked.connect(self.create_championship)
-        create_btn.setStyleSheet("QPushButton { padding: 10px; background-color: #B9F2FF; color: #353839; font-weight: bold; }")
+        create_btn.setStyleSheet(
+            "QPushButton { padding: 10px; background-color: #B9F2FF; "
+            "color: #353839; font-weight: bold; }"
+        )
         buttons_layout.addWidget(create_btn)
         
         cancel_btn = QPushButton("Cancel")
@@ -409,7 +417,10 @@ class CreateChampionshipDialog(QDialog):
             logger.info(f"Found {len(tracks)} tracks for {championship.discipline}")
             
             if not tracks or len(tracks) < self.season_spin.value():
-                logger.warning(f"Insufficient discipline-specific tracks ({len(tracks)} available, {self.season_spin.value()} needed)")
+                logger.warning(
+                    "Insufficient discipline-specific tracks "
+                    f"({len(tracks)} available, {self.season_spin.value()} needed)"
+                )
                 logger.info("Falling back to all available tracks in database")
                 # If not enough tracks, try to get any tracks
                 all_tracks = self.db.get_all_tracks()
@@ -455,14 +466,24 @@ class CreateChampionshipDialog(QDialog):
                 f"Invalid input:\n{str(e)}\n\nPlease check your inputs and try again."
             )
         except AttributeError as e:
-            logger.error(f"Attribute error (likely database schema mismatch): {str(e)}", exc_info=True)
+            logger.error(
+                f"Attribute error (likely database schema mismatch): {str(e)}",
+                exc_info=True,
+            )
             QMessageBox.critical(
                 self,
                 "Database Error",
-                f"Database structure error:\n{str(e)}\n\nThe database may need to be regenerated. Check the log file for details."
+                "Database structure error:\n"
+                f"{str(e)}\n\n"
+                "The database may need to be regenerated. "
+                "Check the log file for details."
             )
         except Exception as e:
-            logger.error(f"Unexpected error creating championship: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Unexpected error creating championship: "
+                f"{type(e).__name__}: {str(e)}",
+                exc_info=True,
+            )
             QMessageBox.critical(
                 self,
                 "Error",
@@ -532,7 +553,10 @@ class ChampionshipWindow(QMainWindow):
         
         # Notification area
         self.notification_label = QLabel()
-        self.notification_label.setStyleSheet(f"color: {COLORS['info']}; padding: 8px; background-color: rgba(52, 152, 219, 0.1); border-radius: 4px;")
+        self.notification_label.setStyleSheet(
+            f"color: {COLORS['info']}; padding: 8px; "
+            "background-color: rgba(52, 152, 219, 0.1); border-radius: 4px;"
+        )
         self.notification_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.notification_label.hide()
         layout.addWidget(self.notification_label)
@@ -645,7 +669,13 @@ class ChampionshipWindow(QMainWindow):
         for i, entry in enumerate(standings):
             pos_item = QTableWidgetItem(str(entry.position))
             pos_item.setForeground(QColor(COLORS['accent']))
-            pos_item.setFont(QFont(pos_item.font().family(), pos_item.font().pointSize(), QFont.Weight.Bold))
+            pos_item.setFont(
+                QFont(
+                    pos_item.font().family(),
+                    pos_item.font().pointSize(),
+                    QFont.Weight.Bold,
+                )
+            )
             self.standings_table.setItem(i, 0, pos_item)
 
             self.standings_table.setItem(i, 1, QTableWidgetItem(entry.driver_name))
@@ -894,7 +924,10 @@ class PreRaceSetupDialog(QDialog):
         header_layout = QHBoxLayout()
         
         track_info = QLabel()
-        track_info.setText(f"<b>{self.track.name if self.track else 'Unknown'}</b> - {self.track.country if self.track else ''}")
+        track_info.setText(
+            f"<b>{self.track.name if self.track else 'Unknown'}</b> - "
+            f"{self.track.country if self.track else ''}"
+        )
         track_info.setStyleSheet(f"color: {COLORS['primary']}; font-size: 16px; font-weight: bold;")
         header_layout.addWidget(track_info)
         
@@ -1089,7 +1122,10 @@ class PreRaceSetupDialog(QDialog):
         if self.team_combo.currentIndex() >= 0:
             self.selected_team = self.team_combo.currentData()
             if self.selected_team:
-                budget_text = f"Budget: €{self.selected_team.budget:,.0f} | Tier: {_player_label(self.selected_team.tier)}"
+                budget_text = (
+                    f"Budget: €{self.selected_team.budget:,.0f} | "
+                    f"Tier: {_player_label(self.selected_team.tier)}"
+                )
                 self.team_budget.setText(budget_text)
                 self._refresh_driver_combo_for_selected_team()
                 self._update_start_button_state()
