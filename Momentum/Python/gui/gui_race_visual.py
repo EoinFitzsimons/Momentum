@@ -72,6 +72,15 @@ from services.driver_attributes import get_preferred_window_size
 from .infield_presets import select_preset
 from .props_placer import place_props, draw_props
 
+try:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    MATPLOTLIB_AVAILABLE = True
+except Exception:
+    FigureCanvas = None  # type: ignore[assignment]
+    Figure = None  # type: ignore[assignment]
+    MATPLOTLIB_AVAILABLE = False
+
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1108,6 +1117,18 @@ class TrackWidget(QWidget):
         painter.translate(center_x, center_y)
         base_zoom = self._compute_full_view_zoom()
         painter.scale(base_zoom, -base_zoom)
+        track_center_x, track_center_y = self._compute_track_center()
+        painter.translate(-track_center_x, -track_center_y)
+
+    def _compute_track_center(self) -> Tuple[float, float]:
+        """Return world-space midpoint of the active track geometry."""
+        if not self.track_points:
+            return 0.0, 0.0
+        min_x = min(pt.x for pt in self.track_points)
+        max_x = max(pt.x for pt in self.track_points)
+        min_y = min(pt.y for pt in self.track_points)
+        max_y = max(pt.y for pt in self.track_points)
+        return (min_x + max_x) * 0.5, (min_y + max_y) * 0.5
 
     def _compute_full_view_zoom(self) -> float:
         """Compute fit-to-viewport zoom for full-track mode."""
@@ -2194,33 +2215,7 @@ class RaceWindow(QMainWindow):
             self.setWindowTitle("Momentum - Race Visualisation")
             # Display mode (default: borderless)
             self.display_mode = "borderless"
-            # Borderless windowed fullscreen (use setWindowFlag to toggle)
-            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-            screen_obj = QApplication.primaryScreen()
-            available = screen_obj.availableGeometry() if screen_obj else None
-            if available is not None:
-                # Ensure widget minimums don't force a larger geometry than the screen
-                try:
-                    self.setMinimumSize(0, 0)
-                except Exception:
-                    pass
-                # Also clear minimums on child widgets to avoid min>max issues
-                try:
-                    for w in self.findChildren(QWidget):
-                        try:
-                            w.setMinimumSize(0, 0)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-                # Constrain maximum size to available screen area
-                try:
-                    self.setMaximumSize(available.width(), available.height())
-                except Exception:
-                    pass
-                # Use available geometry (accounts for taskbar/docked panels)
-                self.setGeometry(available)
-            self.showMaximized()
+            self._configure_initial_window()
             # Race state
             self.db: Optional[DatabaseManager] = None
             self.drivers = []
@@ -2287,6 +2282,42 @@ class RaceWindow(QMainWindow):
             print("[ERROR] Exception in RaceWindow.__init__:", e)
             _traceback.print_exc()
             raise
+
+    def _configure_initial_window(self) -> None:
+        """Apply borderless/maximized setup constrained to available screen area."""
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        screen_obj = QApplication.primaryScreen()
+        available = screen_obj.availableGeometry() if screen_obj else None
+        if available is None:
+            self.showMaximized()
+            return
+
+        self._try_reset_window_minimums()
+        self._try_constrain_to_available_geometry(available.width(), available.height())
+        self.setGeometry(available)
+        self.showMaximized()
+
+    def _try_reset_window_minimums(self) -> None:
+        """Best-effort clear minimum sizes to avoid min>max geometry conflicts."""
+        try:
+            self.setMinimumSize(0, 0)
+        except Exception:
+            pass
+        try:
+            for w in self.findChildren(QWidget):
+                try:
+                    w.setMinimumSize(0, 0)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def _try_constrain_to_available_geometry(self, width: int, height: int) -> None:
+        """Best-effort max-size constraint to screen working area."""
+        try:
+            self.setMaximumSize(width, height)
+        except Exception:
+            pass
 
     # Auto-start logic removed: user must click Start Race manually
 
@@ -4349,6 +4380,10 @@ class RaceWindow(QMainWindow):
 
         dlg_layout.addWidget(self._build_post_race_header_label(summary))
         dlg_layout.addWidget(self._build_post_race_highlights_label(summary))
+        position_graph = self._build_position_trend_graph(results_sorted)
+        if position_graph is not None:
+            dlg_layout.addWidget(self._build_position_graph_title_label())
+            dlg_layout.addWidget(position_graph)
         dlg_layout.addWidget(self._build_position_change_table(rows))
         dlg_layout.addWidget(self._build_detail_title_label())
         dlg_layout.addWidget(self._build_detailed_results_table(results_sorted))
@@ -4403,6 +4438,188 @@ class RaceWindow(QMainWindow):
         highlights = QLabel(f"Highlights: Biggest gain - {gain_text} | Biggest loss - {loss_text}")
         highlights.setStyleSheet("font-size: 13px; font-weight: bold; color: #F5F5F5;")
         return highlights
+
+    def _build_position_graph_title_label(self) -> QLabel:
+        """Build section title for race position trend chart."""
+        lbl = QLabel("<h3>Race Position Trend</h3>")
+        lbl.setTextFormat(Qt.TextFormat.RichText)
+        return lbl
+
+    def _build_position_trend_graph(self, results_sorted: list) -> Optional[QWidget]:
+        """Build matplotlib line graph from recorded in-race position history."""
+        if not MATPLOTLIB_AVAILABLE or FigureCanvas is None or Figure is None:
+            return None
+        history = getattr(self, '_position_history', None)
+        if not isinstance(history, dict) or not history:
+            return None
+
+        series = self._build_position_trend_series(results_sorted, history)
+        if not series:
+            return None
+
+        max_position = max(1, len(results_sorted) if results_sorted else len(series))
+        return self._build_matplotlib_position_canvas(series, max_position)
+
+    def _build_matplotlib_position_canvas(self, series: List[Dict[str, Any]], max_position: int) -> QWidget:
+        """Create embedded matplotlib canvas for post-race position trends."""
+        figure_cls = cast(Any, Figure)
+        canvas_cls = cast(Any, FigureCanvas)
+        fig = figure_cls(figsize=(8.0, 2.6), dpi=100, facecolor="#1a1f26")
+        canvas = canvas_cls(fig)
+        ax = fig.add_subplot(111)
+
+        ax.set_facecolor("#1f2733")
+        ax.grid(True, axis='y', linestyle='--', linewidth=0.6, alpha=0.35, color="#6a788a")
+        ax.tick_params(axis='x', colors="#d8e1ec", labelsize=8)
+        ax.tick_params(axis='y', colors="#d8e1ec", labelsize=8)
+        for spine in ax.spines.values():
+            spine.set_color("#6a788a")
+
+        for item in series:
+            points = item.get('points', [])
+            if len(points) < 2:
+                continue
+            xs = [float(p[0]) for p in points]
+            ys = [int(p[1]) for p in points]
+            is_focus = bool(item.get('is_focus', False))
+            color = self._qcolor_to_mpl(item.get('color', QColor(150, 170, 210)), 0.95 if is_focus else 0.5)
+            ax.plot(xs, ys, color=color, linewidth=2.3 if is_focus else 1.2)
+
+        ax.set_ylim(max_position + 0.4, 0.6)
+        ax.set_ylabel("Position", color="#d8e1ec")
+        ax.set_xlabel("Race Progress", color="#d8e1ec")
+        ax.set_yticks(self._position_axis_ticks(max_position))
+        ax.set_xticks([])
+        ax.text(0.0, -0.12, "Start", transform=ax.transAxes, color="#d8e1ec", fontsize=8)
+        ax.text(1.0, -0.12, "Finish", transform=ax.transAxes, color="#d8e1ec", fontsize=8, ha='right')
+
+        fig.tight_layout(pad=1.1)
+        canvas.setMinimumHeight(230)
+        return cast(QWidget, canvas)
+
+    def _position_axis_ticks(self, max_position: int) -> List[int]:
+        """Return readable y-axis ticks for race position charts."""
+        if max_position <= 10:
+            step = 1
+        elif max_position <= 20:
+            step = 2
+        else:
+            step = 4
+        ticks = list(range(1, max_position + 1, step))
+        if ticks[-1] != max_position:
+            ticks.append(max_position)
+        return ticks
+
+    def _qcolor_to_mpl(self, color: Any, alpha: float) -> Tuple[float, float, float, float]:
+        """Convert QColor-like input into matplotlib RGBA tuple."""
+        if not isinstance(color, QColor):
+            color = QColor(150, 170, 210)
+        return (
+            color.red() / 255.0,
+            color.green() / 255.0,
+            color.blue() / 255.0,
+            max(0.0, min(1.0, float(alpha))),
+        )
+
+    def _build_position_trend_series(self, results_sorted: list, history: Dict[Any, Any]) -> List[Dict[str, Any]]:
+        """Prepare compact graph series payload from collected position history."""
+        finish_by_id = self._build_finish_position_index(results_sorted)
+        focus_ids = self._build_focus_driver_ids(finish_by_id)
+        visible_ids = self._select_visible_position_graph_ids(history, finish_by_id, focus_ids)
+        return self._assemble_position_trend_series(visible_ids, history, focus_ids)
+
+    def _build_finish_position_index(self, results_sorted: list) -> Dict[int, int]:
+        """Map driver id to final race position."""
+        finish_by_id: Dict[int, int] = {}
+        for idx, res in enumerate(results_sorted, 1):
+            did = self._normalize_driver_id(res.get('driver_id'))
+            if did is None:
+                continue
+            try:
+                finish_by_id[int(did)] = int(res.get('position') or idx)
+            except Exception:
+                finish_by_id[int(did)] = idx
+        return finish_by_id
+
+    def _build_focus_driver_ids(self, finish_by_id: Dict[int, int]) -> set[int]:
+        """Return focus drivers for emphasis (podium + player)."""
+        focus_ids = {did for did, pos in finish_by_id.items() if pos <= 3}
+        player_id = self._normalize_driver_id(getattr(self, 'player_driver_id', None))
+        if player_id is not None:
+            focus_ids.add(int(player_id))
+        return focus_ids
+
+    def _select_visible_position_graph_ids(self, history: Dict[Any, Any], finish_by_id: Dict[int, int], focus_ids: set[int]) -> List[int]:
+        """Choose visible drivers for the trend chart."""
+        ranked_ids = sorted(
+            [int(did) for did in history.keys() if self._normalize_driver_id(did) is not None],
+            key=lambda did: finish_by_id.get(did, 999),
+        )
+        visible_ids = ranked_ids[:10]
+        for did in sorted(focus_ids):
+            if did not in visible_ids and did in ranked_ids:
+                visible_ids.append(did)
+        return visible_ids
+
+    def _assemble_position_trend_series(self, visible_ids: List[int], history: Dict[Any, Any], focus_ids: set[int]) -> List[Dict[str, Any]]:
+        """Build final trend-series payload for graph rendering."""
+        series: List[Dict[str, Any]] = []
+        for idx, did in enumerate(visible_ids):
+            pts = self._extract_position_points(history.get(did, []))
+            if len(pts) < 2:
+                continue
+
+            series.append(
+                {
+                    'driver_id': did,
+                    'name': self._resolve_driver_name_by_id(did),
+                    'points': pts,
+                    'color': self._position_trend_color(did, idx),
+                    'is_focus': did in focus_ids,
+                }
+            )
+        return series
+
+    def _extract_position_points(self, raw_points: Any) -> List[Tuple[float, int]]:
+        """Validate and normalize recorded history points for one driver."""
+        if not isinstance(raw_points, list):
+            return []
+        points: List[Tuple[float, int]] = []
+        for item in raw_points:
+            if not isinstance(item, tuple) or len(item) < 2:
+                continue
+            try:
+                points.append((float(item[0]), int(item[1])))
+            except Exception:
+                continue
+        return points
+
+    def _resolve_driver_name_by_id(self, driver_id: int) -> str:
+        """Lookup driver display name by id with fallback."""
+        return next((d.name for d in self.drivers if int(getattr(d, 'id', -1)) == driver_id), f"Driver {driver_id}")
+
+    def _position_trend_color(self, driver_id: int, index: int) -> QColor:
+        """Resolve stable chart color, preferring car livery when available."""
+        try:
+            tw = getattr(self, 'track_widget', None)
+            if tw is not None and hasattr(tw, 'cars'):
+                for car in getattr(tw, 'cars', []):
+                    if int(getattr(car, 'driver_id', -1)) == int(driver_id):
+                        col = getattr(car, 'colour', None)
+                        if isinstance(col, QColor):
+                            return col
+        except Exception:
+            pass
+
+        palette = [
+            QColor(80, 170, 255),
+            QColor(255, 120, 90),
+            QColor(150, 220, 120),
+            QColor(255, 210, 90),
+            QColor(196, 140, 255),
+            QColor(110, 235, 235),
+        ]
+        return palette[index % len(palette)]
 
     def _build_position_change_table(self, rows: List[Tuple[Optional[int], int, str, int, str]]) -> QTableWidget:
         """Build start/finish delta table for summary dialog."""
