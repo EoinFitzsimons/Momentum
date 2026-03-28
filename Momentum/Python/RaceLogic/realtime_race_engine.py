@@ -94,6 +94,7 @@ class DriverState:
     pit_time_remaining_s: float = 0.0
     pit_stops_completed: int = 0
     last_pit_eval_lap: int = -1
+    pit_window_notified: bool = False
 
     # Performance modifiers
     in_slipstream: bool = False     # Currently benefiting from draft
@@ -104,6 +105,12 @@ class DriverState:
     dnf_reason: Optional[str] = None
     # Has a DNF event already been emitted for this driver (prevents dupes)
     dnf_event_emitted: bool = False
+
+    # Rallycross joker-lap tracking
+    joker_lap_target: int = 0
+    joker_lap_taken: bool = False
+    joker_lap_taken_on: int = 0
+    joker_time_penalty_s: float = 0.0
 
     # Timing
     total_time: float = 0.0         # Total race time elapsed
@@ -208,6 +215,10 @@ class RealtimeRaceEngine:
         self.PIT_TIRE_THRESHOLD = 0.42
         self.PIT_MIN_LAPS_REMAINING = 3
 
+        # Rallycross mandatory joker-lap model
+        self.RALLYCROSS_JOKER_BASE_PENALTY_S = 2.8
+        self._rallycross_joker_enabled = False
+
     def simulate_race(
         self,
         drivers: List[Driver],
@@ -297,9 +308,45 @@ class RealtimeRaceEngine:
         if self.player_team_driver_ids:
             print(f"  OK Player team-controlled drivers: {sorted(self.player_team_driver_ids)}")
 
+        self._configure_rallycross_joker_mode(track)
+
         track_length_m = track.length_km * 1000.0
         race_state = self._initialize_race(drivers, teams, track_length_m, total_laps)
         return race_state, track_length_m
+
+    def _configure_rallycross_joker_mode(self, track: Track) -> None:
+        """Enable mandatory joker-lap logic for sprint/rallycross races."""
+        discipline = str(getattr(track, 'primary_discipline', '') or '').upper()
+        explicit = bool(getattr(track, 'joker_enabled', False))
+        self._rallycross_joker_enabled = explicit or discipline == 'SPRINT_RALLYCROSS'
+        if self._rallycross_joker_enabled:
+            print(f"  OK Rallycross joker-lap mode enabled (+{self.RALLYCROSS_JOKER_BASE_PENALTY_S:.2f}s route penalty)")
+
+    def _initial_joker_lap_target(self, driver_id: int, total_laps: int) -> int:
+        """Pick a default joker lap target for a driver."""
+        if total_laps <= 1:
+            return 1
+        if self.player_driver_id is not None and int(driver_id) == int(self.player_driver_id):
+            # Player can arm "come_in" whenever they want; if never armed,
+            # joker is forced on final lap to satisfy mandatory usage.
+            return max(1, int(total_laps))
+        # Keep AI varied, but avoid final-lap clustering for most runs.
+        upper = max(1, total_laps - 1)
+        return int(self.rng.integers(1, upper + 1))
+
+    def _player_requests_come_in_for_driver(self, state: DriverState) -> bool:
+        """Return True when the player has armed a generic come-in request."""
+        if self.player_driver_id is None or int(state.driver_id) != int(self.player_driver_id):
+            return False
+        if not isinstance(getattr(self, 'player_overrides', None), dict):
+            return False
+        return bool(self.player_overrides.get('come_in', False))
+
+    def _consume_player_come_in_request(self, state: DriverState) -> None:
+        """Reset one-shot come-in request after it has been acted upon."""
+        if not self._player_requests_come_in_for_driver(state):
+            return
+        self.player_overrides['come_in'] = False
 
     def _run_simulation_loop(
         self,
@@ -363,7 +410,7 @@ class RealtimeRaceEngine:
         if self._check_driver_mistake(state):
             speed_mps *= 0.3
 
-        self._advance_driver_position(state, race_state, speed_mps, timestep, track_length_m)
+        self._advance_driver_position(state, race_state, speed_mps, timestep, track_length_m, event_callback)
         self._apply_driver_degradation(state)
         self._update_driver_stall_state(state, event_callback)
         self._update_driver_push_fatigue(state)
@@ -391,7 +438,7 @@ class RealtimeRaceEngine:
             return False
 
         if not state.in_pit_lane:
-            if self._should_start_pit_stop(state, race_state):
+            if self._should_start_pit_stop(state, race_state, event_callback):
                 self._enter_pit_lane(state, event_callback)
                 return True
             return False
@@ -402,7 +449,7 @@ class RealtimeRaceEngine:
         prev_lap = int(state.prev_position_m // track_length_m)
         curr_lap = int(state.position_m // track_length_m)
         if curr_lap > prev_lap:
-            self._complete_lap(state, race_state)
+            self._complete_lap(state, race_state, event_callback)
 
         state.total_time += timestep
         state.push_intensity = min(state.push_intensity, 0.45)
@@ -411,11 +458,20 @@ class RealtimeRaceEngine:
             self._exit_pit_lane(state, event_callback)
         return True
 
-    def _should_start_pit_stop(self, state: DriverState, race_state: RaceState) -> bool:
+    def _should_start_pit_stop(
+        self,
+        state: DriverState,
+        race_state: RaceState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> bool:
         """Decide pit stops once per lap using tire/fuel and mandatory-stop heuristics."""
         if state.last_pit_eval_lap == state.lap:
             return False
         state.last_pit_eval_lap = state.lap
+
+        # Player one-shot override: come in at next lap opportunity.
+        if self._player_requests_come_in_for_driver(state):
+            return True
 
         laps_remaining = race_state.total_laps - state.lap
         if state.lap <= 0 or laps_remaining < self.PIT_MIN_LAPS_REMAINING:
@@ -430,6 +486,7 @@ class RealtimeRaceEngine:
         # One mandatory stop for longer races if none taken yet
         if race_state.total_laps >= 20 and state.pit_stops_completed == 0:
             mandatory_window_lap = int(race_state.total_laps * 0.55)
+            self._emit_pit_window_open_if_needed(state, mandatory_window_lap, event_callback)
             if state.lap >= mandatory_window_lap and state.tire_condition < 0.72:
                 return True
 
@@ -440,6 +497,31 @@ class RealtimeRaceEngine:
 
         return False
 
+    def _emit_pit_window_open_if_needed(
+        self,
+        state: DriverState,
+        mandatory_window_lap: int,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> None:
+        """Emit one-shot pit-window notice for player-controlled driver."""
+        if state.pit_window_notified:
+            return
+        if state.lap < mandatory_window_lap:
+            return
+        if self.player_driver_id is None or int(state.driver_id) != int(self.player_driver_id):
+            return
+        if not event_callback:
+            return
+
+        state.pit_window_notified = True
+        event_callback({
+            'type': 'pit_window_open',
+            'driver_id': state.driver_id,
+            'driver_name': state.driver_name,
+            'lap': state.lap,
+            'window_lap': mandatory_window_lap,
+        })
+
     def _enter_pit_lane(
         self,
         state: DriverState,
@@ -448,6 +530,7 @@ class RealtimeRaceEngine:
         """Start pit phase and emit telemetry event."""
         service_variance = float(self.rng.uniform(-0.7, 0.7))
         total_pit_time = self.PIT_LANE_TRANSIT_SECONDS + self.PIT_SERVICE_BASE_SECONDS + service_variance
+        self._consume_player_come_in_request(state)
         state.in_pit_lane = True
         state.pit_time_remaining_s = max(6.0, total_pit_time)
         state.racing_mode = RacingMode.MANAGE
@@ -488,6 +571,7 @@ class RealtimeRaceEngine:
         speed_mps: float,
         timestep: float,
         track_length_m: float,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         """Advance positional and lap state by one frame."""
         state.prev_position_m = state.position_m
@@ -496,7 +580,7 @@ class RealtimeRaceEngine:
         prev_lap = int(state.prev_position_m // track_length_m)
         curr_lap = int(state.position_m // track_length_m)
         if curr_lap > prev_lap:
-            self._complete_lap(state, race_state)
+            self._complete_lap(state, race_state, event_callback)
         state.total_time += timestep
 
     def _apply_driver_degradation(self, state: DriverState) -> None:
@@ -728,6 +812,9 @@ class RealtimeRaceEngine:
                 frames_since_mistake=999,
                 push_intensity=initial_push
             )
+
+            if self._rallycross_joker_enabled:
+                state.joker_lap_target = self._initial_joker_lap_target(driver.id, total_laps)
 
             print(f"  [INIT] {driver.name}: speed={get_safe_attribute(driver,'speed'):.1f} -> initial_push={initial_push:.2f}")
 
@@ -1168,8 +1255,13 @@ class RealtimeRaceEngine:
                 nearby.append(other_id)
         return nearby
 
-    def _complete_lap(self, state: DriverState, race_state: RaceState):
-        """Handle lap completion"""
+    def _complete_lap(
+        self,
+        state: DriverState,
+        race_state: RaceState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> None:
+        """Handle lap completion and discipline-specific lap side effects."""
         state.lap += 1
 
         # Calculate lap time
@@ -1185,6 +1277,8 @@ class RealtimeRaceEngine:
 
             race_state.lap_times[state.driver_id].append(lap_time)
 
+        self._maybe_apply_rallycross_joker(state, race_state, event_callback)
+
         race_state.lap_start_positions[state.driver_id] = state.position_m
         
         # Check if this driver completed all required laps
@@ -1197,6 +1291,67 @@ class RealtimeRaceEngine:
         # If checkered flag is deployed, finish any driver crossing the line
         elif race_state.checkered_flag_deployed:
             state.running = False
+
+    def _maybe_apply_rallycross_joker(
+        self,
+        state: DriverState,
+        race_state: RaceState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> None:
+        """Apply mandatory single joker-lap penalty in rallycross mode."""
+        if not self._rallycross_joker_enabled or state.joker_lap_taken:
+            return
+
+        self._refresh_player_joker_target_if_needed(state, race_state)
+        target_lap = max(1, int(state.joker_lap_target or 1))
+
+        should_serve_now = state.lap == target_lap
+        forced = False
+        if not should_serve_now and state.lap >= race_state.total_laps:
+            # Mandatory fallback: cannot finish race without exactly one joker lap.
+            should_serve_now = True
+            forced = True
+
+        if not should_serve_now:
+            return
+
+        penalty_s = self._joker_penalty_seconds(state)
+        state.total_time += penalty_s
+        state.joker_lap_taken = True
+        state.joker_lap_taken_on = int(state.lap)
+        state.joker_time_penalty_s = penalty_s
+        self._consume_player_come_in_request(state)
+
+        if event_callback:
+            event_callback({
+                'type': 'joker_lap_served',
+                'driver_id': state.driver_id,
+                'driver_name': state.driver_name,
+                'served_lap': state.joker_lap_taken_on,
+                'target_lap': target_lap,
+                'forced': forced,
+                'penalty_s': penalty_s,
+            })
+
+    def _refresh_player_joker_target_if_needed(self, state: DriverState, race_state: RaceState) -> None:
+        """Allow player to trigger joker timing using generic come-in toggle."""
+        _ = race_state
+        if self.player_driver_id is None:
+            return
+        if int(state.driver_id) != int(self.player_driver_id):
+            return
+        if state.joker_lap_taken:
+            return
+        if self._player_requests_come_in_for_driver(state):
+            state.joker_lap_target = max(1, int(state.lap))
+
+    def _joker_penalty_seconds(self, state: DriverState) -> float:
+        """Compute one-time joker route penalty in seconds."""
+        consistency = get_safe_attribute(state.driver, 'consistency') / 100.0
+        skill_adjust = 1.0 - (consistency - 0.5) * 0.20
+        jitter = float(self.rng.uniform(-0.20, 0.20))
+        penalty = self.RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter
+        return max(1.8, penalty)
 
     def _check_driver_mistake(self, state: DriverState) -> bool:
         """
