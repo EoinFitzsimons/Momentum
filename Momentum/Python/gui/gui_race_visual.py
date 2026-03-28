@@ -2222,6 +2222,7 @@ class RaceWindow(QMainWindow):
             self.track = None
             self._initial_track_id = track_id
             self._initial_discipline = discipline or "SINGLE_SEATER"
+            self._race_total_laps = self._discipline_total_laps()
             self._championship_id = championship_id  # Championship this race belongs to
             self._race_id = race_id  # Current race ID in championship
             self.race_thread: Optional[threading.Thread] = None
@@ -2239,7 +2240,10 @@ class RaceWindow(QMainWindow):
             self.player_team_id: Optional[int] = None
             self.player_team_driver_ids: List[int] = []
             self.player_overrides: Dict[str, float] = {
-                'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
+                'pace': 0.7,
+                'overtake': 0.5,
+                'come_in': False,
+            }  # pace/overtake: 0.0-1.0, come_in: bool trigger for pit/joker routing
             self.tuning_preset: str = 'balanced'  # Simulation tuning preset
 
             # Player telemetry tracking
@@ -2393,7 +2397,7 @@ class RaceWindow(QMainWindow):
         right_panel.addWidget(self.info_label)
 
         # Player controls section
-        from PyQt6.QtWidgets import QSlider, QGroupBox
+        from PyQt6.QtWidgets import QSlider, QGroupBox, QCheckBox
         player_controls = QGroupBox("Your Controls")
         player_controls.setStyleSheet("""
             QGroupBox {
@@ -2458,6 +2462,24 @@ class RaceWindow(QMainWindow):
         overtake_hint.setStyleSheet("font-size: 10px;")
         overtake_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         player_layout.addWidget(overtake_hint)
+
+        player_layout.addSpacing(8)
+
+        self.come_in_label = QLabel("Come In Request")
+        self.come_in_label.setStyleSheet(CONTROL_LABEL_STYLE)
+        self.come_in_label.setMinimumHeight(22)
+        player_layout.addWidget(self.come_in_label)
+
+        self.come_in_checkbox = QCheckBox("Come in next lap")
+        self.come_in_checkbox.toggled.connect(self._on_come_in_toggled)
+        player_layout.addWidget(self.come_in_checkbox)
+
+        self.come_in_status_label = QLabel("")
+        self.come_in_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.come_in_status_label.setStyleSheet("font-size: 11px; color: #B9F2FF;")
+        player_layout.addWidget(self.come_in_status_label)
+
+        self._configure_come_in_ui()
 
         right_panel.addWidget(player_controls)
 
@@ -2943,6 +2965,53 @@ class RaceWindow(QMainWindow):
         """Return True when the active race discipline is drag racing."""
         discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
         return discipline == 'DRAG_ACCELERATION'
+
+    def _is_rallycross_discipline(self) -> bool:
+        """Return True when the active race discipline is sprint/rallycross."""
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        return discipline == 'SPRINT_RALLYCROSS'
+
+    def _discipline_total_laps(self) -> int:
+        """Return discipline-specific lap count for the current race mode."""
+        if self._is_rallycross_discipline():
+            return 6
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        if discipline == 'ENDURANCE':
+            return 24
+        return 3
+
+    def _configure_come_in_ui(self) -> None:
+        """Configure generic come-in text based on active discipline."""
+        is_rallycross = self._is_rallycross_discipline()
+        is_endurance = str(getattr(self, '_initial_discipline', '') or '').upper() == 'ENDURANCE'
+        label = getattr(self, 'come_in_label', None)
+        checkbox = getattr(self, 'come_in_checkbox', None)
+        status = getattr(self, 'come_in_status_label', None)
+        if label is not None:
+            label.setText("Come In Request")
+        if checkbox is not None:
+            checkbox.setText("Take joker route next lap" if is_rallycross else "Pit next lap")
+            checkbox.setChecked(bool(self.player_overrides.get('come_in', False)))
+        if status is not None:
+            if is_rallycross:
+                status.setText("Rallycross: one joker lap is mandatory. Toggle when you want to serve it.")
+            elif is_endurance:
+                status.setText("Endurance: monitor pit window and use Come In for planned service.")
+            else:
+                status.setText("Toggle to request a pit entry on the next lap evaluation.")
+
+    def _on_come_in_toggled(self, checked: bool) -> None:
+        """Store generic come-in request used by pit/joker logic in the engine."""
+        self.player_overrides['come_in'] = bool(checked)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            if checked:
+                if self._is_rallycross_discipline():
+                    status.setText("Come in request armed: joker will be served at next lap crossing.")
+                else:
+                    status.setText("Come in request armed: pit entry will be taken at next lap evaluation.")
+            else:
+                status.setText("Come in request cleared.")
 
     def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
         """Build a point-to-point drag strip profile (straight strip)."""
@@ -3723,12 +3792,13 @@ class RaceWindow(QMainWindow):
 
     def _build_race_context(self, event_callback: Any, track_pts: Any, teams: Dict[int, Any]) -> RaceContext:
         """Construct race context and populate adapter-specific conditions."""
+        race_laps = max(1, int(getattr(self, '_race_total_laps', 3) or 3))
         context = RaceContext(
             discipline=RacingDiscipline[self._initial_discipline],
             track=self.track,
             drivers=self.drivers,
             teams=teams,
-            total_laps=3,
+            total_laps=race_laps,
             event_callback=event_callback,
         )
         tc = context.track_conditions
@@ -3739,6 +3809,9 @@ class RaceWindow(QMainWindow):
         tc['realtime_speed'] = 5.0
         tc['stop_event'] = self.stop_event
         tc['tuning_preset'] = self.tuning_preset
+        tc['discipline'] = str(getattr(self, '_initial_discipline', 'SINGLE_SEATER') or 'SINGLE_SEATER')
+        tc['rallycross_joker_required'] = self._is_rallycross_discipline()
+        tc['total_laps'] = race_laps
         return context
 
     def _event_callback_from_race_thread(self, event: dict) -> None:
@@ -3754,7 +3827,7 @@ class RaceWindow(QMainWindow):
             if event_type == "race_finished":
                 self._handle_thread_race_finished_event(event)
                 return
-            if event_type in {"drag_bracket_seeded", "drag_heat_result"}:
+            if event_type in {"drag_bracket_seeded", "drag_heat_result", "joker_lap_served", "pit_entry", "pit_exit", "pit_window_open"}:
                 self.emitter.generic_event.emit(event)
                 return
         except Exception as e:
@@ -4147,6 +4220,8 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(enabled)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(enabled)
+            if hasattr(self, 'come_in_checkbox'):
+                self.come_in_checkbox.setEnabled(enabled)
         except Exception:
             pass
 
@@ -4765,6 +4840,79 @@ class RaceWindow(QMainWindow):
             return
         if event_type == 'drag_heat_result':
             self._apply_drag_heat_to_tree(event)
+            return
+        if event_type == 'joker_lap_served':
+            self._handle_joker_lap_served_event(event)
+            return
+        if event_type == 'pit_entry':
+            self._handle_pit_entry_event(event)
+            return
+        if event_type == 'pit_exit':
+            self._handle_pit_exit_event(event)
+            return
+        if event_type == 'pit_window_open':
+            self._handle_pit_window_open_event(event)
+
+    def _handle_pit_entry_event(self, event: Dict[str, Any]) -> None:
+        """Clear player one-shot come-in request once pit entry is served."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        checkbox = getattr(self, 'come_in_checkbox', None)
+        if checkbox is not None:
+            checkbox.blockSignals(True)
+            checkbox.setChecked(False)
+            checkbox.blockSignals(False)
+        self.player_overrides['come_in'] = False
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText("Pit entry served. Come-in request reset.")
+
+    def _handle_pit_exit_event(self, event: Dict[str, Any]) -> None:
+        """Show completion status after player pit service exits."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        stops = int(event.get('pit_stops_completed', 0) or 0)
+        msg = f"Pit stop complete. Total stops: {stops}."
+        self.info_label.setText(msg)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText(msg)
+
+    def _handle_pit_window_open_event(self, event: Dict[str, Any]) -> None:
+        """Surface endurance pit-window reminder for player-controlled driver."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        lap = int(event.get('lap', 0) or 0)
+        msg = f"Pit window is open (lap {lap}). Consider using Come In."
+        self.info_label.setText(msg)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText(msg)
+
+    def _handle_joker_lap_served_event(self, event: Dict[str, Any]) -> None:
+        """Render rallycross joker-lap completion updates in the UI."""
+        if not self._is_rallycross_discipline():
+            return
+        driver_id = int(event.get('driver_id', 0) or 0)
+        served_lap = int(event.get('served_lap', 0) or 0)
+        penalty_s = float(event.get('penalty_s', 0.0) or 0.0)
+        forced = bool(event.get('forced', False))
+        if driver_id == int(getattr(self, 'player_driver_id', -1) or -1):
+            suffix = " (auto-served)" if forced else ""
+            msg = f"Joker completed on lap {served_lap}{suffix} (+{penalty_s:.2f}s)"
+            self.info_label.setText(msg)
+            status = getattr(self, 'come_in_status_label', None)
+            if status is not None:
+                status.setText(msg)
+            checkbox = getattr(self, 'come_in_checkbox', None)
+            if checkbox is not None:
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+            self.player_overrides['come_in'] = False
 
     def _handle_start_animation_event(self) -> None:
         """Start track animation when first simulation data is ready."""
