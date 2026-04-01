@@ -1,9 +1,13 @@
-<#
-This helper script has been deprecated and its original contents removed.
-To install requirements run:
+# Backward-compatible script: kept so old commands still work.
+# It simply forwards to install_requirements.ps1.
 
-	python -m pip install --upgrade pip
-	python -m pip install -r Momentum/Python/requirements.txt
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$target = Join-Path $scriptDir "install_requirements.ps1"
 
-The original installer helper was removed per repository cleanup.
-#>
+if (Test-Path $target) {
+	& $target
+} else {
+	Write-Host "install_requirements.ps1 not found."
+	Write-Host "Run: python -m pip install --upgrade pip"
+	Write-Host "Run: python -m pip install -r Momentum/Python/requirements.txt"
+}
