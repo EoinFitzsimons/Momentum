@@ -14,6 +14,10 @@ from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
 import importlib
 import inspect
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) -> Optional[BaseDisciplineEngine]:
@@ -34,6 +38,7 @@ def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) ->
     try:
         mod = importlib.import_module(module_path)
     except Exception:
+        LOGGER.debug("Could not import discipline module '%s'", module_path, exc_info=True)
         return None
 
     # Find first concrete subclass of BaseDisciplineEngine
@@ -42,6 +47,7 @@ def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) ->
             if issubclass(cls, BaseDisciplineEngine) and cls is not BaseDisciplineEngine:
                 return cls(seed=seed if seed is not None else 0)
         except Exception:
+            LOGGER.debug("Skipping candidate discipline engine class %s", getattr(cls, '__name__', repr(cls)), exc_info=True)
             continue
 
     return None
@@ -175,7 +181,7 @@ def _extract_time_from_result(result: dict) -> Optional[float]:
         if avg and laps:
             return float(avg) * float(laps)
     except Exception:
-        pass
+        LOGGER.debug("Could not derive total time from lap values avg=%r laps=%r", avg, laps, exc_info=True)
     
     return None
 
@@ -205,6 +211,7 @@ def _convert_result_to_race_result(result: dict, race_id: int) -> RaceResult:
     try:
         rr.status = result.get('status') or ('DNF' if result.get('dnf_reason') else 'FINISHED')
     except Exception:
+        LOGGER.debug("Could not derive race result status; defaulting to FINISHED", exc_info=True)
         rr.status = 'FINISHED'
     
     return rr
@@ -239,7 +246,7 @@ def _persist_race_results(db: Optional[Any], race_id: int, results_list: List[di
         save_fn = getattr(db, 'save_race_results')
         save_fn(race_id, results_list)
     except Exception:
-        pass  # Silent fail on persistence errors
+        LOGGER.warning("Failed to persist race results for race_id=%s", race_id, exc_info=True)
 
 
 def simulate_race(
@@ -271,7 +278,7 @@ def simulate_race(
         try:
             _setup_context_teams(context)
         except Exception:
-            pass  # Best-effort; continue on error
+            LOGGER.warning("Failed to prepare context teams; continuing with fallback flow", exc_info=True)
         
         # Try discipline-specific adapter first
         adapter = _load_discipline_engine(context, seed=seed)
