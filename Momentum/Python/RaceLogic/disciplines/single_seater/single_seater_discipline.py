@@ -18,8 +18,8 @@ Performance Model:
 - Lap time modifiers: tire wear, fuel load, traffic, weather conditions, incidents
 - Consistency: Lap-to-lap variance based on driver consistency attribute
 
-Authors: Final Year Project - Computer Science
-Date: January 2025
+Authors: Eoin Fitzsimons
+Date: September 2025
 """
 
 import time

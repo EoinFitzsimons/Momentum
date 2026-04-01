@@ -18,8 +18,8 @@ MVP Status:
 - Single seater implementation in separate file (single_seater_discipline.py)
 - Other disciplines can be added by extending BaseDisciplineEngine
 
-Authors: Final Year Project - Computer Science
-Date: January 2025
+Authors: Eoin Fitzsimons
+
 """
 
 import random

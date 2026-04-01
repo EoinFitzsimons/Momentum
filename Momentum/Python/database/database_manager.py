@@ -28,7 +28,7 @@ Usage Patterns:
     standings = db.get_championship_standings(championship_id, season)
 
 Compatibility: SQLite 3.7+, Python 3.8+
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 import sqlite3

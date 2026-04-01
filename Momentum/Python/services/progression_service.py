@@ -13,7 +13,7 @@ Key Features:
 - Form trend tracking
 - Automatic retirement and recycling
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 import random
