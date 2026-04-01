@@ -27,7 +27,7 @@ API Endpoints:
 - GET /races/{id}/results: Get race classification details
 - POST /simulate/race: Run race simulation
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Version: 2.0.0 (Championship Management Update)
 Compatible with: Python 3.8+, FastAPI 0.100+
 """

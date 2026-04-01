@@ -4,7 +4,7 @@ Race Simulation API - Real-time agent-based racing interface
 Public API for real-time racing simulation where drivers are autonomous AI agents
 making live decisions at 30 FPS based on race conditions and their attributes.
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: December 2025
 """
 

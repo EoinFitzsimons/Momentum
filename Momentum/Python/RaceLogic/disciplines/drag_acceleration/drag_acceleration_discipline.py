@@ -17,7 +17,7 @@ Performance Model:
 - Top speed (trap speed): 200-330+ km/h depending on vehicle class
 - Points system: 8 positions (20,17,14,11,8,5,2,1) per race
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: January 2026
 """
 

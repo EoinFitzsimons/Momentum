@@ -20,7 +20,7 @@ Architecture:
 - Vectorized numpy calculations for performance
 - Event emission for GUI integration at 30 FPS
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: December 2025
 """
 
