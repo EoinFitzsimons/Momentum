@@ -54,7 +54,7 @@ def _setup_context_teams(context: RaceContext) -> None:
         for d in getattr(context, 'drivers', []) or []:
             ctx_teams[d.current_team_id] = Team(
                 id=d.current_team_id,
-                name=f"Team {d.current_team_id}",
+                name=f"Fallback Entry {d.current_team_id}",
                 nationality="USA",
                 discipline="formula",
                 tier="tier2",
@@ -109,16 +109,17 @@ def _populate_team_data_from_db(teams_dict: Dict[int, Team], drivers: Optional[L
     return teams_dict
 
 
-def _create_placeholder_teams(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]]) -> Dict[int, Team]:
-    """Create placeholder teams for any drivers without team data"""
+def _create_fallback_teams(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]], verbose: bool = False) -> Dict[int, Team]:
+    """Create fallback teams for drivers missing resolvable team data."""
     if not drivers:
         return teams_dict
-    
+
+    created = 0
     for driver in drivers:
         if driver.current_team_id not in teams_dict:
             teams_dict[driver.current_team_id] = Team(
                 id=driver.current_team_id,
-                name=f"Team {driver.current_team_id}",
+                name=f"Fallback Entry {driver.current_team_id}",
                 nationality="USA",
                 discipline="formula",
                 tier="tier2",
@@ -126,7 +127,11 @@ def _create_placeholder_teams(teams_dict: Dict[int, Team], drivers: Optional[Lis
                 founded_year=2020,
                 team_principal="Unknown"
             )
-    
+            created += 1
+
+    if verbose and created > 0:
+        print(f"Warning: created {created} fallback team entries for unresolved team IDs")
+
     return teams_dict
 
 
@@ -281,8 +286,8 @@ def simulate_race(
     # Fetch team data from database if provided
     teams_dict = _populate_team_data_from_db(teams_dict, drivers, db, verbose)
     
-    # Create placeholder teams if needed
-    teams_dict = _create_placeholder_teams(teams_dict, drivers)
+    # Create fallback teams if needed
+    teams_dict = _create_fallback_teams(teams_dict, drivers, verbose)
     
     # Calculate lap count
     laps = _calculate_race_laps(track, laps)

@@ -85,6 +85,7 @@ except Exception:
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CONTROL_LABEL_STYLE = "font-size: 16px; font-weight: bold; color: #FFFFFF;"
+UNKNOWN_DRIVER_LABEL = "Unknown Driver"
 
 
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
@@ -2817,7 +2818,7 @@ class RaceWindow(QMainWindow):
             print(f"Loaded {len(self.drivers)} drivers")
             if self.drivers:
                 print(f"First driver: id={self.drivers[0].id}, name={self.drivers[0].name}")
-            self._log_placeholder_driver_warning()
+            self._log_synthetic_driver_warning()
             self._prepare_driver_colours()
             self._init_driver_liveries_safe()
             return True
@@ -2828,16 +2829,16 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
             return False
 
-    def _log_placeholder_driver_warning(self) -> None:
-        """Log warning if placeholder names are present in active grid."""
-        placeholder_count = sum(
+    def _log_synthetic_driver_warning(self) -> None:
+        """Log warning if generated driver names are present in active grid."""
+        synthetic_count = sum(
             1 for d in self.drivers
             if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
         )
-        if placeholder_count <= 0:
+        if synthetic_count <= 0:
             return
         print(
-            f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
+            f"[DATA WARNING] {synthetic_count}/{len(self.drivers)} active drivers use generated names. "
             "Run scripts/seed_career_mode.py for realistic Faker data."
         )
 
@@ -3059,7 +3060,7 @@ class RaceWindow(QMainWindow):
             return None, None
 
     def _create_and_mount_track_widget(self, track_points: List[TrackPoint], track_length: float) -> bool:
-        """Create TrackWidget and replace loading placeholder in left panel."""
+        """Create TrackWidget and replace loading label in left panel."""
         try:
             self.track_widget = TrackWidget(
                 track_points,
@@ -3401,7 +3402,7 @@ class RaceWindow(QMainWindow):
             heat_count = current_size // 2
             for heat_idx in range(1, heat_count + 1):
                 left_name, right_name = self._drag_heat_lane_labels(round_idx, heat_idx, entrants)
-                heat_item = QTreeWidgetItem([f"H{heat_idx}", f"{left_name} vs {right_name}", "TBD", "-"])
+                heat_item = QTreeWidgetItem([f"H{heat_idx}", f"{left_name} vs {right_name}", "Pending", "-"])
                 round_node.addChild(heat_item)
                 self._drag_heat_items[(round_idx, heat_idx)] = heat_item
             round_node.setExpanded(True)
@@ -3411,15 +3412,15 @@ class RaceWindow(QMainWindow):
     def _drag_heat_lane_labels(self, round_idx: int, heat_idx: int, entrants: List[Dict[str, Any]]) -> Tuple[str, str]:
         """Return left/right lane labels for a heat."""
         if round_idx != 1:
-            return "TBD", "TBD"
+            return "Pending", "Pending"
         li = (heat_idx - 1) * 2
         ri = li + 1
-        left_name = str(entrants[li].get('driver_name', 'TBD')) if li < len(entrants) else "TBD"
-        right_name = str(entrants[ri].get('driver_name', 'TBD')) if ri < len(entrants) else "TBD"
+        left_name = str(entrants[li].get('driver_name', UNKNOWN_DRIVER_LABEL)) if li < len(entrants) else "Pending"
+        right_name = str(entrants[ri].get('driver_name', UNKNOWN_DRIVER_LABEL)) if ri < len(entrants) else "Pending"
         return left_name, right_name
 
     def _apply_drag_heat_to_tree(self, event: Dict[str, Any]) -> None:
-        """Update one heat node and propagate winner placeholder to next round."""
+        """Update one heat node and propagate winner to the next round."""
         if not self._is_drag_discipline():
             return
         try:
@@ -3448,9 +3449,9 @@ class RaceWindow(QMainWindow):
 
     def _drag_heat_names(self, event: Dict[str, Any]) -> Tuple[str, str, str]:
         """Extract lane and winner names from drag event payload."""
-        left_name = str(event.get('left_name', 'TBD'))
-        right_name = str(event.get('right_name', 'TBD'))
-        winner_name = str(event.get('winner_name', 'TBD'))
+        left_name = str(event.get('left_name', UNKNOWN_DRIVER_LABEL))
+        right_name = str(event.get('right_name', UNKNOWN_DRIVER_LABEL))
+        winner_name = str(event.get('winner_name', 'Pending'))
         return left_name, right_name, winner_name
 
     def _drag_heat_et_text(self, event: Dict[str, Any]) -> Tuple[str, str]:
@@ -3485,7 +3486,7 @@ class RaceWindow(QMainWindow):
             item.setBackground(col, QColor(255, 215, 0, 70))
 
     def _propagate_drag_winner_to_next_round(self, round_idx: int, heat_idx: int, winner_name: str) -> None:
-        """Push winner name into next-round matchup placeholder."""
+        """Push winner name into next-round matchup slots."""
         next_round = round_idx + 1
         next_heat = (heat_idx + 1) // 2
         next_item = self._drag_heat_items.get((next_round, next_heat))
@@ -3493,9 +3494,9 @@ class RaceWindow(QMainWindow):
             return
         prev_match = next_item.text(1)
         if (heat_idx % 2) == 1:
-            next_item.setText(1, f"{winner_name} vs TBD")
+            next_item.setText(1, f"{winner_name} vs Pending")
             return
-        left_slot = prev_match.split(" vs ")[0] if " vs " in prev_match else "TBD"
+        left_slot = prev_match.split(" vs ")[0] if " vs " in prev_match else "Pending"
         next_item.setText(1, f"{left_slot} vs {winner_name}")
 
     def _update_drag_time_metrics_from_event(self, event: Dict[str, Any], left_name: str, right_name: str) -> None:
@@ -5366,7 +5367,7 @@ class RaceWindow(QMainWindow):
         """Set an item in the standings table but respect DNF state.
 
         If `driver_id` is provided and that driver is marked DNF in
-        `self._race_state`, this will write a stable DNF/placeholder
+        `self._race_state`, this will write a stable DNF/pending
         instead of allowing other code to overwrite the cell.
         """
         try:
@@ -5389,7 +5390,7 @@ class RaceWindow(QMainWindow):
         return bool(entry.get('dnf', False))
 
     def _set_dnf_standings_item(self, row: int, col: int, item: QTableWidgetItem) -> None:
-        """Write DNF-safe placeholders and muted styling."""
+        """Write DNF-safe pending values and muted styling."""
         if col == 3:
             self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
         elif col in (0, 2):

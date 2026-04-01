@@ -216,7 +216,7 @@ def get_player_team(x_player_id: Annotated[Optional[str], Header(alias="X-Player
     UC-13: Read Player Team
 
     Get the authenticated player's owned team with edit permissions.
-    Uses X-Player-Id as a lightweight auth placeholder.
+    Uses X-Player-Id as a lightweight auth header.
 
     Returns:
         Player's team with editable flags
