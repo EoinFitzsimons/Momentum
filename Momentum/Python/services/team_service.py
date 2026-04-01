@@ -199,7 +199,7 @@ class TeamService:
                     "name": s.name,
                     "role": s.role,
                     "rating": s.rating,
-                    "annual_salary": 800_000  # Placeholder
+                    "annual_salary": 800_000  # Default baseline
                 }
                 for s in staff
             ]

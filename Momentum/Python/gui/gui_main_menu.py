@@ -397,7 +397,7 @@ class MainMenuWindow(QMainWindow):
         quick_race_btn.clicked.connect(self._show_quick_race_setup)
         layout.addWidget(quick_race_btn)
 
-        # Championship Mode (placeholder)
+        # Championship Mode
         championship_btn = QPushButton("Championship Mode")
         championship_btn.setMinimumHeight(80)
         championship_btn.setStyleSheet("""
@@ -825,7 +825,7 @@ class QuickRaceSetupWindow(QDialog):
         self.profile_team = QLabel("Team: -")
         profile_layout.addWidget(self.profile_team)
 
-        # RadarWidget placeholder - draws a 6-axis polygon visualisation
+        # RadarWidget - draws a 6-axis polygon visualisation
         from PyQt6.QtWidgets import QSizePolicy
         from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
         from PyQt6.QtCore import QPointF
@@ -1342,8 +1342,7 @@ class QuickRaceSetupWindow(QDialog):
                 tracks = []
             
             if not tracks:
-                # No tracks found -> placeholder
-                self.track_combo.addItem("Test Circuit (Default)", None)
+                self.track_combo.addItem("Fallback Circuit", None)
             else:
                 for track in tracks:
                     # Store track id as user data
@@ -1351,7 +1350,7 @@ class QuickRaceSetupWindow(QDialog):
                     self.track_combo.addItem(track_name, track.id)
         except Exception as e:
             print(f"[WARNING] Error loading tracks: {e}")
-            self.track_combo.addItem("Test Circuit (Default)", None)
+            self.track_combo.addItem("Fallback Circuit", None)
 
     def _on_driver_selected(self, current, previous):
         """Update the right-hand profile panel when selection changes."""
