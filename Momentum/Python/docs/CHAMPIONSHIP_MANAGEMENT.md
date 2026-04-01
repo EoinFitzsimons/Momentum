@@ -301,6 +301,6 @@ When extending this system:
 4. Update API schemas in `api/schemas.py`
 5. Add tests to `tests/test_championship_management.py`
 
-## License
+## Licence
 
 Part of Momentum Motorsport Simulation - Final Year Project
