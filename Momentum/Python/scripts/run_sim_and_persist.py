@@ -17,17 +17,10 @@ def main():
         db = PersistenceSQLite()
         print("DB path:", db.db_path)
         db.ensure_schema()
-        # Prefer the richer Faker-based seeder when available for demo runs.
+        # Seed sample data when the database is empty.
         drivers = db.list_drivers()
         if not drivers:
-            try:
-                # Try to run the Faker seeder script (provides realistic names)
-                import importlib
-                faker_seeder = importlib.import_module("scripts.seed_faker_drivers")
-                faker_seeder.main()
-            except Exception:
-                # Fallback to simple placeholder seed (used by tests)
-                db.seed_sample_data()
+            db.seed_sample_data()
         drivers = db.list_drivers()
         print("drivers len:", len(drivers))
         track = db.get_track(1)
