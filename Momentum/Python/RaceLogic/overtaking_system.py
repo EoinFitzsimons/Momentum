@@ -12,7 +12,7 @@ All decisions use driver attributes comprehensively.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 from enum import Enum
 import numpy as np
 
@@ -32,6 +32,18 @@ DEFAULT_LOGISTIC_SLOPES = {
 _ACTIVE_LOGISTIC_SLOPES = dict(DEFAULT_LOGISTIC_SLOPES)
 
 
+def _effective_logistic_slopes(logistic_slopes: Optional[dict] = None) -> Dict[str, float]:
+    """Return validated slope map merged with defaults."""
+    if not logistic_slopes:
+        return dict(DEFAULT_LOGISTIC_SLOPES)
+
+    updated = dict(DEFAULT_LOGISTIC_SLOPES)
+    for key, value in logistic_slopes.items():
+        if key in updated and value is not None:
+            updated[key] = float(value)
+    return updated
+
+
 def set_logistic_slopes(slopes: Optional[dict]) -> None:
     """Set active logistic slopes used by overtake and incident models.
 
@@ -40,15 +52,7 @@ def set_logistic_slopes(slopes: Optional[dict]) -> None:
     - higher slope => sharper threshold-like behaviour
     """
     global _ACTIVE_LOGISTIC_SLOPES
-    if not slopes:
-        _ACTIVE_LOGISTIC_SLOPES = dict(DEFAULT_LOGISTIC_SLOPES)
-        return
-
-    updated = dict(DEFAULT_LOGISTIC_SLOPES)
-    for key, value in slopes.items():
-        if key in updated and value is not None:
-            updated[key] = float(value)
-    _ACTIVE_LOGISTIC_SLOPES = updated
+    _ACTIVE_LOGISTIC_SLOPES = _effective_logistic_slopes(slopes)
 
 
 def get_logistic_slopes() -> dict:
@@ -156,7 +160,8 @@ def evaluate_overtaking_opportunity(
     gap_m: float,
     section: TrackSection,
     corner: Optional[TrackCorner],
-    track_width_m: float = 12.0
+    track_width_m: float = 12.0,
+    logistic_slopes: Optional[dict] = None,
 ) -> Tuple[bool, float, OvertakeAttemptType]:
     """
     Evaluate if overtaking attempt should be initiated
@@ -166,6 +171,8 @@ def evaluate_overtaking_opportunity(
         - success_probability: 0.0-1.0 estimated success chance
         - attempt_type: Type of maneuver to use
     """
+
+    slopes = _effective_logistic_slopes(logistic_slopes)
 
     # Can't overtake if too far behind
     if gap_m > 50.0:
@@ -195,7 +202,7 @@ def evaluate_overtaking_opportunity(
             speed_factor = min(max(speed_advantage / 12.0, 0.0), 1.0)
 
             latent = (1.15 * attacker_score) - (0.85 * defender_score) + (0.95 * speed_factor) - 0.55
-            success_prob = _logistic_probability(latent, slope=_ACTIVE_LOGISTIC_SLOPES['straight'])
+            success_prob = _logistic_probability(latent, slope=slopes['straight'])
             success_prob = np.clip(success_prob, 0.03, 0.97)
 
             # Aggressive or brave drivers try earlier
@@ -228,7 +235,7 @@ def evaluate_overtaking_opportunity(
             difficulty_factor = max(0.0, 1.0 - getattr(corner, 'overtaking_difficulty', 0.5))
 
             latent = (1.20 * attacker_score) - (0.90 * defender_score) + (0.70 * difficulty_factor) - 0.75
-            success_prob = _logistic_probability(latent, slope=_ACTIVE_LOGISTIC_SLOPES['braking'])
+            success_prob = _logistic_probability(latent, slope=slopes['braking'])
             success_prob = np.clip(success_prob, 0.02, 0.85)
 
             # Risk tolerance driven by aggression (not raw racecraft)
@@ -259,7 +266,7 @@ def evaluate_overtaking_opportunity(
                 0.20 * (get_driver_bravery(attacker) / 100.0)
             )
             outside_latent = (1.00 * attacker_outside) - (0.82 * defender_score) + (0.35 * width_factor) - 0.70
-            outside_success = _logistic_probability(outside_latent, slope=_ACTIVE_LOGISTIC_SLOPES['outside'])
+            outside_success = _logistic_probability(outside_latent, slope=slopes['outside'])
             outside_success = np.clip(outside_success, 0.02, 0.80)
 
             # Switchback attempt (requires patience and racecraft to set up)
@@ -269,7 +276,7 @@ def evaluate_overtaking_opportunity(
                 0.15 * (get_driver_bravery(attacker) / 100.0)
             )
             switch_latent = (1.05 * attacker_switch) - (0.78 * defender_score) + (0.30 * width_factor) - 0.72
-            switch_success = _logistic_probability(switch_latent, slope=_ACTIVE_LOGISTIC_SLOPES['switch'])
+            switch_success = _logistic_probability(switch_latent, slope=slopes['switch'])
             switch_success = np.clip(switch_success, 0.02, 0.78)
 
             # Choose the maneuver with higher success probability but require
@@ -386,13 +393,16 @@ def calculate_incident_risk(
     attacker: Driver,
     defender: Driver,
     overtake_attempt: OvertakeAttempt,
-    section: TrackSection
+    section: TrackSection,
+    logistic_slopes: Optional[dict] = None,
 ) -> float:
     """
     Calculate probability of incident during overtake
 
     Returns probability (0.0-1.0) of contact/crash
     """
+    slopes = _effective_logistic_slopes(logistic_slopes)
+
     # === TEMPORARY: COLLISION TESTING DISABLED ===
     # Base risks set to near-zero for testing car movement and positioning.
     # Note: Realistic collision rates (0.10-0.40 range) require verification of visual
@@ -428,17 +438,18 @@ def calculate_incident_risk(
         + (0.75 * overlap_risk)
         - 0.45
     )
-    risk_multiplier = 0.45 + (1.8 * _logistic_probability(risk_pressure, slope=_ACTIVE_LOGISTIC_SLOPES['risk']))
+    risk_multiplier = 0.45 + (1.8 * _logistic_probability(risk_pressure, slope=slopes['risk']))
     incident_prob = base_risk * risk_multiplier * overlap_risk
 
-    return np.clip(incident_prob, 0.001, 0.30)
+    return np.clip(incident_prob, 0.0, 0.30)
 
 
 def resolve_overtake_outcome(
     attacker: Driver,
     defender: Driver,
     overtake_attempt: OvertakeAttempt,
-    rng: np.random.Generator
+    rng: np.random.Generator,
+    logistic_slopes: Optional[dict] = None,
 ) -> Tuple[str, Optional[str]]:
     """
     Resolve overtake attempt outcome
@@ -454,7 +465,12 @@ def resolve_overtake_outcome(
         section = TrackSection.STRAIGHT
 
     incident_risk = calculate_incident_risk(
-        attacker, defender, overtake_attempt, section)
+        attacker,
+        defender,
+        overtake_attempt,
+        section,
+        logistic_slopes=logistic_slopes,
+    )
 
     if rng.random() < incident_risk:
         # Determine who suffers
