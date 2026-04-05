@@ -83,7 +83,7 @@ from api.schemas import (
 )
 from config import API_HOST, API_PORT, API_RELOAD
 
-# Initialize FastAPI application
+# Initialise FastAPI application
 app = FastAPI(
     title="Momentum Simulation API",
     description="Multi-discipline Motorsport Management Simulator - Championship Management System",
@@ -101,7 +101,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize services
+# Initialise services
 db_manager = DatabaseManager()
 championship_service = ChampionshipService(db_manager)
 team_service = TeamService(db_manager)

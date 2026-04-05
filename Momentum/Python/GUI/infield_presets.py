@@ -1,7 +1,7 @@
 """Palette and preset definitions for infield biomes and weather modifiers.
 
 Provides a simple API: `select_preset(surface, surface_grip, seed=None)`
-returning a dict with colors and density multipliers used by the infield
+returning a dict with colours and density multipliers used by the infield
 renderer.
 """
 from PyQt6.QtGui import QColor
@@ -53,7 +53,7 @@ PRESETS = {
 
 
 def _normalize_grip_to_legacy_scale(surface_grip: Optional[float]) -> Optional[float]:
-    """Normalize grip to legacy 0..20 scale used by preset thresholds."""
+    """Normalise grip to legacy 0..20 scale used by preset thresholds."""
     if surface_grip is None:
         return None
     try:
@@ -81,8 +81,8 @@ def select_preset(surface: str, surface_grip: Optional[float] = None, seed: Opti
 
     Rules (simple heuristics):
     - dirt/gravel/sand/snow/ice bias toward drier or wetter terrain tones
-    - concrete and mixed favor sparse vegetation tones
-    - grip values can be either 0..1 or legacy 0..20 and are normalized
+    - concrete and mixed favour sparse vegetation tones
+    - grip values can be either 0..1 or legacy 0..20 and are normalised
     - otherwise prefer lush vegetation
     """
     s = (surface or '').lower()

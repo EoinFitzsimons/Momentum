@@ -37,7 +37,7 @@ class ProgressionService:
     """
     
     def __init__(self, db_path: str = DATABASE_PATH):
-        """Initialize progression service with database connection"""
+        """Initialise progression service with database connection"""
         self.db = DatabaseManager(db_path)
     
     # ========================================================================

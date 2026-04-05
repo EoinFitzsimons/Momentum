@@ -5,7 +5,7 @@ Racing vehicle systems including:
 - Single seater (Formula) car rendering with realistic detail
 - Aerodynamic elements (front wing, DRS flap, rear wing)
 - Visible mechanical components (suspension, wheels, cockpit)
-- Livery management (team colors, driver numbers)
+- Livery management (team colours, driver numbers)
 - Vehicle configuration (fuel, tires, brake balance)
 - GUI integration for race visualisation
 

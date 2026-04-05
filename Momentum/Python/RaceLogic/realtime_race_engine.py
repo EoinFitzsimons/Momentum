@@ -35,7 +35,7 @@ from RaceLogic.track_physics import TrackMap, TrackSection, RacingLine
 from RaceLogic.overtaking_system import (
     OvertakeAttempt, OvertakeAttemptType, DefensiveAction,
     evaluate_overtaking_opportunity, calculate_defensive_action,
-    resolve_overtake_outcome
+    resolve_overtake_outcome, set_logistic_slopes
 )
 from services.driver_attributes import (
     get_safe_attribute,
@@ -44,6 +44,7 @@ from services.driver_attributes import (
     get_vehicle_control,
     get_cornering_skill,
 )
+from config import STAFF_ROLES_CONFIG
 
 
 class RacingMode(Enum):
@@ -68,10 +69,10 @@ class DriverState:
     team: Team
 
     # Physical state (updated every timestep)
-    # Absolute position from start line (meters)
+    # Absolute position from start line (metres)
     position_m: float = 0.0
     prev_position_m: float = 0.0    # Previous position (for lap detection)
-    velocity_mps: float = 0.0       # Current velocity (meters per second)
+    velocity_mps: float = 0.0       # Current velocity (metres per second)
     lap: int = 0                    # Current lap number
 
     # Race situation awareness
@@ -143,9 +144,9 @@ class RaceState:
     # Collision tracking
     collision_log: List[Dict[str, Any]] = field(default_factory=list)
     
-    # Checkered flag logic: when leader finishes, allow other drivers to finish at line
+    # Chequered flag logic: when leader finishes, allow other drivers to finish at line
     checkered_flag_deployed: bool = False  # Set when leader completes all laps
-    leader_lap_count: int = 0  # Highest lap count when checkered flag deployed
+    leader_lap_count: int = 0  # Highest lap count when chequered flag deployed
 
 
 class RealtimeRaceEngine:
@@ -161,6 +162,14 @@ class RealtimeRaceEngine:
         self.rng = np.random.default_rng(seed)
         # Kept for backward compatibility with older tests that pass `db=`.
         self.db = db
+        self.debug_logging: bool = False
+        self._team_staff_effects: Dict[int, Dict[str, float]] = {}
+        self.STAFF_EFFECT_CAP = 0.35
+        self.STAFF_EFFECT_SATURATION_STRENGTH = 1.35
+        self.DRIVER_EFFECT_CURVE_SCALE = 2.6
+        self.discipline_calibration: Dict[str, Dict[str, float]] = self._build_default_discipline_calibration()
+        self._active_discipline_calibration: Dict[str, float] = {}
+        self.START_GRID_SPACING_M = 20.0
 
         # Track-aware racing physics
         self.track_map: Optional[TrackMap] = None
@@ -182,7 +191,7 @@ class RealtimeRaceEngine:
         # When car is within 2 car lengths (50m) behind another, gets speed boost
         # from reduced air resistance. Real F1 data shows 5-10% boost.
         self.SLIPSTREAM_BONUS = 0.07     # 7% speed boost when drafting
-        self.SLIPSTREAM_DISTANCE = 50.0  # Meters - effective draft range
+        self.SLIPSTREAM_DISTANCE = 50.0  # Metres - effective draft range
 
         # === DIRTY AIR EFFECT - MUCH STRONGER ===
         # When following closely in corners, turbulent air reduces downforce
@@ -190,7 +199,7 @@ class RealtimeRaceEngine:
         # corners
         # 15% speed loss in corners when following (was 5%)
         self.DIRTY_AIR_PENALTY = 0.15
-        # Meters - dirty air affects up to this distance (was 100m)
+        # Metres - dirty air affects up to this distance (was 100m)
         self.DIRTY_AIR_DISTANCE = 150.0
         self.TIRE_DEGRADATION_RATE = 0.00001  # Per timestep degradation
         self.FUEL_BURN_RATE = 0.00002    # Per timestep fuel consumption
@@ -218,6 +227,38 @@ class RealtimeRaceEngine:
         # Rallycross mandatory joker-lap model
         self.RALLYCROSS_JOKER_BASE_PENALTY_S = 2.8
         self._rallycross_joker_enabled = False
+
+    def _build_default_discipline_calibration(self) -> Dict[str, Dict[str, float]]:
+        """Return default per-discipline calibration profile.
+
+        Profile key guide:
+        - *_slope: logistic steepness for overtake/incident probability curves.
+          Higher slope means a sharper jump between unlikely and likely.
+        - tire_eta / mech_eta: Weibull scale ("life") parameters.
+          Higher values delay typical failures.
+        - tire_beta / mech_beta: Weibull shape parameters.
+          Values > 1 model wear-out behaviour where risk increases over laps.
+        """
+        default = {
+            'straight_slope': 3.8,
+            'braking_slope': 3.4,
+            'outside_slope': 3.2,
+            'switch_slope': 3.0,
+            'risk_slope': 3.4,
+            'tire_eta': 28.0,
+            'tire_beta': 2.6,
+            'mech_eta': 95.0,
+            'mech_beta': 2.1,
+        }
+        return {
+            'DEFAULT': dict(default),
+            'SINGLE_SEATER': dict(default),
+            'PRODUCTION_TOURING': dict(default),
+            'URBAN_STREET': dict(default),
+            'DRAG_ACCELERATION': dict(default),
+            'SPRINT_RALLYCROSS': dict(default),
+            'ENDURANCE': dict(default),
+        }
 
     def simulate_race(
         self,
@@ -291,28 +332,117 @@ class RealtimeRaceEngine:
         player_overrides: Optional[Dict[str, float]],
     ) -> Tuple[RaceState, float]:
         """Prepare track map, controls and race state for simulation loop."""
-        print(f"-> Generating track map for {track.name}...")
+        if self.debug_logging:
+            print(f"-> Generating track map for {track.name}...")
         self.track_map = TrackMap(track=track)
         self._event_callback = event_callback
-        print(f"  OK Track map ready: {len(self.track_map.corners)} corners, {len(self.track_map.drs_zones)} DRS zones")
+        if self.debug_logging:
+            print(f"  OK Track map ready: {len(self.track_map.corners)} corners, {len(self.track_map.drs_zones)} DRS zones")
 
         self.track_points = track_points
-        if track_points:
+        if track_points and self.debug_logging:
             print(f"  OK Using visual track with {len(track_points)} points for position mapping")
 
         self.player_driver_id = player_driver_id
         self.player_team_driver_ids = {int(x) for x in (player_team_driver_ids or []) if x is not None}
         self.player_overrides = player_overrides or {}
-        if player_driver_id:
+        if player_driver_id and self.debug_logging:
             print(f"  OK Player driver ID {player_driver_id} with overrides: {self.player_overrides}")
-        if self.player_team_driver_ids:
+        if self.player_team_driver_ids and self.debug_logging:
             print(f"  OK Player team-controlled drivers: {sorted(self.player_team_driver_ids)}")
 
+        self._apply_discipline_calibration(track)
         self._configure_rallycross_joker_mode(track)
 
         track_length_m = track.length_km * 1000.0
         race_state = self._initialize_race(drivers, teams, track_length_m, total_laps)
+        self._hydrate_staff_effects_for_teams(teams)
         return race_state, track_length_m
+
+    def _get_track_discipline(self, track: Track) -> str:
+        return str(getattr(track, 'primary_discipline', '') or '').upper()
+
+    def _apply_discipline_calibration(self, track: Track) -> None:
+        """Activate discipline-specific calibration for overtakes and reliability."""
+        discipline = self._get_track_discipline(track)
+        profile = self.discipline_calibration.get(discipline) or self.discipline_calibration.get('DEFAULT', {})
+        self._active_discipline_calibration = dict(profile)
+        set_logistic_slopes({
+            'straight': self._active_discipline_calibration.get('straight_slope', 3.8),
+            'braking': self._active_discipline_calibration.get('braking_slope', 3.4),
+            'outside': self._active_discipline_calibration.get('outside_slope', 3.2),
+            'switch': self._active_discipline_calibration.get('switch_slope', 3.0),
+            'risk': self._active_discipline_calibration.get('risk_slope', 3.4),
+        })
+
+    def _hydrate_staff_effects_for_teams(self, teams: Dict[int, Team]) -> None:  # NOSONAR
+        """Compute normalised per-team staff effects from DB roster and role config."""
+        self._team_staff_effects = {int(team_id): {} for team_id in teams.keys()}
+        if not self.db or not hasattr(self.db, 'get_staff_by_team'):
+            return
+
+        for team_id, team in teams.items():
+            try:
+                staff = self.db.get_staff_by_team(int(team_id))
+            except Exception:
+                staff = []
+
+            raw_effects: Dict[str, float] = {}
+            discipline = str(getattr(team, 'discipline', '') or '').upper()
+
+            for member in staff:
+                role_key = str(getattr(member, 'role', '') or '').upper()
+                cfg = STAFF_ROLES_CONFIG.get(role_key)
+                if not cfg:
+                    continue
+
+                rating = float(getattr(member, 'rating', 50.0) or 50.0)
+                rating_factor = self._rating_impact_factor(rating)
+                discipline_mod = float(cfg.get('discipline_modifiers', {}).get(discipline, 1.0))
+                base_effects = cfg.get('base_effects', {})
+
+                for effect_name, effect_value in base_effects.items():
+                    raw_effects[effect_name] = raw_effects.get(effect_name, 0.0) + (
+                        float(effect_value) * rating_factor * discipline_mod
+                    )
+
+            effects: Dict[str, float] = {}
+            for key, raw_value in raw_effects.items():
+                effects[key] = self._saturate_staff_effect(raw_value)
+
+            self._team_staff_effects[int(team_id)] = effects
+
+    def _rating_impact_factor(self, rating: float) -> float:
+        """Map staff rating to nonlinear impact where early improvements matter more."""
+        normalized = max(0.0, min(1.0, float(rating) / 100.0))
+        scale = 3.0
+        raw = 1.0 - np.exp(-scale * normalized)
+        max_raw = 1.0 - np.exp(-scale)
+        return raw / max_raw if max_raw > 0.0 else normalized
+
+    def _saturate_staff_effect(self, raw_effect: float) -> float:
+        """Apply diminishing returns so stacking elite staff tails off near perfection."""
+        x = max(0.0, float(raw_effect))
+        cap = float(self.STAFF_EFFECT_CAP)
+        strength = float(self.STAFF_EFFECT_SATURATION_STRENGTH)
+        if cap <= 0.0:
+            return 0.0
+        saturated = cap * (1.0 - np.exp(-strength * (x / cap)))
+        return max(0.0, min(cap, saturated))
+
+    def _driver_attr_factor(self, value: float) -> float:
+        """Map 0-100 driver attributes onto a diminishing-returns curve in [0,1]."""
+        normalized = max(0.0, min(1.0, float(value) / 100.0))
+        scale = float(self.DRIVER_EFFECT_CURVE_SCALE)
+        raw = 1.0 - np.exp(-scale * normalized)
+        max_raw = 1.0 - np.exp(-scale)
+        return raw / max_raw if max_raw > 0.0 else normalized
+
+    def _get_team_staff_effect(self, team: Team, effect_name: str) -> float:
+        """Return precomputed staff effect for a team and effect key."""
+        team_id = int(getattr(team, 'id', 0) or 0)
+        effects = self._team_staff_effects.get(team_id, {})
+        return float(effects.get(effect_name, 0.0) or 0.0)
 
     def _configure_rallycross_joker_mode(self, track: Track) -> None:
         """Enable mandatory joker-lap logic for sprint/rallycross races."""
@@ -359,22 +489,64 @@ class RealtimeRaceEngine:
         realtime_speed: float,
     ) -> int:
         """Run per-frame simulation until race ends or stop is requested."""
+        max_race_time_s = max(180.0, float(race_state.total_laps) * 240.0)
         while not self._race_finished(race_state):
-            if stop_event and stop_event.is_set():
-                print("\n[RACE ENGINE] Stop requested - terminating simulation")
+            if self._should_stop_simulation(stop_event):
                 break
 
-            frame_start = time.time()
-            self._update_running_drivers(race_state, track_length_m, timestep, event_callback)
-            self._update_race_situation(race_state)
-            self._log_frame_snapshot_if_needed(frame, race_state)
+            if self._apply_time_limit_if_needed(race_state, max_race_time_s):
+                break
 
-            frame += 1
-            race_state.current_time += timestep
-            self._emit_position_update_if_needed(frame, race_state, event_callback)
-            self._throttle_frame_if_needed(frame_start, timestep, realtime_speed)
+            frame = self._process_simulation_frame(
+                frame=frame,
+                race_state=race_state,
+                track_length_m=track_length_m,
+                timestep=timestep,
+                event_callback=event_callback,
+                realtime_speed=realtime_speed,
+            )
 
         return frame
+
+    def _should_stop_simulation(self, stop_event: Any) -> bool:
+        """Return True if an external stop event requested termination."""
+        if not (stop_event and stop_event.is_set()):
+            return False
+        print("\n[RACE ENGINE] Stop requested - terminating simulation")
+        return True
+
+    def _apply_time_limit_if_needed(self, race_state: RaceState, max_race_time_s: float) -> bool:
+        """Force-stop running cars when a race exceeds its safety time limit."""
+        if race_state.current_time < max_race_time_s:
+            return False
+        for state in race_state.driver_states.values():
+            if state.running:
+                state.running = False
+                state.dnf_reason = state.dnf_reason or 'time_limit'
+        if self.debug_logging:
+            print(f"[RACE ENGINE] Time limit reached ({max_race_time_s:.1f}s), forcing race end")
+        return True
+
+    def _process_simulation_frame(
+        self,
+        frame: int,
+        race_state: RaceState,
+        track_length_m: float,
+        timestep: float,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+        realtime_speed: float,
+    ) -> int:
+        """Execute one simulation frame and return the incremented frame index."""
+        frame_start = time.time()
+        self._update_running_drivers(race_state, track_length_m, timestep, event_callback)
+        self._update_race_situation(race_state)
+        self._log_frame_snapshot_if_needed(frame, race_state)
+
+        next_frame = frame + 1
+        race_state.current_time += timestep
+        self._emit_position_update_if_needed(next_frame, race_state, event_callback)
+        self._throttle_frame_if_needed(frame_start, timestep, realtime_speed)
+        return next_frame
 
     def _update_running_drivers(
         self,
@@ -490,7 +662,7 @@ class RealtimeRaceEngine:
             if state.lap >= mandatory_window_lap and state.tire_condition < 0.72:
                 return True
 
-        # Simple undercut behavior in traffic
+        # Simple undercut behaviour in traffic
         in_traffic_window = 0.8 < state.gap_ahead < 2.5
         if in_traffic_window and state.tire_condition < 0.65 and self.rng.random() < 0.20:
             return True
@@ -529,7 +701,11 @@ class RealtimeRaceEngine:
     ) -> None:
         """Start pit phase and emit telemetry event."""
         service_variance = float(self.rng.uniform(-0.7, 0.7))
-        total_pit_time = self.PIT_LANE_TRANSIT_SECONDS + self.PIT_SERVICE_BASE_SECONDS + service_variance
+        pitstop_effect = self._get_team_staff_effect(state.team, 'pitstop')
+        operations_effect = self._get_team_staff_effect(state.team, 'operations')
+        strategy_effect = self._get_team_staff_effect(state.team, 'strategy')
+        pit_reduction = min(1.8, 6.0 * (pitstop_effect * 0.6 + operations_effect * 0.3 + strategy_effect * 0.1))
+        total_pit_time = self.PIT_LANE_TRANSIT_SECONDS + self.PIT_SERVICE_BASE_SECONDS + service_variance - pit_reduction
         self._consume_player_come_in_request(state)
         state.in_pit_lane = True
         state.pit_time_remaining_s = max(6.0, total_pit_time)
@@ -665,6 +841,8 @@ class RealtimeRaceEngine:
 
     def _log_frame_snapshot_if_needed(self, frame: int, race_state: RaceState) -> None:
         """Periodic verbose snapshot for debugging frame-by-frame state."""
+        if not self.debug_logging:
+            return
         if frame % 30 != 0:
             return
         print(f"\n[FRAME {frame}] Race time: {race_state.current_time:.1f}s")
@@ -688,12 +866,12 @@ class RealtimeRaceEngine:
         if not event_callback:
             return
         position_event = self._create_position_event(race_state, frame)
-        if frame % 90 == 0:
+        if self.debug_logging and frame % 90 == 0:
             print(f"  -> Emitting {len(position_event['positions'])} car positions to GUI")
         event_callback(position_event)
 
     def _throttle_frame_if_needed(self, frame_start: float, timestep: float, realtime_speed: float) -> None:
-        """Sleep to honor realtime_speed for low-speed visualized runs."""
+        """Sleep to honour realtime_speed for low-speed visualised runs."""
         if realtime_speed >= 100:
             return
         frame_duration = time.time() - frame_start
@@ -742,7 +920,7 @@ class RealtimeRaceEngine:
         _ = iterations
         _ = kwargs
 
-        # Older tests may pass teams as a list/tuple; normalize to {team_id: team}.
+        # Older tests may pass teams as a list/tuple; normalise to {team_id: team}.
         if not hasattr(teams, 'get'):
             teams = {
                 int(getattr(team, 'id', idx + 1)): team
@@ -788,7 +966,7 @@ class RealtimeRaceEngine:
             # on the opening laps. Increase spacing to reduce first-lap contacts.
             # NOTE: SAFE_FOLLOWING_DISTANCE used in collision detection is
             # approximately 15.0m, so pick a spacing comfortably above that.
-            starting_position = i * 20.0  # 20m spacing between all cars
+            starting_position = i * float(self.START_GRID_SPACING_M)
 
             # Calculate initial push intensity based on driver personality
             raw_speed = get_safe_attribute(driver, 'speed') / 100.0
@@ -816,7 +994,8 @@ class RealtimeRaceEngine:
             if self._rallycross_joker_enabled:
                 state.joker_lap_target = self._initial_joker_lap_target(driver.id, total_laps)
 
-            print(f"  [INIT] {driver.name}: speed={get_safe_attribute(driver,'speed'):.1f} -> initial_push={initial_push:.2f}")
+            if self.debug_logging:
+                print(f"  [INIT] {driver.name}: speed={get_safe_attribute(driver,'speed'):.1f} -> initial_push={initial_push:.2f}")
 
             race_state.driver_states[driver.id] = state
             race_state.lap_times[driver.id] = []
@@ -904,11 +1083,12 @@ class RealtimeRaceEngine:
 
         Consistency is returned for later variance/post-processing.
         """
-        raw_speed = get_safe_attribute(driver, 'speed') / 100.0
-        aggression = get_driver_aggression(driver) / 100.0
-        consistency = get_safe_attribute(driver, 'consistency') / 100.0
+        raw_speed = self._driver_attr_factor(get_safe_attribute(driver, 'speed'))
+        aggression = self._driver_attr_factor(get_driver_aggression(driver))
+        consistency = self._driver_attr_factor(get_safe_attribute(driver, 'consistency'))
         professionalism = get_driver_professionalism(driver)
-        risk_tolerance = (100.0 - professionalism) / 100.0
+        professionalism_factor = self._driver_attr_factor(professionalism)
+        risk_tolerance = 1.0 - professionalism_factor
 
         base_push = 0.4 + (raw_speed * 0.2) + (aggression * 0.2) + (risk_tolerance * 0.2)
         variability = (1.0 - consistency) * self.rng.uniform(-0.05, 0.05)
@@ -953,7 +1133,16 @@ class RealtimeRaceEngine:
         state.racing_mode = RacingMode.ATTACK
         state.push_intensity = min(1.0, base_push + 0.35)
         self._log_overtake_attempt(driver.name, car_ahead.driver.name, gap_m, success_prob)
-        self._start_overtake_if_not_on_cooldown(state, car_ahead, race_state, attempt_type, gap_m, corner)
+        self._start_overtake_if_not_on_cooldown(
+            state,
+            car_ahead,
+            race_state,
+            attempt_type,
+            gap_m,
+            corner,
+            section_type,
+            float(success_prob),
+        )
 
     def _log_overtake_attempt(self, attacker_name: str, defender_name: str, gap_m: float, success_prob: float) -> None:
         if not hasattr(self, '_overtake_log_counter'):
@@ -973,6 +1162,8 @@ class RealtimeRaceEngine:
         attempt_type: OvertakeAttemptType | str,
         gap_m: float,
         corner: Optional[Any],
+        section_type: Any,
+        success_prob: float,
     ) -> None:
         key = (state.driver_id, car_ahead.driver_id)
         pair_key = frozenset((state.driver_id, car_ahead.driver_id))
@@ -997,6 +1188,28 @@ class RealtimeRaceEngine:
             speed_advantage_kmh=(state.velocity_mps - car_ahead.velocity_mps) * 3.6,
             corner=corner,
         )
+
+        # Emit quality context so calibration can reward realistic opportunities,
+        # not just raw attempt volume.
+        if hasattr(self, '_event_callback') and callable(self._event_callback):
+            try:
+                self._event_callback({
+                    "type": "overtake_attempt",
+                    "attacker_id": state.driver_id,
+                    "attacker_name": state.driver_name,
+                    "defender_id": car_ahead.driver_id,
+                    "defender_name": car_ahead.driver_name,
+                    "lap": state.lap,
+                    "time": race_state.current_time,
+                    "section": str(getattr(section_type, 'value', section_type)),
+                    "attempt_type": normalized_attempt_type.value,
+                    "gap_m": float(gap_m),
+                    "speed_advantage_kmh": float((state.velocity_mps - car_ahead.velocity_mps) * 3.6),
+                    "push_intensity": float(state.push_intensity),
+                    "success_probability": float(success_prob),
+                })
+            except Exception:
+                pass
 
     def _apply_defend_mode_if_needed(self, state: DriverState, race_state: RaceState, driver: Driver, base_push: float) -> bool:
         if not (state.gap_behind < self.DEFEND_THRESHOLD_GAP and state.position < len(race_state.driver_states)):
@@ -1047,14 +1260,14 @@ class RealtimeRaceEngine:
         """
         Calculate current speed with DRAMATIC variation based on push_intensity
 
-        Returns speed in meters per second.
+        Returns speed in metres per second.
         """
         driver = state.driver
         team = state.team
 
         # Base speed from driver canonical skill and team capability
-        raw_speed = get_safe_attribute(driver, 'speed') / 100.0
-        cornering_skill = get_cornering_skill(driver) / 100.0
+        raw_speed = self._driver_attr_factor(get_safe_attribute(driver, 'speed'))
+        cornering_skill = self._driver_attr_factor(get_cornering_skill(driver))
         team_performance = self._get_team_multiplier(team)
 
         # *** PUSH INTENSITY IS THE DOMINANT FACTOR ***
@@ -1068,7 +1281,7 @@ class RealtimeRaceEngine:
         push_multiplier = 0.20 + (state.push_intensity * 1.10)
 
         # Driver skill modifies slightly (5-10% variation)
-        driver_modifier = 0.95 + (raw_speed * 0.10)
+        driver_modifier = 0.94 + (raw_speed * 0.11)
 
         # Team performance adds small bonus (0-5%)
         team_modifier = 0.975 + (team_performance * 0.05)
@@ -1078,7 +1291,7 @@ class RealtimeRaceEngine:
 
         if in_corner:
             # 85-100% speed in corners
-            corner_modifier = 0.85 + (cornering_skill * 0.15)
+            corner_modifier = 0.84 + (cornering_skill * 0.16)
         else:
             corner_modifier = 1.0  # Full speed on straights
 
@@ -1112,7 +1325,7 @@ class RealtimeRaceEngine:
         speed = self._apply_collision_avoidance(speed, state)
 
         # Consistency variance
-        consistency = get_safe_attribute(driver, 'consistency') / 100.0
+        consistency = self._driver_attr_factor(get_safe_attribute(driver, 'consistency'))
         speed_variance = (1.0 - consistency) * 0.05
         speed *= (1.0 + self.rng.normal(0, speed_variance))
 
@@ -1126,6 +1339,8 @@ class RealtimeRaceEngine:
 
     def _log_speed_debug(self, state: DriverState, push_multiplier: float, speed: float) -> None:
         """Emit throttled speed diagnostics for early frames and periodic checkpoints."""
+        if not self.debug_logging:
+            return
         if not hasattr(self, '_speed_debug_counter'):
             self._speed_debug_counter = 0
         self._speed_debug_counter += 1
@@ -1152,21 +1367,51 @@ class RealtimeRaceEngine:
         return speed
 
     def _apply_collision_avoidance(self, speed: float, state: DriverState) -> float:
-        """Reduce speed when gap to car ahead is physically unsafe."""
-        if state.gap_ahead >= 0.8 or state.velocity_mps <= 0.1:
+        """Reduce speed using smooth desired-gap dynamics instead of hard thresholds."""
+        if state.velocity_mps <= 0.1:
+            return speed
+
+        if state.gap_ahead >= 3.0:
             return speed
 
         car_length = 4.0
-        minimum_gap = car_length * 1.2
-        distance_gap = state.gap_ahead * state.velocity_mps
-        if distance_gap >= minimum_gap:
+        standstill_gap = car_length * 1.4
+        headway_time = 0.45 + ((1.0 - float(state.push_intensity)) * 0.90)
+        desired_gap = standstill_gap + (state.velocity_mps * headway_time)
+        actual_gap = max(0.0, state.gap_ahead * max(state.velocity_mps, self.BASE_SPEED_MPS * 0.35))
+
+        if actual_gap >= desired_gap:
             return speed
 
-        safety_factor = max(0.65, distance_gap / minimum_gap)
-        speed *= safety_factor
-        if distance_gap < car_length * 0.7:
-            speed *= 0.75
+        ratio = actual_gap / max(desired_gap, 1e-6)
+        soft_brake = np.clip(ratio ** 1.35, 0.40, 1.0)
+        speed *= float(soft_brake)
+
+        if actual_gap < standstill_gap:
+            speed *= 0.72
         return speed
+
+    def _weibull_incremental_failure_prob(self, t_laps: float, delta_laps: float, eta: float, beta: float) -> float:
+        """Return failure probability over one lap window using Weibull reliability.
+
+        Weibull CDF is F(t) = 1 - exp(-(t/eta)^beta). We convert that into a
+        discrete step probability by computing F(t + delta) - F(t), which is
+        the chance a failure occurs during this frame/window.
+
+        Parameters:
+        - t_laps: elapsed usage in lap-equivalent units.
+        - delta_laps: current step size in lap units.
+        - eta: scale (characteristic life); larger => later failures.
+        - beta: shape; >1 means wear-out risk grows with usage.
+        """
+        t0 = max(0.0, float(t_laps))
+        dt = max(1e-8, float(delta_laps))
+        scale = max(1e-6, float(eta))
+        shape = max(0.2, float(beta))
+
+        f_t0 = 1.0 - np.exp(-((t0 / scale) ** shape))
+        f_t1 = 1.0 - np.exp(-(((t0 + dt) / scale) ** shape))
+        return float(np.clip(f_t1 - f_t0, 0.0, 1.0))
 
     def _get_team_multiplier(self, team: Team) -> float:
         """Get team performance multiplier"""
@@ -1176,7 +1421,25 @@ class RealtimeRaceEngine:
         # Budget factor
         budget_factor = min(team.budget / 200.0, 1.0) * 0.2
 
-        return min(base + budget_factor, 1.0)
+        # Staff-role effects from HQ roster.
+        operations_effect = self._get_team_staff_effect(team, 'operations')
+        car_perf_effect = self._get_team_staff_effect(team, 'car_performance')
+        power_effect = self._get_team_staff_effect(team, 'power')
+        handling_effect = self._get_team_staff_effect(team, 'handling')
+        aero_effect = self._get_team_staff_effect(team, 'aero')
+        strategy_effect = self._get_team_staff_effect(team, 'strategy')
+
+        staff_bonus_raw = (
+            (operations_effect * 0.30)
+            + (car_perf_effect * 0.45)
+            + (power_effect * 0.18)
+            + (handling_effect * 0.16)
+            + (aero_effect * 0.16)
+            + (strategy_effect * 0.10)
+        )
+        staff_bonus = min(0.12, max(0.0, staff_bonus_raw))
+
+        return min(base + budget_factor + staff_bonus, 1.05)
 
     def _update_race_situation(self, race_state: RaceState):
         """Update gaps, positions, nearby cars, slipstream status"""
@@ -1284,11 +1547,11 @@ class RealtimeRaceEngine:
         # Check if this driver completed all required laps
         if state.lap >= race_state.total_laps:
             state.running = False
-            # If this is the first driver to finish, deploy checkered flag
+            # If this is the first driver to finish, deploy chequered flag
             if not race_state.checkered_flag_deployed:
                 race_state.checkered_flag_deployed = True
                 race_state.leader_lap_count = state.lap
-        # If checkered flag is deployed, finish any driver crossing the line
+        # If chequered flag is deployed, finish any driver crossing the line
         elif race_state.checkered_flag_deployed:
             state.running = False
 
@@ -1347,7 +1610,7 @@ class RealtimeRaceEngine:
 
     def _joker_penalty_seconds(self, state: DriverState) -> float:
         """Compute one-time joker route penalty in seconds."""
-        consistency = get_safe_attribute(state.driver, 'consistency') / 100.0
+        consistency = self._driver_attr_factor(get_safe_attribute(state.driver, 'consistency'))
         skill_adjust = 1.0 - (consistency - 0.5) * 0.20
         jitter = float(self.rng.uniform(-0.20, 0.20))
         penalty = self.RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter
@@ -1383,8 +1646,8 @@ class RealtimeRaceEngine:
             push_risk = state.push_intensity / 0.7  # Linear below aggressive threshold
 
         # Driver skill reduces mistakes
-        consistency = get_safe_attribute(state.driver, 'consistency') / 100.0
-        vehicle_control = get_vehicle_control(state.driver) / 100.0
+        consistency = self._driver_attr_factor(get_safe_attribute(state.driver, 'consistency'))
+        vehicle_control = self._driver_attr_factor(get_vehicle_control(state.driver))
         # Range: 0.0 to 2.0
         skill_factor = 2.0 - (consistency + vehicle_control)
 
@@ -1440,7 +1703,7 @@ class RealtimeRaceEngine:
             if self._handle_pair_incident(state, other_state, race_state, longitudinal_gap, car_length):
                 return True
 
-        return self._check_solo_incident(state)
+        return self._check_solo_incident(state, race_state)
 
     def _is_collision_candidate(self, state: DriverState, other_id: int, other_state: DriverState) -> bool:
         """Return whether another state can collide with the current state this frame."""
@@ -1480,18 +1743,27 @@ class RealtimeRaceEngine:
         return False
 
     def _racecraft_score(self, state: DriverState) -> float:
-        """Return normalized racecraft/control/reaction composite in [0,1]."""
-        vehicle_control = get_vehicle_control(state.driver)
-        reactions = get_safe_attribute(state.driver, 'reactions')
-        racecraft = get_safe_attribute(state.driver, 'racecraft')
-        return (vehicle_control + reactions + racecraft) / 300.0
+        """Return normalised racecraft/control/reaction composite in [0,1]."""
+        vehicle_control = self._driver_attr_factor(get_vehicle_control(state.driver))
+        reactions = self._driver_attr_factor(get_safe_attribute(state.driver, 'reactions'))
+        racecraft = self._driver_attr_factor(get_safe_attribute(state.driver, 'racecraft'))
+        return (vehicle_control + reactions + racecraft) / 3.0
 
     def _maybe_trigger_overtake_contact(self, state: DriverState, other_state: DriverState, race_state: RaceState) -> bool:
         my_racecraft = self._racecraft_score(state)
         other_racecraft = self._racecraft_score(other_state)
         combined_skill = (my_racecraft + other_racecraft) / 2.0
         control_factor = min(state.tire_condition, other_state.tire_condition)
-        contact_probability = 0.0000002 * (1.0 - combined_skill * control_factor)
+        safety_bonus = (
+            self._get_team_staff_effect(state.team, 'reliability')
+            + self._get_team_staff_effect(state.team, 'consistency')
+            + self._get_team_staff_effect(state.team, 'racecraft')
+            + self._get_team_staff_effect(other_state.team, 'reliability')
+            + self._get_team_staff_effect(other_state.team, 'consistency')
+            + self._get_team_staff_effect(other_state.team, 'racecraft')
+        ) / 6.0
+        safety_multiplier = max(0.72, 1.0 - (safety_bonus * 0.45))
+        contact_probability = 0.0000002 * (1.0 - combined_skill * control_factor) * safety_multiplier
         if self.rng.random() >= contact_probability:
             return False
 
@@ -1545,7 +1817,14 @@ class RealtimeRaceEngine:
 
         combined_control = (get_vehicle_control(state.driver) + get_vehicle_control(other_state.driver)) / 200.0
         severity = min(1.0, (relative_velocity - 15.0) / 15.0)
-        dnf_probability = 0.12 * severity * (1.0 - combined_control)
+        safety_bonus = (
+            self._get_team_staff_effect(state.team, 'reliability')
+            + self._get_team_staff_effect(state.team, 'consistency')
+            + self._get_team_staff_effect(other_state.team, 'reliability')
+            + self._get_team_staff_effect(other_state.team, 'consistency')
+        ) / 4.0
+        safety_multiplier = max(0.70, 1.0 - (safety_bonus * 0.50))
+        dnf_probability = 0.12 * severity * (1.0 - combined_control) * safety_multiplier
         if self.rng.random() < dnf_probability:
             print(f"  *** REAR-END! {state.driver_name} hit {other_state.driver_name}")
             state.dnf_reason = "rear_end_collision"
@@ -1581,15 +1860,51 @@ class RealtimeRaceEngine:
         })
         return False
 
-    def _check_solo_incident(self, state: DriverState) -> bool:
+    def _check_solo_incident(self, state: DriverState, race_state: RaceState) -> bool:
         """Handle non-contact DNFs (tire failure spin and mechanical failure)."""
+        tyre_management_effect = self._get_team_staff_effect(state.team, 'tyre_management')
+        setup_effect = self._get_team_staff_effect(state.team, 'setup')
+        reliability_effect = self._get_team_staff_effect(state.team, 'reliability')
+
+        track_length = max(1.0, float(getattr(race_state, 'track_length_m', 1.0) or 1.0))
+        lap_fraction = (float(state.position_m) % track_length) / track_length
+        race_progress_laps = max(0.0, float(state.lap) + lap_fraction)
+        delta_laps = max(1e-6, float(state.velocity_mps) / track_length / 30.0)
+
+        tire_eta = float(self._active_discipline_calibration.get('tire_eta', 28.0))
+        tire_beta = float(self._active_discipline_calibration.get('tire_beta', 2.6))
+        mech_eta = float(self._active_discipline_calibration.get('mech_eta', 95.0))
+        mech_beta = float(self._active_discipline_calibration.get('mech_beta', 2.1))
+
         if state.tire_condition < 0.1:
-            consistency = state.driver.consistency / 100.0
-            if self.rng.random() > consistency:
+            consistency = self._driver_attr_factor(state.driver.consistency)
+            tire_spin_risk_reduction = min(0.45, (tyre_management_effect * 0.6) + (setup_effect * 0.4))
+            spin_threshold = consistency + tire_spin_risk_reduction
+            tire_hazard = self._weibull_incremental_failure_prob(
+                t_laps=race_progress_laps,
+                delta_laps=delta_laps,
+                eta=tire_eta,
+                beta=tire_beta,
+            )
+            tire_hazard *= 1.0 + ((1.0 - state.tire_condition) * 2.8)
+            tire_hazard *= max(0.35, 1.0 - tire_spin_risk_reduction)
+            tire_hazard *= max(0.40, 1.0 - (consistency * 0.55))
+            if self.rng.random() < np.clip(tire_hazard, 0.0, 0.95) and self.rng.random() > min(0.98, spin_threshold):
                 state.dnf_reason = "tire_failure_spin"
                 print(f"  X {state.driver_name} spins off - tire condition critical!")
                 return True
-        if self.rng.random() < 0.00001:
+
+        push_stress = 0.85 + (float(state.push_intensity) * 0.35) + (float(state.push_fatigue) * 0.25)
+        reliability_guard = max(0.40, 1.0 - (reliability_effect * 0.9))
+        mech_failure_prob = self._weibull_incremental_failure_prob(
+            t_laps=race_progress_laps,
+            delta_laps=delta_laps,
+            eta=mech_eta,
+            beta=mech_beta,
+        )
+        mech_failure_prob *= push_stress * reliability_guard
+        mech_failure_prob = float(np.clip(mech_failure_prob, 0.0, 0.03))
+        if self.rng.random() < mech_failure_prob:
             state.dnf_reason = "mechanical"
             print(f"  X {state.driver_name} retires - mechanical failure!")
             return True
@@ -1720,6 +2035,20 @@ class RealtimeRaceEngine:
                 "attempt_type": attempt.attempt_type.value,
                 "description": f"{attacker_state.driver_name} overtook {defender_state.driver_name} ({attempt.attempt_type.value})",
             })
+
+            # Mirror overtake into callback stream so calibration/UI consumers
+            # do not need to parse collision logs to observe overtakes.
+            if hasattr(self, '_event_callback') and callable(self._event_callback):
+                self._event_callback({
+                    "type": "overtake",
+                    "attacker_id": attacker_state.driver_id,
+                    "attacker_name": attacker_state.driver_name,
+                    "defender_id": defender_state.driver_id,
+                    "defender_name": defender_state.driver_name,
+                    "lap": attacker_state.lap,
+                    "time": race_state.current_time,
+                    "attempt_type": attempt.attempt_type.value,
+                })
         except Exception:
             pass
 
@@ -1785,10 +2114,10 @@ class RealtimeRaceEngine:
         return behind_car
 
     def _race_finished(self, race_state: RaceState) -> bool:
-        """Check if race is complete with checkered flag logic
+        """Check if race is complete with chequered flag logic
         
         Two-phase finishing:
-        1. When leader completes all laps, deploy checkered flag
+        1. When leader completes all laps, deploy chequered flag
         2. Other drivers finish when they cross the line (don't need full laps)
         3. Race ends when all drivers have finished or DNF'd
         """
@@ -1800,15 +2129,15 @@ class RealtimeRaceEngine:
         if not active_drivers:
             return True
 
-        # If checkered flag not yet deployed, check if leader finished
+        # If chequered flag not yet deployed, check if leader finished
         if not race_state.checkered_flag_deployed:
             leader_laps = max(driver.lap for driver in active_drivers)
             if leader_laps >= race_state.total_laps:
-                # Leader finished - deploy checkered flag but don't end race yet
+                # Leader finished - deploy chequered flag but don't end race yet
                 # Let other drivers finish when they cross the line
                 return False
         
-        # If checkered flag deployed, race continues until all drivers finish
+        # If chequered flag deployed, race continues until all drivers finish
         return False
 
     def _create_position_event(

@@ -83,6 +83,7 @@ Source file:
 
 Source functions:
 - `RealtimeRaceEngine._calculate_speed`
+- `RealtimeRaceEngine._driver_attr_factor`
 - `RealtimeRaceEngine._apply_driver_degradation`
 - `RealtimeRaceEngine._apply_dirty_air_penalty`
 - `RealtimeRaceEngine._apply_collision_avoidance`
@@ -95,6 +96,14 @@ Source functions:
 Position update per frame (`dt = 1/30`):
 
 `position_next = position_now + speed_mps * dt`
+
+Driver attribute nonlinear mapping (used for speed, cornering, and consistency):
+
+`x = clamp(attribute / 100.0, 0.0, 1.0)`
+
+`driver_factor = (1 - exp(-k_driver * x)) / (1 - exp(-k_driver))`
+
+With `k_driver = 2.6`.
 
 Speed construction (conceptual):
 
@@ -110,6 +119,12 @@ Then multiplied by:
 - consistency noise
 
 Then clamped to `[MIN_SPEED_MPS, MAX_SPEED_MPS]`.
+
+Collision-avoidance speed shaping now uses a smooth desired-gap ratio instead of hard threshold braking:
+
+`desired_gap = standstill_gap + headway_time * speed`
+
+`speed_next = speed * clip((actual_gap / desired_gap)^1.35, 0.40, 1.0)`
 
 Tire and fuel update per frame:
 
@@ -133,6 +148,8 @@ Source function:
 
 Where factors are built from consistency, vehicle control, fatigue, tires, and push level.
 
+Consistency and vehicle control are now passed through the same nonlinear driver mapping before contributing to `skill_factor`.
+
 ## 5) Overtaking Success and Incident Risk
 
 Source file:
@@ -146,17 +163,31 @@ Source functions:
 
 ### Key formulas
 
-Straight success probability:
+Straight/braking/corner success probabilities are now logistic in latent competition score:
+
+`P(success) = 1 / (1 + exp(-k * latent_signal))`
+
+with section-specific `latent_signal` built from attacker score, defender score, speed/track context and maneuver type.
+
+Representative straight latent structure:
+
+`latent = a1*attacker_score - a2*defender_score + a3*speed_factor - b`
+
+then `P = logistic(k * latent)` and clipped to guardrails.
+
+Previous linear form (retained here for historical reference):
 
 `success_prob = 0.25 + 0.45*attacker_score - 0.25*defender_score + 0.35*speed_factor`
 
-Then clipped to range.
-
-Braking and corner formulas use similar weighted forms with different constants and clipping.
+was replaced by bounded logistic forms for improved realism and diminishing returns.
 
 Incident risk during overtake:
 
-`incident_prob = base_risk * (1.5 - combined_skill) * (1.0 + aggression_factor * 0.5) * overlap_risk`
+`incident_prob = base_risk * risk_multiplier * overlap_risk`
+
+`risk_multiplier = 0.45 + 1.8 * logistic(k_risk * risk_pressure)`
+
+`risk_pressure` combines aggression, bravery, overlap and inverse control skill.
 
 Then clipped.
 
@@ -190,6 +221,27 @@ Joker penalty:
 `penalty = RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter`
 
 `skill_adjust` is derived from consistency; final penalty is lower-bounded.
+
+Consistency in this context is also nonlinear-mapped via `RealtimeRaceEngine._driver_attr_factor`.
+
+## 6b) Solo Failure Hazard (Realtime)
+
+Source file:
+- `Momentum/Python/RaceLogic/realtime_race_engine.py`
+
+Source functions:
+- `RealtimeRaceEngine._weibull_incremental_failure_prob`
+- `RealtimeRaceEngine._check_solo_incident`
+
+Weibull cumulative form:
+
+`F(t) = 1 - exp(-(t/eta)^beta)`
+
+Frame-step incremental hazard used in simulation:
+
+`P_fail_step = F(t + dt) - F(t)`
+
+Mechanical and tyre-related solo failures now derive from this incremental Weibull hazard, then are modulated by push stress, tyre condition, reliability, setup, and tyre-management effects.
 
 ## 7) Discipline Adapter Tuning
 
@@ -327,3 +379,91 @@ Success criteria:
 ### Angle wrapping
 
 `wrap(a)` normalises heading to `[-pi, pi]` for stable residual behaviour.
+
+## 12) Staff Runtime Impact and Diminishing Returns
+
+Source file:
+- `Momentum/Python/RaceLogic/realtime_race_engine.py`
+
+Source functions:
+- `RealtimeRaceEngine._hydrate_staff_effects_for_teams`
+- `RealtimeRaceEngine._rating_impact_factor`
+- `RealtimeRaceEngine._saturate_staff_effect`
+- `RealtimeRaceEngine._get_team_multiplier`
+- `RealtimeRaceEngine._enter_pit_lane`
+- `RealtimeRaceEngine._maybe_trigger_overtake_contact`
+- `RealtimeRaceEngine._maybe_trigger_rear_end_incident`
+- `RealtimeRaceEngine._check_solo_incident`
+
+### Equations
+
+Per-staff rating nonlinear contribution:
+
+`r = clamp(rating / 100.0, 0.0, 1.0)`
+
+`rating_factor = (1 - exp(-k_staff_rating * r)) / (1 - exp(-k_staff_rating))`
+
+With `k_staff_rating = 3.0`.
+
+Raw role effect accumulation (per team, per effect key):
+
+`raw_effect_j = sum_over_staff(base_effect_j * rating_factor * discipline_modifier)`
+
+Saturating diminishing returns for aggregate staff effects:
+
+`staff_effect_j = C * (1 - exp(-k_staff_sat * (raw_effect_j / C)))`
+
+With:
+- `C = STAFF_EFFECT_CAP = 0.35`
+- `k_staff_sat = STAFF_EFFECT_SATURATION_STRENGTH = 1.35`
+
+This creates strong early gains and progressively smaller gains near cap.
+
+### Where these effects are applied
+
+- Team pace multiplier via operations, car_performance, power, handling, aero, strategy
+- Pit service time reduction via pitstop, operations, strategy
+- Overtake/contact and rear-end DNF risk reduction via reliability, consistency, racecraft
+- Solo tire-spin and mechanical risk reduction via tyre_management, setup, reliability
+
+## 13) Curve Calibration Reference
+
+This section provides concrete example points for the active nonlinear curves in the race engine.
+
+### Driver attribute mapping reference (`k_driver = 2.6`)
+
+| Raw Attribute | Nonlinear Factor |
+|---|---|
+| 40 | 0.6984 |
+| 60 | 0.8532 |
+| 80 | 0.9453 |
+| 95 | 0.9889 |
+
+Interpretation:
+- The jump from 40 to 60 is large.
+- The jump from 80 to 95 is much smaller (tail-off near elite).
+
+### Staff rating mapping reference (`k_staff_rating = 3.0`)
+
+| Raw Rating | Rating Factor |
+|---|---|
+| 40 | 0.7354 |
+| 60 | 0.8784 |
+| 80 | 0.9569 |
+| 95 | 0.9915 |
+
+### Staff aggregate saturation reference (`C = 0.35`, `k_staff_sat = 1.35`)
+
+| Raw Aggregate Effect | Saturated Effect |
+|---|---|
+| 0.03 | 0.0382 |
+| 0.06 | 0.0723 |
+| 0.12 | 0.1297 |
+| 0.18 | 0.1752 |
+| 0.24 | 0.2113 |
+| 0.30 | 0.2400 |
+| 0.36 | 0.2627 |
+
+Interpretation:
+- Early accumulation improves quickly.
+- High accumulation keeps improving, but at progressively lower marginal gain.

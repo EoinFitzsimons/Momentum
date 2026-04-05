@@ -1,7 +1,7 @@
 """
 Momentum Racing Simulator Launcher.
 
-Integrates main menu with race visualization window.
+Integrates main menu with race visualisation window.
 """
 
 import sys
