@@ -8,6 +8,8 @@ Implements a dedicated career HQ flow:
 - Start the next scheduled race from HQ
 """
 
+import random
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
@@ -27,10 +29,23 @@ from PyQt6.QtWidgets import (
 
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
+from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
 
 PLAYER_ID = "local_player"
+BUDGET_WARNING_TITLE = "Insufficient Budget"
+SEASON_COMPLETE_TEXT = "Season Complete"
+
+FACILITY_OPTIONS = [
+    ("Driver Academy", "driver_academy"),
+    ("Simulation Lab", "simulation_lab"),
+    ("Data Center", "data_center"),
+    ("Marketing Suite", "marketing_suite"),
+]
+
+FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
+LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
@@ -57,6 +72,15 @@ class CareerTeamSelectionDialog(QDialog):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
+
+        self.navbar = NavigationBar(self, db_provider=lambda: self.db, title="Career Team Select")
+        layout.addWidget(self.navbar)
 
         title = QLabel("Select Your Team")
         title.setStyleSheet("font-size: 22px; font-weight: 700; color: #B9F2FF;")
@@ -166,10 +190,19 @@ class CareerWindow(QMainWindow):
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
 
         layout = QVBoxLayout(central)
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
+
+        self.navbar = NavigationBar(self, db_provider=lambda: self.db, title="Career HQ")
+        layout.addWidget(self.navbar)
 
         self.header_label = QLabel()
         self.header_label.setStyleSheet("font-size: 24px; font-weight: 700; color: #B9F2FF;")
@@ -179,14 +212,14 @@ class CareerWindow(QMainWindow):
         self.subheader_label.setStyleSheet("color: #DD2D4A; font-size: 13px;")
         layout.addWidget(self.subheader_label)
 
+        self.kpi_banner_label = QLabel("Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -")
+        self.kpi_banner_label.setWordWrap(True)
+        layout.addWidget(self.kpi_banner_label)
+
         top_actions = QHBoxLayout()
         self.start_next_btn = QPushButton("Start Next Race")
         self.start_next_btn.clicked.connect(self.start_next_race)
         top_actions.addWidget(self.start_next_btn)
-
-        refresh_btn = QPushButton("Refresh HQ")
-        refresh_btn.clicked.connect(self.load_data)
-        top_actions.addWidget(refresh_btn)
 
         back_btn = QPushButton("Return to Menu")
         back_btn.clicked.connect(self._on_return_to_menu)
@@ -207,9 +240,11 @@ class CareerWindow(QMainWindow):
 
         right_col = QVBoxLayout()
         self.car_group = self._create_car_group()
+        self.hq_management_group = self._create_hq_management_group()
         self.schedule_group = self._create_schedule_group()
         self.standings_group = self._create_standings_group()
         right_col.addWidget(self.car_group)
+        right_col.addWidget(self.hq_management_group)
         right_col.addWidget(self.schedule_group)
         right_col.addWidget(self.standings_group)
 
@@ -224,10 +259,14 @@ class CareerWindow(QMainWindow):
         self.team_budget_label = QLabel("Budget: -")
         self.team_tier_label = QLabel("Tier: -")
         self.team_hq_label = QLabel("HQ: -")
+        self.team_quality_label = QLabel("Team Quality: -")
+        self.team_attractiveness_label = QLabel("Attractiveness: -")
         v.addWidget(self.team_name_label)
         v.addWidget(self.team_budget_label)
         v.addWidget(self.team_tier_label)
         v.addWidget(self.team_hq_label)
+        v.addWidget(self.team_quality_label)
+        v.addWidget(self.team_attractiveness_label)
         return group
 
     def _create_driver_group(self) -> QGroupBox:
@@ -266,6 +305,43 @@ class CareerWindow(QMainWindow):
         v.addWidget(self.car_ops_label)
         v.addWidget(self.car_strategy_label)
         v.addWidget(self.facility_label)
+        return group
+
+    def _create_hq_management_group(self) -> QGroupBox:
+        group = QGroupBox("HQ Management")
+        v = QVBoxLayout(group)
+
+        self.hq_state_label = QLabel("Run actions to grow quality, attractiveness, and budget.")
+        self.hq_state_label.setWordWrap(True)
+        v.addWidget(self.hq_state_label)
+
+        self.marketing_btn = QPushButton("Run Marketing Campaign (-EUR 250,000)")
+        self.marketing_btn.clicked.connect(self._run_marketing_campaign)
+        v.addWidget(self.marketing_btn)
+
+        self.driver_dev_btn = QPushButton("Driver Development (-EUR 180,000)")
+        self.driver_dev_btn.clicked.connect(self._run_driver_development)
+        v.addWidget(self.driver_dev_btn)
+
+        self.staff_dev_btn = QPushButton("Staff Development (-EUR 220,000)")
+        self.staff_dev_btn.clicked.connect(self._run_staff_development)
+        v.addWidget(self.staff_dev_btn)
+
+        facility_row = QHBoxLayout()
+        self.facility_combo = QComboBox()
+        for label, value in FACILITY_OPTIONS:
+            self.facility_combo.addItem(label, value)
+        facility_row.addWidget(self.facility_combo)
+
+        self.facility_btn = QPushButton("Upgrade Facility (-EUR 400,000)")
+        self.facility_btn.clicked.connect(self._run_facility_upgrade)
+        facility_row.addWidget(self.facility_btn)
+        v.addLayout(facility_row)
+
+        self.hq_action_result_label = QLabel("")
+        self.hq_action_result_label.setWordWrap(True)
+        v.addWidget(self.hq_action_result_label)
+
         return group
 
     def _create_schedule_group(self) -> QGroupBox:
@@ -322,12 +398,44 @@ class CareerWindow(QMainWindow):
         self.owned_team = self.db.get_team(self.owned_team.id)
         if not self.owned_team:
             return
+
+        self._ensure_owned_team_staff()
+
+        self._apply_pending_race_income()
+        self.owned_team = self.db.get_team(self.owned_team.id)
+        if not self.owned_team:
+            return
+
         self._load_team_panel()
         self._load_drivers_panel()
         self._load_staff_panel()
         self._load_car_panel()
         self._load_schedule_panel()
         self._load_standings_panel()
+        self._update_kpi_banner()
+
+    def _update_kpi_banner(self):
+        if not self.owned_team:
+            self.kpi_banner_label.setText("Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -")
+            return
+
+        quality_score, _ = self._compute_team_scores()
+        drivers = self.db.get_drivers_by_team(self.owned_team.id)
+        try:
+            staff = self.db.get_staff_by_team(self.owned_team.id)
+        except Exception:
+            staff = []
+
+        next_race_text = SEASON_COMPLETE_TEXT
+        if self.next_race:
+            next_race_text = f"R{self.next_race.get('round_number', '?')} {self.next_race.get('track_name', '-') }"
+
+        self.kpi_banner_label.setText(
+            f"Budget: EUR {float(self.owned_team.budget or 0.0):,.0f} | "
+            f"Team Quality: {quality_score:.1f}/100 | "
+            f"Next Race: {next_race_text} | "
+            f"Drivers: {len(drivers)} | Staff: {len(staff)}"
+        )
 
     def _load_team_panel(self):
         if not self.owned_team:
@@ -342,6 +450,16 @@ class CareerWindow(QMainWindow):
         self.team_budget_label.setText(f"Budget: EUR {self.owned_team.budget:,.0f}")
         self.team_tier_label.setText(f"Tier: {_player_label(self.owned_team.tier)}")
         self.team_hq_label.setText(f"HQ: {self.owned_team.headquarters or '-'}")
+
+        quality_score, attractiveness_score = self._compute_team_scores()
+        self.team_quality_label.setText(f"Team Quality: {quality_score:.1f} / 100")
+        self.team_attractiveness_label.setText(
+            f"Attractiveness (for signings): {attractiveness_score:.1f} / 100"
+        )
+        self.hq_state_label.setText(
+            "Higher quality improves race performance. Higher attractiveness helps future "
+            "driver/staff recruitment strength."
+        )
 
     def _load_drivers_panel(self):
         if not self.owned_team:
@@ -431,7 +549,7 @@ class CareerWindow(QMainWindow):
             self.next_race is not None and self.selected_driver is not None
         )
         if self.next_race is None:
-            self.start_next_btn.setText("Season Complete")
+            self.start_next_btn.setText(SEASON_COMPLETE_TEXT)
         else:
             self.start_next_btn.setText("Start Next Race")
 
@@ -450,7 +568,7 @@ class CareerWindow(QMainWindow):
 
     def start_next_race(self):
         if not self.next_race:
-            QMessageBox.information(self, "Season Complete", "No scheduled races remain.")
+            QMessageBox.information(self, SEASON_COMPLETE_TEXT, "No scheduled races remain.")
             return
 
         if not self.selected_driver:
@@ -493,3 +611,299 @@ class CareerWindow(QMainWindow):
 
     def _on_return_to_menu(self):
         self.return_to_menu.emit()
+
+    @staticmethod
+    def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+        return max(low, min(high, value))
+
+    def _compute_team_scores(self) -> tuple[float, float]:
+        if not self.owned_team:
+            return 0.0, 0.0
+
+        facilities = self.db.get_facility_upgrades(self.owned_team.id)
+        facility_levels = sum(int(f.get("level", 0) or 0) for f in facilities)
+        facility_score = min(22.0, facility_levels * 2.2)
+
+        try:
+            staff = self.db.get_staff_by_team(self.owned_team.id)
+        except Exception:
+            staff = []
+        staff_avg = (sum(float(s.rating) for s in staff) / len(staff)) if staff else 50.0
+        staff_score = min(18.0, max(0.0, (staff_avg - 50.0) * 0.6))
+
+        ops = float(getattr(self.owned_team, "operations_rating", 50.0) or 50.0)
+        quality_score = self._clamp((ops * 0.62) + facility_score + staff_score)
+
+        budget = float(getattr(self.owned_team, "budget", 0.0) or 0.0)
+        budget_score = min(28.0, (budget / 6_000_000.0) * 28.0)
+
+        marketing_levels = sum(
+            int(f.get("level", 0) or 0)
+            for f in facilities
+            if "marketing" in str(f.get("facility_name", "")).lower()
+        )
+        brand_score = min(10.0, marketing_levels * 2.0)
+
+        attractiveness_score = self._clamp((quality_score * 0.65) + budget_score + brand_score)
+        return quality_score, attractiveness_score
+
+    def _apply_budget_delta(self, amount: float, category: str, description: str) -> bool:
+        if not self.owned_team:
+            return False
+
+        current_budget = float(self.owned_team.budget or 0.0)
+        new_budget = current_budget + float(amount)
+        if new_budget < 0:
+            return False
+
+        self.owned_team.budget = new_budget
+        updated = self.db.update_team(self.owned_team.id, self.owned_team)
+        if not updated:
+            return False
+
+        try:
+            self.db.add_budget_transaction(self.owned_team.id, category, float(amount), description)
+        except Exception:
+            pass
+
+        refreshed = self.db.get_team(self.owned_team.id)
+        if refreshed is not None:
+            self.owned_team = refreshed
+        return True
+
+    def _apply_pending_race_income(self):
+        if not self.owned_team:
+            return
+
+        calendar = self.championship_service.get_championship_calendar(
+            self.championship.id,
+            self.championship.current_season,
+        )
+        transactions = self.db.get_budget_transactions(self.owned_team.id)
+        existing_refs = {
+            str(t.get("description", ""))
+            for t in transactions
+            if t.get("category") == "race_income"
+        }
+
+        tier = str(getattr(self.owned_team, "tier", "TIER_2") or "TIER_2").upper()
+        base_income_map = {
+            "TOP_TIER": 520000,
+            "TIER_1": 460000,
+            "TIER_2": 330000,
+            "TIER_3": 240000,
+        }
+        base_income = int(base_income_map.get(tier, 330000))
+
+        quality_score, _ = self._compute_team_scores()
+        quality_multiplier = 0.85 + ((quality_score / 100.0) * 0.45)
+
+        for race in calendar:
+            if race.get("status") != "completed":
+                continue
+            race_id = int(race.get("race_id", 0) or 0)
+            if race_id <= 0:
+                continue
+            marker = f"race_income_ref:{race_id}"
+            if any(marker in desc for desc in existing_refs):
+                continue
+
+            payout = int(base_income * quality_multiplier)
+            applied = self._apply_budget_delta(
+                payout,
+                "race_income",
+                f"Race participation income R{race.get('round_number', '?')} ({marker})",
+            )
+            if applied:
+                existing_refs.add(marker)
+
+    def _run_marketing_campaign(self):
+        if not self.owned_team:
+            return
+
+        cost = 250000
+        applied = self._apply_budget_delta(
+            -cost,
+            "marketing_cost",
+            "Marketing campaign spend",
+        )
+        if not applied:
+            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for marketing campaign.")
+            return
+
+        quality_score, _ = self._compute_team_scores()
+        revenue = int(random.uniform(0.6, 1.9) * cost * (0.65 + quality_score / 200.0))
+        self._apply_budget_delta(
+            revenue,
+            "marketing_revenue",
+            "Marketing campaign return",
+        )
+        net = revenue - cost
+        self.hq_action_result_label.setText(
+            f"Marketing complete. Revenue EUR {revenue:,.0f} (net EUR {net:,.0f})."
+        )
+        self.load_data()
+
+    def _run_driver_development(self):
+        if not self.owned_team:
+            return
+
+        if not self.selected_driver:
+            QMessageBox.warning(self, "No Driver", "Select a race driver before running development.")
+            return
+
+        cost = 180000
+        applied = self._apply_budget_delta(
+            -cost,
+            "driver_development",
+            f"Driver development for {self.selected_driver.name}",
+        )
+        if not applied:
+            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for driver development.")
+            return
+
+        speed_gain = random.uniform(0.6, 1.8)
+        racecraft_gain = random.uniform(0.5, 1.4)
+        consistency_gain = random.uniform(0.4, 1.2)
+
+        with self.db.get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE drivers
+                SET speed = MIN(100, speed + ?),
+                    racecraft = MIN(100, racecraft + ?),
+                    consistency = MIN(100, consistency + ?)
+                WHERE id = ?
+                """,
+                (speed_gain, racecraft_gain, consistency_gain, self.selected_driver.id)
+            )
+
+        self.hq_action_result_label.setText(
+            f"Driver development complete: +{speed_gain:.1f} speed, +{racecraft_gain:.1f} racecraft, "
+            f"+{consistency_gain:.1f} consistency."
+        )
+        self.load_data()
+
+    def _run_staff_development(self):
+        if not self.owned_team:
+            return
+
+        cost = 220000
+        applied = self._apply_budget_delta(
+            -cost,
+            "staff_development",
+            "Staff development program",
+        )
+        if not applied:
+            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for staff development.")
+            return
+
+        try:
+            staff = self.db.get_staff_by_team(self.owned_team.id)
+        except Exception:
+            staff = []
+
+        if not staff:
+            self.hq_action_result_label.setText("No staff found. Program completed with no effect.")
+            self.load_data()
+            return
+
+        boosted = 0
+        with self.db.get_connection() as conn:
+            for member in staff[: min(8, len(staff))]:
+                gain = random.uniform(0.5, 1.6)
+                conn.execute(
+                    "UPDATE staff_members SET rating = MIN(100, rating + ?) WHERE id = ?",
+                    (gain, member.id),
+                )
+                boosted += 1
+
+        self.hq_action_result_label.setText(
+            f"Staff development complete: improved {boosted} staff members."
+        )
+        self.load_data()
+
+    def _run_facility_upgrade(self):
+        if not self.owned_team:
+            return
+
+        facility_label = str(self.facility_combo.currentText() or "Facility")
+        facility_name = str(self.facility_combo.currentData() or "facility")
+        cost = 400000
+
+        applied = self._apply_budget_delta(
+            -cost,
+            "facility_upgrade",
+            f"Facility upgrade: {facility_label}",
+        )
+        if not applied:
+            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for facility upgrade.")
+            return
+
+        self.db.upsert_facility_upgrade(self.owned_team.id, facility_name, float(cost))
+        self.owned_team.operations_rating = self._clamp(
+            float(getattr(self.owned_team, "operations_rating", 50.0) or 50.0) + random.uniform(0.8, 2.0)
+        )
+        self.db.update_team(self.owned_team.id, self.owned_team)
+
+        self.hq_action_result_label.setText(
+            f"Facility upgraded: {facility_label}. Team operations improved."
+        )
+        self.load_data()
+
+    def _ensure_owned_team_staff(self):
+        """Backfill a minimal staff crew for the owned team when unstaffed."""
+        if not self.owned_team:
+            return
+
+        try:
+            existing_staff = self.db.get_staff_by_team(self.owned_team.id)
+        except Exception:
+            existing_staff = []
+        if existing_staff:
+            return
+
+        assigned = 0
+        start_season = int(getattr(self.championship, "current_season", 1) or 1)
+
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, rating
+                FROM staff_members
+                WHERE current_team_id IS NULL
+                ORDER BY rating DESC, id ASC
+                LIMIT 3
+                """
+            ).fetchall()
+
+            for row in rows:
+                staff_id = int(row[0])
+                rating = float(row[1] or 50.0)
+                annual_salary = round(45_000 + (rating * 2_750), 2)
+                contract_length = 2
+                conn.execute(
+                    """
+                    UPDATE staff_members
+                    SET current_team_id = ?,
+                        annual_salary = ?,
+                        contract_length = ?,
+                        contract_start_season = ?,
+                        contract_end_season = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        self.owned_team.id,
+                        annual_salary,
+                        contract_length,
+                        start_season,
+                        start_season + contract_length - 1,
+                        staff_id,
+                    ),
+                )
+                assigned += 1
+
+        if assigned > 0 and not self.hq_action_result_label.text():
+            self.hq_action_result_label.setText(
+                f"Auto-staffed HQ with {assigned} core staff members from the market pool."
+            )

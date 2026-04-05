@@ -50,6 +50,9 @@ COLORS = {
     "info": "#3498db"
 }
 
+FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
+LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
 
 def _screen_dimensions(fallback_width: int = 1280, fallback_height: int = 720) -> Tuple[int, int]:
     """Return screen width and height with a safe fallback for headless/type-checking paths."""
@@ -114,6 +117,12 @@ class ChampionshipSelectionDialog(QDialog):
     def setup_ui(self):
         """Setup dialog UI."""
         layout = QVBoxLayout(self)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
         
         # Button text constant
         CREATE_CHAMPIONSHIP_TEXT = "Create New Championship"
@@ -287,6 +296,12 @@ class CreateChampionshipDialog(QDialog):
     def setup_ui(self):
         """Setup creation dialog UI."""
         layout = QVBoxLayout(self)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
         
         # Title
         title = QLabel(self.CREATE_CHAMPIONSHIP_TITLE)
@@ -527,6 +542,12 @@ class ChampionshipWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
         
         # Header with more info
         header_layout = QHBoxLayout()
@@ -919,6 +940,12 @@ class PreRaceSetupDialog(QDialog):
         """Setup pre-race setup UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
         
         # Header with track info
         header_layout = QHBoxLayout()
@@ -1255,6 +1282,12 @@ class PostRaceResultsDialog(QDialog):
         """Setup results display UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
         
         # Title
         title = QLabel("Race Results")

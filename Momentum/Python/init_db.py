@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize database with proper schema"""
+"""Initialise database with proper schema"""
 
 import os
 import sqlite3
@@ -18,7 +18,7 @@ if os.path.exists('momentum.db'):
     print('✓ Deleted momentum.db')
 
 # Clear all cached modules
-for module in list(sys.modules.keys()):
+for module in tuple(sys.modules):
     if 'database' in module or 'config' in module:
         del sys.modules[module]
 
@@ -26,7 +26,7 @@ for module in list(sys.modules.keys()):
 from database.database_manager import DatabaseManager
 
 db = DatabaseManager()
-print('✓ Database initialized')
+print('✓ Database initialised')
 
 # Verify schema
 conn = sqlite3.connect(db.db_path)

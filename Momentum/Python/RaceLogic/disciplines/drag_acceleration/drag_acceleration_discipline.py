@@ -65,7 +65,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
     """
 
     def __init__(self, seed: Optional[int] = None):
-        """Initialize drag racing engine"""
+        """Initialise drag racing engine"""
         super().__init__(seed if seed is not None else 0)
         self.discipline = RacingDiscipline.DRAG_ACCELERATION
         self.DRAG_DISTANCE_M = 402.34  # Official quarter-mile distance

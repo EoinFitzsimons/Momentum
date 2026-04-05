@@ -22,6 +22,7 @@ from services.driver_attributes import (
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
+    QStackedWidget,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -68,6 +69,9 @@ COMBO_BOX_STYLE = """
         border: 2px solid #B9F2FF;
     }
 """
+
+FEINT_BUTTON_BORDER = "1px solid rgba(185,242,255,0.24)"
+LOGO_STYLE = "font-size: 30px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
 
 class DriverCard(QWidget):
@@ -259,7 +263,7 @@ class MainMenuWindow(QMainWindow):
             QLabel.h2 { font-size: 22px; font-weight: 600; }
 
             /* Buttons */
-            QPushButton { border: none; border-radius: 8px; padding: 10px; font-weight: 700; }
+            QPushButton { border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: 10px; font-weight: 700; }
             QPushButton.primary { background-color: #B9F2FF; color: #353839; }
             QPushButton.secondary { background-color: #DD2D4A; color: #FFFFFF; }
             QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
@@ -292,6 +296,10 @@ class MainMenuWindow(QMainWindow):
         # Database
         self.db: Optional[DatabaseManager] = None
         self.drivers = []
+        self.view_stack: Optional[QStackedWidget] = None
+        self.menu_page: Optional[QWidget] = None
+        self._embedded_views = {}
+        self._embedded_hosts = {}
 
         self._setup_ui()
         self._load_drivers()
@@ -301,7 +309,18 @@ class MainMenuWindow(QMainWindow):
         """Setup main menu UI."""
         central = QWidget()
         self.setCentralWidget(central)
-        main_layout = QVBoxLayout(central)
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        self.view_stack = QStackedWidget()
+        root_layout.addWidget(self.view_stack)
+
+        self.menu_page = QWidget()
+        self.view_stack.addWidget(self.menu_page)
+        self.view_stack.setCurrentWidget(self.menu_page)
+
+        main_layout = QVBoxLayout(self.menu_page)
         main_layout.setContentsMargins(40, 40, 40, 40)
         main_layout.setSpacing(20)
 
@@ -322,6 +341,13 @@ class MainMenuWindow(QMainWindow):
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: #DD2D4A; font-weight: bold;")
         main_layout.addWidget(subtitle)
+
+        self.menu_summary_label = QLabel(
+            "Game Hub: Choose a mode, tune display options, and jump straight into racing. "
+            "Shortcuts: Ctrl+1 Quick Race, Ctrl+2 Championship, Ctrl+3 Career, Ctrl+Enter Apply Display, F1 About."
+        )
+        self.menu_summary_label.setWordWrap(True)
+        main_layout.addWidget(self.menu_summary_label)
 
         main_layout.addSpacing(30)
 
@@ -348,7 +374,7 @@ class MainMenuWindow(QMainWindow):
                 font-weight: bold;
                 background-color: #353839;
                 color: #B9F2FF;
-                border: 3px solid #B9F2FF;
+                border: 1px solid rgba(185,242,255,0.30);
                 border-radius: 10px;
                 padding: 15px;
             }
@@ -362,8 +388,42 @@ class MainMenuWindow(QMainWindow):
                 color: #F5F5F5;
             }
         """)
+        exit_btn.setShortcut("Ctrl+Q")
+        exit_btn.setToolTip("Exit the game launcher (Ctrl+Q)")
+        exit_btn.setAccessibleName("Exit Application")
         exit_btn.clicked.connect(self.close)
         main_layout.addWidget(exit_btn)
+
+    def _set_embedded_window(self, key: str, host_window: QMainWindow) -> Optional[QWidget]:
+        """Embed a mode window into the main stack to keep a single top-level window."""
+        if self.view_stack is None:
+            return None
+
+        existing_page = self._embedded_views.get(key)
+        if existing_page is not None:
+            self.view_stack.removeWidget(existing_page)
+            existing_page.deleteLater()
+            self._embedded_views.pop(key, None)
+
+        existing_host = self._embedded_hosts.get(key)
+        if existing_host is not None:
+            existing_host.close()
+            self._embedded_hosts.pop(key, None)
+
+        embedded_page = host_window.takeCentralWidget()
+        if embedded_page is None:
+            return None
+
+        embedded_page.setParent(self.view_stack)
+        self.view_stack.addWidget(embedded_page)
+        self._embedded_views[key] = embedded_page
+        self._embedded_hosts[key] = host_window
+        return embedded_page
+
+    def _show_menu_page(self):
+        """Return to the main menu view in the stacked layout."""
+        if self.view_stack is not None and self.menu_page is not None:
+            self.view_stack.setCurrentWidget(self.menu_page)
 
     def _create_race_mode_section(self):
         """Create race mode selection section."""
@@ -374,57 +434,19 @@ class MainMenuWindow(QMainWindow):
         # Quick Race button
         quick_race_btn = QPushButton("Quick Race")
         quick_race_btn.setMinimumHeight(80)
-        quick_race_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 20px;
-                font-weight: bold;
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 4px solid #B9F2FF;
-                border-radius: 12px;
-                padding: 20px;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-                border-color: #DD2D4A;
-            }
-        """)
+        quick_race_btn.setProperty("primary", True)
+        quick_race_btn.setShortcut("Ctrl+1")
+        quick_race_btn.setToolTip("Start a one-off quick race (Ctrl+1)")
+        quick_race_btn.setAccessibleName("Quick Race Mode")
         quick_race_btn.clicked.connect(self._show_quick_race_setup)
         layout.addWidget(quick_race_btn)
 
         # Championship Mode
-        championship_btn = QPushButton("Championship Mode")
+        championship_btn = QPushButton("Quick Championship")
         championship_btn.setMinimumHeight(80)
-        championship_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 20px;
-                font-weight: bold;
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 4px solid #B9F2FF;
-                border-radius: 12px;
-                padding: 20px;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-                border-color: #DD2D4A;
-            }
-            QPushButton:disabled {
-                background-color: #353839;
-                color: #666;
-                border-color: #555;
-            }
-        """)
+        championship_btn.setProperty("primary", True)
+        championship_btn.setShortcut("Ctrl+2")
+        championship_btn.setAccessibleName("Championship Mode")
         championship_btn.setEnabled(True)  # Now implemented!
         championship_btn.setToolTip("Start or continue a championship season")
         championship_btn.clicked.connect(self._show_championship_mode)
@@ -433,31 +455,9 @@ class MainMenuWindow(QMainWindow):
         # Career Mode
         career_btn = QPushButton("Career Mode")
         career_btn.setMinimumHeight(80)
-        career_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 20px;
-                font-weight: bold;
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 4px solid #B9F2FF;
-                border-radius: 12px;
-                padding: 20px;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-                border-color: #DD2D4A;
-            }
-            QPushButton:disabled {
-                background-color: #353839;
-                color: #666;
-                border-color: #555;
-            }
-        """)
+        career_btn.setProperty("primary", True)
+        career_btn.setShortcut("Ctrl+3")
+        career_btn.setAccessibleName("Career Mode")
         career_btn.setEnabled(True)
         career_btn.setToolTip("Start or continue a career season")
         career_btn.clicked.connect(self._show_career_mode)
@@ -506,25 +506,10 @@ class MainMenuWindow(QMainWindow):
         # Apply button
         apply_btn = QPushButton("Apply Display Settings")
         apply_btn.setMinimumHeight(50)
-        apply_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 14px;
-                font-weight: bold;
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 3px solid #B9F2FF;
-                border-radius: 10px;
-                padding: 12px;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-            }
-        """)
+        apply_btn.setProperty("primary", True)
+        apply_btn.setShortcut("Ctrl+Return")
+        apply_btn.setToolTip("Apply selected display mode (Ctrl+Enter)")
+        apply_btn.setAccessibleName("Apply Display Settings")
         apply_btn.clicked.connect(self._apply_display_mode)
         layout.addWidget(apply_btn)
         layout.addStretch()
@@ -532,25 +517,9 @@ class MainMenuWindow(QMainWindow):
         # About button
         about_btn = QPushButton("About")
         about_btn.setMinimumHeight(50)
-        about_btn.setStyleSheet("""
-            QPushButton {
-                font-size: 14px;
-                font-weight: bold;
-                background-color: #353839;
-                color: #B9F2FF;
-                border: 3px solid #B9F2FF;
-                border-radius: 10px;
-                padding: 12px;
-            }
-            QPushButton:hover {
-                background-color: #B9F2FF;
-                color: #353839;
-            }
-            QPushButton:pressed {
-                background-color: #DD2D4A;
-                color: #F5F5F5;
-            }
-        """)
+        about_btn.setShortcut("F1")
+        about_btn.setToolTip("About this build (F1)")
+        about_btn.setAccessibleName("About Momentum")
         about_btn.clicked.connect(self._show_about)
         layout.addWidget(about_btn)
 
@@ -567,24 +536,27 @@ class MainMenuWindow(QMainWindow):
         """Show championship selection/management."""
         from GUI.gui_championship import ChampionshipSelectionDialog, ChampionshipWindow
         if self.db is None:
-            QMessageBox.warning(self, "Database Unavailable", "Database is not initialized.")
+            QMessageBox.warning(self, "Database Unavailable", "Database is not initialised.")
             return
         
         # Show championship selection
         dialog = ChampionshipSelectionDialog(self.db, self)
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_championship:
-            # Show championship window
             self.championship_window = ChampionshipWindow(dialog.selected_championship, self)
             self.championship_window.return_to_menu.connect(self._return_from_championship)
             self.championship_window.start_race_signal.connect(self._start_championship_race)
-            self.championship_window.show()
-            self.hide()
+
+            championship_page = self._set_embedded_window("championship", self.championship_window)
+            if championship_page is None or self.view_stack is None:
+                QMessageBox.warning(self, "Navigation Error", "Could not open championship view.")
+                return
+            self.view_stack.setCurrentWidget(championship_page)
 
     def _show_career_mode(self):
         """Show career selection/management in a dedicated career GUI."""
         from GUI.gui_career import CareerSelectionDialog, CareerWindow
         if self.db is None:
-            QMessageBox.warning(self, "Database Unavailable", "Database is not initialized.")
+            QMessageBox.warning(self, "Database Unavailable", "Database is not initialised.")
             return
 
         dialog = CareerSelectionDialog(self.db, self)
@@ -592,35 +564,37 @@ class MainMenuWindow(QMainWindow):
             self.career_window = CareerWindow(dialog.selected_championship, self)
             self.career_window.return_to_menu.connect(self._return_from_career)
             self.career_window.start_race_signal.connect(self._start_career_race)
-            self.career_window.show()
-            self.hide()
+
+            career_page = self._set_embedded_window("career", self.career_window)
+            if career_page is None or self.view_stack is None:
+                QMessageBox.warning(self, "Navigation Error", "Could not open career view.")
+                return
+            self.view_stack.setCurrentWidget(career_page)
     
     def _return_from_championship(self):
         """Return from championship to main menu."""
-        if hasattr(self, 'championship_window'):
-            self.championship_window.close()
+        self._show_menu_page()
         self.show()
 
     def _return_from_career(self):
         """Return from career to main menu."""
-        if hasattr(self, 'career_window'):
-            self.career_window.close()
+        self._show_menu_page()
         self.show()
     
     def _start_championship_race(self, config: dict):
         """Start a championship race."""
         # Add display mode to config
         config["display_mode"] = self.display_mode
+        self._show_menu_page()
         self.start_race_signal.emit(config)
-        if hasattr(self, 'championship_window'):
-            self.championship_window.hide()
+        self.hide()
 
     def _start_career_race(self, config: dict):
         """Start a career race."""
         config["display_mode"] = self.display_mode
+        self._show_menu_page()
         self.start_race_signal.emit(config)
-        if hasattr(self, 'career_window'):
-            self.career_window.hide()
+        self.hide()
 
     def _on_display_mode_changed(self, button):
         """Handle display mode radio button change."""
@@ -746,6 +720,13 @@ class QuickRaceSetupWindow(QDialog):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
 
+        self.setStyleSheet(f"QPushButton {{ border: {FEINT_BUTTON_BORDER}; }}")
+
+        logo = QLabel("MOMENTUM")
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        logo.setStyleSheet(LOGO_STYLE)
+        layout.addWidget(logo)
+
         # Title
         title = QLabel("Quick Race Setup")
         title_font = QFont()
@@ -753,6 +734,14 @@ class QuickRaceSetupWindow(QDialog):
         title_font.setBold(True)
         title.setFont(title_font)
         layout.addWidget(title)
+
+        self.selection_summary = QLabel("Ready: Select a driver, discipline, tier, and track.")
+        self.selection_summary.setWordWrap(True)
+        self.selection_summary.setStyleSheet(
+            "background-color: #18212B; border: 1px solid #2E3B4A; border-radius: 8px; "
+            "padding: 10px; color: #CFE8FF;"
+        )
+        layout.addWidget(self.selection_summary)
 
         # Driver selection + profile area
         selection_container = QHBoxLayout()
@@ -784,6 +773,8 @@ class QuickRaceSetupWindow(QDialog):
         # our DriverCard draws the visible selection instead.
         self.driver_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.driver_list.setSpacing(4)  # Compact spacing between cards
+        self.driver_list.setAccessibleName("Driver Selection List")
+        self.driver_list.setToolTip("Use Up/Down keys to select a driver")
 
         # Populate with DriverCard widgets (selection pool defined in config)
         for driver in self.drivers[:QUICK_RACE_LIST_SIZE]:
@@ -909,6 +900,7 @@ class QuickRaceSetupWindow(QDialog):
             "tyre_sensitive")
         self.preset_combo.setCurrentIndex(0)
         self.preset_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.preset_combo.setAccessibleName("Race Tuning Preset")
         preset_layout.addWidget(self.preset_combo)
 
         # Preset descriptions
@@ -973,6 +965,7 @@ class QuickRaceSetupWindow(QDialog):
         
         self.discipline_combo.setStyleSheet(COMBO_BOX_STYLE)
         self.discipline_combo.setCurrentIndex(0)
+        self.discipline_combo.setAccessibleName("Racing Discipline")
         self.discipline_combo.currentIndexChanged.connect(self._on_discipline_changed)
         discipline_layout.addWidget(self.discipline_combo)
         layout.addWidget(discipline_group)
@@ -985,6 +978,7 @@ class QuickRaceSetupWindow(QDialog):
 
         self.tier_combo = QComboBox()
         self.tier_combo.setStyleSheet(self.discipline_combo.styleSheet())
+        self.tier_combo.setAccessibleName("Team Tier")
         self.tier_combo.currentIndexChanged.connect(self._on_tier_changed)
         tier_layout.addWidget(self.tier_combo)
         layout.addWidget(tier_group)
@@ -997,6 +991,8 @@ class QuickRaceSetupWindow(QDialog):
 
         self.track_combo = QComboBox()
         self.track_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.track_combo.setAccessibleName("Track Selection")
+        self.track_combo.currentIndexChanged.connect(self._update_setup_summary)
         track_layout.addWidget(self.track_combo)
         layout.addWidget(track_group)
 
@@ -1015,6 +1011,7 @@ class QuickRaceSetupWindow(QDialog):
         # Initialise profile with first driver if present
         if self.driver_list.count() > 0:
             self._on_driver_selected(self.driver_list.currentItem(), None)
+        self._update_setup_summary()
 
     def _start_race(self):
         """Start race with current settings."""
@@ -1097,10 +1094,12 @@ class QuickRaceSetupWindow(QDialog):
         self._update_tiers_for_selected_discipline()
         self._update_tracks_for_discipline()
         self._refresh_driver_list_for_selected_discipline()
+        self._update_setup_summary()
 
     def _on_tier_changed(self):
         """Handle tier selection change."""
         self._refresh_driver_list_for_selected_discipline()
+        self._update_setup_summary()
 
     def _update_tiers_for_selected_discipline(self):
         """Populate available tiers for the selected discipline."""
@@ -1306,6 +1305,7 @@ class QuickRaceSetupWindow(QDialog):
             self.profile_nationality.setText("Nationality: -")
             self.profile_skill.setText("Skill: -")
             self.profile_team.setText("Team: -")
+            self._update_setup_summary()
             return
 
         self.driver_list.clear()
@@ -1322,6 +1322,7 @@ class QuickRaceSetupWindow(QDialog):
 
         self.driver_list.setCurrentRow(0)
         self._on_driver_selected(self.driver_list.currentItem(), None)
+        self._update_setup_summary()
 
     def _update_tracks_for_discipline(self):
         """Populate track list based on selected discipline."""
@@ -1363,6 +1364,31 @@ class QuickRaceSetupWindow(QDialog):
         self._update_profile_panel(driver)
         self._update_radar_widget_safe(driver)
         self._update_driver_card_selection_style(current, previous)
+        self._update_setup_summary()
+
+    def _update_setup_summary(self):
+        """Render a concise setup summary so players can confirm key selections quickly."""
+        discipline = self.discipline_combo.currentText() if hasattr(self, "discipline_combo") else "-"
+        tier = self.tier_combo.currentText() if hasattr(self, "tier_combo") else "-"
+        track = self.track_combo.currentText() if hasattr(self, "track_combo") else "-"
+
+        current_item = self.driver_list.currentItem() if hasattr(self, "driver_list") else None
+        driver_name = "No driver"
+        team_name = "No team"
+        if current_item is not None:
+            driver = current_item.data(Qt.ItemDataRole.UserRole)
+            if driver is not None:
+                driver_name = get_display_name(driver)
+                team = self._resolve_driver_team(driver)
+                if team is not None:
+                    team_name = getattr(team, "name", "Unknown Team")
+
+        ready = current_item is not None and self.track_combo.count() > 0
+        state = "READY TO START" if ready else "SETUP INCOMPLETE"
+        self.selection_summary.setText(
+            f"{state} | Discipline: {discipline} | Tier: {tier} | Track: {track} | "
+            f"Driver: {driver_name} | Team: {team_name}"
+        )
 
     def _update_profile_panel(self, driver) -> None:
         """Update profile text fields and selected team for the chosen driver."""

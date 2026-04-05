@@ -95,7 +95,7 @@ class MomentumLogger:
 
         # Log initialisation
         self.info("=" * 80)
-        self.info("MOMENTUM Logging System Initialized")
+        self.info("MOMENTUM Logging System Initialised")
         self.info(f"Log file: {self.log_file}")
         self.info(f"Error log: {self.error_log_file}")
         self.info("=" * 80)

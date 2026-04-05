@@ -61,7 +61,7 @@ class ChampionshipService:
     """
     
     def __init__(self, db_manager: DatabaseManager):
-        """Initialize with database manager"""
+        """Initialise with database manager"""
         self.db = db_manager
     
     def calculate_points(self, position: int, discipline: str, fastest_lap: bool = False) -> int:
@@ -142,7 +142,7 @@ class ChampionshipService:
         return driver_stats
 
     def _ensure_driver_stats(self, driver_stats: Dict[int, Dict[str, Any]], driver_id: int, team_id: Optional[int]) -> Dict[str, Any]:
-        """Initialize driver stats entry when missing and return it."""
+        """Initialise driver stats entry when missing and return it."""
         if driver_id not in driver_stats:
             driver_stats[driver_id] = {
                 "driver_id": driver_id,

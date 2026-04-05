@@ -113,7 +113,7 @@ class Track:
     country: str
     primary_discipline: str
 
-    # Special segments & behaviors
+    # Special segments & behaviours
     is_point_to_point: bool = False
     joker_enabled: bool = False
     instructions_json: Optional[str] = None
@@ -132,7 +132,7 @@ class Track:
     drs_zones: int = 1
     surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
     surface_type: str = "asphalt"  # Legacy surface type field (kept for database compatibility)
-    surface_grip: float = 1.0  # Grip level for visualization and simulation (0-1 scale)
+    surface_grip: float = 1.0  # Grip level for visualisation and simulation (0-1 scale)
     surface_abrasiveness: float = 8.0  # Abrasiveness for tire wear
     climate: str = "temperate"  # Climate type for track conditions
 

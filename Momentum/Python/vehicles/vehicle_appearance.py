@@ -41,7 +41,7 @@ class VehicleRenderer:
         
         Args:
             painter: QPainter instance
-            livery: Car livery/colors
+            livery: Car livery/colours
             scale: Rendering scale
             steering_angle: Front wheel steering angle in degrees (typically -15 to +15)
         """
@@ -59,7 +59,6 @@ class VehicleRenderer:
         nose_taper_fraction = 0.48  # controls nose taper width
         nose_taper_length = 0.09    # controls nose taper depth
         mid_start = -0.04           # where max width begins
-        mid_end = 0.38              # where rear taper begins
         
         body_poly = [
             QPointF(0.0, -half_l),                                        # nose tip (top centre)
@@ -197,7 +196,6 @@ class VehicleRenderer:
         # Wheel positions (need to define early for body cutouts)
         front_wheel_y = -2.8 * scale
         rear_wheel_y = 2.5 * scale
-        wheel_arch_width = 1.8 * scale
 
         # MAIN BODY - smooth endurance car outline with integrated wheel bulges
         body_poly = [
@@ -708,7 +706,7 @@ class VehicleRenderer:
         Args:
             painter: QPainter instance
             vehicle_type: Type of vehicle to render
-            livery: Car livery/colors
+            livery: Car livery/colours
             scale: Rendering scale
             steering_angle: Steering angle for front wheels (default 0.0)
         """

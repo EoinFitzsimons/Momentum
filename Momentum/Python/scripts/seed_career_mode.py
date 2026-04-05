@@ -163,6 +163,9 @@ DRIVER_SLOTS_PER_DISCIPLINE = {
     "ENDURANCE": 4,
 }
 
+STAFF_SLOTS_PER_TEAM = 3
+MIN_STAFF_PER_TEAM = 1
+
 # Locale mapping is provided by tools.locale_mapping (best-effort per country)
 
 
@@ -641,6 +644,203 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
     return staff_created
 
 
+def assign_staff_contracts(db: DatabaseManager, disciplines: list) -> int:  # NOSONAR
+    """Assign available staff to teams and guarantee minimum staffing coverage."""
+    print("\n=== Assigning Staff Contracts to Teams ===")
+    assignments = 0
+    generated_staff = 0
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+
+        team_ids = []
+        for discipline in disciplines:
+            rows = cursor.execute(
+                """
+                SELECT id
+                FROM teams
+                WHERE discipline = ?
+                ORDER BY operations_rating DESC, id ASC
+                """,
+                (discipline,)
+            ).fetchall()
+            team_ids.extend(int(row[0]) for row in rows)
+
+        if not team_ids:
+            print("  ! No teams found for staff assignment")
+            return 0
+
+        staff_counts = {
+            int(row[0]): int(row[1])
+            for row in cursor.execute(
+                """
+                SELECT t.id, COUNT(s.id) AS staff_count
+                FROM teams t
+                LEFT JOIN staff_members s ON s.current_team_id = t.id
+                WHERE t.discipline IN ({})
+                GROUP BY t.id
+                """.format(
+                    ",".join(["?"] * len(disciplines))
+                ),
+                tuple(disciplines),
+            ).fetchall()
+        }
+
+        team_ids_needing_minimum = [
+            team_id for team_id in team_ids if staff_counts.get(team_id, 0) < MIN_STAFF_PER_TEAM
+        ]
+
+        staff_rows = cursor.execute(
+            """
+            SELECT id, rating
+            FROM staff_members
+            WHERE current_team_id IS NULL
+            ORDER BY rating DESC, id ASC
+            """
+        ).fetchall()
+
+        role_pool = []
+        for role, config in STAFF_ROLES_CONFIG.items():
+            role_pool.extend([role] * int(config.get("weight", 1)))
+        if not role_pool:
+            role_pool = ["MECHANIC"]
+
+        missing_minimum = max(0, len(team_ids_needing_minimum) - len(staff_rows))
+        if missing_minimum > 0:
+            print(f"  ! Creating {missing_minimum} extra staff to satisfy minimum team coverage")
+            created_for_minimum = 0
+            attempts = 0
+            max_attempts = max(10, missing_minimum * 8)
+
+            while created_for_minimum < missing_minimum and attempts < max_attempts:
+                attempts += 1
+                locale = random.choice(COMMON_LOCALES)
+                try:
+                    fake = Faker(locale)
+                except Exception:
+                    fake = Faker('en_US')
+                role = random.choice(role_pool)
+                staff_data = generate_staff_member(fake, role)
+                if not staff_data:
+                    role_cfg = STAFF_ROLES_CONFIG.get(role, {"rating_range": (50.0, 80.0)})
+                    min_rating, max_rating = role_cfg["rating_range"]
+                    staff_data = {
+                        "name": f"Generated Staff {random.randint(100000, 999999)}",
+                        "role": role,
+                        "rating": round(random.uniform(min_rating, max_rating), 2),
+                    }
+                cursor.execute(
+                    """
+                    INSERT INTO staff_members (name, role, rating)
+                    VALUES (?, ?, ?)
+                    """,
+                    (staff_data["name"], staff_data["role"], staff_data["rating"]),
+                )
+                generated_staff += 1
+                created_for_minimum += 1
+
+            if created_for_minimum < missing_minimum:
+                print(
+                    "  ! Warning: could not generate enough minimum-coverage staff "
+                    f"({created_for_minimum}/{missing_minimum})"
+                )
+
+            staff_rows = cursor.execute(
+                """
+                SELECT id, rating
+                FROM staff_members
+                WHERE current_team_id IS NULL
+                ORDER BY rating DESC, id ASC
+                """
+            ).fetchall()
+
+        if not staff_rows:
+            print("  ! No unassigned staff available to contract")
+            return 0
+
+        mandatory_targets = list(team_ids_needing_minimum)
+        pair_count = min(len(staff_rows), len(mandatory_targets))
+        start_season = datetime.now().year
+
+        for idx in range(pair_count):
+            team_id = mandatory_targets[idx]
+            staff_id = int(staff_rows[idx][0])
+            rating = float(staff_rows[idx][1] or 50.0)
+            annual_salary = round(45_000 + (rating * 2_750), 2)
+            contract_length = random.randint(1, 3)
+
+            cursor.execute(
+                """
+                UPDATE staff_members
+                SET current_team_id = ?,
+                    annual_salary = ?,
+                    contract_length = ?,
+                    contract_start_season = ?,
+                    contract_end_season = ?
+                WHERE id = ?
+                """,
+                (
+                    team_id,
+                    annual_salary,
+                    contract_length,
+                    start_season,
+                    start_season + contract_length - 1,
+                    staff_id,
+                )
+            )
+            assignments += 1
+            staff_counts[team_id] = staff_counts.get(team_id, 0) + 1
+
+        remaining_staff = staff_rows[pair_count:]
+
+        extra_targets = []
+        for _ in range(STAFF_SLOTS_PER_TEAM):
+            for team_id in team_ids:
+                if staff_counts.get(team_id, 0) < STAFF_SLOTS_PER_TEAM:
+                    extra_targets.append(team_id)
+
+        extra_pair_count = min(len(remaining_staff), len(extra_targets))
+        for idx in range(extra_pair_count):
+            team_id = extra_targets[idx]
+            staff_id = int(remaining_staff[idx][0])
+            rating = float(remaining_staff[idx][1] or 50.0)
+            annual_salary = round(45_000 + (rating * 2_750), 2)
+            contract_length = random.randint(1, 3)
+
+            cursor.execute(
+                """
+                UPDATE staff_members
+                SET current_team_id = ?,
+                    annual_salary = ?,
+                    contract_length = ?,
+                    contract_start_season = ?,
+                    contract_end_season = ?
+                WHERE id = ?
+                """,
+                (
+                    team_id,
+                    annual_salary,
+                    contract_length,
+                    start_season,
+                    start_season + contract_length - 1,
+                    staff_id,
+                )
+            )
+            assignments += 1
+            staff_counts[team_id] = staff_counts.get(team_id, 0) + 1
+
+        conn.commit()
+
+        teams_without_staff = sum(1 for team_id in team_ids if staff_counts.get(team_id, 0) <= 0)
+
+    print(
+        f"✓ Total staff contracts assigned: {assignments} "
+        f"(generated {generated_staff} extra staff, target {STAFF_SLOTS_PER_TEAM} per team where possible, "
+        f"teams with zero staff after assignment: {teams_without_staff})"
+    )
+    return assignments
+
+
 def assign_driver_contracts(db: DatabaseManager, disciplines: list) -> int:
     """Assign drivers to teams by discipline to create playable rosters."""
     print("\n=== Assigning Driver Contracts to Teams ===")
@@ -977,6 +1177,7 @@ def main():
         drivers_created = seed_drivers(db, args.drivers, disciplines)
         teams_created = seed_teams(db, args.teams_per_discipline, disciplines)
         staff_created = seed_staff(db, args.staff)
+        staff_contracts_assigned = assign_staff_contracts(db, disciplines)
         contracts_assigned = assign_driver_contracts(db, disciplines)
         drivers_adjusted = adjust_drivers_by_tier(db)
         
@@ -993,6 +1194,7 @@ def main():
         print(f"  Drivers: {drivers_created}")
         print(f"  Teams: {teams_created}")
         print(f"  Staff: {staff_created}")
+        print(f"  Staff contracts: {staff_contracts_assigned}")
         print(f"  Driver contracts: {contracts_assigned}")
         print(f"  Drivers adjusted by tier: {drivers_adjusted}")
         

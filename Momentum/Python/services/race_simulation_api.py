@@ -9,6 +9,8 @@ Date: December 2025
 """
 
 from typing import List, Callable, Optional, Dict, Any
+import contextlib
+import io
 from database.models import Driver, Track, RaceResult, Team
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
@@ -73,7 +75,7 @@ def _setup_context_teams(context: RaceContext) -> None:
 
 def _extract_context_fields(context: RaceContext, seed: Optional[int]) -> tuple:
     """Extract fields from RaceContext for simulation"""
-    engine = RealtimeRaceEngine(seed=seed)
+    engine = RealtimeRaceEngine(seed=seed, db=getattr(context, 'db', None))
     drivers = context.drivers
     track = context.track
     laps = context.total_laps
@@ -249,6 +251,103 @@ def _persist_race_results(db: Optional[Any], race_id: int, results_list: List[di
         LOGGER.warning("Failed to persist race results for race_id=%s", race_id, exc_info=True)
 
 
+def _create_realtime_engine(seed: Optional[int], verbose: bool, db: Optional[Any]) -> RealtimeRaceEngine:
+    """Create and configure the realtime engine instance."""
+    engine = RealtimeRaceEngine(seed=seed)
+    engine.debug_logging = bool(verbose)
+    if db is not None:
+        engine.db = db
+    return engine
+
+
+def _try_run_context_adapter(context: RaceContext, seed: Optional[int], verbose: bool):
+    """Return adapter simulation result when a discipline adapter exists, else None."""
+    try:
+        _setup_context_teams(context)
+    except Exception:
+        LOGGER.warning("Failed to prepare context teams; continuing with fallback flow", exc_info=True)
+
+    adapter = _load_discipline_engine(context, seed=seed)
+    if adapter is None:
+        return None
+    if verbose:
+        print(f"Using discipline adapter: {adapter.__class__.__name__} for {context.discipline}")
+    return adapter.simulate_race(context)
+
+
+def _resolve_simulation_inputs_from_context(
+    context: Optional[RaceContext],
+    engine: RealtimeRaceEngine,
+    drivers: Optional[List[Driver]],
+    track: Optional[Track],
+    laps: Optional[int],
+    event_callback: Optional[Callable[[dict], None]],
+    teams_dict: Dict[int, Team],
+    track_points: Optional[List],
+    player_driver_id: Optional[int],
+    player_overrides: Optional[Dict[str, float]],
+    seed: Optional[int],
+) -> tuple:
+    """Return normalized simulation inputs after optional RaceContext extraction."""
+    if context is None:
+        return engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides
+    return _extract_context_fields(context, seed)
+
+
+def _validate_required_simulation_inputs(drivers: Optional[List[Driver]], track: Optional[Track]) -> None:
+    """Validate required non-optional inputs for simulation runtime."""
+    if drivers is None:
+        raise ValueError("drivers parameter is required")
+    if track is None:
+        raise ValueError("track parameter is required")
+
+
+def _resolve_realtime_speed(verbose: bool, event_callback: Optional[Callable[[dict], None]]) -> float:
+    """Use fast defaults for headless runs and slower speed for visualised runs."""
+    return 5.0 if (verbose or event_callback is not None) else 250.0
+
+
+def _build_engine_run_kwargs(
+    drivers: List[Driver],
+    teams_dict: Dict[int, Team],
+    track: Track,
+    laps: int,
+    event_callback: Optional[Callable[[dict], None]],
+    stop_event: Any,
+    realtime_speed: float,
+    track_points: Optional[List],
+    player_driver_id: Optional[int],
+    player_overrides: Optional[Dict[str, float]],
+) -> Dict[str, Any]:
+    """Build runtime kwargs for RealtimeRaceEngine.simulate_race."""
+    return {
+        'drivers': drivers,
+        'teams': teams_dict,
+        'track': track,
+        'total_laps': laps,
+        'event_callback': event_callback,
+        'stop_event': stop_event,
+        'realtime_speed': float(realtime_speed),
+        'track_points': track_points,
+        'player_driver_id': player_driver_id,
+        'player_overrides': player_overrides,
+    }
+
+
+def _execute_engine_simulation(
+    engine: RealtimeRaceEngine,
+    run_kwargs: Dict[str, Any],
+    verbose: bool,
+    event_callback: Optional[Callable[[dict], None]],
+) -> List[dict]:
+    """Execute engine simulation with optional stdout suppression for headless runs."""
+    suppress_output = (not verbose and event_callback is None)
+    if suppress_output:
+        with contextlib.redirect_stdout(io.StringIO()):
+            return engine.simulate_race(**run_kwargs)
+    return engine.simulate_race(**run_kwargs)
+
+
 def simulate_race(
     drivers: Optional[List[Driver]] = None,
     track: Optional[Track] = None,
@@ -270,25 +369,27 @@ def simulate_race(
     Drivers are AI agents making live racing decisions (attack/defend/manage)
     based on gaps, position, and their attributes.
     """
-    engine = RealtimeRaceEngine(seed=seed)
+    engine = _create_realtime_engine(seed, verbose, db)
     teams_dict: Dict[int, Team] = {}
-    
-    # Process context if provided
+
     if context is not None:
-        try:
-            _setup_context_teams(context)
-        except Exception:
-            LOGGER.warning("Failed to prepare context teams; continuing with fallback flow", exc_info=True)
-        
-        # Try discipline-specific adapter first
-        adapter = _load_discipline_engine(context, seed=seed)
-        if adapter is not None:
-            if verbose:
-                print(f"Using discipline adapter: {adapter.__class__.__name__} for {context.discipline}")
-            return adapter.simulate_race(context)
-        
-        # Extract fields from context for fallback
-        engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides = _extract_context_fields(context, seed)
+        adapter_results = _try_run_context_adapter(context, seed, verbose)
+        if adapter_results is not None:
+            return adapter_results
+
+    engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides = _resolve_simulation_inputs_from_context(
+        context,
+        engine,
+        drivers,
+        track,
+        laps,
+        event_callback,
+        teams_dict,
+        track_points,
+        player_driver_id,
+        player_overrides,
+        seed,
+    )
     
     # Fetch team data from database if provided
     teams_dict = _populate_team_data_from_db(teams_dict, drivers, db, verbose)
@@ -296,31 +397,30 @@ def simulate_race(
     # Create fallback teams if needed
     teams_dict = _create_fallback_teams(teams_dict, drivers, verbose)
     
+    # Validate required parameters before using helper flows
+    _validate_required_simulation_inputs(drivers, track)
+
     # Calculate lap count
     laps = _calculate_race_laps(track, laps)
+    realtime_speed = _resolve_realtime_speed(verbose, event_callback)
     
     # Print summary
     _print_race_summary(verbose, track, drivers, laps)
     
-    # Validate required parameters
-    if drivers is None:
-        raise ValueError("drivers parameter is required")
-    if track is None:
-        raise ValueError("track parameter is required")
-    
     try:
-        results_list = engine.simulate_race(
+        run_kwargs = _build_engine_run_kwargs(
             drivers=drivers,
-            teams=teams_dict,
+            teams_dict=teams_dict,
             track=track,
-            total_laps=laps,
+            laps=laps,
             event_callback=event_callback,
             stop_event=stop_event,
-            realtime_speed=5.0,
+            realtime_speed=realtime_speed,
             track_points=track_points,
             player_driver_id=player_driver_id,
-            player_overrides=player_overrides
+            player_overrides=player_overrides,
         )
+        results_list = _execute_engine_simulation(engine, run_kwargs, verbose, event_callback)
     except Exception as e:
         if verbose:
             print(f"\nERROR: {e}")
