@@ -1328,7 +1328,8 @@ class TrackWidget(QWidget):
                 painter.fillRect(0, 0, w, h, occ_grad)
             except Exception:
                 painter.fillRect(0, 0, w, h, QColor(0, 0, 0, int(occ * 255)))
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _paint_infield_noise(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
         """Paint translucent ellipse noise layer for turf variation."""
@@ -1428,7 +1429,8 @@ class TrackWidget(QWidget):
                 painter.drawPath(path)
                 toggle = not toggle
                 x0 += stripe_w * 0.7
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_joker(self, painter):
         """Draw an alternate 'joker' route if provided by the track data."""
@@ -1447,7 +1449,8 @@ class TrackWidget(QWidget):
                 path.lineTo(pt.x, pt.y)
             painter.drawPath(path)
             painter.restore()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
@@ -1463,7 +1466,8 @@ class TrackWidget(QWidget):
             self._draw_pit_entry_chevrons(painter)
             self._draw_pit_exit_marker(painter)
 
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_pit_lane_offsets(self, points: List[TrackPoint]) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
         pit_inner_points: List[Tuple[float, float]] = []
@@ -1557,7 +1561,8 @@ class TrackWidget(QWidget):
             self._draw_main_straight_grandstands(painter)
             self._draw_corner_grandstands(painter)
 
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_main_straight_grandstands(self, painter) -> None:
         for gs_s in [320, 380, 440]:
@@ -1643,7 +1648,8 @@ class TrackWidget(QWidget):
             self._draw_garage_base_segments(painter)
             self._draw_garage_bays(painter)
 
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_garage_base_segments(self, painter) -> None:
         painter.setBrush(QBrush(QColor(140, 140, 140)))
@@ -1882,7 +1888,8 @@ class TrackWidget(QWidget):
             self._ensure_infield_assets(key, bbox, w, h, seed, inner_infield_points)
             self._draw_infield_props_clipped(painter, bbox, h, inner_infield_points, key)
             self._draw_outer_forest_band(painter, outer_poly, inner_poly, bbox, w, h)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _resolve_track_surface_color(self) -> Tuple[int, int, int]:
         """Resolve track base color, adjusted by grip where available."""
@@ -2199,7 +2206,8 @@ class TrackWidget(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
             painter.restore()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
 
 class RaceWindow(QMainWindow):
@@ -2305,19 +2313,23 @@ class RaceWindow(QMainWindow):
         """Best-effort clear minimum sizes to avoid min>max geometry conflicts."""
         try:
             self.setMinimumSize(0, 0)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         try:
             for w in self.findChildren(QWidget):
                 try:
                     w.setMinimumSize(0, 0)
-                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+                except Exception:
+                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _try_constrain_to_available_geometry(self, width: int, height: int) -> None:
         """Best-effort max-size constraint to screen working area."""
         try:
             self.setMaximumSize(width, height)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     # Auto-start logic removed: user must click Start Race manually
 
@@ -2757,7 +2769,8 @@ class RaceWindow(QMainWindow):
             if screen is not None:
                 screen_w = int(screen.availableGeometry().width())
                 return max(560, min(760, int(screen_w * 0.34)))
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         return 640
 
     def _load_data(self):
@@ -3135,14 +3148,16 @@ class RaceWindow(QMainWindow):
                 return
             try:
                 tw.set_cars(cars)
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
             try:
                 self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
             except Exception:
                 self._starting_grid = ordered_ids
             print("Detected reversed grid order; flipped to ascending start positions")
             self._recompute_grid_from_track_widget_positions()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _recompute_grid_from_track_widget_positions(self) -> None:
         """Derive starting grid from visual car placement to keep UI/engine aligned."""
@@ -3153,7 +3168,8 @@ class RaceWindow(QMainWindow):
             sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
             self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
             print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _create_cars_and_start_grid(self) -> bool:
         """Create race cars and initialize canonical starting grid."""
@@ -3429,7 +3445,8 @@ class RaceWindow(QMainWindow):
             self._propagate_drag_winner_to_next_round(round_idx, heat_idx, winner_name)
             self._update_drag_time_metrics_from_event(event, left_name, right_name)
             self._refresh_drag_time_board()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _parse_drag_heat_index(self, event: Dict[str, Any]) -> Tuple[int, int]:
         """Extract round/heat indices from drag event payload."""
@@ -3681,7 +3698,8 @@ class RaceWindow(QMainWindow):
         try:
             if hasattr(self, 'player_status_label'):
                 self.player_status_label.hide()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # Ensure player controls are enabled at race start (in case they were
         # disabled by a prior DNF)
@@ -3696,7 +3714,8 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(True)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(True)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # === CRITICAL FIX: Don't start animation yet! ===
         # Starting animation before first data arrives causes freeze
@@ -3727,7 +3746,8 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
             try:
                 self.emitter.event_signal.emit(error_msg)
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _run_simulation_with_callback(self) -> None:
         """Build context and execute simulation using thread event bridge."""
@@ -3758,7 +3778,8 @@ class RaceWindow(QMainWindow):
                 'results': results or [],
                 'collision_log': [],
             })
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_race_teams_map(self) -> Dict[int, Any]:
         """Resolve team objects for current race entrants."""
@@ -3941,7 +3962,8 @@ class RaceWindow(QMainWindow):
         try:
             if driver_id is not None:
                 self.emitter.event_signal.emit(f"mark_dnf|{driver_id}")
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _emit_player_dnf_if_controlled(self, driver_id: Any, lap: int, reason: str) -> None:
         """Emit player_dnf event for selected driver or teammate control group."""
@@ -3952,7 +3974,8 @@ class RaceWindow(QMainWindow):
                 controlled_ids.add(player_id)
             if driver_id in controlled_ids:
                 self.emitter.event_signal.emit(f"player_dnf|{driver_id}|{lap}|{reason}")
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _update_race_state_dnf_snapshot(self, driver_id: Any, driver_name: str, lap: int, event: dict) -> None:
         """Keep race-state DNF flag in sync for subsequent table rebuilds."""
@@ -3995,15 +4018,18 @@ class RaceWindow(QMainWindow):
                 print(f"ERROR: failed to emit race_finished: {ex}")
                 try:
                     _traceback.print_exc()
-                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+                except Exception:
+                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
                 try:
                     self.emitter.race_finished.emit([])
-                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+                except Exception:
+                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         except Exception as e:
             print(f"ERROR preparing results payload for emit: {e}")
             try:
                 _traceback.print_exc()
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _stop_race(self):
         """Stop the race simulation."""
@@ -4109,7 +4135,8 @@ class RaceWindow(QMainWindow):
             self._set_standings_item(row, 0, QTableWidgetItem("-"), driver_id)
             self._set_standings_item(row, 2, QTableWidgetItem("-"), driver_id)
             self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver_id)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _style_standings_name_cell(self, row: int, driver_id: int) -> None:
         """Apply player/highlight styling for standings name cell."""
@@ -4182,7 +4209,8 @@ class RaceWindow(QMainWindow):
         try:
             if hasattr(self, 'player_status_label'):
                 self.player_status_label.hide()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         self._set_player_controls_enabled(True)
         if self.track_widget:
             self.track_widget.stop_animation()
@@ -4202,7 +4230,8 @@ class RaceWindow(QMainWindow):
                 self.push_gauge.setEnabled(enabled)
             if hasattr(self, 'come_in_checkbox'):
                 self.come_in_checkbox.setEnabled(enabled)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _sorted_results_by_position(self, results: list) -> list:
         """Return race results sorted by finishing position."""
@@ -4399,7 +4428,8 @@ class RaceWindow(QMainWindow):
             except Exception:
                 try:
                     start_pos[self._normalize_driver_id(did)] = int(float(gp))
-                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+                except Exception:
+                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         return start_pos
 
@@ -4451,7 +4481,8 @@ class RaceWindow(QMainWindow):
             dlg_h = int(pref_h * 0.74)
             dlg.setMinimumSize(dlg_w, dlg_h)
             dlg.resize(dlg_w, dlg_h)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         dlg.setLayout(dlg_layout)
         dlg.setModal(True)
@@ -4660,7 +4691,8 @@ class RaceWindow(QMainWindow):
                         col = getattr(car, 'colour', None)
                         if isinstance(col, QColor):
                             return col
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         palette = [
             QColor(80, 170, 255),
@@ -4975,7 +5007,8 @@ class RaceWindow(QMainWindow):
         """Rebuild standings while keeping event handlers fail-safe."""
         try:
             self._rebuild_standings_table()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_mark_dnf_event(self, message: str) -> None:
         """Process generic DNF command emitted from simulation thread."""
@@ -4994,11 +5027,13 @@ class RaceWindow(QMainWindow):
                 if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
                     tw.set_camera_mode('full')
                     print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
             self._mark_driver_dnf_in_state(did)
             self._refresh_standings_safe()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _controlled_driver_ids(self) -> set:
         """Return the set of drivers controlled by player team/selection."""
@@ -5034,7 +5069,8 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(False)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(False)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_player_dnf_event(self, message: str) -> None:
         """Process DNF updates for controlled cars and reflect UI state."""
@@ -5053,13 +5089,15 @@ class RaceWindow(QMainWindow):
                 if hasattr(self, 'player_status_label'):
                     self.player_status_label.setText("PRIMARY CAR RETIRED" if did == player_id else "TEAM CAR RETIRED")
                     self.player_status_label.show()
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
             self._mark_driver_dnf_in_state(did)
             if not self._has_active_controlled_driver(controlled_ids):
                 self._disable_player_controls()
             self._refresh_standings_safe()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _update_race_state_from_standings(
         self,
@@ -5114,7 +5152,8 @@ class RaceWindow(QMainWindow):
             except Exception:
                 total_distance = race_time
             hist.append((total_distance, race_position))
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_standings_update_event(self, message: str) -> None:
         """Process live standings payload and refresh table."""
@@ -5139,7 +5178,8 @@ class RaceWindow(QMainWindow):
             )
             self._record_position_history(driver_id, lap, position_m, race_position, race_time)
             self._rebuild_standings_table()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _rebuild_standings_table(self):
         """Rebuild the standings table with live gaps and proper lapped classification."""
@@ -5346,7 +5386,8 @@ class RaceWindow(QMainWindow):
             try:
                 # Best-effort fallback
                 self.standings_table.setItem(row, col, item)
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _is_dnf_driver(self, driver_id: Optional[int]) -> bool:
         """Return True when the target row belongs to a DNF driver."""
@@ -5373,7 +5414,8 @@ class RaceWindow(QMainWindow):
                 return
             name_cell.setBackground(QColor(80, 80, 80))
             name_cell.setForeground(QColor(200, 200, 200))
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _resize_standings_height(self):
         """Resize standings table to its contents to avoid scrollbars."""
@@ -5387,7 +5429,8 @@ class RaceWindow(QMainWindow):
             total = header_h + row_heights + margins.top() + margins.bottom() + frame + 4
             self.standings_table.setMinimumHeight(total)
             self.standings_table.setMaximumHeight(total)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _on_pace_changed(self, value):
         """Handle pace slider change - update label and colour gradient."""
@@ -5502,13 +5545,15 @@ class RaceWindow(QMainWindow):
         # Refresh team-controlled driver ids after driver assignment.
         try:
             self._rebuild_player_team_driver_ids()
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # Drag races are easiest to read in follow mode by default.
         try:
             if driver and self._is_drag_discipline() and getattr(self, 'track_widget', None) is not None:
                 self._set_camera_mode('follow')
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_cars_from_drivers(self) -> List[Car]:
         """Create grid cars from current entrant list using stable grid spacing."""
@@ -5741,8 +5786,10 @@ class RaceWindow(QMainWindow):
             for w in self.findChildren(QWidget):
                 try:
                     w.setMinimumSize(0, 0)
-                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+                except Exception:
+                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _apply_max_size_from_rect(self, rect) -> None:
         """Clamp window max size to the provided screen rectangle."""
@@ -5750,7 +5797,8 @@ class RaceWindow(QMainWindow):
             return
         try:
             self.setMaximumSize(rect.width(), rect.height())
-        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:
+            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _apply_windowed_mode(self) -> None:
         """Switch to standard resizable windowed mode."""
@@ -5765,7 +5813,8 @@ class RaceWindow(QMainWindow):
         if available is not None:
             try:
                 self.setMinimumSize(0, 0)
-            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+            except Exception:
+                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
             self._reset_child_min_sizes()
             self._apply_max_size_from_rect(available)
             self.setGeometry(available)

@@ -156,7 +156,7 @@ This matrix is limited to gameplay-facing use cases. Administrative, seed, and d
 | UC-20 | Update team budget | Medium | Verified Implemented | Momentum/Python/services/team_service.py, Momentum/Python/simulation.py | Momentum/Python/tests/test_integration_database_layer.py | Budget allocate endpoint | Add budget transaction example |
 
 ### Coverage Summary (Revised)
-- Verified Implemented: 18
+- Verified Implemented: 19
 - Deferred: 0
 
 ### Gap-Closure Checklist
