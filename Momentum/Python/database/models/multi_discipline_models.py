@@ -16,7 +16,7 @@ for backwards compatibility but are not used by active systems.
 Each discipline has unique characteristics, vehicle development paths,
 and specific driver skill requirements.
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 import sqlite3

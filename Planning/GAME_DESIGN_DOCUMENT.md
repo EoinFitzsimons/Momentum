@@ -1717,5 +1717,5 @@ def calculate_financial_health(team):
 
 **Document Version:** 1.0
 **Last Updated:** 2025-10-31
-**Authors:** Momentum Development Team
+Authors: Eoin Fitzsimons
 **Status:** Foundation Document - Implementation in Progress

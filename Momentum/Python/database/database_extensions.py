@@ -4,7 +4,7 @@ Database Manager Extensions - Hiring & Progression Methods
 Extension methods for DatabaseManager class to support hiring and progression systems.
 Import and monkey-patch these methods into DatabaseManager at runtime.
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 from typing import List, Optional, Dict

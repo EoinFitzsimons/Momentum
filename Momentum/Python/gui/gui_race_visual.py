@@ -65,6 +65,7 @@ import re
 import time
 import threading
 import traceback as _traceback
+import logging
 from typing import Any, List, Dict, Optional, Tuple, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
@@ -85,6 +86,8 @@ except Exception:
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 CONTROL_LABEL_STYLE = "font-size: 16px; font-weight: bold; color: #FFFFFF;"
+UNKNOWN_DRIVER_LABEL = "Unknown Driver"
+LOGGER = logging.getLogger(__name__)
 
 
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
@@ -111,7 +114,7 @@ def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
             if set(tw_ids) == set(starting_grid):
                 return tw_ids
     except Exception:
-        pass
+        LOGGER.debug("Could not canonicalize starting grid from track widget", exc_info=True)
     return starting_grid
 
 
@@ -700,8 +703,10 @@ class TrackWidget(QWidget):
             try:
                 self._grass_tile_mtime = int(os.path.getmtime(grass_path))
             except Exception:
+                LOGGER.debug("Could not read grass tile modification time", exc_info=True)
                 self._grass_tile_mtime = None
         except Exception:
+            LOGGER.debug("Failed to initialize grass tile cache", exc_info=True)
             self._grass_tile_pixmap = None
             self._grass_tile_mtime = None
 
@@ -713,6 +718,7 @@ class TrackWidget(QWidget):
             effective_fps = max(1, min(RENDER_FPS, 60))
             interval_ms = max(1, int(1000 / effective_fps))
         except Exception:
+            LOGGER.debug("Invalid render FPS configuration; falling back to 16ms interval", exc_info=True)
             interval_ms = 16
         self.animation_timer.setInterval(interval_ms)
 
@@ -728,7 +734,7 @@ class TrackWidget(QWidget):
             for pt in self.track_points:
                 pt.s = float(pt.s) * scale
         except Exception:
-            pass
+            LOGGER.debug("Failed to normalize track arc lengths", exc_info=True)
 
     def set_camera_mode(self, mode: str, follow_car_id: Optional[int] = None):
         """Set camera mode and target car.
@@ -1019,6 +1025,7 @@ class TrackWidget(QWidget):
                 return self._interpolate_circular(prev, target, t)
             return prev + (target - prev) * t
         except Exception:
+            LOGGER.debug("Interpolation failed for driver_id=%s", getattr(car, 'driver_id', None), exc_info=True)
             return car.s
 
     def _has_interpolation_window(self, car: Car) -> bool:
@@ -1165,7 +1172,7 @@ class TrackWidget(QWidget):
                     painter.drawTiledPixmap(int(-5000), int(-5000), int(10000), int(10000), ft_pix)
             painter.restore()
         except Exception:
-            pass
+            LOGGER.debug("Failed to draw world forest tile", exc_info=True)
 
     def _draw_world_inner_forest_band(self, painter) -> None:
         try:
@@ -1195,7 +1202,7 @@ class TrackWidget(QWidget):
                     painter.drawTiledPixmap(int(-2000), int(-2000), int(self.width() * 4), int(self.height() * 4), ft_pix)
             painter.restore()
         except Exception:
-            pass
+            LOGGER.debug("Failed to draw inner forest band", exc_info=True)
 
     def _draw_runoff_areas(self, painter):
         """Draw red asphalt runoff zones on outside of fast corners."""
@@ -1237,7 +1244,7 @@ class TrackWidget(QWidget):
                             int(next_pt.y - next_normal_y * mid_offset)
                         )
         except Exception:
-            pass
+            LOGGER.debug("Failed to draw runoff areas", exc_info=True)
 
     def _generate_infield_pixmap(self, bbox, w: int, h: int, seed: int) -> QPixmap:
         """Generate a procedural blended turf pixmap for the given bbox.
@@ -1269,6 +1276,7 @@ class TrackWidget(QWidget):
             p.end()
             return pix
         except Exception:
+            LOGGER.debug("Failed to generate infield pixmap; using fallback", exc_info=True)
             # Return a tiny fallback pixmap
             p = QPixmap(max(2, w), max(2, h))
             p.fill(QColor(34, 139, 34))
@@ -1320,8 +1328,7 @@ class TrackWidget(QWidget):
                 painter.fillRect(0, 0, w, h, occ_grad)
             except Exception:
                 painter.fillRect(0, 0, w, h, QColor(0, 0, 0, int(occ * 255)))
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _paint_infield_noise(self, painter: QPainter, rnd: random.Random, w: int, h: int, muted_base: QColor, palette: Dict[str, Any]) -> None:
         """Paint translucent ellipse noise layer for turf variation."""
@@ -1421,8 +1428,7 @@ class TrackWidget(QWidget):
                 painter.drawPath(path)
                 toggle = not toggle
                 x0 += stripe_w * 0.7
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_joker(self, painter):
         """Draw an alternate 'joker' route if provided by the track data."""
@@ -1441,8 +1447,7 @@ class TrackWidget(QWidget):
                 path.lineTo(pt.x, pt.y)
             painter.drawPath(path)
             painter.restore()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_pit_lane(self, painter):
         """Draw professional pit lane with boxes, entry/exit zones."""
@@ -1458,8 +1463,7 @@ class TrackWidget(QWidget):
             self._draw_pit_entry_chevrons(painter)
             self._draw_pit_exit_marker(painter)
 
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_pit_lane_offsets(self, points: List[TrackPoint]) -> Tuple[List[Tuple[float, float]], List[Tuple[float, float]]]:
         pit_inner_points: List[Tuple[float, float]] = []
@@ -1553,8 +1557,7 @@ class TrackWidget(QWidget):
             self._draw_main_straight_grandstands(painter)
             self._draw_corner_grandstands(painter)
 
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_main_straight_grandstands(self, painter) -> None:
         for gs_s in [320, 380, 440]:
@@ -1640,8 +1643,7 @@ class TrackWidget(QWidget):
             self._draw_garage_base_segments(painter)
             self._draw_garage_bays(painter)
 
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _draw_garage_base_segments(self, painter) -> None:
         painter.setBrush(QBrush(QColor(140, 140, 140)))
@@ -1880,8 +1882,7 @@ class TrackWidget(QWidget):
             self._ensure_infield_assets(key, bbox, w, h, seed, inner_infield_points)
             self._draw_infield_props_clipped(painter, bbox, h, inner_infield_points, key)
             self._draw_outer_forest_band(painter, outer_poly, inner_poly, bbox, w, h)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _resolve_track_surface_color(self) -> Tuple[int, int, int]:
         """Resolve track base color, adjusted by grip where available."""
@@ -2198,8 +2199,7 @@ class TrackWidget(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawEllipse(int(offset_x) - 14, int(offset_y) - 14, 28, 28)
             painter.restore()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
 
 class RaceWindow(QMainWindow):
@@ -2222,6 +2222,7 @@ class RaceWindow(QMainWindow):
             self.track = None
             self._initial_track_id = track_id
             self._initial_discipline = discipline or "SINGLE_SEATER"
+            self._race_total_laps = self._discipline_total_laps()
             self._championship_id = championship_id  # Championship this race belongs to
             self._race_id = race_id  # Current race ID in championship
             self.race_thread: Optional[threading.Thread] = None
@@ -2239,7 +2240,10 @@ class RaceWindow(QMainWindow):
             self.player_team_id: Optional[int] = None
             self.player_team_driver_ids: List[int] = []
             self.player_overrides: Dict[str, float] = {
-                'pace': 0.7, 'overtake': 0.5}  # pace: 0.5-1.0, overtake: 0.0-1.0
+                'pace': 0.7,
+                'overtake': 0.5,
+                'come_in': False,
+            }  # pace/overtake: 0.0-1.0, come_in: bool trigger for pit/joker routing
             self.tuning_preset: str = 'balanced'  # Simulation tuning preset
 
             # Player telemetry tracking
@@ -2301,23 +2305,19 @@ class RaceWindow(QMainWindow):
         """Best-effort clear minimum sizes to avoid min>max geometry conflicts."""
         try:
             self.setMinimumSize(0, 0)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         try:
             for w in self.findChildren(QWidget):
                 try:
                     w.setMinimumSize(0, 0)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _try_constrain_to_available_geometry(self, width: int, height: int) -> None:
         """Best-effort max-size constraint to screen working area."""
         try:
             self.setMaximumSize(width, height)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     # Auto-start logic removed: user must click Start Race manually
 
@@ -2393,7 +2393,7 @@ class RaceWindow(QMainWindow):
         right_panel.addWidget(self.info_label)
 
         # Player controls section
-        from PyQt6.QtWidgets import QSlider, QGroupBox
+        from PyQt6.QtWidgets import QSlider, QGroupBox, QCheckBox
         player_controls = QGroupBox("Your Controls")
         player_controls.setStyleSheet("""
             QGroupBox {
@@ -2458,6 +2458,24 @@ class RaceWindow(QMainWindow):
         overtake_hint.setStyleSheet("font-size: 10px;")
         overtake_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         player_layout.addWidget(overtake_hint)
+
+        player_layout.addSpacing(8)
+
+        self.come_in_label = QLabel("Come In Request")
+        self.come_in_label.setStyleSheet(CONTROL_LABEL_STYLE)
+        self.come_in_label.setMinimumHeight(22)
+        player_layout.addWidget(self.come_in_label)
+
+        self.come_in_checkbox = QCheckBox("Come in next lap")
+        self.come_in_checkbox.toggled.connect(self._on_come_in_toggled)
+        player_layout.addWidget(self.come_in_checkbox)
+
+        self.come_in_status_label = QLabel("")
+        self.come_in_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.come_in_status_label.setStyleSheet("font-size: 11px; color: #B9F2FF;")
+        player_layout.addWidget(self.come_in_status_label)
+
+        self._configure_come_in_ui()
 
         right_panel.addWidget(player_controls)
 
@@ -2739,8 +2757,7 @@ class RaceWindow(QMainWindow):
             if screen is not None:
                 screen_w = int(screen.availableGeometry().width())
                 return max(560, min(760, int(screen_w * 0.34)))
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         return 640
 
     def _load_data(self):
@@ -2795,7 +2812,7 @@ class RaceWindow(QMainWindow):
             print(f"Loaded {len(self.drivers)} drivers")
             if self.drivers:
                 print(f"First driver: id={self.drivers[0].id}, name={self.drivers[0].name}")
-            self._log_placeholder_driver_warning()
+            self._log_synthetic_driver_warning()
             self._prepare_driver_colours()
             self._init_driver_liveries_safe()
             return True
@@ -2806,16 +2823,16 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
             return False
 
-    def _log_placeholder_driver_warning(self) -> None:
-        """Log warning if placeholder names are present in active grid."""
-        placeholder_count = sum(
+    def _log_synthetic_driver_warning(self) -> None:
+        """Log warning if generated driver names are present in active grid."""
+        synthetic_count = sum(
             1 for d in self.drivers
             if re.match(r"^(Driver|Seed Driver)\\s+\\d+", str(getattr(d, 'name', '')).strip())
         )
-        if placeholder_count <= 0:
+        if synthetic_count <= 0:
             return
         print(
-            f"[DATA WARNING] {placeholder_count}/{len(self.drivers)} active drivers use placeholder names. "
+            f"[DATA WARNING] {synthetic_count}/{len(self.drivers)} active drivers use generated names. "
             "Run scripts/seed_career_mode.py for realistic Faker data."
         )
 
@@ -2944,6 +2961,53 @@ class RaceWindow(QMainWindow):
         discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
         return discipline == 'DRAG_ACCELERATION'
 
+    def _is_rallycross_discipline(self) -> bool:
+        """Return True when the active race discipline is sprint/rallycross."""
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        return discipline == 'SPRINT_RALLYCROSS'
+
+    def _discipline_total_laps(self) -> int:
+        """Return discipline-specific lap count for the current race mode."""
+        if self._is_rallycross_discipline():
+            return 6
+        discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
+        if discipline == 'ENDURANCE':
+            return 24
+        return 3
+
+    def _configure_come_in_ui(self) -> None:
+        """Configure generic come-in text based on active discipline."""
+        is_rallycross = self._is_rallycross_discipline()
+        is_endurance = str(getattr(self, '_initial_discipline', '') or '').upper() == 'ENDURANCE'
+        label = getattr(self, 'come_in_label', None)
+        checkbox = getattr(self, 'come_in_checkbox', None)
+        status = getattr(self, 'come_in_status_label', None)
+        if label is not None:
+            label.setText("Come In Request")
+        if checkbox is not None:
+            checkbox.setText("Take joker route next lap" if is_rallycross else "Pit next lap")
+            checkbox.setChecked(bool(self.player_overrides.get('come_in', False)))
+        if status is not None:
+            if is_rallycross:
+                status.setText("Rallycross: one joker lap is mandatory. Toggle when you want to serve it.")
+            elif is_endurance:
+                status.setText("Endurance: monitor pit window and use Come In for planned service.")
+            else:
+                status.setText("Toggle to request a pit entry on the next lap evaluation.")
+
+    def _on_come_in_toggled(self, checked: bool) -> None:
+        """Store generic come-in request used by pit/joker logic in the engine."""
+        self.player_overrides['come_in'] = bool(checked)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            if checked:
+                if self._is_rallycross_discipline():
+                    status.setText("Come in request armed: joker will be served at next lap crossing.")
+                else:
+                    status.setText("Come in request armed: pit entry will be taken at next lap evaluation.")
+            else:
+                status.setText("Come in request cleared.")
+
     def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
         """Build a point-to-point drag strip profile (straight strip)."""
         total_m = max(350, int(track_length_m))
@@ -2990,7 +3054,7 @@ class RaceWindow(QMainWindow):
             return None, None
 
     def _create_and_mount_track_widget(self, track_points: List[TrackPoint], track_length: float) -> bool:
-        """Create TrackWidget and replace loading placeholder in left panel."""
+        """Create TrackWidget and replace loading label in left panel."""
         try:
             self.track_widget = TrackWidget(
                 track_points,
@@ -3071,16 +3135,14 @@ class RaceWindow(QMainWindow):
                 return
             try:
                 tw.set_cars(cars)
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
             try:
                 self._starting_grid = [gridpos_map.get(pos) for pos in range(1, total_drivers + 1)]
             except Exception:
                 self._starting_grid = ordered_ids
             print("Detected reversed grid order; flipped to ascending start positions")
             self._recompute_grid_from_track_widget_positions()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _recompute_grid_from_track_widget_positions(self) -> None:
         """Derive starting grid from visual car placement to keep UI/engine aligned."""
@@ -3091,8 +3153,7 @@ class RaceWindow(QMainWindow):
             sorted_by_s = sorted(tw_cars, key=lambda c: getattr(c, 's', 0.0), reverse=True)
             self._starting_grid = [getattr(c, 'driver_id', None) for c in sorted_by_s]
             print(f"Computed starting grid from car positions (P1..PN): {self._starting_grid}")
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _create_cars_and_start_grid(self) -> bool:
         """Create race cars and initialize canonical starting grid."""
@@ -3332,7 +3393,7 @@ class RaceWindow(QMainWindow):
             heat_count = current_size // 2
             for heat_idx in range(1, heat_count + 1):
                 left_name, right_name = self._drag_heat_lane_labels(round_idx, heat_idx, entrants)
-                heat_item = QTreeWidgetItem([f"H{heat_idx}", f"{left_name} vs {right_name}", "TBD", "-"])
+                heat_item = QTreeWidgetItem([f"H{heat_idx}", f"{left_name} vs {right_name}", "Pending", "-"])
                 round_node.addChild(heat_item)
                 self._drag_heat_items[(round_idx, heat_idx)] = heat_item
             round_node.setExpanded(True)
@@ -3342,15 +3403,15 @@ class RaceWindow(QMainWindow):
     def _drag_heat_lane_labels(self, round_idx: int, heat_idx: int, entrants: List[Dict[str, Any]]) -> Tuple[str, str]:
         """Return left/right lane labels for a heat."""
         if round_idx != 1:
-            return "TBD", "TBD"
+            return "Pending", "Pending"
         li = (heat_idx - 1) * 2
         ri = li + 1
-        left_name = str(entrants[li].get('driver_name', 'TBD')) if li < len(entrants) else "TBD"
-        right_name = str(entrants[ri].get('driver_name', 'TBD')) if ri < len(entrants) else "TBD"
+        left_name = str(entrants[li].get('driver_name', UNKNOWN_DRIVER_LABEL)) if li < len(entrants) else "Pending"
+        right_name = str(entrants[ri].get('driver_name', UNKNOWN_DRIVER_LABEL)) if ri < len(entrants) else "Pending"
         return left_name, right_name
 
     def _apply_drag_heat_to_tree(self, event: Dict[str, Any]) -> None:
-        """Update one heat node and propagate winner placeholder to next round."""
+        """Update one heat node and propagate winner to the next round."""
         if not self._is_drag_discipline():
             return
         try:
@@ -3368,8 +3429,7 @@ class RaceWindow(QMainWindow):
             self._propagate_drag_winner_to_next_round(round_idx, heat_idx, winner_name)
             self._update_drag_time_metrics_from_event(event, left_name, right_name)
             self._refresh_drag_time_board()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _parse_drag_heat_index(self, event: Dict[str, Any]) -> Tuple[int, int]:
         """Extract round/heat indices from drag event payload."""
@@ -3379,9 +3439,9 @@ class RaceWindow(QMainWindow):
 
     def _drag_heat_names(self, event: Dict[str, Any]) -> Tuple[str, str, str]:
         """Extract lane and winner names from drag event payload."""
-        left_name = str(event.get('left_name', 'TBD'))
-        right_name = str(event.get('right_name', 'TBD'))
-        winner_name = str(event.get('winner_name', 'TBD'))
+        left_name = str(event.get('left_name', UNKNOWN_DRIVER_LABEL))
+        right_name = str(event.get('right_name', UNKNOWN_DRIVER_LABEL))
+        winner_name = str(event.get('winner_name', 'Pending'))
         return left_name, right_name, winner_name
 
     def _drag_heat_et_text(self, event: Dict[str, Any]) -> Tuple[str, str]:
@@ -3416,7 +3476,7 @@ class RaceWindow(QMainWindow):
             item.setBackground(col, QColor(255, 215, 0, 70))
 
     def _propagate_drag_winner_to_next_round(self, round_idx: int, heat_idx: int, winner_name: str) -> None:
-        """Push winner name into next-round matchup placeholder."""
+        """Push winner name into next-round matchup slots."""
         next_round = round_idx + 1
         next_heat = (heat_idx + 1) // 2
         next_item = self._drag_heat_items.get((next_round, next_heat))
@@ -3424,9 +3484,9 @@ class RaceWindow(QMainWindow):
             return
         prev_match = next_item.text(1)
         if (heat_idx % 2) == 1:
-            next_item.setText(1, f"{winner_name} vs TBD")
+            next_item.setText(1, f"{winner_name} vs Pending")
             return
-        left_slot = prev_match.split(" vs ")[0] if " vs " in prev_match else "TBD"
+        left_slot = prev_match.split(" vs ")[0] if " vs " in prev_match else "Pending"
         next_item.setText(1, f"{left_slot} vs {winner_name}")
 
     def _update_drag_time_metrics_from_event(self, event: Dict[str, Any], left_name: str, right_name: str) -> None:
@@ -3621,8 +3681,7 @@ class RaceWindow(QMainWindow):
         try:
             if hasattr(self, 'player_status_label'):
                 self.player_status_label.hide()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # Ensure player controls are enabled at race start (in case they were
         # disabled by a prior DNF)
@@ -3637,8 +3696,7 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(True)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(True)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # === CRITICAL FIX: Don't start animation yet! ===
         # Starting animation before first data arrives causes freeze
@@ -3669,8 +3727,7 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
             try:
                 self.emitter.event_signal.emit(error_msg)
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _run_simulation_with_callback(self) -> None:
         """Build context and execute simulation using thread event bridge."""
@@ -3701,8 +3758,7 @@ class RaceWindow(QMainWindow):
                 'results': results or [],
                 'collision_log': [],
             })
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_race_teams_map(self) -> Dict[int, Any]:
         """Resolve team objects for current race entrants."""
@@ -3723,12 +3779,13 @@ class RaceWindow(QMainWindow):
 
     def _build_race_context(self, event_callback: Any, track_pts: Any, teams: Dict[int, Any]) -> RaceContext:
         """Construct race context and populate adapter-specific conditions."""
+        race_laps = max(1, int(getattr(self, '_race_total_laps', 3) or 3))
         context = RaceContext(
             discipline=RacingDiscipline[self._initial_discipline],
             track=self.track,
             drivers=self.drivers,
             teams=teams,
-            total_laps=3,
+            total_laps=race_laps,
             event_callback=event_callback,
         )
         tc = context.track_conditions
@@ -3739,6 +3796,9 @@ class RaceWindow(QMainWindow):
         tc['realtime_speed'] = 5.0
         tc['stop_event'] = self.stop_event
         tc['tuning_preset'] = self.tuning_preset
+        tc['discipline'] = str(getattr(self, '_initial_discipline', 'SINGLE_SEATER') or 'SINGLE_SEATER')
+        tc['rallycross_joker_required'] = self._is_rallycross_discipline()
+        tc['total_laps'] = race_laps
         return context
 
     def _event_callback_from_race_thread(self, event: dict) -> None:
@@ -3754,7 +3814,7 @@ class RaceWindow(QMainWindow):
             if event_type == "race_finished":
                 self._handle_thread_race_finished_event(event)
                 return
-            if event_type in {"drag_bracket_seeded", "drag_heat_result"}:
+            if event_type in {"drag_bracket_seeded", "drag_heat_result", "joker_lap_served", "pit_entry", "pit_exit", "pit_window_open"}:
                 self.emitter.generic_event.emit(event)
                 return
         except Exception as e:
@@ -3881,8 +3941,7 @@ class RaceWindow(QMainWindow):
         try:
             if driver_id is not None:
                 self.emitter.event_signal.emit(f"mark_dnf|{driver_id}")
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _emit_player_dnf_if_controlled(self, driver_id: Any, lap: int, reason: str) -> None:
         """Emit player_dnf event for selected driver or teammate control group."""
@@ -3893,8 +3952,7 @@ class RaceWindow(QMainWindow):
                 controlled_ids.add(player_id)
             if driver_id in controlled_ids:
                 self.emitter.event_signal.emit(f"player_dnf|{driver_id}|{lap}|{reason}")
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _update_race_state_dnf_snapshot(self, driver_id: Any, driver_name: str, lap: int, event: dict) -> None:
         """Keep race-state DNF flag in sync for subsequent table rebuilds."""
@@ -3937,18 +3995,15 @@ class RaceWindow(QMainWindow):
                 print(f"ERROR: failed to emit race_finished: {ex}")
                 try:
                     _traceback.print_exc()
-                except Exception:
-                    pass
+                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
                 try:
                     self.emitter.race_finished.emit([])
-                except Exception:
-                    pass
+                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         except Exception as e:
             print(f"ERROR preparing results payload for emit: {e}")
             try:
                 _traceback.print_exc()
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _stop_race(self):
         """Stop the race simulation."""
@@ -4054,8 +4109,7 @@ class RaceWindow(QMainWindow):
             self._set_standings_item(row, 0, QTableWidgetItem("-"), driver_id)
             self._set_standings_item(row, 2, QTableWidgetItem("-"), driver_id)
             self._set_standings_item(row, 3, QTableWidgetItem("DNF"), driver_id)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _style_standings_name_cell(self, row: int, driver_id: int) -> None:
         """Apply player/highlight styling for standings name cell."""
@@ -4128,8 +4182,7 @@ class RaceWindow(QMainWindow):
         try:
             if hasattr(self, 'player_status_label'):
                 self.player_status_label.hide()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
         self._set_player_controls_enabled(True)
         if self.track_widget:
             self.track_widget.stop_animation()
@@ -4147,8 +4200,9 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(enabled)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(enabled)
-        except Exception:
-            pass
+            if hasattr(self, 'come_in_checkbox'):
+                self.come_in_checkbox.setEnabled(enabled)
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _sorted_results_by_position(self, results: list) -> list:
         """Return race results sorted by finishing position."""
@@ -4345,8 +4399,7 @@ class RaceWindow(QMainWindow):
             except Exception:
                 try:
                     start_pos[self._normalize_driver_id(did)] = int(float(gp))
-                except Exception:
-                    pass
+                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         return start_pos
 
@@ -4398,8 +4451,7 @@ class RaceWindow(QMainWindow):
             dlg_h = int(pref_h * 0.74)
             dlg.setMinimumSize(dlg_w, dlg_h)
             dlg.resize(dlg_w, dlg_h)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         dlg.setLayout(dlg_layout)
         dlg.setModal(True)
@@ -4608,8 +4660,7 @@ class RaceWindow(QMainWindow):
                         col = getattr(car, 'colour', None)
                         if isinstance(col, QColor):
                             return col
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         palette = [
             QColor(80, 170, 255),
@@ -4765,6 +4816,79 @@ class RaceWindow(QMainWindow):
             return
         if event_type == 'drag_heat_result':
             self._apply_drag_heat_to_tree(event)
+            return
+        if event_type == 'joker_lap_served':
+            self._handle_joker_lap_served_event(event)
+            return
+        if event_type == 'pit_entry':
+            self._handle_pit_entry_event(event)
+            return
+        if event_type == 'pit_exit':
+            self._handle_pit_exit_event(event)
+            return
+        if event_type == 'pit_window_open':
+            self._handle_pit_window_open_event(event)
+
+    def _handle_pit_entry_event(self, event: Dict[str, Any]) -> None:
+        """Clear player one-shot come-in request once pit entry is served."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        checkbox = getattr(self, 'come_in_checkbox', None)
+        if checkbox is not None:
+            checkbox.blockSignals(True)
+            checkbox.setChecked(False)
+            checkbox.blockSignals(False)
+        self.player_overrides['come_in'] = False
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText("Pit entry served. Come-in request reset.")
+
+    def _handle_pit_exit_event(self, event: Dict[str, Any]) -> None:
+        """Show completion status after player pit service exits."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        stops = int(event.get('pit_stops_completed', 0) or 0)
+        msg = f"Pit stop complete. Total stops: {stops}."
+        self.info_label.setText(msg)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText(msg)
+
+    def _handle_pit_window_open_event(self, event: Dict[str, Any]) -> None:
+        """Surface endurance pit-window reminder for player-controlled driver."""
+        driver_id = int(event.get('driver_id', 0) or 0)
+        if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
+            return
+        lap = int(event.get('lap', 0) or 0)
+        msg = f"Pit window is open (lap {lap}). Consider using Come In."
+        self.info_label.setText(msg)
+        status = getattr(self, 'come_in_status_label', None)
+        if status is not None:
+            status.setText(msg)
+
+    def _handle_joker_lap_served_event(self, event: Dict[str, Any]) -> None:
+        """Render rallycross joker-lap completion updates in the UI."""
+        if not self._is_rallycross_discipline():
+            return
+        driver_id = int(event.get('driver_id', 0) or 0)
+        served_lap = int(event.get('served_lap', 0) or 0)
+        penalty_s = float(event.get('penalty_s', 0.0) or 0.0)
+        forced = bool(event.get('forced', False))
+        if driver_id == int(getattr(self, 'player_driver_id', -1) or -1):
+            suffix = " (auto-served)" if forced else ""
+            msg = f"Joker completed on lap {served_lap}{suffix} (+{penalty_s:.2f}s)"
+            self.info_label.setText(msg)
+            status = getattr(self, 'come_in_status_label', None)
+            if status is not None:
+                status.setText(msg)
+            checkbox = getattr(self, 'come_in_checkbox', None)
+            if checkbox is not None:
+                checkbox.blockSignals(True)
+                checkbox.setChecked(False)
+                checkbox.blockSignals(False)
+            self.player_overrides['come_in'] = False
 
     def _handle_start_animation_event(self) -> None:
         """Start track animation when first simulation data is ready."""
@@ -4851,8 +4975,7 @@ class RaceWindow(QMainWindow):
         """Rebuild standings while keeping event handlers fail-safe."""
         try:
             self._rebuild_standings_table()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_mark_dnf_event(self, message: str) -> None:
         """Process generic DNF command emitted from simulation thread."""
@@ -4871,13 +4994,11 @@ class RaceWindow(QMainWindow):
                 if getattr(tw, 'camera_mode', None) == 'follow' and getattr(tw, 'follow_car_id', None) == did:
                     tw.set_camera_mode('full')
                     print(f"[CAMERA] Followed car {did} DNF'd — switching to full track view")
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
             self._mark_driver_dnf_in_state(did)
             self._refresh_standings_safe()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _controlled_driver_ids(self) -> set:
         """Return the set of drivers controlled by player team/selection."""
@@ -4913,8 +5034,7 @@ class RaceWindow(QMainWindow):
                 self.camera_follow_btn.setEnabled(False)
             if hasattr(self, 'push_gauge'):
                 self.push_gauge.setEnabled(False)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_player_dnf_event(self, message: str) -> None:
         """Process DNF updates for controlled cars and reflect UI state."""
@@ -4933,15 +5053,13 @@ class RaceWindow(QMainWindow):
                 if hasattr(self, 'player_status_label'):
                     self.player_status_label.setText("PRIMARY CAR RETIRED" if did == player_id else "TEAM CAR RETIRED")
                     self.player_status_label.show()
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
             self._mark_driver_dnf_in_state(did)
             if not self._has_active_controlled_driver(controlled_ids):
                 self._disable_player_controls()
             self._refresh_standings_safe()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _update_race_state_from_standings(
         self,
@@ -4996,8 +5114,7 @@ class RaceWindow(QMainWindow):
             except Exception:
                 total_distance = race_time
             hist.append((total_distance, race_position))
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _handle_standings_update_event(self, message: str) -> None:
         """Process live standings payload and refresh table."""
@@ -5022,8 +5139,7 @@ class RaceWindow(QMainWindow):
             )
             self._record_position_history(driver_id, lap, position_m, race_position, race_time)
             self._rebuild_standings_table()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _rebuild_standings_table(self):
         """Rebuild the standings table with live gaps and proper lapped classification."""
@@ -5218,7 +5334,7 @@ class RaceWindow(QMainWindow):
         """Set an item in the standings table but respect DNF state.
 
         If `driver_id` is provided and that driver is marked DNF in
-        `self._race_state`, this will write a stable DNF/placeholder
+        `self._race_state`, this will write a stable DNF/pending
         instead of allowing other code to overwrite the cell.
         """
         try:
@@ -5230,8 +5346,7 @@ class RaceWindow(QMainWindow):
             try:
                 # Best-effort fallback
                 self.standings_table.setItem(row, col, item)
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _is_dnf_driver(self, driver_id: Optional[int]) -> bool:
         """Return True when the target row belongs to a DNF driver."""
@@ -5241,7 +5356,7 @@ class RaceWindow(QMainWindow):
         return bool(entry.get('dnf', False))
 
     def _set_dnf_standings_item(self, row: int, col: int, item: QTableWidgetItem) -> None:
-        """Write DNF-safe placeholders and muted styling."""
+        """Write DNF-safe pending values and muted styling."""
         if col == 3:
             self.standings_table.setItem(row, col, QTableWidgetItem("DNF"))
         elif col in (0, 2):
@@ -5258,8 +5373,7 @@ class RaceWindow(QMainWindow):
                 return
             name_cell.setBackground(QColor(80, 80, 80))
             name_cell.setForeground(QColor(200, 200, 200))
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _resize_standings_height(self):
         """Resize standings table to its contents to avoid scrollbars."""
@@ -5273,8 +5387,7 @@ class RaceWindow(QMainWindow):
             total = header_h + row_heights + margins.top() + margins.bottom() + frame + 4
             self.standings_table.setMinimumHeight(total)
             self.standings_table.setMaximumHeight(total)
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _on_pace_changed(self, value):
         """Handle pace slider change - update label and colour gradient."""
@@ -5389,15 +5502,13 @@ class RaceWindow(QMainWindow):
         # Refresh team-controlled driver ids after driver assignment.
         try:
             self._rebuild_player_team_driver_ids()
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
         # Drag races are easiest to read in follow mode by default.
         try:
             if driver and self._is_drag_discipline() and getattr(self, 'track_widget', None) is not None:
                 self._set_camera_mode('follow')
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _build_cars_from_drivers(self) -> List[Car]:
         """Create grid cars from current entrant list using stable grid spacing."""
@@ -5630,10 +5741,8 @@ class RaceWindow(QMainWindow):
             for w in self.findChildren(QWidget):
                 try:
                     w.setMinimumSize(0, 0)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                except Exception:`r`n                    LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _apply_max_size_from_rect(self, rect) -> None:
         """Clamp window max size to the provided screen rectangle."""
@@ -5641,8 +5750,7 @@ class RaceWindow(QMainWindow):
             return
         try:
             self.setMaximumSize(rect.width(), rect.height())
-        except Exception:
-            pass
+        except Exception:`r`n            LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
 
     def _apply_windowed_mode(self) -> None:
         """Switch to standard resizable windowed mode."""
@@ -5657,8 +5765,7 @@ class RaceWindow(QMainWindow):
         if available is not None:
             try:
                 self.setMinimumSize(0, 0)
-            except Exception:
-                pass
+            except Exception:`r`n                LOGGER.debug("Suppressed non-fatal GUI exception", exc_info=True)
             self._reset_child_min_sizes()
             self._apply_max_size_from_rect(available)
             self.setGeometry(available)

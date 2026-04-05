@@ -27,7 +27,7 @@ API Endpoints:
 - GET /races/{id}/results: Get race classification details
 - POST /simulate/race: Run race simulation
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Version: 2.0.0 (Championship Management Update)
 Compatible with: Python 3.8+, FastAPI 0.100+
 """
@@ -216,7 +216,7 @@ def get_player_team(x_player_id: Annotated[Optional[str], Header(alias="X-Player
     UC-13: Read Player Team
 
     Get the authenticated player's owned team with edit permissions.
-    Uses X-Player-Id as a lightweight auth placeholder.
+    Uses X-Player-Id as a lightweight auth header.
 
     Returns:
         Player's team with editable flags

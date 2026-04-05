@@ -1,0 +1,329 @@
+# Mathematics and Function Sources
+
+This document summarises the mathematics used by the game and points to the exact function sources.
+
+## 1) Base Performance Model
+
+Source file:
+- `Momentum/Python/RaceLogic/base_race_engine.py`
+
+Source functions:
+- `BaseDisciplineEngine.calculate_base_performance`
+- `BaseDisciplineEngine._calculate_team_performance`
+- `BaseDisciplineEngine._calculate_weather_impact`
+- `BaseDisciplineEngine._calculate_temperature_impact`
+- `BaseDisciplineEngine._calculate_track_impact`
+
+### Equations
+
+Driver weighted score:
+
+`driver_score = sum(weight_i * (attribute_i / 100)) / sum(weight_i)`
+
+Composite performance:
+
+`performance = 0.5 * driver_score + 0.3 * team_performance + 0.1 * weather_impact + 0.1 * track_impact`
+
+Team performance:
+
+`tier_base in {tier1:0.9, tier2:0.7, tier3:0.5}`
+
+`budget_factor = min(team_budget / 200.0, 1.0) * 0.3`
+
+`team_performance = min(tier_base + budget_factor, 1.0)`
+
+Weather impact blend:
+
+`weather_impact = 0.5 * rain_adaptation + 0.25 * wind_impact + 0.25 * temp_impact`
+
+Temperature impact:
+
+`temp_impact = max(0.7, 1.0 - abs(temp_c - 20.0)/30.0)`
+
+Track impact:
+
+`difficulty_impact = 1.0 - (difficulty * (1.0 - adaptability) * 0.3)`
+
+`learning_impact = 0.9 + 0.1 * track_learning`
+
+`track_impact = difficulty_impact * learning_impact`
+
+## 2) Reliability and Incident Probability
+
+Source file:
+- `Momentum/Python/RaceLogic/base_race_engine.py`
+
+Source functions:
+- `BaseDisciplineEngine.check_mechanical_failure`
+- `BaseDisciplineEngine.check_race_incident`
+
+### Equations
+
+Mechanical failure probability per lap:
+
+`total_failure_rate = base_failure_rate + weather_stress + temp_stress`
+
+Where:
+- `base_failure_rate` depends on team tier
+- `weather_stress = precipitation * 0.0002`
+- `temp_stress = 0.0003` for extreme temperatures, else `0.0`
+
+Incident probability per lap:
+
+`total_incident_rate = base_incident_rate * consistency_factor * aggression_factor * weather_factor * traffic_factor`
+
+With:
+- `consistency_factor = 1.0 - (consistency / 200.0)`
+- `aggression_factor = 1.0 + (aggression / 500.0)`
+
+## 3) Real-Time Speed, Degradation, and Gaps
+
+Source file:
+- `Momentum/Python/RaceLogic/realtime_race_engine.py`
+
+Source functions:
+- `RealtimeRaceEngine._calculate_speed`
+- `RealtimeRaceEngine._apply_driver_degradation`
+- `RealtimeRaceEngine._apply_dirty_air_penalty`
+- `RealtimeRaceEngine._apply_collision_avoidance`
+- `RealtimeRaceEngine._update_gap_ahead_and_slipstream`
+- `RealtimeRaceEngine._update_gap_behind`
+- `RealtimeRaceEngine._advance_driver_position`
+
+### Equations
+
+Position update per frame (`dt = 1/30`):
+
+`position_next = position_now + speed_mps * dt`
+
+Speed construction (conceptual):
+
+`speed = reference_speed * push_multiplier * driver_modifier * team_modifier * corner_modifier`
+
+Then multiplied by:
+- tire penalty
+- fuel bonus
+- fatigue penalty
+- slipstream bonus (if active)
+- dirty-air penalty (if in corner and close)
+- collision-avoidance slowdown (if unsafe gap)
+- consistency noise
+
+Then clamped to `[MIN_SPEED_MPS, MAX_SPEED_MPS]`.
+
+Tire and fuel update per frame:
+
+`degradation = TIRE_DEGRADATION_RATE * push_intensity * surface_multiplier * compound_multiplier`
+
+`tire_condition = max(0.0, tire_condition - degradation)`
+
+`fuel_load = fuel_load - FUEL_BURN_RATE`
+
+## 4) Driver Mistake Risk (Realtime)
+
+Source file:
+- `Momentum/Python/RaceLogic/realtime_race_engine.py`
+
+Source function:
+- `RealtimeRaceEngine._check_driver_mistake`
+
+### Equation
+
+`mistake_prob = base_probability * push_risk * skill_factor * fatigue_multiplier * tire_multiplier`
+
+Where factors are built from consistency, vehicle control, fatigue, tires, and push level.
+
+## 5) Overtaking Success and Incident Risk
+
+Source file:
+- `Momentum/Python/RaceLogic/overtaking_system.py`
+
+Source functions:
+- `evaluate_overtaking_opportunity`
+- `calculate_defensive_action`
+- `calculate_incident_risk`
+- `resolve_overtake_outcome`
+
+### Key formulas
+
+Straight success probability:
+
+`success_prob = 0.25 + 0.45*attacker_score - 0.25*defender_score + 0.35*speed_factor`
+
+Then clipped to range.
+
+Braking and corner formulas use similar weighted forms with different constants and clipping.
+
+Incident risk during overtake:
+
+`incident_prob = base_risk * (1.5 - combined_skill) * (1.0 + aggression_factor * 0.5) * overlap_risk`
+
+Then clipped.
+
+Outcome resolution:
+- sample incident first
+- if no incident, sample success using `success_probability`
+
+## 6) Pit and Joker Strategy Math
+
+Source file:
+- `Momentum/Python/RaceLogic/realtime_race_engine.py`
+
+Source functions:
+- `RealtimeRaceEngine._should_start_pit_stop`
+- `RealtimeRaceEngine._emit_pit_window_open_if_needed`
+- `RealtimeRaceEngine._enter_pit_lane`
+- `RealtimeRaceEngine._maybe_apply_rallycross_joker`
+- `RealtimeRaceEngine._joker_penalty_seconds`
+
+### Logic math
+
+Pit decisions combine thresholds on:
+- laps remaining
+- tire condition
+- fuel load
+- mandatory-stop window
+- player `come_in` override
+
+Joker penalty:
+
+`penalty = RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter`
+
+`skill_adjust` is derived from consistency; final penalty is lower-bounded.
+
+## 7) Discipline Adapter Tuning
+
+Source files:
+- `Momentum/Python/RaceLogic/disciplines/single_seater/single_seater_discipline.py`
+- `Momentum/Python/RaceLogic/disciplines/drag_acceleration/drag_acceleration_discipline.py`
+- `Momentum/Python/RaceLogic/disciplines/endurance/endurance_discipline.py`
+- `Momentum/Python/RaceLogic/disciplines/sprint_rallycross/sprint_rallycross_discipline.py`
+- `Momentum/Python/RaceLogic/disciplines/urban_street/urban_street_discipline.py`
+- `Momentum/Python/RaceLogic/disciplines/production_touring/production_touring_discipline.py`
+
+Source functions:
+- per-file `get_attribute_weights`
+- per-file `calculate_lap_time`
+- per-file tuning helpers (for example `_apply_base_tuning`, `_apply_tuning`)
+
+These adapters define discipline-specific coefficients while delegating race execution to `RealtimeRaceEngine`.
+
+## 8) Championship Points Mathematics
+
+Source file:
+- `Momentum/Python/services/championship_service.py`
+
+Source functions:
+- `ChampionshipService.calculate_points`
+- `ChampionshipService.recalculate_standings`
+
+### Equations
+
+Points are table-driven by discipline:
+
+`base_points = points_table[position - 1]` if in range, else `0`
+
+Fastest-lap bonus:
+
+`total_points = base_points + fastest_lap_bonus`
+
+Standings are aggregated and ranked by tie-break logic after total accumulation.
+
+## 9) Hiring and Budget Mathematics
+
+Source file:
+- `Momentum/Python/services/hiring_service.py`
+
+Source functions:
+- `HiringService.estimate_driver_salary`
+- `HiringService.estimate_staff_salary`
+- `HiringService.calculate_team_salary_commitment`
+- `HiringService.check_salary_cap_compliance`
+- `HiringService.validate_contract_budget`
+
+### Equations
+
+Driver salary estimate:
+
+`base_salary = (cap * 0.05) * skill_factor`
+
+`final_salary = base_salary * achievement_bonus * experience_factor * age_factor`
+
+Then clamped to min and max bounds.
+
+Staff salary estimate (linear interpolation):
+
+`estimated = min_salary + (max_salary - min_salary) * (rating / 100.0)`
+
+Cap compliance:
+
+`projected_commitment = current_commitment + additional_salary`
+
+`is_compliant = projected_commitment <= cap`
+
+Budget checks include signing bonus and reserve buffer thresholds.
+
+## 10) Season Progression and Ageing Curves
+
+Source file:
+- `Momentum/Python/services/progression_service.py`
+
+Source functions:
+- `ProgressionService.calculate_age_factor`
+- `ProgressionService.calculate_skill_progression`
+- `ProgressionService.check_retirement_eligibility`
+
+### Core math
+
+Age factor is a piecewise function by age band (rookie growth, peak, decline).
+
+Season progression applies random multipliers to skill groups using:
+- age
+- learning rate
+- races completed
+- diminishing returns at high skill
+
+Retirement chance is age-band and performance dependent.
+
+## 11) Track Closure Solver Mathematics
+
+Source file:
+- `Momentum/Python/RaceLogic/closure_solver.py`
+
+Source functions:
+- `_integrate_clothoid_discrete`
+- `_integrate_clothoid_continuous`
+- `_simulate_primitives`
+- `_simulate_primitives_continuous`
+- `_build_param_list`
+- `solve_closure`
+- `apply_multipliers_to_instructions`
+
+### Problem definition
+
+Find multiplier vector `p` (one scale per straight/corner primitive) such that:
+- final `x` is near 0
+- final `y` is near 0
+- final heading `theta` is near `2*pi`
+
+Residual vector:
+
+`r(p) = [x(p), y(p), wrap(theta(p) - 2*pi)]`
+
+### Optimisation stages
+
+Stage 1 (continuous least squares):
+- Solve on continuous clothoid integration with bounds
+- Includes regularisation terms towards 1.0 multipliers
+
+Stage 2 (discrete refinement):
+- Minimise `||r(p)||_2` on discrete simulation
+- Uses Powell, then Nelder-Mead fallback
+
+Success criteria:
+- `pos_norm = ||[x, y]|| < 1e-2`
+- `ang_err = abs(wrap(theta - 2*pi)) < 0.6`
+
+### Angle wrapping
+
+`wrap(a)` normalises heading to `[-pi, pi]` for stable residual behaviour.

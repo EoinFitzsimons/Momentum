@@ -13,7 +13,7 @@ Key Features:
 - Performance-based salary estimation
 - Contract buyout calculations
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 import math

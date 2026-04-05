@@ -28,7 +28,7 @@ Usage Patterns:
     standings = db.get_championship_standings(championship_id, season)
 
 Compatibility: SQLite 3.7+, Python 3.8+
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 """
 
 import sqlite3
@@ -1379,18 +1379,26 @@ class DatabaseManager:
         Returns:
             Race-like object or None
         """
-        # For now, we don't have a races table, so we create a temporary race object
-        # The race_id contains the info we need (championship_id * 1000 +
-        # round)
+        # For now, we don't have a races table, so create a temporary race-like
+        # object using a best available track id from the tracks table.
 
         championship_id = race_id // 1000
         round_number = race_id % 1000
+        circuit_id = None
+
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT id FROM tracks ORDER BY id LIMIT 1").fetchone()
+            if row is not None:
+                circuit_id = int(row[0])
+
+        if circuit_id is None:
+            return None
 
         class TempRace:
             def __init__(self):
                 self.id = race_id
                 self.championship_id = championship_id
-                self.circuit_id = 1  # Placeholder
+                self.circuit_id = circuit_id
                 self.discipline = "SINGLE_SEATER"  # Will be set by caller
                 self.round_number = round_number
                 self.total_laps = 50

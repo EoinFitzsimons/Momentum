@@ -14,6 +14,10 @@ class _SignalStub:
     def connect(self, callback):
         self.connected.append(callback)
 
+    def emit(self, *args, **kwargs):
+        for callback in list(self.connected):
+            callback(*args, **kwargs)
+
 
 class _RaceWindowStub:
     def __init__(self, **kwargs):
@@ -48,6 +52,15 @@ class _RaceWindowStub:
 class _MainMenuStub:
     def __init__(self):
         self.shown = False
+
+    def show(self):
+        self.shown = True
+
+
+class _MainMenuWithSignalStub:
+    def __init__(self):
+        self.shown = False
+        self.start_race_signal = _SignalStub()
 
     def show(self):
         self.shown = True
@@ -112,3 +125,46 @@ def test_launcher_return_to_menu_closes_race_and_shows_menu():
 
     assert launcher.race_window is None
     assert launcher.main_menu.shown is True
+
+
+@pytest.mark.unit
+def test_launcher_menu_signal_can_automate_start_race_flow():
+    """Menu signal emission should drive launcher into race window flow."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    launcher_module = pytest.importorskip("GUI.launcher")
+
+    launcher = launcher_module.MomentumLauncher.__new__(launcher_module.MomentumLauncher)
+    launcher.race_window_class = _RaceWindowStub
+    launcher.main_menu_class = _MainMenuWithSignalStub
+    launcher.championship_window_class = object
+    launcher.main_menu = None
+    launcher.race_window = None
+    launcher.championship_window = None
+    launcher.race_config = {}
+    launcher.championship_config = {}
+
+    launcher.show_main_menu()
+    assert launcher.main_menu is not None
+    assert launcher.main_menu.shown is True
+
+    driver = type("DriverStub", (), {"name": "Player Auto"})()
+    team = type("TeamStub", (), {"id": 9})()
+    config = {
+        "driver": driver,
+        "team": team,
+        "track_id": 5,
+        "discipline": "SINGLE_SEATER",
+        "race_id": 12,
+        "display_mode": "windowed",
+        "mode": "single_race",
+    }
+
+    # Automates the same route as a user pressing "Start Race" in the menu.
+    launcher.main_menu.start_race_signal.emit(config)
+
+    assert launcher.race_window is not None
+    assert launcher.race_window.kwargs["track_id"] == 5
+    assert launcher.race_window.kwargs["discipline"] == "SINGLE_SEATER"
+    assert launcher.race_window.kwargs["race_id"] == 12
+    assert launcher.race_window.player_driver is driver
+    assert launcher.race_window.player_team is team
