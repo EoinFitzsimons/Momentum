@@ -1,6 +1,6 @@
 """Import circuits JSON into the project's SQLite tracks table.
 
-Default behavior is safe to run repeatedly: update existing rows or
+Default behaviour is safe to run repeatedly: update existing rows or
 insert new rows by matching `name` + `country`.
 
 Usage:

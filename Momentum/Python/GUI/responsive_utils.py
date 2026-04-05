@@ -109,7 +109,7 @@ def get_scaled_font_size(base_size: int, widget: QWidget) -> int:
 
 def calculate_track_zoom(canvas_width: int, canvas_height: int) -> float:
     """
-    Calculate appropriate zoom level for track visualization based on canvas size.
+    Calculate appropriate zoom level for track visualisation based on canvas size.
     
     Args:
         canvas_width: Width of the track canvas in pixels

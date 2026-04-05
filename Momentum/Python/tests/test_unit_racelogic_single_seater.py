@@ -1,4 +1,4 @@
-"""Unit tests for RaceLogic single-seater adapter behavior."""
+"""Unit tests for RaceLogic single-seater adapter behaviour."""
 
 from __future__ import annotations
 
