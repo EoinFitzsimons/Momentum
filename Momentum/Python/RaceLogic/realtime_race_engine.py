@@ -35,7 +35,7 @@ from RaceLogic.track_physics import TrackMap, TrackSection, RacingLine
 from RaceLogic.overtaking_system import (
     OvertakeAttempt, OvertakeAttemptType, DefensiveAction,
     evaluate_overtaking_opportunity, calculate_defensive_action,
-    resolve_overtake_outcome, set_logistic_slopes
+    resolve_overtake_outcome, DEFAULT_LOGISTIC_SLOPES
 )
 from services.driver_attributes import (
     get_safe_attribute,
@@ -169,6 +169,7 @@ class RealtimeRaceEngine:
         self.DRIVER_EFFECT_CURVE_SCALE = 2.6
         self.discipline_calibration: Dict[str, Dict[str, float]] = self._build_default_discipline_calibration()
         self._active_discipline_calibration: Dict[str, float] = {}
+        self._active_logistic_slopes: Dict[str, float] = dict(DEFAULT_LOGISTIC_SLOPES)
         self.START_GRID_SPACING_M = 20.0
 
         # Track-aware racing physics
@@ -367,13 +368,13 @@ class RealtimeRaceEngine:
         discipline = self._get_track_discipline(track)
         profile = self.discipline_calibration.get(discipline) or self.discipline_calibration.get('DEFAULT', {})
         self._active_discipline_calibration = dict(profile)
-        set_logistic_slopes({
+        self._active_logistic_slopes = {
             'straight': self._active_discipline_calibration.get('straight_slope', 3.8),
             'braking': self._active_discipline_calibration.get('braking_slope', 3.4),
             'outside': self._active_discipline_calibration.get('outside_slope', 3.2),
             'switch': self._active_discipline_calibration.get('switch_slope', 3.0),
             'risk': self._active_discipline_calibration.get('risk_slope', 3.4),
-        })
+        }
 
     def _hydrate_staff_effects_for_teams(self, teams: Dict[int, Team]) -> None:  # NOSONAR
         """Compute normalised per-team staff effects from DB roster and role config."""
@@ -1124,6 +1125,7 @@ class RealtimeRaceEngine:
             gap_m=gap_m,
             section=section_type,
             corner=corner,
+            logistic_slopes=self._active_logistic_slopes,
         )
 
         if not should_attempt:
@@ -1987,6 +1989,7 @@ class RealtimeRaceEngine:
             defender=defender_state.driver,
             overtake_attempt=attempt,
             rng=self.rng,
+            logistic_slopes=self._active_logistic_slopes,
         )
         return result
 
