@@ -2,22 +2,22 @@
 Momentum Motorsport Simulation - Database Manager
 
 Comprehensive database abstraction layer providing CRUD operations, data integrity
-enforcement, and query optimization for the Momentum simulation system. Manages
+enforcement, and query optimisation for the Momentum simulation system. Manages
 all persistent storage operations for drivers, teams, tracks, championships, and
 race results using SQLite as the backend database.
 
 Key Features:
 - Automatic schema initialisation and validation
 - Transaction management with rollback support
-- Optimized queries with proper indexing
+- Optimised queries with proper indexing
 - Data integrity through foreign key constraints
 - Connection pooling and resource management
 - Comprehensive error handling and logging
 
 Database Architecture:
 - SQLite file-based storage for portability
-- Normalized relational schema
-- Performance-optimized with strategic indexes
+- Normalised relational schema
+- Performance-optimised with strategic indexes
 - Multi-discipline support (Formula, Rally, Endurance, Street)
 - Historical data preservation for career tracking
 
@@ -123,7 +123,7 @@ class DatabaseManager:
         Schema Components:
             - Core entity tables (drivers, teams, tracks, championships, races)
             - Result tracking tables (race_results)
-            - Performance indexes for query optimization
+            - Performance indexes for query optimisation
             - Foreign key constraints for data integrity
             - Check constraints for data validation
 
@@ -613,7 +613,7 @@ class DatabaseManager:
         """Get all teams in a specific discipline"""
         with self.get_connection() as conn:
             # Accept flexible discipline identifiers: case-insensitive, spaces vs underscores
-            # Normalize input to lowercase with underscores and compare against a normalized
+            # Normalise input to lowercase with underscores and compare against a normalised
             # discipline column (replace spaces with underscores and lower-case
             # it).
             norm = discipline.lower().replace(' ', '_')
@@ -627,7 +627,7 @@ class DatabaseManager:
             self, discipline: str, tier: str) -> List[Team]:
         """Get all teams in a specific discipline and tier (for championship-specific races)"""
         with self.get_connection() as conn:
-            # Normalize discipline input (case-insensitive, spaces vs
+            # Normalise discipline input (case-insensitive, spaces vs
             # underscores)
             norm_discipline = discipline.lower().replace(' ', '_')
             rows = conn.execute(

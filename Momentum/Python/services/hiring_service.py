@@ -69,7 +69,7 @@ class HiringService:
     TEAM_NOT_FOUND_ERROR = "Team not found"
     
     def __init__(self, db_path: str = DATABASE_PATH):
-        """Initialize hiring service with database connection"""
+        """Initialise hiring service with database connection"""
         self.db = DatabaseManager(db_path)
     
     # ========================================================================

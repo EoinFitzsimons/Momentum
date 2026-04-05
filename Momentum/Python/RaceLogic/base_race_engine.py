@@ -230,12 +230,12 @@ class BaseDisciplineEngine(ABC):
                 attr_value = DRIVER_ATTRIBUTE_DEFAULT if 'DRIVER_ATTRIBUTE_DEFAULT' in globals() else 50.0
 
             if attr_value is not None:
-                # Normalize attribute (0-100 scale) to 0-1 scale
+                # Normalise attribute (0-100 scale) to 0-1 scale
                 normalized_value = float(attr_value) / 100.0
                 driver_score += normalized_value * weight
                 total_weight += weight
 
-        # Normalize driver score to 0-1 scale
+        # Normalise driver score to 0-1 scale
         if total_weight > 0:
             driver_score /= total_weight
         else:
