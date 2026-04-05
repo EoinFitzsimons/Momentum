@@ -1368,39 +1368,15 @@ class DatabaseManager:
 
     def get_race_by_id(self, race_id: int) -> Optional[Any]:
         """
-        Get race by ID
+        Get race by ID.
 
-        For now, returns a simple object with race attributes.
-        In future, this would query a races table.
+        Compatibility alias for get_race so older callers can still resolve
+        races through the legacy helper name.
 
         Args:
             race_id: Race ID
 
         Returns:
-            Race-like object or None
+            Race object or None
         """
-        # For now, we don't have a races table, so create a temporary race-like
-        # object using a best available track id from the tracks table.
-
-        championship_id = race_id // 1000
-        round_number = race_id % 1000
-        circuit_id = None
-
-        with self.get_connection() as conn:
-            row = conn.execute("SELECT id FROM tracks ORDER BY id LIMIT 1").fetchone()
-            if row is not None:
-                circuit_id = int(row[0])
-
-        if circuit_id is None:
-            return None
-
-        class TempRace:
-            def __init__(self):
-                self.id = race_id
-                self.championship_id = championship_id
-                self.circuit_id = circuit_id
-                self.discipline = "SINGLE_SEATER"  # Will be set by caller
-                self.round_number = round_number
-                self.total_laps = 50
-
-        return TempRace()
+        return self.get_race(race_id)

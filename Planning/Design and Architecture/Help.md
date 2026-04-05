@@ -1,10 +1,6 @@
-## [1.1
+## Design and Architecture
 
-Design and Architecture]()
-
-### [1.1.1
-
-Current]()
+### Current
 
 Momentum
 is built on Python 3.13 and uses PyQt6 for the GUI. The architecture consists
