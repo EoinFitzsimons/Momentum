@@ -17,7 +17,7 @@ Performance Model:
 - Top speed (trap speed): 200-330+ km/h depending on vehicle class
 - Points system: 8 positions (20,17,14,11,8,5,2,1) per race
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: January 2026
 """
 
@@ -27,6 +27,8 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
 from database.models import Driver, Team, RaceResult
+
+UNKNOWN_DRIVER_LABEL = "Unknown Driver"
 
 
 @dataclass
@@ -433,17 +435,17 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             'round_index': int(round_idx),
             'heat_index': int(heat_idx),
             'left_id': int(getattr(left_driver, 'id', 0) or 0),
-            'left_name': str(getattr(left_driver, 'name', 'TBD')),
+            'left_name': str(getattr(left_driver, 'name', UNKNOWN_DRIVER_LABEL)),
             'left_time_s': left_result.get('time_seconds'),
             'left_reaction_ms': left_result.get('reaction_time_ms'),
             'left_trap_kmh': left_result.get('trap_speed_kmh'),
             'right_id': int(getattr(right_driver, 'id', 0) or 0),
-            'right_name': str(getattr(right_driver, 'name', 'TBD')),
+            'right_name': str(getattr(right_driver, 'name', UNKNOWN_DRIVER_LABEL)),
             'right_time_s': right_result.get('time_seconds'),
             'right_reaction_ms': right_result.get('reaction_time_ms'),
             'right_trap_kmh': right_result.get('trap_speed_kmh'),
             'winner_id': int(getattr(winner_driver, 'id', 0) or 0),
-            'winner_name': str(getattr(winner_driver, 'name', 'TBD')),
+            'winner_name': str(getattr(winner_driver, 'name', UNKNOWN_DRIVER_LABEL)),
             'race_time': float(race_time),
         })
 
@@ -986,6 +988,9 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         Returns elapsed time from a single run.
         """
-        # Not applicable for drag racing (single run format)
-        # Return a placeholder value
-        return 10.0  # 10 seconds placeholder
+        # Drag does not use lap loops; return a representative single-run elapsed time.
+        run = self._simulate_single_run(driver, team, context)
+        elapsed = run.get('time_seconds')
+        if isinstance(elapsed, (int, float)) and elapsed != float('inf'):
+            return float(elapsed)
+        return float('inf')

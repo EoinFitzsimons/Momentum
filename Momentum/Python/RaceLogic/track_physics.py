@@ -8,7 +8,7 @@ This module implements a sophisticated racing simulation that uses:
 4. All 50+ driver attributes properly weighted
 5. Real-time spatial combat (side-by-side, slipstream, divebombs)
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: December 2025
 """
 

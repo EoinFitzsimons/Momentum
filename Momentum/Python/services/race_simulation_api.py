@@ -4,7 +4,7 @@ Race Simulation API - Real-time agent-based racing interface
 Public API for real-time racing simulation where drivers are autonomous AI agents
 making live decisions at 30 FPS based on race conditions and their attributes.
 
-Authors: Final Year Project - Computer Science
+Authors: Eoin Fitzsimons
 Date: December 2025
 """
 
@@ -14,6 +14,10 @@ from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
 import importlib
 import inspect
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) -> Optional[BaseDisciplineEngine]:
@@ -34,6 +38,7 @@ def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) ->
     try:
         mod = importlib.import_module(module_path)
     except Exception:
+        LOGGER.debug("Could not import discipline module '%s'", module_path, exc_info=True)
         return None
 
     # Find first concrete subclass of BaseDisciplineEngine
@@ -42,6 +47,7 @@ def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) ->
             if issubclass(cls, BaseDisciplineEngine) and cls is not BaseDisciplineEngine:
                 return cls(seed=seed if seed is not None else 0)
         except Exception:
+            LOGGER.debug("Skipping candidate discipline engine class %s", getattr(cls, '__name__', repr(cls)), exc_info=True)
             continue
 
     return None
@@ -54,7 +60,7 @@ def _setup_context_teams(context: RaceContext) -> None:
         for d in getattr(context, 'drivers', []) or []:
             ctx_teams[d.current_team_id] = Team(
                 id=d.current_team_id,
-                name=f"Team {d.current_team_id}",
+                name=f"Fallback Entry {d.current_team_id}",
                 nationality="USA",
                 discipline="formula",
                 tier="tier2",
@@ -109,16 +115,17 @@ def _populate_team_data_from_db(teams_dict: Dict[int, Team], drivers: Optional[L
     return teams_dict
 
 
-def _create_placeholder_teams(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]]) -> Dict[int, Team]:
-    """Create placeholder teams for any drivers without team data"""
+def _create_fallback_teams(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]], verbose: bool = False) -> Dict[int, Team]:
+    """Create fallback teams for drivers missing resolvable team data."""
     if not drivers:
         return teams_dict
-    
+
+    created = 0
     for driver in drivers:
         if driver.current_team_id not in teams_dict:
             teams_dict[driver.current_team_id] = Team(
                 id=driver.current_team_id,
-                name=f"Team {driver.current_team_id}",
+                name=f"Fallback Entry {driver.current_team_id}",
                 nationality="USA",
                 discipline="formula",
                 tier="tier2",
@@ -126,7 +133,11 @@ def _create_placeholder_teams(teams_dict: Dict[int, Team], drivers: Optional[Lis
                 founded_year=2020,
                 team_principal="Unknown"
             )
-    
+            created += 1
+
+    if verbose and created > 0:
+        print(f"Warning: created {created} fallback team entries for unresolved team IDs")
+
     return teams_dict
 
 
@@ -170,7 +181,7 @@ def _extract_time_from_result(result: dict) -> Optional[float]:
         if avg and laps:
             return float(avg) * float(laps)
     except Exception:
-        pass
+        LOGGER.debug("Could not derive total time from lap values avg=%r laps=%r", avg, laps, exc_info=True)
     
     return None
 
@@ -200,6 +211,7 @@ def _convert_result_to_race_result(result: dict, race_id: int) -> RaceResult:
     try:
         rr.status = result.get('status') or ('DNF' if result.get('dnf_reason') else 'FINISHED')
     except Exception:
+        LOGGER.debug("Could not derive race result status; defaulting to FINISHED", exc_info=True)
         rr.status = 'FINISHED'
     
     return rr
@@ -234,7 +246,7 @@ def _persist_race_results(db: Optional[Any], race_id: int, results_list: List[di
         save_fn = getattr(db, 'save_race_results')
         save_fn(race_id, results_list)
     except Exception:
-        pass  # Silent fail on persistence errors
+        LOGGER.warning("Failed to persist race results for race_id=%s", race_id, exc_info=True)
 
 
 def simulate_race(
@@ -266,7 +278,7 @@ def simulate_race(
         try:
             _setup_context_teams(context)
         except Exception:
-            pass  # Best-effort; continue on error
+            LOGGER.warning("Failed to prepare context teams; continuing with fallback flow", exc_info=True)
         
         # Try discipline-specific adapter first
         adapter = _load_discipline_engine(context, seed=seed)
@@ -281,8 +293,8 @@ def simulate_race(
     # Fetch team data from database if provided
     teams_dict = _populate_team_data_from_db(teams_dict, drivers, db, verbose)
     
-    # Create placeholder teams if needed
-    teams_dict = _create_placeholder_teams(teams_dict, drivers)
+    # Create fallback teams if needed
+    teams_dict = _create_fallback_teams(teams_dict, drivers, verbose)
     
     # Calculate lap count
     laps = _calculate_race_laps(track, laps)

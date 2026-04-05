@@ -10,6 +10,7 @@ import dataclasses
 from typing import List, Optional, Any
 import os
 import sys
+import logging
 
 # Ensure repository root is on sys.path so imports like `database.models`
 # resolve when running tests from `Momentum/Python`.
@@ -23,6 +24,9 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from database.models import Driver as DBDriver, Track as DBTrack, SCHEMA_SQL
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class PersistenceSQLite:
@@ -61,7 +65,7 @@ class PersistenceSQLite:
                 cur.executescript(SCHEMA_SQL)
                 self.conn.commit()
         except Exception:
-            pass
+            LOGGER.warning("Failed to verify/recreate drivers table schema", exc_info=True)
 
     def _ensure_time_seconds_column(self, cur) -> None:
         """Ensure race_results has time_seconds column."""
@@ -72,7 +76,7 @@ class PersistenceSQLite:
                 cur.execute("ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;")
                 self.conn.commit()
         except Exception:
-            pass
+            LOGGER.warning("Failed to ensure race_results.time_seconds column", exc_info=True)
 
     def _ensure_race_result_columns(self, cur) -> None:
         """Ensure race_results contains the expanded set of columns.
@@ -102,9 +106,9 @@ class PersistenceSQLite:
                         cur.execute(sql)
                         self.conn.commit()
                     except Exception:
-                        pass
+                        LOGGER.debug("Could not add race_results column '%s'", col, exc_info=True)
         except Exception:
-            pass
+            LOGGER.warning("Failed to ensure expanded race_results columns", exc_info=True)
 
     def ensure_schema(self) -> None:
         cur = self.conn.cursor()
@@ -119,7 +123,7 @@ class PersistenceSQLite:
                     cur.executescript(SCHEMA_SQL)
                     self.conn.commit()
                 except Exception:
-                    pass
+                    LOGGER.warning("Automatic schema migration for current_team_id failed", exc_info=True)
 
         self._verify_and_recreate_drivers_table(cur)
         self._ensure_time_seconds_column(cur)
@@ -131,6 +135,7 @@ class PersistenceSQLite:
         try:
             existing = cur.fetchone()[0]
         except Exception:
+            LOGGER.debug("Could not read existing driver count; treating as empty", exc_info=True)
             existing = 0
         if existing > 0 and not force:
             return
@@ -239,7 +244,7 @@ class PersistenceSQLite:
                 try:
                     return float(t)
                 except Exception:
-                    pass
+                    LOGGER.debug("Ignoring non-numeric direct total-time field '%s': %r", name, t, exc_info=True)
         return None
 
     def _safe_float(self, value) -> Optional[float]:
