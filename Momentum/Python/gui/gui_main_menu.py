@@ -264,8 +264,8 @@ class MainMenuWindow(QMainWindow):
 
             /* Buttons */
             QPushButton { border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: 10px; font-weight: 700; }
-            QPushButton.primary { background-color: #B9F2FF; color: #353839; }
-            QPushButton.secondary { background-color: #DD2D4A; color: #FFFFFF; }
+            QPushButton[primary="true"] { background-color: #B9F2FF; color: #353839; }
+            QPushButton[secondary="true"] { background-color: #DD2D4A; color: #FFFFFF; }
             QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
 
             /* ComboBox */
