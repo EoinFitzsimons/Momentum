@@ -91,6 +91,18 @@ SUPPRESSED_GUI_EXCEPTION_MSG = "Suppressed non-fatal GUI exception"
 LOGGER = logging.getLogger(__name__)
 
 
+def _normalize_tier(value: Any) -> str:
+    """Normalize team/championship tier labels to canonical values."""
+    raw = str(value or "").strip().upper()
+    if raw in {"TOP_TIER", "TIER1", "TIER_1", "1"}:
+        return "TIER_1"
+    if raw in {"TIER2", "TIER_2", "2"}:
+        return "TIER_2"
+    if raw in {"TIER3", "TIER_3", "3"}:
+        return "TIER_3"
+    return "TIER_2"
+
+
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
     """
     Return a canonical starting grid list where index 0 == start pos 1.
@@ -150,6 +162,12 @@ class Car:
     prev_update_time: float = 0.0
     target_update_time: float = 0.0
     active: bool = True
+    in_pit_lane: bool = False
+    pit_time_remaining_s: float = 0.0
+    pit_total_time_s: float = 0.0
+    tyre_compound: str = "medium"
+    team_id: int = 0
+    pit_box_index: int = 0
 
 
 class EventEmitter(QObject):
@@ -637,6 +655,8 @@ class CircuitGenerator:
 class TrackWidget(QWidget):
     """Widget displaying the racing circuit and cars."""
 
+    TRACK_HALF_WIDTH = 14.0
+
     def __init__(self, track_points: List[TrackPoint], track_length: float,
                  appearance_manager: VehicleAppearanceManager,
                  track_surface: str = "asphalt", surface_grip: Optional[float] = None,
@@ -815,6 +835,101 @@ class TrackWidget(QWidget):
 
         return TrackPoint(interp_s, x, y, theta, curvature)
 
+    def _point_at_s_on_route(self, route_points: List[TrackPoint], route_length: float, s: float, closed: bool = False) -> Optional[TrackPoint]:
+        """Return interpolated point on an arbitrary route polyline."""
+        if not route_points or route_length <= 0:
+            return None
+
+        target = self._resolve_route_target(route_length, s, closed)
+        pts = route_points
+        left, right = 0, len(pts) - 1
+        while left < right:
+            mid = (left + right) // 2
+            if pts[mid].s < target:
+                left = mid + 1
+            else:
+                right = mid
+
+        idx = max(0, min(left, len(pts) - 1))
+        next_pt = pts[idx]
+        prev_idx = self._resolve_route_prev_index(idx, len(pts), closed)
+        prev_pt = pts[prev_idx]
+
+        prev_s = float(prev_pt.s)
+        next_s = float(next_pt.s)
+        if closed and next_s <= prev_s:
+            next_s += float(route_length)
+        adj_target = float(target)
+        if closed and adj_target < prev_s:
+            adj_target += float(route_length)
+
+        span = next_s - prev_s
+        t = 0.0 if span == 0 else max(0.0, min(1.0, (adj_target - prev_s) / span))
+
+        x = prev_pt.x + (next_pt.x - prev_pt.x) * t
+        y = prev_pt.y + (next_pt.y - prev_pt.y) * t
+        a0 = prev_pt.theta
+        a1 = next_pt.theta
+        diff = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        theta = a0 + diff * t
+        curvature = prev_pt.curvature + (next_pt.curvature - prev_pt.curvature) * t
+        interp_s = (prev_s + span * t) % float(route_length) if closed else (prev_s + span * t)
+        return TrackPoint(interp_s, x, y, theta, curvature)
+
+    def _resolve_route_target(self, route_length: float, s: float, closed: bool) -> float:
+        """Normalize requested route position for open/closed route types."""
+        if closed:
+            return float(s) % float(route_length)
+        return max(0.0, min(float(s), float(route_length)))
+
+    def _resolve_route_prev_index(self, idx: int, length: int, closed: bool) -> int:
+        """Return previous sample index respecting route closure type."""
+        if idx > 0:
+            return idx - 1
+        if closed:
+            return max(0, length - 1)
+        return 0
+
+    def _route_length(self, points: Optional[List[TrackPoint]]) -> float:
+        """Resolve route length from polyline metadata, falling back to track length."""
+        if points and len(points) > 1:
+            try:
+                length = float(points[-1].s)
+                if length > 0:
+                    return length
+            except Exception:
+                LOGGER.debug("Failed to read route length; using main track length", exc_info=True)
+        return float(self.track_length)
+
+    def _pit_box_s_for_car(self, car: Car, route_length: float) -> float:
+        """Return assigned pit box arc-length for a car."""
+        base = 20.0
+        spacing = 20.0
+        box_s = base + float(int(car.pit_box_index % 10) * spacing)
+        return max(base, min(box_s, max(base, route_length - 20.0)))
+
+    def _resolve_pit_route_s(self, car: Car, route_length: float) -> float:
+        """Map pit-stop timing to smooth pit-route progress with a garage hold window."""
+        box_s = self._pit_box_s_for_car(car, route_length)
+        remaining = float(getattr(car, 'pit_time_remaining_s', 0.0) or 0.0)
+        total = float(getattr(car, 'pit_total_time_s', 0.0) or 0.0)
+        if total <= 0.0:
+            return box_s
+
+        progress = max(0.0, min(1.0, 1.0 - (remaining / total)))
+        entry_target = min(route_length * 0.18, max(8.0, box_s * 0.55))
+        exit_target = max(box_s + 8.0, route_length * 0.86)
+
+        # 0.00-0.30: approach box, 0.30-0.70: stationary service, 0.70-1.00: exit.
+        if progress < 0.30:
+            t = progress / 0.30
+            return entry_target + (box_s - entry_target) * t
+        if progress < 0.70:
+            return box_s
+
+        t = (progress - 0.70) / 0.30
+        return box_s + (exit_target - box_s) * t
+
     def set_cars(self, cars: List[Car]):
         """Update car list."""
         self.cars = cars
@@ -878,7 +993,11 @@ class TrackWidget(QWidget):
                 break
 
     def update_car_realtime(self, driver_id: int,
-                            position_m: float, lap: int, velocity_mps: float, running: bool = True):
+                            position_m: float, lap: int, velocity_mps: float,
+                            running: bool = True, in_pit_lane: bool = False,
+                            pit_time_remaining_s: float = 0.0,
+                            pit_total_time_s: float = 0.0,
+                            tyre_compound: str = "medium"):
         """
         *** CRITICAL FUNCTION: Real-time car position updates from race engine ***
 
@@ -923,7 +1042,15 @@ class TrackWidget(QWidget):
             return
 
         self._apply_realtime_position(car, position_m)
-        self._update_realtime_car_state(car, lap, velocity_mps)
+        self._update_realtime_car_state(
+            car,
+            lap,
+            velocity_mps,
+            in_pit_lane,
+            pit_time_remaining_s,
+            pit_total_time_s,
+            tyre_compound,
+        )
         self._record_realtime_update(driver_id, car, lap)
 
         # Trigger repaint
@@ -988,10 +1115,18 @@ class TrackWidget(QWidget):
             movement -= self.track_length
         return movement
 
-    def _update_realtime_car_state(self, car: Car, lap: int, velocity_mps: float) -> None:
+    def _update_realtime_car_state(self, car: Car, lap: int, velocity_mps: float,
+                                   in_pit_lane: bool = False, pit_time_remaining_s: float = 0.0,
+                                   pit_total_time_s: float = 0.0, tyre_compound: str = "medium") -> None:
         """Update non-positional realtime fields from the race engine."""
         car.lap = max(1, int(lap) + 1)
         car.velocity_mps = velocity_mps
+        car.in_pit_lane = bool(in_pit_lane)
+        car.pit_time_remaining_s = max(0.0, float(pit_time_remaining_s or 0.0))
+        if float(pit_total_time_s or 0.0) > 0.0:
+            car.pit_total_time_s = float(pit_total_time_s)
+        if tyre_compound:
+            car.tyre_compound = str(tyre_compound)
 
     def _record_realtime_update(self, driver_id: int, car: Car, lap: int) -> None:
         """Track update frequency for coarse diagnostics without flooding logs."""
@@ -1442,12 +1577,32 @@ class TrackWidget(QWidget):
             if not pts:
                 return
             painter.save()
-            pen = QPen(QColor(255, 140, 0), 3, Qt.PenStyle.DashLine)
-            painter.setPen(pen)
+
+            # Brown dirt-style surface for joker route.
+            joker_inner_points: List[Tuple[float, float]] = []
+            joker_outer_points: List[Tuple[float, float]] = []
+            for pt in pts:
+                normal_x = -math.sin(pt.theta)
+                normal_y = math.cos(pt.theta)
+                joker_inner_points.append((pt.x + normal_x * 6, pt.y + normal_y * 6))
+                joker_outer_points.append((pt.x + normal_x * 14, pt.y + normal_y * 14))
+
+            polygon = QPolygonF()
+            for x, y in joker_inner_points:
+                polygon.append(QPointF(x, y))
+            for x, y in reversed(joker_outer_points):
+                polygon.append(QPointF(x, y))
+
+            painter.setBrush(QBrush(QColor(126, 92, 58)))
+            painter.setPen(QPen(QColor(160, 118, 76), 1))
+            painter.drawPolygon(polygon)
+
+            # Subtle dashed center marking so route reads as intentional lane.
             path = QPainterPath()
             path.moveTo(pts[0].x, pts[0].y)
             for pt in pts[1:]:
                 path.lineTo(pt.x, pt.y)
+            painter.setPen(QPen(QColor(215, 180, 140), 2, Qt.PenStyle.DashLine))
             painter.drawPath(path)
             painter.restore()
         except Exception:
@@ -1461,6 +1616,7 @@ class TrackWidget(QWidget):
             if not points:
                 return
             pit_inner_points, pit_outer_points = self._build_pit_lane_offsets(points)
+            self._draw_pit_connectors(painter, points)
             self._draw_pit_lane_polygon(painter, pit_inner_points, pit_outer_points)
             self._draw_pit_wall(painter, pit_inner_points)
             self._draw_pit_boxes(painter)
@@ -1476,9 +1632,17 @@ class TrackWidget(QWidget):
         for pt in points:
             normal_x = -math.sin(pt.theta)
             normal_y = math.cos(pt.theta)
-            pit_inner_points.append((pt.x + normal_x * 22, pt.y + normal_y * 22))
-            pit_outer_points.append((pt.x + normal_x * 40, pt.y + normal_y * 40))
+            pit_inner_points.append((pt.x - normal_x * self.TRACK_HALF_WIDTH, pt.y - normal_y * self.TRACK_HALF_WIDTH))
+            pit_outer_points.append((pt.x + normal_x * self.TRACK_HALF_WIDTH, pt.y + normal_y * self.TRACK_HALF_WIDTH))
         return pit_inner_points, pit_outer_points
+
+    def _find_route_point_near_s(self, points: List[TrackPoint], s_value: float, tolerance: float) -> Optional[TrackPoint]:
+        if not points:
+            return None
+        for pt in points:
+            if abs(float(pt.s) - float(s_value)) < tolerance:
+                return pt
+        return points[min(len(points) - 1, max(0, int(len(points) * 0.5)))]
 
     def _draw_pit_lane_polygon(self, painter, pit_inner_points: List[Tuple[float, float]], pit_outer_points: List[Tuple[float, float]]) -> None:
         polygon = QPolygonF()
@@ -1486,12 +1650,49 @@ class TrackWidget(QWidget):
             polygon.append(QPointF(x, y))
         for x, y in reversed(pit_outer_points):
             polygon.append(QPointF(x, y))
-        painter.setBrush(QBrush(QColor(110, 110, 110)))
+        # Distinctly darker asphalt than the main racing surface.
+        painter.setBrush(QBrush(QColor(72, 72, 74)))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawPolygon(polygon)
 
+    def _nearest_track_point(self, x: float, y: float) -> Optional[TrackPoint]:
+        if not self.track_points:
+            return None
+        best = None
+        best_d = float('inf')
+        for pt in self.track_points:
+            d = (pt.x - x) * (pt.x - x) + (pt.y - y) * (pt.y - y)
+            if d < best_d:
+                best_d = d
+                best = pt
+        return best
+
+    def _draw_pit_connectors(self, painter, points: List[TrackPoint]) -> None:
+        """Draw entry/exit connector roads between the main circuit and pit lane."""
+        if not points:
+            return
+        lane_half = self.TRACK_HALF_WIDTH
+        for pit_pt in (points[0], points[-1]):
+            main_pt = self._nearest_track_point(pit_pt.x, pit_pt.y)
+            if main_pt is None:
+                continue
+
+            normal_x = -math.sin(pit_pt.theta)
+            normal_y = math.cos(pit_pt.theta)
+            p1 = QPointF(main_pt.x - normal_x * lane_half, main_pt.y - normal_y * lane_half)
+            p2 = QPointF(main_pt.x + normal_x * lane_half, main_pt.y + normal_y * lane_half)
+            p3 = QPointF(pit_pt.x + normal_x * lane_half, pit_pt.y + normal_y * lane_half)
+            p4 = QPointF(pit_pt.x - normal_x * lane_half, pit_pt.y - normal_y * lane_half)
+
+            connector = QPolygonF([p1, p2, p3, p4])
+            painter.save()
+            painter.setBrush(QBrush(QColor(68, 68, 70)))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPolygon(connector)
+            painter.restore()
+
     def _draw_pit_wall(self, painter, pit_inner_points: List[Tuple[float, float]]) -> None:
-        painter.setPen(QPen(QColor(80, 80, 80), 2))
+        painter.setPen(QPen(QColor(48, 48, 48), 2))
         for i in range(len(pit_inner_points) - 1):
             painter.drawLine(
                 int(pit_inner_points[i][0]),
@@ -1503,15 +1704,15 @@ class TrackWidget(QWidget):
     def _draw_pit_boxes(self, painter) -> None:
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        route = self.pit_points if getattr(self, 'pit_points', None) else []
+        route_len = self._route_length(route)
         for box_idx in range(10):
-            box_s = 50 + box_idx * 20
-            pt = self._find_track_point_near_s(box_s, tolerance=2)
+            box_s = max(20.0, min(20.0 + box_idx * 20.0, max(20.0, route_len - 20.0)))
+            pt = self._find_route_point_near_s(route, box_s, tolerance=3)
             if pt is None:
                 continue
-            normal_x = -math.sin(pt.theta)
-            normal_y = math.cos(pt.theta)
             painter.save()
-            painter.translate(pt.x + normal_x * 31, pt.y + normal_y * 31)
+            painter.translate(pt.x, pt.y)
             painter.rotate(math.degrees(pt.theta))
             painter.drawRect(-10, -8, 20, 16)
             painter.restore()
@@ -2157,7 +2358,15 @@ class TrackWidget(QWidget):
         """Resolve world-space draw coordinates and orientation for a car."""
         display_pos = getattr(car, 'display_s', None)
         normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
-        pt = self._point_at_s(normalized_s)
+
+        pt: Optional[TrackPoint]
+        if getattr(car, 'in_pit_lane', False) and getattr(self, 'pit_points', None):
+            pit_length = self._route_length(self.pit_points)
+            route_s = self._resolve_pit_route_s(car, pit_length)
+            pt = self._point_at_s_on_route(self.pit_points, pit_length, route_s, closed=False)
+        else:
+            pt = self._point_at_s(normalized_s)
+
         if pt is None:
             return None
 
@@ -2218,7 +2427,7 @@ class RaceWindow(QMainWindow):
     return_to_menu = pyqtSignal()  # Signal to return to main menu
     next_race = pyqtSignal(dict)  # Signal to start next race in championship with config
 
-    def __init__(self, track_id: Optional[int] = None, discipline: Optional[str] = None, championship_id: Optional[int] = None, race_id: Optional[int] = None):
+    def __init__(self, track_id: Optional[int] = None, discipline: Optional[str] = None, tier: Optional[str] = None, championship_id: Optional[int] = None, race_id: Optional[int] = None):
         try:
             super().__init__()
             self.setWindowTitle("Momentum - Race Visualisation")
@@ -2231,6 +2440,7 @@ class RaceWindow(QMainWindow):
             self.track = None
             self._initial_track_id = track_id
             self._initial_discipline = discipline or "SINGLE_SEATER"
+            self._initial_tier = _normalize_tier(tier) if tier else None
             self._race_total_laps = self._discipline_total_laps()
             self._championship_id = championship_id  # Championship this race belongs to
             self._race_id = race_id  # Current race ID in championship
@@ -2252,6 +2462,7 @@ class RaceWindow(QMainWindow):
                 'pace': 0.7,
                 'overtake': 0.5,
                 'come_in': False,
+                'pit_tyre_compound': 'medium',
             }  # pace/overtake: 0.0-1.0, come_in: bool trigger for pit/joker routing
             self.tuning_preset: str = 'balanced'  # Simulation tuning preset
 
@@ -2260,7 +2471,8 @@ class RaceWindow(QMainWindow):
                 'speed_kph': 0.0,
                 'push_intensity': 0.7,
                 'push_fatigue': 0.0,
-                'tire_condition': 1.0
+                'tyre_condition': 1.0,
+                'tyre_compound': 'medium',
             }
 
             # Collision tracking
@@ -2483,6 +2695,20 @@ class RaceWindow(QMainWindow):
         self.come_in_checkbox.toggled.connect(self._on_come_in_toggled)
         player_layout.addWidget(self.come_in_checkbox)
 
+        from PyQt6.QtWidgets import QComboBox
+        self.pit_tyre_label = QLabel("Pit tyre compound")
+        self.pit_tyre_label.setStyleSheet("font-size: 11px; color: #F5F5F5;")
+        player_layout.addWidget(self.pit_tyre_label)
+
+        self.pit_tyre_combo = QComboBox()
+        self.pit_tyre_combo.addItem("Soft", "soft")
+        self.pit_tyre_combo.addItem("Medium", "medium")
+        self.pit_tyre_combo.addItem("Hard", "hard")
+        self.pit_tyre_combo.addItem("Wet", "wet")
+        self.pit_tyre_combo.currentIndexChanged.connect(self._on_pit_tyre_changed)
+        self.pit_tyre_combo.setCurrentIndex(1)
+        player_layout.addWidget(self.pit_tyre_combo)
+
         self.come_in_status_label = QLabel("")
         self.come_in_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.come_in_status_label.setStyleSheet("font-size: 11px; color: #B9F2FF;")
@@ -2556,11 +2782,21 @@ class RaceWindow(QMainWindow):
         self.fatigue_label.setStyleSheet("font-size: 12px; color: #FFD700;")
         telemetry_layout.addWidget(self.fatigue_label)
 
-        # Tire condition
-        self.tire_label = QLabel("Tire: 100%")
-        self.tire_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.tire_label.setStyleSheet("font-size: 12px; color: #00BFFF;")
-        telemetry_layout.addWidget(self.tire_label)
+        # Tyre telemetry
+        self.tyre_label = QLabel("Tyre condition: 100%")
+        self.tyre_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tyre_label.setStyleSheet("font-size: 12px; color: #00BFFF;")
+        telemetry_layout.addWidget(self.tyre_label)
+
+        self.tyre_wear_label = QLabel("Tyre wear: 0%")
+        self.tyre_wear_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tyre_wear_label.setStyleSheet("font-size: 12px; color: #B9F2FF;")
+        telemetry_layout.addWidget(self.tyre_wear_label)
+
+        self.tyre_compound_label = QLabel("Tyre compound: Medium")
+        self.tyre_compound_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.tyre_compound_label.setStyleSheet("font-size: 12px; color: #9FE870;")
+        telemetry_layout.addWidget(self.tyre_compound_label)
         # Player status (e.g., RETIRED) — visible but does not disable controls
         self.player_status_label = QLabel("")
         self.player_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -3007,7 +3243,7 @@ class RaceWindow(QMainWindow):
             elif is_endurance:
                 status.setText("Endurance: monitor pit window and use Come In for planned service.")
             else:
-                status.setText("Toggle to request a pit entry on the next lap evaluation.")
+                status.setText("Toggle to request a pit lane entry on the next lap evaluation.")
 
     def _on_come_in_toggled(self, checked: bool) -> None:
         """Store generic come-in request used by pit/joker logic in the engine."""
@@ -3018,9 +3254,21 @@ class RaceWindow(QMainWindow):
                 if self._is_rallycross_discipline():
                     status.setText("Come in request armed: joker will be served at next lap crossing.")
                 else:
-                    status.setText("Come in request armed: pit entry will be taken at next lap evaluation.")
+                    status.setText("Come in request armed: pit lane entry will be taken at next lap evaluation.")
             else:
                 status.setText("Come in request cleared.")
+
+    def _on_pit_tyre_changed(self, _: int) -> None:
+        """Persist player pit-stop tyre choice for the race engine."""
+        combo = getattr(self, 'pit_tyre_combo', None)
+        if combo is None:
+            return
+        value = combo.currentData()
+        compound = str(value or 'medium').strip().lower()
+        self.player_overrides['pit_tyre_compound'] = compound
+        label = getattr(self, 'tyre_compound_label', None)
+        if label is not None:
+            label.setText(f"Tyre compound: {compound.title()}")
 
     def _build_drag_strip_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
         """Build a point-to-point drag strip profile (straight strip)."""
@@ -3032,6 +3280,70 @@ class RaceWindow(QMainWindow):
             {'type': 'S', 'length_m': first_straight},
             {'type': 'S', 'length_m': second_straight},
         ]
+
+    def _build_offset_route(self, main_points: List[TrackPoint], lateral_offset_m: float) -> Optional[List[TrackPoint]]:
+        """Create a full-loop auxiliary route by offsetting the main centerline."""
+        if not main_points:
+            return None
+        out: List[TrackPoint] = []
+        for pt in main_points:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            out.append(
+                TrackPoint(
+                    s=float(pt.s),
+                    x=float(pt.x + normal_x * lateral_offset_m),
+                    y=float(pt.y + normal_y * lateral_offset_m),
+                    theta=float(pt.theta),
+                    curvature=float(pt.curvature),
+                )
+            )
+        return out
+
+    def _build_main_straight_pit_route(self, main_points: List[TrackPoint]) -> Optional[List[TrackPoint]]:
+        """Create pit lane geometry offset from the start/finish straight segment."""
+        if not main_points:
+            return None
+
+        # Align with garage placement zone and keep only the straightest samples.
+        candidates = [
+            pt for pt in main_points
+            if 8.0 <= float(pt.s) <= 290.0 and abs(float(pt.curvature)) <= 0.006
+        ]
+        if len(candidates) < 12:
+            candidates = [pt for pt in main_points if 8.0 <= float(pt.s) <= 290.0]
+        if len(candidates) < 6:
+            return None
+
+        # Keep the pit lane lane clearly separate from the racing surface.
+        centerline_offset = 36.0
+        out: List[TrackPoint] = []
+        for pt in candidates:
+            normal_x = -math.sin(pt.theta)
+            normal_y = math.cos(pt.theta)
+            out.append(
+                TrackPoint(
+                    s=float(pt.s - candidates[0].s),
+                    x=float(pt.x + normal_x * centerline_offset),
+                    y=float(pt.y + normal_y * centerline_offset),
+                    theta=float(pt.theta),
+                    curvature=float(pt.curvature),
+                )
+            )
+        return out
+
+    def _ensure_auxiliary_route_visibility(self, main_points: List[TrackPoint]) -> None:
+        """Guarantee visible pit/joker geometry for disciplines that rely on route cues."""
+        if self._is_drag_discipline() or not main_points:
+            return
+
+        if not getattr(self, 'pit_points', None):
+            # Visible service lane offset from the main straight.
+            self.pit_points = self._build_main_straight_pit_route(main_points)
+
+        if self._is_rallycross_discipline() and not getattr(self, 'joker_points', None):
+            # Rallycross joker route: parallel dirt lane outside the main loop.
+            self.joker_points = self._build_offset_route(main_points, 34.0)
 
     def _generate_circuit_geometry(self) -> Tuple[Optional[List[TrackPoint]], Optional[float]]:
         """Generate circuit geometry and return points with authoritative track length."""
@@ -3057,6 +3369,7 @@ class RaceWindow(QMainWindow):
                 self.start_btn.setEnabled(False)
                 print("ERROR: Circuit generation returned empty list")
                 return None, None
+            self._ensure_auxiliary_route_visibility(track_points)
             print(f"Generated circuit with {len(track_points)} points, using database length: {track_length:.0f}m")
             self.track_points = track_points
             return track_points, track_length
@@ -3101,6 +3414,8 @@ class RaceWindow(QMainWindow):
         """Create grid cars and map from grid position to driver id."""
         cars: List[Car] = []
         gridpos_map: Dict[int, Any] = {}
+        team_to_box: Dict[int, int] = {}
+        next_box = 0
         total_drivers = len(self.drivers)
         grid_spacing = 15.0
         show_on_grid = not self._is_drag_discipline()
@@ -3109,6 +3424,10 @@ class RaceWindow(QMainWindow):
             row = (grid_number - 1) // 2
             start_position = row * grid_spacing
             car_colour = self.driver_colours.get(driver.id, QColor(200, 200, 200))
+            team_id = int(getattr(driver, 'current_team_id', 0) or 0)
+            if team_id not in team_to_box:
+                team_to_box[team_id] = next_box % 10
+                next_box += 1
             cars.append(Car(
                 driver_id=driver.id,
                 driver_name=driver.name,
@@ -3118,6 +3437,8 @@ class RaceWindow(QMainWindow):
                 avg_lap_time=60.0,
                 last_lap=0,
                 active=show_on_grid,
+                team_id=team_id,
+                pit_box_index=team_to_box.get(team_id, i % 10),
             ))
             try:
                 gridpos_map[int(grid_number)] = int(driver.id)
@@ -3534,20 +3855,39 @@ class RaceWindow(QMainWindow):
         if str(self._initial_discipline).upper() == 'DRAG_ACCELERATION':
             # Drag uses one representative per team and bracket-friendly grids.
             limit = min(16, RACE_GRID_SIZE)
-        contracted = self._get_contracted_discipline_drivers(self._initial_discipline, limit)
+        contracted = self._get_contracted_discipline_drivers(
+            self._initial_discipline,
+            limit,
+            self._initial_tier,
+        )
         if contracted:
             return contracted
+
+        # If tier-specific pool is empty, keep discipline constraint as fallback.
+        contracted_any_tier = self._get_contracted_discipline_drivers(
+            self._initial_discipline,
+            limit,
+            None,
+        )
+        if contracted_any_tier:
+            return contracted_any_tier
 
         # Last-resort fallback if discipline data is unavailable.
         all_drivers = self.db.get_all_drivers()
         return all_drivers[:RACE_GRID_SIZE] if len(all_drivers) >= RACE_GRID_SIZE else all_drivers
 
-    def _get_contracted_discipline_drivers(self, discipline: str, limit: int):
+    def _get_contracted_discipline_drivers(self, discipline: str, limit: int, tier: Optional[str] = None):
         """Return contracted drivers for teams in selected discipline."""
         if self.db is None:
             return []
 
         norm = (discipline or "").lower().replace(" ", "_")
+        tier_norm = _normalize_tier(tier) if tier else None
+        fetch_limit = int(limit)
+        if tier_norm:
+            # Pull a broader candidate list first, then normalize/filter tiers in Python.
+            fetch_limit = max(fetch_limit * 8, fetch_limit + 20)
+
         with self.db.get_connection() as conn:
             if norm == 'drag_acceleration':
                 rows = conn.execute(
@@ -3568,7 +3908,7 @@ class RaceWindow(QMainWindow):
                     ORDER BY id ASC
                     LIMIT ?
                     """,
-                    (norm, int(limit))
+                    (norm, fetch_limit)
                 ).fetchall()
             else:
                 rows = conn.execute(
@@ -3580,14 +3920,31 @@ class RaceWindow(QMainWindow):
                     ORDER BY d.speed DESC, d.id ASC
                     LIMIT ?
                     """,
-                    (norm, int(limit))
+                    (norm, fetch_limit)
                 ).fetchall()
 
         out = []
+        team_cache: Dict[int, Any] = {}
         for row in rows:
             drv = self.db.get_driver(int(row[0]))
-            if drv:
-                out.append(drv)
+            if not drv:
+                continue
+            if tier_norm:
+                team_id = int(getattr(drv, 'current_team_id', 0) or 0)
+                if team_id <= 0:
+                    continue
+                team = team_cache.get(team_id)
+                if team is None:
+                    team = self.db.get_team(team_id)
+                    if team:
+                        team_cache[team_id] = team
+                if not team:
+                    continue
+                if _normalize_tier(getattr(team, 'tier', 'TIER_2')) != tier_norm:
+                    continue
+            out.append(drv)
+            if len(out) >= int(limit):
+                break
         return out
 
     def _ensure_contracted_grid_for_discipline(self, discipline: str, target_grid_size: int):
@@ -3898,13 +4255,15 @@ class RaceWindow(QMainWindow):
         velocity_mps = float(pos_data.get("velocity_mps", 0.0))
         push_intensity = float(pos_data.get("push_intensity", 0.7))
         push_fatigue = float(pos_data.get("push_fatigue", 0.0))
-        tire_condition = float(pos_data.get("tire_condition", 1.0))
+        tyre_condition = float(pos_data.get("tire_condition", 1.0))
+        tyre_compound = str(pos_data.get("tire_compound", "medium") or "medium")
         self.player_telemetry['speed_kph'] = velocity_mps * 3.6
         self.player_telemetry['push_intensity'] = push_intensity
         self.player_telemetry['push_fatigue'] = push_fatigue
-        self.player_telemetry['tire_condition'] = tire_condition
+        self.player_telemetry['tyre_condition'] = tyre_condition
+        self.player_telemetry['tyre_compound'] = tyre_compound
         self.emitter.event_signal.emit(
-            f"telemetry_update|{velocity_mps * 3.6:.1f}|{push_intensity:.2f}|{push_fatigue:.2f}|{tire_condition:.2f}"
+            f"telemetry_update|{velocity_mps * 3.6:.1f}|{push_intensity:.2f}|{push_fatigue:.2f}|{tyre_condition:.2f}|{tyre_compound}"
         )
 
     def _update_track_widget_realtime(self, driver_id: int, pos_data: Dict[str, Any], race_time: float) -> None:
@@ -3915,6 +4274,10 @@ class RaceWindow(QMainWindow):
         lap = int(pos_data.get("lap", 0))
         velocity_mps = float(pos_data.get("velocity_mps", 0.0))
         running = bool(pos_data.get("running", True))
+        in_pit_lane = bool(pos_data.get("in_pit_lane", False))
+        pit_time_remaining_s = float(pos_data.get("pit_time_remaining_s", 0.0) or 0.0)
+        pit_total_time_s = float(pos_data.get("pit_total_time_s", 0.0) or 0.0)
+        tyre_compound = str(pos_data.get("tire_compound", "medium") or "medium")
         if hasattr(self.track_widget, 'update_car_realtime'):
             self.track_widget.update_car_realtime(
                 driver_id=driver_id,
@@ -3922,6 +4285,10 @@ class RaceWindow(QMainWindow):
                 lap=lap,
                 velocity_mps=velocity_mps,
                 running=running,
+                in_pit_lane=in_pit_lane,
+                pit_time_remaining_s=pit_time_remaining_s,
+                pit_total_time_s=pit_total_time_s,
+                tyre_compound=tyre_compound,
             )
             return
         if not running:
@@ -4276,7 +4643,9 @@ class RaceWindow(QMainWindow):
 
     def _save_race_results_if_needed(self, results_sorted: list) -> None:
         """Persist race results in championship mode."""
-        if not (self._championship_id and self._race_id and results_sorted):
+        is_career = str(getattr(self, '_game_mode', '') or '').lower() == 'career'
+        can_save = bool(self._race_id and results_sorted and (self._championship_id or is_career))
+        if not can_save:
             return
         try:
             saved_count = 0
@@ -4325,11 +4694,66 @@ class RaceWindow(QMainWindow):
         )
         try:
             if self.db is not None:
-                self.db.save_race_result(race_result)
+                is_career = str(getattr(self, '_game_mode', '') or '').lower() == 'career'
+                if is_career:
+                    self._save_single_career_race_result(
+                        result=result,
+                        driver_id=driver_id,
+                        team_id=team_id,
+                        position=position,
+                        points=points,
+                        fastest_lap=fastest_lap,
+                        dnf_reason=dnf_reason,
+                    )
+                else:
+                    self.db.save_race_result(race_result)
                 return True
         except Exception as e:
             print(f"WARNING: Could not save result for driver {driver_id}: {e}")
         return False
+
+    def _save_single_career_race_result(
+        self,
+        result: dict,
+        driver_id: int,
+        team_id: int,
+        position: int,
+        points: int,
+        fastest_lap: bool,
+        dnf_reason,
+    ) -> None:
+        """Persist one career-mode race result into career-specific storage."""
+        if self.db is None:
+            return
+        with self.db.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO career_race_results
+                    (player_id, career_race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
+                VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(career_race_id, driver_id) DO UPDATE SET
+                    team_id = excluded.team_id,
+                    position = excluded.position,
+                    points = excluded.points,
+                    fastest_lap = excluded.fastest_lap,
+                    dnf_reason = excluded.dnf_reason,
+                    grid_position = excluded.grid_position,
+                    recorded_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    "local_player",
+                    int(self._race_id),
+                    int(driver_id),
+                    int(team_id),
+                    int(position),
+                    int(points),
+                    1 if fastest_lap else 0,
+                    dnf_reason,
+                    int(result.get('grid_position', result.get('position')) or 0),
+                ),
+            )
+            conn.commit()
 
     def _show_position_change_summary_safe(self, results_sorted: list) -> None:
         """Display post-race position summary while keeping flow fail-safe."""
@@ -4340,10 +4764,11 @@ class RaceWindow(QMainWindow):
 
     def _enable_next_race_if_championship_mode(self) -> None:
         """Enable next-race navigation in championship mode."""
-        if not self._championship_id:
+        is_career = str(getattr(self, '_game_mode', '') or '').lower() == 'career'
+        if not (self._championship_id or is_career):
             return
         self.next_race_btn.setEnabled(True)
-        print("[RACE FINISHED] Next Race button enabled (championship mode)")
+        print("[RACE FINISHED] Next Race button enabled")
 
     def _show_position_change_summary(self, results_sorted: list):
         """Display a post-race start-vs-finish summary dialog."""
@@ -4800,12 +5225,12 @@ class RaceWindow(QMainWindow):
         *** Handle general race events from simulation ***
 
         This receives string messages from the race engine containing:
-        - telemetry_update: Player driver telemetry (speed, push, fatigue, tires)
+        - telemetry_update: Player driver telemetry (speed, push, fatigue, tyres)
         - standings_update: Position changes during race
         - General info messages
 
         TELEMETRY UPDATE FORMAT:
-        "telemetry_update|speed_kph|push_intensity|push_fatigue|tire_condition"
+        "telemetry_update|speed_kph|push_intensity|push_fatigue|tyre_condition|tyre_compound"
 
         STANDINGS UPDATE FORMAT (live gaps):
         "standings_update|driver_id|position|lap|push|gap_ahead|position_m|race_time"
@@ -4874,7 +5299,8 @@ class RaceWindow(QMainWindow):
         self.player_overrides['come_in'] = False
         status = getattr(self, 'come_in_status_label', None)
         if status is not None:
-            status.setText("Pit entry served. Come-in request reset.")
+            compound = str(event.get('tyre_compound', 'medium') or 'medium').title()
+            status.setText(f"Pit lane entry served. Tyre set: {compound}.")
 
     def _handle_pit_exit_event(self, event: Dict[str, Any]) -> None:
         """Show completion status after player pit service exits."""
@@ -4882,11 +5308,15 @@ class RaceWindow(QMainWindow):
         if driver_id != int(getattr(self, 'player_driver_id', -1) or -1):
             return
         stops = int(event.get('pit_stops_completed', 0) or 0)
-        msg = f"Pit stop complete. Total stops: {stops}."
+        compound = str(event.get('tyre_compound', 'medium') or 'medium').title()
+        msg = f"Pit stop complete. Total stops: {stops}. Tyres: {compound}."
         self.info_label.setText(msg)
         status = getattr(self, 'come_in_status_label', None)
         if status is not None:
             status.setText(msg)
+        compound_label = getattr(self, 'tyre_compound_label', None)
+        if compound_label is not None:
+            compound_label.setText(f"Tyre compound: {compound}")
 
     def _handle_pit_window_open_event(self, event: Dict[str, Any]) -> None:
         """Surface endurance pit-window reminder for player-controlled driver."""
@@ -4940,14 +5370,14 @@ class RaceWindow(QMainWindow):
         else:
             self.fatigue_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
 
-    def _set_tire_label_style(self, tire_condition: float) -> None:
-        """Apply tire condition style by wear threshold."""
-        if tire_condition < 0.3:
-            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
-        elif tire_condition < 0.6:
-            self.tire_label.setStyleSheet("font-size: 14px; color: #DD2D4A;")
+    def _set_tyre_label_style(self, tyre_condition: float) -> None:
+        """Apply tyre condition style by wear threshold."""
+        if tyre_condition < 0.3:
+            self.tyre_label.setStyleSheet("font-size: 14px; color: #DD2D4A; font-weight: bold;")
+        elif tyre_condition < 0.6:
+            self.tyre_label.setStyleSheet("font-size: 14px; color: #DD2D4A;")
         else:
-            self.tire_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
+            self.tyre_label.setStyleSheet("font-size: 14px; color: #B9F2FF;")
 
     def _handle_telemetry_event(self, message: str) -> None:
         """Update player telemetry panel from event payload."""
@@ -4959,7 +5389,8 @@ class RaceWindow(QMainWindow):
             speed_kph = float(parts[1])
             push_intensity = float(parts[2])
             push_fatigue = float(parts[3])
-            tire_condition = float(parts[4])
+            tyre_condition = float(parts[4])
+            tyre_compound = str(parts[5]).strip().title() if len(parts) > 5 else "Medium"
 
             self.speed_label.setText(f"Speed: {speed_kph:.0f} km/h")
             self.push_gauge.setValue(int(push_intensity * 100))
@@ -4968,9 +5399,12 @@ class RaceWindow(QMainWindow):
             self.fatigue_label.setText(f"Fatigue: {fatigue_percent}%")
             self._set_fatigue_label_style(push_fatigue)
 
-            tire_percent = int(tire_condition * 100)
-            self.tire_label.setText(f"Tire: {tire_percent}%")
-            self._set_tire_label_style(tire_condition)
+            tyre_percent = int(tyre_condition * 100)
+            wear_percent = max(0, min(100, 100 - tyre_percent))
+            self.tyre_label.setText(f"Tyre condition: {tyre_percent}%")
+            self.tyre_wear_label.setText(f"Tyre wear: {wear_percent}%")
+            self.tyre_compound_label.setText(f"Tyre compound: {tyre_compound}")
+            self._set_tyre_label_style(tyre_condition)
         except Exception as e:
             print(f"Error updating telemetry display: {e}")
             _traceback.print_exc()

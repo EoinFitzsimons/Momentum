@@ -63,6 +63,18 @@ class ChampionshipService:
     def __init__(self, db_manager: DatabaseManager):
         """Initialise with database manager"""
         self.db = db_manager
+
+    @staticmethod
+    def default_laps_for_discipline(discipline: str) -> int:
+        """Return default race laps for each discipline."""
+        key = str(discipline or "").upper()
+        if key == "ENDURANCE":
+            return 24
+        if key == "SPRINT_RALLYCROSS":
+            return 6
+        if key == "DRAG_ACCELERATION":
+            return 3
+        return 3
     
     def calculate_points(self, position: int, discipline: str, fastest_lap: bool = False) -> int:
         """
@@ -260,7 +272,7 @@ class ChampionshipService:
                 round_number=round_num,
                 race_date=current_date.strftime("%Y-%m-%d"),
                 weather_conditions="clear",
-                laps=50,  # Default, should be calculated based on track
+                laps=self.default_laps_for_discipline(championship.discipline),
                 status="scheduled"
             )
             
