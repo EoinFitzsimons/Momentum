@@ -21,6 +21,45 @@ except Exception as e:
     raise ImportError("scipy is required for closure_solver. Install scipy in the environment.") from e
 
 
+CLOSURE_PARAM_MIN = 0.2
+CLOSURE_PARAM_MAX = 5.0
+CLOSURE_REGULARIZATION_WEIGHT = 0.1
+CLOSURE_PRIMARY_MINIMIZE_METHOD = 'Powell'
+CLOSURE_FALLBACK_MINIMIZE_METHOD = 'Nelder-Mead'
+CLOSURE_PRIMARY_MINIMIZE_OPTIONS = {
+    'maxiter': 5000,
+    'xtol': 1e-4,
+    'ftol': 1e-4,
+}
+CLOSURE_FALLBACK_MINIMIZE_OPTIONS = {
+    'maxiter': 5000,
+    'xatol': 1e-4,
+    'fatol': 1e-4,
+}
+CLOSURE_POSITION_TOLERANCE_M = 1e-2
+CLOSURE_ANGLE_TOLERANCE_RAD = 0.6
+
+
+def _minimize_discrete_with_fallback(obj_fn, p_init):
+    """Run discrete minimization with Powell primary and Nelder-Mead fallback."""
+    res = minimize(
+        obj_fn,
+        p_init,
+        method=CLOSURE_PRIMARY_MINIMIZE_METHOD,
+        options=CLOSURE_PRIMARY_MINIMIZE_OPTIONS,
+    )
+    if res.success:
+        return res, CLOSURE_PRIMARY_MINIMIZE_METHOD
+
+    fallback_res = minimize(
+        obj_fn,
+        p_init,
+        method=CLOSURE_FALLBACK_MINIMIZE_METHOD,
+        options=CLOSURE_FALLBACK_MINIMIZE_OPTIONS,
+    )
+    return fallback_res, CLOSURE_FALLBACK_MINIMIZE_METHOD
+
+
 def _wrap_angle(a: float) -> float:
     while a > math.pi:
         a -= 2 * math.pi
@@ -261,8 +300,8 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
 
     # Stage 1: continuous least-squares to get a good initial guess
     p0 = np.array(inits)
-    lower = np.maximum(0.2, p0 * 0.2)
-    upper = np.minimum(5.0, p0 * 5.0)
+    lower = np.maximum(CLOSURE_PARAM_MIN, p0 * 0.2)
+    upper = np.minimum(CLOSURE_PARAM_MAX, p0 * 5.0)
 
     def residuals_continuous(p):
         muls = list(p)
@@ -270,7 +309,7 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
         r1 = x
         r2 = y
         r3 = _wrap_angle(theta - 2 * math.pi)
-        reg = [(m - 1.0) * 0.1 for m in muls]
+        reg = [(m - 1.0) * CLOSURE_REGULARIZATION_WEIGHT for m in muls]
         return [r1, r2, r3] + reg
 
     try:
@@ -290,22 +329,21 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
 
     # Try a more robust derivative-free optimizer (Powell), with Nelder-Mead fallback
     try:
-        res2 = minimize(obj_discrete, p_init, method='Powell', options={'maxiter': 5000, 'xtol': 1e-4, 'ftol': 1e-4})
-        if not res2.success:
-            res2 = minimize(obj_discrete, p_init, method='Nelder-Mead', options={'maxiter': 5000, 'xatol': 1e-4, 'fatol': 1e-4})
+        res2, method_used = _minimize_discrete_with_fallback(obj_discrete, p_init)
     except Exception as e:
         diagnostics = {'reason': 'minimize failed', 'error': str(e)}
         return False, list(p_init), diagnostics
 
-    final_params = np.clip(res2.x, 0.2, 5.0)
+    final_params = np.clip(res2.x, CLOSURE_PARAM_MIN, CLOSURE_PARAM_MAX)
     x, y, theta = _simulate_primitives(instructions, list(final_params))
     pos_norm = float(np.linalg.norm([x, y]))
     ang_err = abs(_wrap_angle(theta - 2 * math.pi))
     # Success if position is closed tightly and heading error is reasonable
-    success = (pos_norm < 1e-2) and (ang_err < 0.6)
+    success = (pos_norm < CLOSURE_POSITION_TOLERANCE_M) and (ang_err < CLOSURE_ANGLE_TOLERANCE_RAD)
     diagnostics = {
         'cont_success': bool(res_cont.success) if res_cont is not None else False,
         'minimize_success': res2.success,
+        'minimize_method': method_used,
         'minimize_nit': int(getattr(res2, 'nit', 0)),
         'minimize_fun': float(res2.fun),
         'pos_norm': pos_norm,

@@ -79,6 +79,7 @@ class MomentumLauncher:
         # Create race window with display mode, pass selected track_id and discipline if present
         track_id = config.get('track_id')
         discipline = config.get('discipline', 'SINGLE_SEATER')
+        tier = config.get('tier')
         championship_id = config.get('championship_id')
         race_id = config.get('race_id')
         
@@ -86,6 +87,7 @@ class MomentumLauncher:
             self.race_window = self.race_window_class(
                 track_id=track_id, 
                 discipline=discipline,
+                tier=tier,
                 championship_id=championship_id,
                 race_id=race_id
             )
@@ -139,6 +141,10 @@ class MomentumLauncher:
         championship_id = config.get('championship_id')
         race_id = config.get('race_id')
         mode = (config.get('mode') or 'championship').lower()
+
+        if mode == 'career':
+            self._handle_career_next_race(config)
+            return
 
         if not championship_id:
             print("[LAUNCHER] ERROR: No championship_id in next_race config")
@@ -341,6 +347,56 @@ class MomentumLauncher:
             setattr(self.main_menu, 'career_window', career_window)
             self.main_menu.hide()
         career_window.show()
+
+    def _handle_career_next_race(self, config: dict) -> None:
+        """Career progression handler using career_* tables (no championships dependency)."""
+        self._close_active_race_window()
+
+        try:
+            from database.database_manager import DatabaseManager
+
+            db = DatabaseManager()
+            race_id = int(config.get('career_race_id') or config.get('race_id') or 0)
+            if race_id > 0:
+                with db.get_connection() as conn:
+                    conn.execute(
+                        "UPDATE career_races SET status = 'completed' WHERE id = ?",
+                        (race_id,),
+                    )
+                    conn.commit()
+
+            career_championship_id = int(config.get('career_championship_id') or 0)
+            championship = None
+            if career_championship_id > 0:
+                with db.get_connection() as conn:
+                    row = conn.execute(
+                        """
+                        SELECT id, name, discipline, tier, season_length, current_season
+                        FROM career_championships
+                        WHERE id = ?
+                        """,
+                        (career_championship_id,),
+                    ).fetchone()
+                    if row:
+                        rowd = dict(row)
+                        from types import SimpleNamespace
+                        championship = SimpleNamespace(**rowd)
+
+            if championship is None and self.main_menu and hasattr(self.main_menu, 'career_window'):
+                existing = getattr(self.main_menu, 'career_window')
+                championship = getattr(existing, 'championship', None)
+
+            if championship is None:
+                self.return_to_menu()
+                return
+
+            self._show_or_create_career_hq(championship)
+        except Exception as e:
+            print(f"[LAUNCHER] ERROR progressing career mode: {e}")
+            import traceback
+            traceback.print_exc()
+            self.return_to_menu()
+
     def return_to_menu(self):
         """Return from race to main menu."""
         if self.race_window:

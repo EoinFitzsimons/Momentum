@@ -2,6 +2,50 @@
 
 This document summarises the mathematics used by the game and points to the exact function sources.
 
+## 0) Notation and External Maths Definitions
+
+Use this section as a global reference for symbols/constants reused later.
+
+### Core notation
+
+- `exp(z)`: natural exponential function (`e^z`).
+- `pi`: circle constant, approximately `3.14159`.
+- `||v||_2`: Euclidean norm (L2 magnitude) of vector `v`.
+- `clamp(x, lo, hi)`: clip `x` into interval `[lo, hi]`.
+
+### Logistic function
+
+`logistic(z) = 1 / (1 + exp(-z))`
+
+- Output is in `(0, 1)`.
+- Steepness constants such as `k` and `k_risk` scale `z` before logistic evaluation.
+- Larger steepness causes faster transition between low and high probability regions.
+
+### Weibull reliability model
+
+`F(t) = 1 - exp(-(t/eta)^beta)`
+
+- `eta` (scale): characteristic life/horizon; larger `eta` delays failures.
+- `beta` (shape): hazard shape; `beta > 1` gives wear-out behaviour with rising hazard.
+
+### Derivative-free optimisation methods
+
+- `Powell`: directional derivative-free local optimisation.
+- `Nelder-Mead`: simplex-based derivative-free local optimisation.
+- In this project, Powell is primary and Nelder-Mead is fallback for robustness.
+
+### Frequent model coefficients
+
+- `a1, a2, a3`: linear feature weights in latent overtake-score models.
+- `b`: bias/intercept term in latent overtake-score models.
+- `k_driver`: steepness in normalised exponential driver-attribute mapping.
+- `lambda`: regularisation weight in least-squares closure objective.
+
+### Threshold and piecewise rules
+
+- Extra tyre wear penalties apply in piecewise bands after 70% and 90% wear.
+- Pit-stop decisions are boolean threshold rules combining tyre/fuel/lap constraints and projected loss.
+
 ## 1) Base Performance Model
 
 Source file:
@@ -105,6 +149,10 @@ Driver attribute nonlinear mapping (used for speed, cornering, and consistency):
 
 With `k_driver = 2.6`.
 
+Interpretation:
+- This is a normalised exponential saturation curve.
+- `k_driver` controls curvature/steepness: larger `k_driver` gives faster early gains and stronger diminishing returns near 1.0.
+
 Speed construction (conceptual):
 
 `speed = reference_speed * push_multiplier * driver_modifier * team_modifier * corner_modifier`
@@ -133,6 +181,50 @@ Tire and fuel update per frame:
 `tire_condition = max(0.0, tire_condition - degradation)`
 
 `fuel_load = fuel_load - FUEL_BURN_RATE`
+
+Current realtime tyre wear uses compound profiles rather than one flat multiplier:
+
+`degradation = TYRE_BASE_WEAR_RATE * wear_multiplier * surface_multiplier * driver_wear_factor * push_multiplier * fatigue_multiplier`
+
+Where compound profile values are:
+
+`soft -> wear_multiplier=1.55, pace_base=1.02, pace_falloff_max=0.24`
+
+`medium -> wear_multiplier=1.00, pace_base=1.00, pace_falloff_max=0.18`
+
+`hard -> wear_multiplier=0.72, pace_base=0.985, pace_falloff_max=0.13`
+
+`wet/rain -> wear_multiplier=1.18, pace_base=0.95, pace_falloff_max=0.16`
+
+Progressive pace falloff from wear:
+
+`wear = 1.0 - clamp(tire_condition, 0.0, 1.0)`
+
+`pace_multiplier = clamp(pace_base - pace_falloff_max * wear ^ pace_falloff_curve - extra_wear_penalty, 0.72, 1.03)`
+
+where `extra_wear_penalty` adds additional loss once wear exceeds 70% and 90%.
+
+Explicit threshold form used by the current model:
+
+`extra_wear_penalty = 0`
+
+`extra_wear_penalty += 0.20 * (wear - 0.70)` for `wear > 0.70`
+
+`extra_wear_penalty += 0.35 * (wear - 0.90)` for `wear > 0.90`
+
+AI pit-stop trigger uses projected tyre loss over a short stint horizon:
+
+`projected_wear = wear_rate_per_step * steps_per_lap * laps_ahead`
+
+`projected_condition = max(0.0, current_condition - projected_wear)`
+
+`projected_loss_seconds = baseline_lap_seconds * (current_pace_multiplier - future_pace_multiplier) * laps_ahead`
+
+AI pits when `current_condition <= 0.58` or `projected_loss_seconds >= 1.45` and enough laps remain.
+
+Decision rule notation:
+
+`pit_now = (laps_remaining > PIT_MIN_LAPS_REMAINING) and ((current_condition <= 0.58) or (projected_loss_seconds >= 1.45))`
 
 ## 4) Driver Mistake Risk (Realtime)
 
@@ -175,6 +267,11 @@ Representative straight latent structure:
 
 then `P = logistic(k * latent)` and clipped to guardrails.
 
+Symbol meaning:
+- `k`: logistic steepness (how quickly probability transitions from unlikely to likely).
+- `a1, a2, a3`: feature weights for attacker quality, defender resistance, and speed context.
+- `b`: bias/intercept term that sets baseline difficulty for that overtake type.
+
 Previous linear form (retained here for historical reference):
 
 `success_prob = 0.25 + 0.45*attacker_score - 0.25*defender_score + 0.35*speed_factor`
@@ -190,6 +287,8 @@ Incident risk during overtake:
 `risk_pressure` combines aggression, bravery, overlap and inverse control skill.
 
 Then clipped.
+
+`k_risk` is the logistic steepness for incident escalation: larger values make risk rise more sharply once pressure crosses the midpoint.
 
 Outcome resolution:
 - sample incident first
@@ -216,11 +315,27 @@ Pit decisions combine thresholds on:
 - mandatory-stop window
 - player `come_in` override
 
+Boolean form (player override + threshold logic):
+
+`pit_now = player_come_in or hard_tyre_trigger or fuel_trigger or mandatory_window_trigger or ai_projected_loss_trigger`
+
+AI tyre compound choice is also selected here using stint length and wear state:
+
+`soft` for short stints or late-race fuel-offensive runs
+
+`medium` for balanced stints
+
+`hard` for longer stints when wear is already low and the remaining race distance is high
+
 Joker penalty:
 
 `penalty = RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter`
 
 `skill_adjust` is derived from consistency; final penalty is lower-bounded.
+
+Lower bound in implementation:
+
+`penalty = max(1.8, RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter)`
 
 Consistency in this context is also nonlinear-mapped via `RealtimeRaceEngine._driver_attr_factor`.
 
@@ -240,6 +355,10 @@ Weibull cumulative form:
 Frame-step incremental hazard used in simulation:
 
 `P_fail_step = F(t + dt) - F(t)`
+
+Parameter meaning (standard Weibull):
+- `eta` (scale): characteristic life/horizon; larger `eta` delays failures.
+- `beta` (shape): hazard shape; `beta > 1` gives wear-out behaviour with rising hazard over time.
 
 Mechanical and tyre-related solo failures now derive from this incremental Weibull hazard, then are modulated by push stress, tyre condition, reliability, setup, and tyre-management effects.
 
@@ -348,8 +467,20 @@ Source functions:
 - `_simulate_primitives`
 - `_simulate_primitives_continuous`
 - `_build_param_list`
+- `_minimize_discrete_with_fallback`
 - `solve_closure`
 - `apply_multipliers_to_instructions`
+
+Source constants:
+- `CLOSURE_PRIMARY_MINIMIZE_METHOD`
+- `CLOSURE_FALLBACK_MINIMIZE_METHOD`
+- `CLOSURE_PRIMARY_MINIMIZE_OPTIONS`
+- `CLOSURE_FALLBACK_MINIMIZE_OPTIONS`
+- `CLOSURE_PARAM_MIN`
+- `CLOSURE_PARAM_MAX`
+- `CLOSURE_REGULARIZATION_WEIGHT`
+- `CLOSURE_POSITION_TOLERANCE_M`
+- `CLOSURE_ANGLE_TOLERANCE_RAD`
 
 ### Problem definition
 
@@ -368,13 +499,24 @@ Stage 1 (continuous least squares):
 - Solve on continuous clothoid integration with bounds
 - Includes regularisation terms towards 1.0 multipliers
 
+Least-squares objective form:
+
+`min_p || [x(p), y(p), wrap(theta(p)-2*pi), lambda*(p_1-1), ..., lambda*(p_n-1)] ||_2^2`
+
+with `lambda = CLOSURE_REGULARIZATION_WEIGHT`.
+
 Stage 2 (discrete refinement):
 - Minimise `||r(p)||_2` on discrete simulation
-- Uses Powell, then Nelder-Mead fallback
+- Uses `CLOSURE_PRIMARY_MINIMIZE_METHOD` (Powell), then
+	`CLOSURE_FALLBACK_MINIMIZE_METHOD` (Nelder-Mead) fallback
+
+Method note:
+- Powell and Nelder-Mead are derivative-free optimisers from numerical optimisation literature.
+- Powell is used first for robust line-search style progress; Nelder-Mead is a simplex fallback when Powell fails to converge satisfactorily.
 
 Success criteria:
-- `pos_norm = ||[x, y]|| < 1e-2`
-- `ang_err = abs(wrap(theta - 2*pi)) < 0.6`
+- `pos_norm = ||[x, y]|| < CLOSURE_POSITION_TOLERANCE_M`
+- `ang_err = abs(wrap(theta - 2*pi)) < CLOSURE_ANGLE_TOLERANCE_RAD`
 
 ### Angle wrapping
 
