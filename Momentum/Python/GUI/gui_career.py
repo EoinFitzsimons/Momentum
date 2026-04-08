@@ -334,9 +334,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             raise ValueError("Could not derive any discipline/tier series from teams.")
 
         with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM career_race_results WHERE player_id = ?", (player_id,))
             conn.execute("DELETE FROM career_races WHERE player_id = ?", (player_id,))
             conn.execute("DELETE FROM career_championships WHERE player_id = ?", (player_id,))
-            conn.execute("DELETE FROM career_race_results WHERE player_id = ?", (player_id,))
             conn.execute("UPDATE team_ownership SET is_active = 0 WHERE player_id = ?", (player_id,))
             conn.execute(
                 """
@@ -1039,18 +1039,53 @@ class CareerWindow(QMainWindow):
         with self.db.get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT rr.driver_id AS driver_id,
-                       COALESCE(d.name, 'Driver ' || rr.driver_id) AS driver_name,
-                       rr.team_id AS team_id,
-                       COALESCE(t.name, 'Team ' || rr.team_id) AS team_name,
-                       COALESCE(SUM(rr.points), 0) AS total_points
-                FROM career_race_results rr
-                JOIN career_races cr ON cr.id = rr.career_race_id
-                LEFT JOIN drivers d ON d.id = rr.driver_id
-                LEFT JOIN teams t ON t.id = rr.team_id
-                WHERE cr.player_id = ? AND cr.career_championship_id = ? AND cr.season = ?
-                GROUP BY rr.driver_id, rr.team_id
-                ORDER BY total_points DESC, driver_name ASC
+                WITH filtered_results AS (
+                    SELECT rr.id AS result_id,
+                           rr.driver_id,
+                           rr.team_id,
+                           rr.points,
+                           cr.round_number
+                    FROM career_race_results rr
+                    JOIN career_races cr ON cr.id = rr.career_race_id
+                    WHERE cr.player_id = ? AND cr.career_championship_id = ? AND cr.season = ?
+                ),
+                driver_points AS (
+                    SELECT fr.driver_id,
+                           COALESCE(SUM(fr.points), 0) AS total_points
+                    FROM filtered_results fr
+                    GROUP BY fr.driver_id
+                ),
+                latest_round AS (
+                    SELECT fr.driver_id,
+                           MAX(fr.round_number) AS latest_round
+                    FROM filtered_results fr
+                    GROUP BY fr.driver_id
+                ),
+                latest_team_result AS (
+                    SELECT fr.driver_id,
+                           MAX(fr.result_id) AS latest_result_id
+                    FROM filtered_results fr
+                    JOIN latest_round lr
+                      ON lr.driver_id = fr.driver_id
+                     AND lr.latest_round = fr.round_number
+                    GROUP BY fr.driver_id
+                ),
+                latest_team AS (
+                    SELECT fr.driver_id,
+                           fr.team_id
+                    FROM filtered_results fr
+                    JOIN latest_team_result ltr ON ltr.latest_result_id = fr.result_id
+                )
+                SELECT dp.driver_id AS driver_id,
+                       COALESCE(d.name, 'Driver ' || dp.driver_id) AS driver_name,
+                       lt.team_id AS team_id,
+                       COALESCE(t.name, 'Team ' || lt.team_id) AS team_name,
+                       dp.total_points AS total_points
+                FROM driver_points dp
+                LEFT JOIN latest_team lt ON lt.driver_id = dp.driver_id
+                LEFT JOIN drivers d ON d.id = dp.driver_id
+                LEFT JOIN teams t ON t.id = lt.team_id
+                ORDER BY dp.total_points DESC, driver_name ASC
                 """,
                 (self.player_id, int(self.championship.id), int(self.championship.current_season)),
             ).fetchall()

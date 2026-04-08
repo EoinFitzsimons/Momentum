@@ -615,7 +615,17 @@ class RealtimeRaceEngine:
         if laps_ahead <= 0:
             return 0.0
         wear_rate = self._tyre_wear_per_step(state)
-        steps_per_lap = 180.0
+        # Derive steps-per-lap from current pace and simulation timestep.
+        race_state = getattr(self, '_current_race_state', None)
+        track_length_m = float(getattr(race_state, 'track_length_m', 0.0) or 0.0)
+        timestep = float(getattr(race_state, 'timestep', 1.0 / 30.0) or (1.0 / 30.0))
+        speed_mps = max(1.0, float(getattr(state, 'velocity_mps', 0.0) or 0.0))
+        if track_length_m > 0.0:
+            est_lap_seconds = track_length_m / speed_mps
+        else:
+            est_lap_seconds = 92.0
+        est_lap_seconds = float(np.clip(est_lap_seconds, 45.0, 220.0))
+        steps_per_lap = max(1.0, est_lap_seconds / max(1e-6, timestep))
         projected_wear = wear_rate * steps_per_lap * laps_ahead
         projected_condition = max(0.0, float(state.tire_condition) - projected_wear)
         current_mult = self._tyre_pace_multiplier(state)

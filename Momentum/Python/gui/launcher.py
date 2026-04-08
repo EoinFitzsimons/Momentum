@@ -171,12 +171,6 @@ class MomentumLauncher:
                 championship.current_season,
             )
 
-            if mode == 'career':
-                # Career mode returns to HQ between races instead of showing
-                # an in-race setup dialog.
-                self._show_or_create_career_hq(championship)
-                return
-
             if not next_race:
                 print("[LAUNCHER] No more scheduled races in championship")
                 self.return_to_menu()
