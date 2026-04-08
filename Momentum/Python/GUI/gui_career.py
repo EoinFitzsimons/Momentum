@@ -9,16 +9,22 @@ Implements a dedicated career HQ flow:
 """
 
 import random
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -34,8 +40,11 @@ from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
 
 PLAYER_ID = "local_player"
+WORLD_START_DATE = "2026-01-01"
 BUDGET_WARNING_TITLE = "Insufficient Budget"
 SEASON_COMPLETE_TEXT = "Season Complete"
+NO_SELECTION_TITLE = "No Selection"
+SELECTION_ERROR_TITLE = "Selection Error"
 
 FACILITY_OPTIONS = [
     ("Driver Academy", "driver_academy"),
@@ -47,22 +56,450 @@ FACILITY_OPTIONS = [
 FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
 LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
+CAREER_DISCIPLINE_RACE_COUNTS = {
+    "SINGLE_SEATER": 24,
+    "PRODUCTION_TOURING": 12,
+    "URBAN_STREET": 10,
+    "DRAG_ACCELERATION": 14,
+    "SPRINT_RALLYCROSS": 12,
+    "ENDURANCE": 8,
+}
+
+
+def _normalize_tier(value: str) -> str:
+    raw = str(value or "").strip().upper().replace("-", "_")
+    if raw in {"TOP_TIER", "TIER1", "TIER_1", "1"}:
+        return "TIER_1"
+    if raw in {"TIER2", "TIER_2", "2"}:
+        return "TIER_2"
+    if raw in {"TIER3", "TIER_3", "3"}:
+        return "TIER_3"
+    return "TIER_2"
+
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
-    """Career-specific entry dialog (backed by championship data model)."""
+    """Career-specific entry dialog backed by dedicated career world tables."""
 
     def __init__(self, db, parent=None):
         super().__init__(db, parent)
         self.setWindowTitle("Select Career")
+        self._ensure_career_tables()
+        self._replace_create_button_text()
+        self.load_championships()
+
+    def create_championship(self):
+        """Create/reset career world and profile."""
+        if self._create_or_reset_career_save():
+            self.load_championships()
+
+    def load_championships(self):
+        """Load career series from dedicated career tables (not championships table)."""
+        self._ensure_career_tables()
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, name, discipline, tier, season_length, current_season, is_active
+                FROM career_championships
+                WHERE player_id = ?
+                ORDER BY discipline, tier, id
+                """,
+                (PLAYER_ID,),
+            ).fetchall()
+
+            self.championships_table.setRowCount(len(rows))
+            for i, row in enumerate(rows):
+                rowd = dict(row)
+                self.championships_table.setItem(i, 0, QTableWidgetItem(str(rowd["name"])))
+                self.championships_table.setItem(i, 1, QTableWidgetItem(_player_label(rowd["discipline"])))
+                self.championships_table.setItem(i, 2, QTableWidgetItem(str(rowd["current_season"])))
+                self.championships_table.setItem(i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} races"))
+                status = "Active" if int(rowd.get("is_active", 1) or 1) == 1 else "Inactive"
+                self.championships_table.setItem(i, 4, QTableWidgetItem(status))
+
+                item = self.championships_table.item(i, 0)
+                if item is not None:
+                    item.setData(Qt.ItemDataRole.UserRole, rowd)
+
+    def _replace_create_button_text(self) -> None:
+        for button in self.findChildren(QPushButton):
+            if button.text().strip().lower() == "create new championship":
+                button.setText("Create New Career Save")
+                button.setToolTip("Reset to 1 Jan 2026 and create a new career profile")
+                return
+
+    def select_championship(self):
+        """Ensure a valid career world exists and return selected career series."""
+        if not self._has_profile(PLAYER_ID):
+            QMessageBox.information(
+                self,
+                "Career Save Required",
+                "Create a career save first.",
+            )
+            if not self._create_or_reset_career_save():
+                return
+            self.load_championships()
+
+        row = self.championships_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a career series.")
+            return
+
+        item = self.championships_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a valid career series.")
+            return
+
+        selected = item.data(Qt.ItemDataRole.UserRole)
+        if not selected:
+            QMessageBox.warning(self, NO_SELECTION_TITLE, "Could not resolve selected career series.")
+            return
+
+        self.selected_championship = SimpleNamespace(
+            id=int(selected["id"]),
+            name=str(selected["name"]),
+            discipline=str(selected["discipline"]),
+            tier=str(selected["tier"]),
+            current_season=int(selected.get("current_season", 1) or 1),
+            season_length=int(selected.get("season_length", 1) or 1),
+            is_career_series=True,
+        )
+        self.accept()
+
+    def delete_championship(self):
+        """Delete selected career series from career tables only."""
+        row = self.championships_table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a career series to delete.")
+            return
+        item = self.championships_table.item(row, 0)
+        selected = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        if not selected:
+            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not resolve selected career series.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Delete Career Series",
+            f"Delete '{selected['name']}' from this career world?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        series_id = int(selected["id"])
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM career_race_results WHERE career_race_id IN (SELECT id FROM career_races WHERE career_championship_id = ?)", (series_id,))
+            conn.execute("DELETE FROM career_races WHERE career_championship_id = ?", (series_id,))
+            conn.execute("DELETE FROM career_championships WHERE id = ?", (series_id,))
+            conn.commit()
+
+        self.load_championships()
+
+    def _create_or_reset_career_save(self) -> bool:
+        profile_dialog = CareerProfileDialog(self)
+        if profile_dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+
+        profile = profile_dialog.profile_payload()
+        self._ensure_career_tables()
+        self._upsert_profile(PLAYER_ID, profile)
+        self._reset_world_to_start_date(PLAYER_ID, WORLD_START_DATE)
+        QMessageBox.information(
+            self,
+            "Career Save Created",
+            "Career world reset to 1 Jan 2026. All championships are active and calendars were rebuilt.",
+        )
+        return True
+
+    def _ensure_career_tables(self) -> None:
+        with self.db.get_connection() as conn:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS career_player_profiles (
+                    player_id TEXT PRIMARY KEY,
+                    player_name TEXT NOT NULL,
+                    age INTEGER NOT NULL,
+                    height_cm REAL NOT NULL,
+                    nationality TEXT NOT NULL,
+                    bio TEXT DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS career_world_state (
+                    player_id TEXT PRIMARY KEY,
+                    world_start_date TEXT NOT NULL,
+                    initialized_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (player_id) REFERENCES career_player_profiles(player_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS career_championships (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    discipline TEXT NOT NULL,
+                    tier TEXT NOT NULL,
+                    season_length INTEGER NOT NULL,
+                    current_season INTEGER NOT NULL DEFAULT 1,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (player_id) REFERENCES career_player_profiles(player_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS career_races (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_id TEXT NOT NULL,
+                    career_championship_id INTEGER NOT NULL,
+                    track_id INTEGER NOT NULL,
+                    season INTEGER NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    race_date TEXT NOT NULL,
+                    weather_conditions TEXT NOT NULL DEFAULT 'clear',
+                    laps INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'scheduled',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (career_championship_id) REFERENCES career_championships(id),
+                    FOREIGN KEY (track_id) REFERENCES tracks(id)
+                );
+
+                CREATE TABLE IF NOT EXISTS career_race_results (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_id TEXT NOT NULL,
+                    career_race_id INTEGER NOT NULL,
+                    driver_id INTEGER NOT NULL,
+                    team_id INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    points INTEGER NOT NULL DEFAULT 0,
+                    fastest_lap INTEGER NOT NULL DEFAULT 0,
+                    dnf_reason TEXT,
+                    grid_position INTEGER,
+                    recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(career_race_id, driver_id),
+                    FOREIGN KEY (career_race_id) REFERENCES career_races(id)
+                );
+                """
+            )
+            conn.commit()
+
+    def _has_profile(self, player_id: str) -> bool:
+        self._ensure_career_tables()
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT player_id FROM career_player_profiles WHERE player_id = ?",
+                (player_id,),
+            ).fetchone()
+            return row is not None
+
+    def _upsert_profile(self, player_id: str, profile: dict) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO career_player_profiles (player_id, player_name, age, height_cm, nationality, bio, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    player_name = excluded.player_name,
+                    age = excluded.age,
+                    height_cm = excluded.height_cm,
+                    nationality = excluded.nationality,
+                    bio = excluded.bio,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    player_id,
+                    profile["player_name"],
+                    profile["age"],
+                    profile["height_cm"],
+                    profile["nationality"],
+                    profile["bio"],
+                ),
+            )
+            conn.commit()
+
+    def _reset_world_to_start_date(self, player_id: str, world_start_date: str) -> None:
+        start_dt = datetime.strptime(world_start_date, "%Y-%m-%d")
+
+        teams = self.db.get_all_teams()
+        if not teams:
+            raise ValueError("No teams available. Seed team data before starting career mode.")
+
+        # Build all active discipline+tier series from team universe.
+        series_keys = sorted({
+            (str(getattr(team, "discipline", "") or "").upper(), _normalize_tier(getattr(team, "tier", "TIER_2")))
+            for team in teams
+            if str(getattr(team, "discipline", "") or "").strip()
+        })
+
+        if not series_keys:
+            raise ValueError("Could not derive any discipline/tier series from teams.")
+
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM career_races WHERE player_id = ?", (player_id,))
+            conn.execute("DELETE FROM career_championships WHERE player_id = ?", (player_id,))
+            conn.execute("DELETE FROM career_race_results WHERE player_id = ?", (player_id,))
+            conn.execute("UPDATE team_ownership SET is_active = 0 WHERE player_id = ?", (player_id,))
+            conn.execute(
+                """
+                INSERT INTO career_world_state (player_id, world_start_date, initialized_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(player_id) DO UPDATE SET
+                    world_start_date = excluded.world_start_date,
+                    initialized_at = CURRENT_TIMESTAMP
+                """,
+                (player_id, world_start_date),
+            )
+
+            for discipline, tier in series_keys:
+                season_length = int(CAREER_DISCIPLINE_RACE_COUNTS.get(discipline, 10))
+                series_name = f"{_player_label(discipline)} {_player_label(tier)} Championship"
+                cursor = conn.execute(
+                    """
+                    INSERT INTO career_championships (player_id, name, discipline, tier, season_length, current_season, is_active)
+                    VALUES (?, ?, ?, ?, ?, 1, 1)
+                    """,
+                    (player_id, series_name, discipline, tier, season_length),
+                )
+                career_championship_id = int(cursor.lastrowid)
+
+                track_ids = self._resolve_track_ids_for_championship(discipline, season_length)
+                race_date = start_dt
+                for round_number, track_id in enumerate(track_ids, start=1):
+                    conn.execute(
+                        """
+                        INSERT INTO career_races (
+                            player_id, career_championship_id, track_id, season, round_number,
+                            race_date, weather_conditions, laps, status
+                        )
+                        VALUES (?, ?, ?, 1, ?, ?, 'clear', ?, 'scheduled')
+                        """,
+                        (
+                            player_id,
+                            career_championship_id,
+                            int(track_id),
+                            round_number,
+                            race_date.strftime("%Y-%m-%d"),
+                            ChampionshipService.default_laps_for_discipline(discipline),
+                        ),
+                    )
+                    race_date += timedelta(days=14)
+
+            conn.commit()
+
+    def _resolve_track_ids_for_championship(self, discipline: str, season_length: int) -> list[int]:
+        tracks = self.db.get_tracks_by_discipline(discipline)
+        if not tracks:
+            tracks = self.db.get_all_tracks()
+        if not tracks:
+            raise ValueError("No tracks available to build a championship calendar.")
+
+        base_ids = [int(track.id) for track in tracks]
+        if len(base_ids) >= season_length:
+            return base_ids[:season_length]
+
+        expanded = []
+        while len(expanded) < season_length:
+            expanded.extend(base_ids)
+        return expanded[:season_length]
+
+
+class CareerProfileDialog(QDialog):
+    """Collect player profile details when creating a new career save."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Career Save")
+        self.resize(520, 430)
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        layout = QVBoxLayout(self)
+
+        title = QLabel("Create Career Save")
+        title.setStyleSheet("font-size: 20px; font-weight: 700; color: #B9F2FF;")
+        layout.addWidget(title)
+
+        subtitle = QLabel(
+            "This creates a persistent world starting on 1 Jan 2026 and resets career progression."
+        )
+        subtitle.setWordWrap(True)
+        subtitle.setStyleSheet("color: #CCCCCC;")
+        layout.addWidget(subtitle)
+
+        form = QFormLayout()
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("Player name")
+        form.addRow("Name", self.name_input)
+
+        self.age_input = QSpinBox()
+        self.age_input.setRange(16, 90)
+        self.age_input.setValue(25)
+        form.addRow("Age", self.age_input)
+
+        self.height_input = QSpinBox()
+        self.height_input.setRange(140, 230)
+        self.height_input.setValue(178)
+        self.height_input.setSuffix(" cm")
+        form.addRow("Height", self.height_input)
+
+        self.nationality_input = QLineEdit()
+        self.nationality_input.setPlaceholderText("Nationality")
+        form.addRow("Nationality", self.nationality_input)
+
+        self.bio_input = QPlainTextEdit()
+        self.bio_input.setPlaceholderText(
+            "Short bio (optional). If empty, one is generated from age, height, and nationality."
+        )
+        self.bio_input.setMaximumHeight(120)
+        form.addRow("Bio", self.bio_input)
+
+        layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        create_btn = QPushButton("Create Save")
+        create_btn.clicked.connect(self._accept_if_valid)
+        buttons.addWidget(create_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(cancel_btn)
+
+        layout.addLayout(buttons)
+
+    def _accept_if_valid(self) -> None:
+        if not self.name_input.text().strip():
+            QMessageBox.warning(self, "Missing Name", "Please enter a player name.")
+            return
+        if not self.nationality_input.text().strip():
+            QMessageBox.warning(self, "Missing Nationality", "Please enter a nationality.")
+            return
+        self.accept()
+
+    def profile_payload(self) -> dict:
+        name = self.name_input.text().strip()
+        nationality = self.nationality_input.text().strip()
+        age = int(self.age_input.value())
+        height_cm = int(self.height_input.value())
+        bio = self.bio_input.toPlainText().strip()
+        if not bio:
+            bio = f"{age}-year-old {nationality} manager, {height_cm} cm tall."
+        return {
+            "player_name": name,
+            "age": age,
+            "height_cm": float(height_cm),
+            "nationality": nationality,
+            "bio": bio,
+        }
 
 
 class CareerTeamSelectionDialog(QDialog):
     """Select the player-owned team for this career save."""
 
-    def __init__(self, db: DatabaseManager, discipline: str, parent=None):
+    def __init__(self, db: DatabaseManager, discipline: str | None, tier: str | None = None, parent=None):
         super().__init__(parent)
         self.db = db
         self.discipline = discipline
+        self.tier = _normalize_tier(tier) if tier else None
         self.selected_team = None
 
         self.setWindowTitle("Select Career Team")
@@ -79,9 +516,6 @@ class CareerTeamSelectionDialog(QDialog):
         logo.setStyleSheet(LOGO_STYLE)
         layout.addWidget(logo)
 
-        self.navbar = NavigationBar(self, db_provider=lambda: self.db, title="Career Team Select")
-        layout.addWidget(self.navbar)
-
         title = QLabel("Select Your Team")
         title.setStyleSheet("font-size: 22px; font-weight: 700; color: #B9F2FF;")
         layout.addWidget(title)
@@ -94,9 +528,10 @@ class CareerTeamSelectionDialog(QDialog):
         layout.addWidget(subtitle)
 
         self.teams_table = QTableWidget()
-        self.teams_table.setColumnCount(6)
+        self.teams_table.setColumnCount(7)
         self.teams_table.setHorizontalHeaderLabels([
             "Team",
+            "Discipline",
             "Tier",
             "Budget",
             "Drivers",
@@ -109,7 +544,7 @@ class CareerTeamSelectionDialog(QDialog):
         header = self.teams_table.horizontalHeader()
         if header is not None:
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-            header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.teams_table)
 
         buttons = QHBoxLayout()
@@ -123,7 +558,16 @@ class CareerTeamSelectionDialog(QDialog):
         layout.addLayout(buttons)
 
     def _load_teams(self):
-        teams = self.db.get_teams_by_discipline(self.discipline)
+        if self.discipline:
+            teams = self.db.get_teams_by_discipline(self.discipline)
+        else:
+            teams = self.db.get_all_teams()
+
+        if self.tier:
+            teams = [
+                team for team in teams
+                if _normalize_tier(getattr(team, "tier", "TIER_2")) == self.tier
+            ]
         self.teams_table.setRowCount(len(teams))
 
         for row, team in enumerate(teams):
@@ -136,11 +580,12 @@ class CareerTeamSelectionDialog(QDialog):
             team_item = QTableWidgetItem(team.name)
             team_item.setData(Qt.ItemDataRole.UserRole, team)
             self.teams_table.setItem(row, 0, team_item)
-            self.teams_table.setItem(row, 1, QTableWidgetItem(_player_label(team.tier)))
-            self.teams_table.setItem(row, 2, QTableWidgetItem(f"EUR {team.budget:,.0f}"))
-            self.teams_table.setItem(row, 3, QTableWidgetItem(str(len(drivers))))
-            self.teams_table.setItem(row, 4, QTableWidgetItem(str(len(staff))))
-            self.teams_table.setItem(row, 5, QTableWidgetItem(team.headquarters or "-"))
+            self.teams_table.setItem(row, 1, QTableWidgetItem(_player_label(team.discipline)))
+            self.teams_table.setItem(row, 2, QTableWidgetItem(_player_label(team.tier)))
+            self.teams_table.setItem(row, 3, QTableWidgetItem(f"EUR {team.budget:,.0f}"))
+            self.teams_table.setItem(row, 4, QTableWidgetItem(str(len(drivers))))
+            self.teams_table.setItem(row, 5, QTableWidgetItem(str(len(staff))))
+            self.teams_table.setItem(row, 6, QTableWidgetItem(team.headquarters or "-"))
 
         if teams:
             self.teams_table.selectRow(0)
@@ -153,12 +598,12 @@ class CareerTeamSelectionDialog(QDialog):
 
         team_item = self.teams_table.item(row, 0)
         if team_item is None:
-            QMessageBox.warning(self, "Selection Error", "Could not read selected team.")
+            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not read selected team.")
             return
 
         self.selected_team = team_item.data(Qt.ItemDataRole.UserRole)
         if self.selected_team is None:
-            QMessageBox.warning(self, "Selection Error", "Could not resolve selected team.")
+            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not resolve selected team.")
             return
         self.accept()
 
@@ -173,7 +618,6 @@ class CareerWindow(QMainWindow):
         super().__init__(parent)
         self.championship = championship
         self.db = DatabaseManager()
-        self.championship_service = ChampionshipService(self.db)
         self.player_id = PLAYER_ID
 
         self.owned_team = None
@@ -378,7 +822,12 @@ class CareerWindow(QMainWindow):
             self.owned_team = team
             return
 
-        dialog = CareerTeamSelectionDialog(self.db, self.championship.discipline, self)
+        dialog = CareerTeamSelectionDialog(
+            self.db,
+            self.championship.discipline,
+            getattr(self.championship, "tier", None),
+            self,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.selected_team is None:
             QMessageBox.warning(
                 self,
@@ -390,6 +839,30 @@ class CareerWindow(QMainWindow):
 
         self.owned_team = dialog.selected_team
         self.db.assign_team_owner(self.owned_team.id, self.player_id)
+        self._sync_selected_series_from_team()
+
+    def _sync_selected_series_from_team(self) -> None:
+        """Align selected career series to the owned team's discipline/tier."""
+        if not self.owned_team:
+            return
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT id, name, discipline, tier, season_length, current_season
+                FROM career_championships
+                WHERE player_id = ? AND discipline = ? AND tier = ? AND is_active = 1
+                ORDER BY id
+                LIMIT 1
+                """,
+                (
+                    self.player_id,
+                    str(self.owned_team.discipline).upper(),
+                    _normalize_tier(getattr(self.owned_team, "tier", "TIER_2")),
+                ),
+            ).fetchone()
+            if row:
+                rowd = dict(row)
+                self.championship = SimpleNamespace(**rowd)
 
     def load_data(self):
         if not self.owned_team:
@@ -528,10 +1001,19 @@ class CareerWindow(QMainWindow):
         self.facility_label.setText("Facilities: " + ", ".join(parts))
 
     def _load_schedule_panel(self):
-        calendar = self.championship_service.get_championship_calendar(
-            self.championship.id,
-            self.championship.current_season,
-        )
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT cr.id AS race_id, cr.round_number, cr.race_date, cr.status, cr.laps,
+                       t.name AS track_name
+                FROM career_races cr
+                LEFT JOIN tracks t ON t.id = cr.track_id
+                WHERE cr.player_id = ? AND cr.career_championship_id = ? AND cr.season = ?
+                ORDER BY cr.round_number
+                """,
+                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+            ).fetchall()
+        calendar = [dict(r) for r in rows]
 
         self.schedule_table.setRowCount(len(calendar))
         self.next_race = None
@@ -554,17 +1036,32 @@ class CareerWindow(QMainWindow):
             self.start_next_btn.setText("Start Next Race")
 
     def _load_standings_panel(self):
-        standings = self.championship_service.recalculate_standings(
-            self.championship.id,
-            self.championship.current_season,
-        )
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT rr.driver_id AS driver_id,
+                       COALESCE(d.name, 'Driver ' || rr.driver_id) AS driver_name,
+                       rr.team_id AS team_id,
+                       COALESCE(t.name, 'Team ' || rr.team_id) AS team_name,
+                       COALESCE(SUM(rr.points), 0) AS total_points
+                FROM career_race_results rr
+                JOIN career_races cr ON cr.id = rr.career_race_id
+                LEFT JOIN drivers d ON d.id = rr.driver_id
+                LEFT JOIN teams t ON t.id = rr.team_id
+                WHERE cr.player_id = ? AND cr.career_championship_id = ? AND cr.season = ?
+                GROUP BY rr.driver_id, rr.team_id
+                ORDER BY total_points DESC, driver_name ASC
+                """,
+                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+            ).fetchall()
+        standings = [dict(r) for r in rows]
 
         self.standings_table.setRowCount(len(standings))
         for row, entry in enumerate(standings):
-            self.standings_table.setItem(row, 0, QTableWidgetItem(str(entry.position)))
-            self.standings_table.setItem(row, 1, QTableWidgetItem(str(entry.driver_name)))
-            self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry.team_name)))
-            self.standings_table.setItem(row, 3, QTableWidgetItem(str(entry.total_points)))
+            self.standings_table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
+            self.standings_table.setItem(row, 1, QTableWidgetItem(str(entry["driver_name"])))
+            self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry["team_name"])))
+            self.standings_table.setItem(row, 3, QTableWidgetItem(str(entry["total_points"])))
 
     def start_next_race(self):
         if not self.next_race:
@@ -576,35 +1073,33 @@ class CareerWindow(QMainWindow):
             return
 
         race_id = int(self.next_race['race_id'])
-        race_obj = self.db.get_race(race_id)
-        if race_obj is None:
-            QMessageBox.warning(self, "Race Error", "Could not load next race details.")
-            return
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT track_id, weather_conditions, laps FROM career_races WHERE id = ?",
+                (race_id,),
+            ).fetchone()
+            if not row:
+                QMessageBox.warning(self, "Race Error", "Could not load next race details.")
+                return
+            conn.execute("UPDATE career_races SET status = 'in-progress' WHERE id = ?", (race_id,))
+            conn.commit()
 
-        success, error_msg = self.championship_service.update_race_lifecycle_status(
-            race_id,
-            "in-progress",
-        )
-        if not success:
-            QMessageBox.warning(
-                self,
-                "Status Update Failed",
-                f"Could not update race status: {error_msg}",
-            )
-            return
+        race_data = dict(row)
 
         config = {
             "mode": "career",
             "personnel_transfers_enabled": True,
-            "championship_id": self.championship.id,
-            "race_id": race_obj.id,
-            "track_id": race_obj.track_id,
+            "career_championship_id": int(self.championship.id),
+            "race_id": race_id,
+            "career_race_id": race_id,
+            "track_id": int(race_data["track_id"]),
             "driver": self.selected_driver,
             "team": self.owned_team,
             "discipline": self.championship.discipline,
-            "weather": race_obj.weather_conditions,
+            "tier": str(getattr(self.championship, "tier", "TIER_2") or "TIER_2"),
+            "weather": race_data.get("weather_conditions", "clear"),
             "tire_strategy": "Medium",
-            "laps": race_obj.laps,
+            "laps": int(race_data.get("laps", 3) or 3),
         }
 
         self.start_race_signal.emit(config)
@@ -675,10 +1170,17 @@ class CareerWindow(QMainWindow):
         if not self.owned_team:
             return
 
-        calendar = self.championship_service.get_championship_calendar(
-            self.championship.id,
-            self.championship.current_season,
-        )
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT id AS race_id, round_number, status
+                FROM career_races
+                WHERE player_id = ? AND career_championship_id = ? AND season = ?
+                ORDER BY round_number
+                """,
+                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+            ).fetchall()
+        calendar = [dict(r) for r in rows]
         transactions = self.db.get_budget_transactions(self.owned_team.id)
         existing_refs = {
             str(t.get("description", ""))
