@@ -66,7 +66,7 @@ import time
 import threading
 import traceback as _traceback
 import logging
-from typing import Any, List, Dict, Optional, Tuple, cast
+from typing import Any, List, Dict, Optional, Tuple, Union, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
@@ -89,6 +89,8 @@ CONTROL_LABEL_STYLE = "font-size: 16px; font-weight: bold; color: #FFFFFF;"
 UNKNOWN_DRIVER_LABEL = "Unknown Driver"
 SUPPRESSED_GUI_EXCEPTION_MSG = "Suppressed non-fatal GUI exception"
 LOGGER = logging.getLogger(__name__)
+
+PlayerOverrideValue = Union[float, bool, str]
 
 
 def _normalize_tier(value: Any) -> str:
@@ -1704,7 +1706,8 @@ class TrackWidget(QWidget):
     def _draw_pit_boxes(self, painter) -> None:
         painter.setPen(QPen(QColor(255, 255, 255), 2))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        route = self.pit_points if getattr(self, 'pit_points', None) else []
+        pit_points = getattr(self, 'pit_points', None)
+        route: List[TrackPoint] = pit_points if isinstance(pit_points, list) else []
         route_len = self._route_length(route)
         for box_idx in range(10):
             box_s = max(20.0, min(20.0 + box_idx * 20.0, max(20.0, route_len - 20.0)))
@@ -2360,10 +2363,11 @@ class TrackWidget(QWidget):
         normalized_s = (display_pos if display_pos is not None else car.s) % self.track_length
 
         pt: Optional[TrackPoint]
-        if getattr(car, 'in_pit_lane', False) and getattr(self, 'pit_points', None):
-            pit_length = self._route_length(self.pit_points)
+        pit_points = getattr(self, 'pit_points', None)
+        if getattr(car, 'in_pit_lane', False) and isinstance(pit_points, list) and pit_points:
+            pit_length = self._route_length(pit_points)
             route_s = self._resolve_pit_route_s(car, pit_length)
-            pt = self._point_at_s_on_route(self.pit_points, pit_length, route_s, closed=False)
+            pt = self._point_at_s_on_route(pit_points, pit_length, route_s, closed=False)
         else:
             pt = self._point_at_s(normalized_s)
 
@@ -2458,7 +2462,7 @@ class RaceWindow(QMainWindow):
             self.player_driver_id: Optional[int] = None
             self.player_team_id: Optional[int] = None
             self.player_team_driver_ids: List[int] = []
-            self.player_overrides: Dict[str, float] = {
+            self.player_overrides: Dict[str, PlayerOverrideValue] = {
                 'pace': 0.7,
                 'overtake': 0.5,
                 'come_in': False,
@@ -3878,19 +3882,48 @@ class RaceWindow(QMainWindow):
 
     def _get_contracted_discipline_drivers(self, discipline: str, limit: int, tier: Optional[str] = None):
         """Return contracted drivers for teams in selected discipline."""
+        return self._get_contracted_discipline_drivers_impl(discipline, limit, tier)
+
+    def _get_contracted_discipline_drivers_impl(self, discipline: str, limit: int, tier: Optional[str] = None):
+        """Implementation for contracted-driver lookup with optional tier filtering."""
         if self.db is None:
             return []
 
         norm = (discipline or "").lower().replace(" ", "_")
         tier_norm = _normalize_tier(tier) if tier else None
+        fetch_limit = self._contracted_fetch_limit(limit, tier_norm)
+        rows = self._fetch_contracted_driver_rows(norm, fetch_limit)
+
+        out = []
+        team_cache: Dict[int, Any] = {}
+        target_limit = int(limit)
+        for row in rows:
+            drv = self.db.get_driver(int(row[0]))
+            if not drv:
+                continue
+            if not self._driver_matches_tier_filter(drv, tier_norm, team_cache):
+                continue
+            out.append(drv)
+            if len(out) >= target_limit:
+                break
+        return out
+
+    def _contracted_fetch_limit(self, limit: int, tier_norm: Optional[str]) -> int:
+        """Return candidate query size, widened when tier filtering is active."""
         fetch_limit = int(limit)
         if tier_norm:
             # Pull a broader candidate list first, then normalize/filter tiers in Python.
             fetch_limit = max(fetch_limit * 8, fetch_limit + 20)
+        return fetch_limit
+
+    def _fetch_contracted_driver_rows(self, discipline_norm: str, fetch_limit: int) -> List[Any]:
+        """Query candidate contracted driver ids for the requested discipline."""
+        if self.db is None:
+            return []
 
         with self.db.get_connection() as conn:
-            if norm == 'drag_acceleration':
-                rows = conn.execute(
+            if discipline_norm == 'drag_acceleration':
+                return conn.execute(
                     """
                     WITH ranked AS (
                         SELECT d.id,
@@ -3908,44 +3941,40 @@ class RaceWindow(QMainWindow):
                     ORDER BY id ASC
                     LIMIT ?
                     """,
-                    (norm, fetch_limit)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT d.id
-                    FROM drivers d
-                    JOIN teams t ON t.id = d.current_team_id
-                    WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
-                    ORDER BY d.speed DESC, d.id ASC
-                    LIMIT ?
-                    """,
-                    (norm, fetch_limit)
+                    (discipline_norm, fetch_limit)
                 ).fetchall()
 
-        out = []
-        team_cache: Dict[int, Any] = {}
-        for row in rows:
-            drv = self.db.get_driver(int(row[0]))
-            if not drv:
-                continue
-            if tier_norm:
-                team_id = int(getattr(drv, 'current_team_id', 0) or 0)
-                if team_id <= 0:
-                    continue
-                team = team_cache.get(team_id)
-                if team is None:
-                    team = self.db.get_team(team_id)
-                    if team:
-                        team_cache[team_id] = team
-                if not team:
-                    continue
-                if _normalize_tier(getattr(team, 'tier', 'TIER_2')) != tier_norm:
-                    continue
-            out.append(drv)
-            if len(out) >= int(limit):
-                break
-        return out
+            return conn.execute(
+                """
+                SELECT d.id
+                FROM drivers d
+                JOIN teams t ON t.id = d.current_team_id
+                WHERE LOWER(REPLACE(t.discipline, ' ', '_')) = ?
+                ORDER BY d.speed DESC, d.id ASC
+                LIMIT ?
+                """,
+                (discipline_norm, fetch_limit)
+            ).fetchall()
+
+    def _driver_matches_tier_filter(self, drv: Any, tier_norm: Optional[str], team_cache: Dict[int, Any]) -> bool:
+        """Return whether driver matches team-tier filter (or no filter is requested)."""
+        if not tier_norm:
+            return True
+        if self.db is None:
+            return False
+
+        team_id = int(getattr(drv, 'current_team_id', 0) or 0)
+        if team_id <= 0:
+            return False
+
+        team = team_cache.get(team_id)
+        if team is None:
+            team = self.db.get_team(team_id)
+            if team:
+                team_cache[team_id] = team
+        if not team:
+            return False
+        return _normalize_tier(getattr(team, 'tier', 'TIER_2')) == tier_norm
 
     def _ensure_contracted_grid_for_discipline(self, discipline: str, target_grid_size: int):
         """Assign available drivers to discipline teams so race grid is playable."""
@@ -4661,7 +4690,15 @@ class RaceWindow(QMainWindow):
         from database.models import RaceResult
         from services.championship_service import ChampionshipService
 
-        driver_id = result.get('driver_id')
+        driver_id_raw = result.get('driver_id')
+        if not isinstance(driver_id_raw, (int, str)):
+            print(f"WARNING: Skipping result with invalid driver_id={driver_id_raw}")
+            return False
+        try:
+            driver_id = int(driver_id_raw)
+        except (TypeError, ValueError):
+            print(f"WARNING: Skipping result with invalid driver_id={driver_id_raw}")
+            return False
         driver = next((d for d in self.drivers if d.id == driver_id), None)
         team_id = driver.current_team_id if driver and hasattr(driver, 'current_team_id') else None
         if team_id is None:
@@ -4725,6 +4762,9 @@ class RaceWindow(QMainWindow):
         """Persist one career-mode race result into career-specific storage."""
         if self.db is None:
             return
+        race_id = getattr(self, '_race_id', None)
+        if race_id is None:
+            return
         with self.db.get_connection() as conn:
             conn.execute(
                 """
@@ -4743,7 +4783,7 @@ class RaceWindow(QMainWindow):
                 """,
                 (
                     "local_player",
-                    int(self._race_id),
+                    int(race_id),
                     int(driver_id),
                     int(team_id),
                     int(position),
@@ -5945,8 +5985,8 @@ class RaceWindow(QMainWindow):
 
     def _update_combined_push(self):
         """Compute combined push intensity as average of pace and overtake sliders."""
-        pace_norm = self.player_overrides.get('pace', 0.5)
-        overtake_norm = self.player_overrides.get('overtake', 0.5)
+        pace_norm = self._get_player_override_float('pace', 0.5)
+        overtake_norm = self._get_player_override_float('overtake', 0.5)
         # Average both sliders: 100% push only when both at 100%
         avg = (pace_norm + overtake_norm) / 2.0
         # Map to 0.3-1.0 range
@@ -5958,6 +5998,13 @@ class RaceWindow(QMainWindow):
                 overtake_norm *
                 100:.0f}% → combined push={
                 self.player_overrides['push']:.2f}")
+
+    def _get_player_override_float(self, key: str, default: float) -> float:
+        """Return numeric player override value with defensive fallback."""
+        value = self.player_overrides.get(key, default)
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(default)
 
     def set_player_driver(self, driver):
         """Set the player-controlled driver."""

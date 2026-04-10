@@ -400,6 +400,10 @@ def simulate_race(
     # Validate required parameters before using helper flows
     _validate_required_simulation_inputs(drivers, track)
 
+    # Explicitly narrow optionals after validation for static type checkers.
+    assert drivers is not None
+    assert track is not None
+
     # Calculate lap count
     laps = _calculate_race_laps(track, laps)
     realtime_speed = _resolve_realtime_speed(verbose, event_callback)
