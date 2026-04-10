@@ -339,7 +339,7 @@ pacing, and route validation at scale. This section is archived for historical d
 **Player Setup:**
 
 - Manager name
-- Starting year (2025 ONLY)
+- Starting year (2026 ONLY)
 - **Choose team** (existing team at any tier level AT ANY DISCIPLINE)
 
 **Team Selection Options:**
