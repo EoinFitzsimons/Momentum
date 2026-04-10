@@ -6002,6 +6002,8 @@ class RaceWindow(QMainWindow):
     def _get_player_override_float(self, key: str, default: float) -> float:
         """Return numeric player override value with defensive fallback."""
         value = self.player_overrides.get(key, default)
+        if isinstance(value, bool):
+            return float(default)
         if isinstance(value, (int, float)):
             return float(value)
         return float(default)
