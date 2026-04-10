@@ -1,44 +1,93 @@
-# Momentum Backend Test Suite
+# Momentum Backend Tests
 
-This test suite is designed to be explainable in the technical report and traceable to project quality goals.
+This folder contains the maintained automated tests for the Python backend.
 
-## Structure
+## How the test setup works
 
 - `conftest.py`
-  - Deterministic fixtures
-  - Isolated temp SQLite DB per test
-  - Seeded reference data
-  - FastAPI `TestClient` patched to test DB
+  - Creates a fresh temporary SQLite database for each test.
+  - Seeds known teams, tracks, and drivers so tests are repeatable.
+  - Patches the FastAPI app to use the temporary test database.
+
+## What each test file checks
 
 - `test_unit_track_surface_service.py`
-  - Unit tests for discipline-to-surface and grip mapping rules
 
+  - Checks that each discipline maps to the expected default surface.
+  - Checks grip values for known and unknown surfaces.
+  - Checks that track surfaces are only overwritten when appropriate.
+- `test_unit_racelogic_discipline_loader.py`
+
+  - Checks that dynamic discipline loading resolves the correct engine class for every discipline.
+  - Checks that `simulate_race(context=...)` uses the discipline adapter path when available.
+- `test_unit_racelogic_single_seater.py`
+
+  - Checks single-seater attribute weights include core fields.
+  - Checks the adapter forwards context values to the realtime engine.
+  - Checks aggressive preset tuning is applied (for example, slipstream bonus).
+- `test_unit_racelogic_production_touring.py`
+
+  - Checks production touring adapter tuning and argument forwarding to realtime simulation.
+  - Includes a placeholder test for deeper touring-specific behaviour as implementation grows.
+- `test_unit_racelogic_urban_street.py`
+
+  - Checks urban street adapter tuning and argument forwarding to realtime simulation.
+  - Includes a placeholder test for future drift-specific scoring/judging behaviour.
+- `test_unit_racelogic_sprint_rallycross.py`
+
+  - Checks sprint rallycross adapter tuning and argument forwarding to realtime simulation.
+- `test_unit_racelogic_endurance.py`
+
+  - Checks endurance adapter tuning and argument forwarding to realtime simulation.
+  - Includes a placeholder test for future stint/reliability-specific behaviour.
+- `test_unit_racelogic_drag_acceleration.py`
+
+  - Checks drag representative selection (one per team, including player override rules).
+  - Checks head-to-head winner logic, including DNF/red-light handling.
+  - Checks player pace/overtake overrides affect elapsed run time correctly.
 - `test_unit_championship_rules.py`
-  - Unit tests for points system logic
 
+  - Checks points allocation rules by discipline.
+  - Checks fastest-lap bonus behaviour.
+  - Checks out-of-range finishing positions return zero points.
+- `test_unit_gui_launcher_smoke.py`
+
+  - Checks launcher race-start wiring with stubs.
+  - Checks returning to menu closes race window and shows main menu.
+  - Checks menu signal flow can automatically start a race.
 - `test_integration_database_layer.py`
-  - CRUD and persistence integration tests for database manager
 
+  - Checks real create/read/update flows through the database manager.
+  - Checks track updates persist.
+  - Checks normalized discipline filtering and database stats responses.
 - `test_integration_api_contracts.py`
-  - Endpoint contract tests for `/health`, `/drivers`, `/teams`, `/teams/me`
 
+  - Checks real FastAPI endpoint contracts for:
+    - `/health`
+    - `/drivers`
+    - `/teams`
+    - `/teams/me`
+  - Checks expected status codes and response envelope shape.
 - `test_integration_championship_flow.py`
-  - Championship calendar creation, race lifecycle, standings recalculation
 
-## Why this suite is report-friendly
+  - Checks championship season creation and discipline surface assignment.
+  - Checks race lifecycle transitions.
+  - Checks standings recalculation and tie-break ordering.
+  - Checks date-conflict validation for race events.
+- `test_integration_full_career_season.py`
 
-- Every test has a clear single purpose and deterministic expected outcome.
-- Integration tests validate real interfaces, not synthetic mock dictionaries.
-- Temporary databases avoid cross-test contamination and make runs reproducible.
-- Test categories (`unit`, `integration`) map to the testing plan sections.
+  - Runs a small full-season pipeline using seeded data.
+  - Checks races are scheduled and completed.
+  - Checks standings are produced and ranked.
 
-## Suggested Runs
+## Commands
 
-- Full suite:
+- Run everything:
+
   - `pytest Momentum/Python/tests -q`
+- Run only unit tests:
 
-- Unit only:
   - `pytest Momentum/Python/tests -m unit -q`
+- Run only integration tests:
 
-- Integration only:
   - `pytest Momentum/Python/tests -m integration -q`

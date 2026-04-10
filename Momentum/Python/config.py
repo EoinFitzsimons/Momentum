@@ -130,10 +130,6 @@ ENABLE_DEBUG_ENDPOINTS = os.getenv(
     "true").lower() == "true"
 MOCK_EXTERNAL_APIS = os.getenv("MOCK_EXTERNAL_APIS", "false").lower() == "true"
 
-# ============================================================================
-# RACING DISCIPLINES (6 Disciplines - Rally Stage removed due to complexity)
-# ============================================================================
-
 DISCIPLINES = {
     "SINGLE_SEATER": {
         "name": "Single Seater Racing",
