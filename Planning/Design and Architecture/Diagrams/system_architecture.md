@@ -14,12 +14,12 @@ flowchart TB
     subgraph Backend["Backend - Race Simulation"]
         RaceAPI["Race API<br/>Public Interface"]
         Engine["Realtime Engine<br/>30 FPS Simulation"]
-        Disciplines["Discipline Modules<br/>7 Racing Types"]
+        Disciplines["Discipline Modules<br/>6 Active Racing Types"]
     end
     
     subgraph Storage["Data Layer"]
         DBManager["Database Manager<br/>CRUD Operations"]
-        SQLite[("SQLite Database<br/>1781 Drivers, 1095 Teams<br/>175 Tracks")]
+        SQLite[("SQLite Database<br/>Drivers, Teams, Tracks,<br/>Championships, Results")]
     end
     
     Launcher -->|"Creates and shows"| MainMenu
@@ -67,8 +67,8 @@ flowchart TB
 **Vehicle Renderer**
 - Top-down sprite rendering using QPainter
 - Deterministic livery generation
-- Steering angle visualization
-- Polygon-based car bodies with wings and tires
+- Steering angle visualisation
+- Polygon-based car bodies with wings and tyres
 
 ### Backend - Race Simulation
 
@@ -85,18 +85,18 @@ flowchart TB
 - Physics calculations (speed, position)
 - Lap detection and timing
 - Collision detection
-- Degradation systems (tires, fuel, fatigue)
+- Degradation systems (tyres, fuel, fatigue)
 - Position event emission
 
 **Discipline Modules**
 - Single Seater racing
-- Rally/Stage racing
-- Endurance racing
+- Production/Touring car racing
+- Urban/Street (drifting) racing
 - Drag/Acceleration racing
 - Sprint/Rallycross racing
-- Production/Touring car racing
-- Urban/Street racing
+- Endurance racing
 - Each inherits from BaseDisciplineEngine
+- Legacy Rally Stage data is retained for compatibility and is not an active gameplay discipline
 
 ### Data Layer
 
@@ -105,12 +105,11 @@ flowchart TB
 - Transaction management
 - Foreign key constraint enforcement
 - Schema initialization
-- Connection pooling
+- Connection lifecycle management
 
 **SQLite Database**
-- 1,781 drivers (50+ attributes each)
-- 1,095 teams
-- 175 tracks
+- Driver, team, track, and championship data
+- Driver records include 50+ attributes each
 - Championships and seasons
 - Race results and telemetry
 - Lap times and standings
@@ -136,7 +135,7 @@ flowchart TB
 
 4. **Database Query Flow**
    - Race Window/Engine → Database Manager → SQLite DB
-   - Load drivers, teams, tracks
+    - Load drivers, teams, and tracks
    - Store race results and telemetry
    - Query championship standings
 
