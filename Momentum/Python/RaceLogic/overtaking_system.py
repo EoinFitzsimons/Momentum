@@ -12,7 +12,7 @@ All decisions use driver attributes comprehensively.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 from enum import Enum
 import numpy as np
 
@@ -75,6 +75,90 @@ def _logistic_probability(signal: float, slope: float = 4.0) -> float:
     """
     z = np.clip(float(signal) * float(slope), -12.0, 12.0)
     return float(1.0 / (1.0 + np.exp(-z)))
+
+
+def _apply_generic_commitment_nudge(
+    should_attempt: bool,
+    success_prob: float,
+    gap_m: float,
+    speed_advantage: float,
+    push: float,
+    overtake: float,
+) -> Tuple[bool, float]:
+    """Apply non-player aggressive commitment nudge when setup is strong."""
+    if push >= 0.85 and overtake >= 0.80 and speed_advantage >= 5.0 and gap_m <= 10.0:
+        return True, max(success_prob, 0.65)
+    return should_attempt, success_prob
+
+
+def _apply_player_max_commitment(
+    success_prob: float,
+    attempt_type: 'OvertakeAttemptType',
+    section: TrackSection,
+    gap_m: float,
+    speed_advantage: float,
+    push: float,
+    overtake: float,
+    racing_mode: str,
+) -> Optional[Tuple[bool, float, 'OvertakeAttemptType']]:
+    """Return forced player-commitment decision when max controls are active."""
+    if not (push >= 0.95 and overtake >= 0.90 and racing_mode == 'attack'):
+        return None
+    if section == TrackSection.STRAIGHT and speed_advantage >= 8.0 and gap_m <= 28.0:
+        return True, max(success_prob, 0.93), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+    if section == TrackSection.BRAKING_ZONE and speed_advantage >= 1.0 and gap_m <= 7.0:
+        return True, max(success_prob, 0.84), OvertakeAttemptType.LATE_BRAKING
+    if gap_m <= 7.0 and speed_advantage >= 0.5:
+        return True, max(success_prob, 0.76), attempt_type
+    return None
+
+
+def _apply_attack_commitment_override(
+    should_attempt: bool,
+    success_prob: float,
+    attempt_type: 'OvertakeAttemptType',
+    section: TrackSection,
+    gap_m: float,
+    speed_advantage: float,
+    attack_context: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, float, 'OvertakeAttemptType']:
+    """Apply commitment-aware overrides to prevent gearbox lock-ups.
+
+    This keeps tactical logic in the overtaking module (not only the race
+    engine) so decisioning and resolution remain coherent.
+    """
+    if not isinstance(attack_context, dict):
+        return should_attempt, success_prob, attempt_type
+
+    push = float(attack_context.get('push_intensity', 0.5) or 0.5)
+    overtake = float(attack_context.get('overtake_intensity', 0.5) or 0.5)
+    is_player = bool(attack_context.get('is_player_controlled', False))
+    racing_mode = str(attack_context.get('racing_mode', '') or '').lower()
+
+    should_attempt, success_prob = _apply_generic_commitment_nudge(
+        should_attempt=should_attempt,
+        success_prob=success_prob,
+        gap_m=gap_m,
+        speed_advantage=speed_advantage,
+        push=push,
+        overtake=overtake,
+    )
+
+    if is_player:
+        player_decision = _apply_player_max_commitment(
+            success_prob=success_prob,
+            attempt_type=attempt_type,
+            section=section,
+            gap_m=gap_m,
+            speed_advantage=speed_advantage,
+            push=push,
+            overtake=overtake,
+            racing_mode=racing_mode,
+        )
+        if player_decision is not None:
+            return player_decision
+
+    return should_attempt, success_prob, attempt_type
 
 
 class OvertakeAttemptType(Enum):
@@ -162,6 +246,7 @@ def evaluate_overtaking_opportunity(
     corner: Optional[TrackCorner],
     track_width_m: float = 12.0,
     logistic_slopes: Optional[dict] = None,
+    attack_context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, float, OvertakeAttemptType]:
     """
     Evaluate if overtaking attempt should be initiated
@@ -209,7 +294,15 @@ def evaluate_overtaking_opportunity(
             threshold = 0.45 - (get_driver_aggression(attacker) / 100.0) * 0.25 - (get_driver_bravery(attacker) / 100.0) * 0.10
 
             should_attempt = success_prob > threshold
-            return should_attempt, float(success_prob), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+            return _apply_attack_commitment_override(
+                should_attempt=bool(should_attempt),
+                success_prob=float(success_prob),
+                attempt_type=OvertakeAttemptType.SLIPSTREAM_STRAIGHT,
+                section=section,
+                gap_m=float(gap_m),
+                speed_advantage=float(speed_advantage),
+                attack_context=attack_context,
+            )
 
     # === BRAKING ZONE OVERTAKING ===
     elif section == TrackSection.BRAKING_ZONE and corner:
@@ -243,7 +336,15 @@ def evaluate_overtaking_opportunity(
             threshold = 0.5 - risk_tolerance
 
             should_attempt = success_prob > threshold
-            return should_attempt, float(success_prob), OvertakeAttemptType.LATE_BRAKING
+            return _apply_attack_commitment_override(
+                should_attempt=bool(should_attempt),
+                success_prob=float(success_prob),
+                attempt_type=OvertakeAttemptType.LATE_BRAKING,
+                section=section,
+                gap_m=float(gap_m),
+                speed_advantage=float(speed_advantage),
+                attack_context=attack_context,
+            )
 
     # === CORNER OVERTAKING ===
     elif section in [TrackSection.SLOW_CORNER, TrackSection.MEDIUM_CORNER] and corner:
@@ -293,7 +394,15 @@ def evaluate_overtaking_opportunity(
             threshold = 0.4 - (get_driver_aggression(attacker) / 100.0) * 0.1 + (get_safe_attribute(attacker, 'patience') / 100.0) * -0.05
 
             should_attempt = best_prob > threshold and get_racecraft(attacker) > 30
-            return should_attempt, float(best_prob), best_type
+            return _apply_attack_commitment_override(
+                should_attempt=bool(should_attempt),
+                success_prob=float(best_prob),
+                attempt_type=best_type,
+                section=section,
+                gap_m=float(gap_m),
+                speed_advantage=float(speed_advantage),
+                attack_context=attack_context,
+            )
 
     # No good opportunity
     return False, 0.0, OvertakeAttemptType.SLIPSTREAM_STRAIGHT

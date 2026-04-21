@@ -1008,11 +1008,21 @@ class RealtimeRaceEngine:
 
     def _update_driver_push_fatigue(self, state: DriverState) -> None:
         """Update fatigue accumulation/recovery based on current push level."""
+        fatigue_gain_rate = 0.00035
+        fatigue_recovery_rate = 0.00008
+        fatigue_cap = 1.0
+
+        if self._is_player_full_attack(state):
+            # Max player attack should still carry risk, but not collapse pace in short runs.
+            fatigue_gain_rate = 0.00016
+            fatigue_recovery_rate = 0.00010
+            fatigue_cap = 0.55
+
         if state.push_intensity > 0.8:
-            state.push_fatigue += 0.00035 * (state.push_intensity - 0.8)
+            state.push_fatigue += fatigue_gain_rate * (state.push_intensity - 0.8)
         else:
-            state.push_fatigue = max(0.0, state.push_fatigue - 0.00008)
-        state.push_fatigue = min(1.0, state.push_fatigue)
+            state.push_fatigue = max(0.0, state.push_fatigue - fatigue_recovery_rate)
+        state.push_fatigue = min(fatigue_cap, state.push_fatigue)
         state.frames_since_mistake += 1
 
     def _emit_driver_dnf_event_if_needed(self, driver_id: int, state: DriverState) -> None:
@@ -1229,6 +1239,16 @@ class RealtimeRaceEngine:
             )
         )
 
+    def _is_player_full_attack(self, state: DriverState) -> bool:
+        """Return True when a controlled driver is explicitly on max attack inputs."""
+        if not self._is_player_controlled_driver(state):
+            return False
+        if not (hasattr(self, 'player_overrides') and isinstance(self.player_overrides, dict)):
+            return False
+        push = float(self.player_overrides.get('push', state.push_intensity))
+        overtake = float(self.player_overrides.get('overtake', 0.0))
+        return push >= 0.95 and overtake >= 0.95
+
     def _apply_player_racing_overrides_if_controlled(self, state: DriverState, driver: Driver) -> bool:
         """Apply player UI overrides for controlled drivers; return True if handled."""
         if not self._is_player_controlled_driver(state):
@@ -1254,7 +1274,19 @@ class RealtimeRaceEngine:
         if 'overtake' not in self.player_overrides:
             return
         overtake_multiplier = self.player_overrides['overtake']
+        push_multiplier = float(self.player_overrides.get('push', state.push_intensity))
         threshold = self.ATTACK_THRESHOLD_GAP * (1.5 - overtake_multiplier * 0.5)
+
+        # Keep full attack sticky for controlled drivers fighting through the pack.
+        if state.position > 1 and overtake_multiplier >= 0.95 and push_multiplier >= 0.95:
+            state.racing_mode = RacingMode.ATTACK
+            return
+
+        # Keep chasing if gap sentinel indicates separation/lap mismatch.
+        if state.position > 1 and state.gap_ahead >= 900.0 and overtake_multiplier >= 0.6:
+            state.racing_mode = RacingMode.ATTACK
+            return
+
         if state.gap_ahead < threshold and overtake_multiplier > 0.3:
             state.racing_mode = RacingMode.ATTACK
         elif state.gap_behind < self.DEFEND_THRESHOLD_GAP:
@@ -1309,6 +1341,13 @@ class RealtimeRaceEngine:
 
         section_type, corner = self.track_map.get_section_at_position(state.position_m % race_state.track_length_m)
         gap_m = state.gap_ahead * state.velocity_mps
+        player_overrides = getattr(self, 'player_overrides', {}) if isinstance(getattr(self, 'player_overrides', None), dict) else {}
+        attack_context = {
+            'is_player_controlled': self._is_player_controlled_driver(state),
+            'push_intensity': float(state.push_intensity),
+            'overtake_intensity': float(player_overrides.get('overtake', 0.5) or 0.5),
+            'racing_mode': state.racing_mode.value,
+        }
 
         should_attempt, success_prob, attempt_type = evaluate_overtaking_opportunity(
             attacker=driver,
@@ -1319,10 +1358,21 @@ class RealtimeRaceEngine:
             section=section_type,
             corner=corner,
             logistic_slopes=self._active_logistic_slopes,
+            attack_context=attack_context,
         )
 
         speed_advantage_kmh = (state.velocity_mps - car_ahead.velocity_mps) * 3.6
         should_attempt, success_prob, attempt_type = self._apply_overspeed_straight_override(
+            should_attempt=should_attempt,
+            success_prob=float(success_prob),
+            attempt_type=attempt_type,
+            section_type=section_type,
+            gap_m=float(gap_m),
+            speed_advantage_kmh=float(speed_advantage_kmh),
+        )
+
+        should_attempt, success_prob, attempt_type = self._apply_player_committed_pass_override(
+            state=state,
             should_attempt=should_attempt,
             success_prob=float(success_prob),
             attempt_type=attempt_type,
@@ -1366,6 +1416,34 @@ class RealtimeRaceEngine:
         if gap_m > self.OVERSPEED_AUTO_PASS_MAX_GAP_M:
             return should_attempt, success_prob, attempt_type
         return True, max(success_prob, self.OVERSPEED_HIGH_CONFIDENCE_PROB), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+
+    def _apply_player_committed_pass_override(
+        self,
+        state: DriverState,
+        should_attempt: bool,
+        success_prob: float,
+        attempt_type: OvertakeAttemptType,
+        section_type: Any,
+        gap_m: float,
+        speed_advantage_kmh: float,
+    ) -> Tuple[bool, float, OvertakeAttemptType]:
+        """Force committed player pass attempts at tiny gaps under max controls."""
+        if not self._is_player_controlled_driver(state):
+            return should_attempt, success_prob, attempt_type
+
+        overrides = getattr(self, 'player_overrides', {}) if isinstance(getattr(self, 'player_overrides', None), dict) else {}
+        push = float(overrides.get('push', state.push_intensity) or state.push_intensity)
+        overtake = float(overrides.get('overtake', 0.5) or 0.5)
+        if push < 0.95 or overtake < 0.90:
+            return should_attempt, success_prob, attempt_type
+        if gap_m > 10.0 or speed_advantage_kmh < 0.5:
+            return should_attempt, success_prob, attempt_type
+
+        if section_type == TrackSection.STRAIGHT:
+            return True, max(success_prob, 0.97), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+        if section_type == TrackSection.BRAKING_ZONE:
+            return True, max(success_prob, 0.88), OvertakeAttemptType.LATE_BRAKING
+        return True, max(success_prob, 0.80), attempt_type
 
     def _log_overtake_attempt(self, attacker_name: str, defender_name: str, gap_m: float, success_prob: float) -> None:
         if not hasattr(self, '_overtake_log_counter'):
@@ -1535,8 +1613,10 @@ class RealtimeRaceEngine:
         # Push fatigue - accumulated stress from pushing hard
         # Increases mistake probability and slightly reduces performance
         if state.push_fatigue > 0.3:
-            # Up to 25% slower when exhausted
-            fatigue_penalty = 1.0 - (state.push_fatigue * 0.25)
+            fatigue_drag = 0.25
+            if self._is_player_full_attack(state):
+                fatigue_drag = 0.12
+            fatigue_penalty = 1.0 - (state.push_fatigue * fatigue_drag)
             speed *= fatigue_penalty
 
         # === SLIPSTREAM BOOST (straights) ===
@@ -1598,8 +1678,8 @@ class RealtimeRaceEngine:
             return speed
 
         car_length = 4.0
-        standstill_gap = car_length * 1.4
-        headway_time = 0.45 + ((1.0 - float(state.push_intensity)) * 0.90)
+        standstill_gap = car_length * self._collision_standstill_gap_multiplier(state)
+        headway_time = self._collision_headway_time(state)
         desired_gap = standstill_gap + (state.velocity_mps * headway_time)
         actual_gap = max(0.0, state.gap_ahead * max(state.velocity_mps, self.BASE_SPEED_MPS * 0.35))
 
@@ -1607,12 +1687,61 @@ class RealtimeRaceEngine:
             return speed
 
         ratio = actual_gap / max(desired_gap, 1e-6)
-        soft_brake = np.clip(ratio ** 1.35, 0.40, 1.0)
+        soft_brake = np.clip(ratio ** 1.35, self._collision_brake_floor(state), 1.0)
         speed *= float(soft_brake)
 
         if actual_gap < standstill_gap:
-            speed *= 0.72
+            speed *= self._collision_critical_gap_penalty(state)
         return speed
+
+    def _collision_headway_time(self, state: DriverState) -> float:
+        """Return adaptive time headway for collision-avoidance target gap."""
+        base_headway = 0.45 + ((1.0 - float(state.push_intensity)) * 0.90)
+        if state.racing_mode == RacingMode.ATTACK:
+            base_headway *= 0.78
+
+        if not self._is_player_controlled_driver(state):
+            return max(0.18, base_headway)
+
+        overtake = float(getattr(self, 'player_overrides', {}).get('overtake', 0.5) or 0.5)
+        push = float(getattr(self, 'player_overrides', {}).get('push', state.push_intensity) or state.push_intensity)
+        if push >= 0.95 and overtake >= 0.90 and state.racing_mode == RacingMode.ATTACK:
+            return max(0.10, base_headway * 0.48)
+        return max(0.16, base_headway)
+
+    def _collision_standstill_gap_multiplier(self, state: DriverState) -> float:
+        """Return standstill-gap multiplier; smaller for committed player attacks."""
+        if not self._is_player_controlled_driver(state):
+            return 1.4
+        overtake = float(getattr(self, 'player_overrides', {}).get('overtake', 0.5) or 0.5)
+        push = float(getattr(self, 'player_overrides', {}).get('push', state.push_intensity) or state.push_intensity)
+        if push >= 0.95 and overtake >= 0.90 and state.racing_mode == RacingMode.ATTACK:
+            return 1.0
+        return 1.3
+
+    def _collision_brake_floor(self, state: DriverState) -> float:
+        """Minimum braking multiplier; higher floor keeps overspeed alive when attacking."""
+        floor = 0.40
+        if state.racing_mode == RacingMode.ATTACK:
+            floor = 0.55
+        if self._is_player_controlled_driver(state):
+            overtake = float(getattr(self, 'player_overrides', {}).get('overtake', 0.5) or 0.5)
+            push = float(getattr(self, 'player_overrides', {}).get('push', state.push_intensity) or state.push_intensity)
+            if push >= 0.95 and overtake >= 0.90 and state.racing_mode == RacingMode.ATTACK:
+                floor = 0.70
+        return floor
+
+    def _collision_critical_gap_penalty(self, state: DriverState) -> float:
+        """Secondary penalty in near-contact ranges; softened for committed attacks."""
+        penalty = 0.72
+        if state.racing_mode == RacingMode.ATTACK:
+            penalty = 0.84
+        if self._is_player_controlled_driver(state):
+            overtake = float(getattr(self, 'player_overrides', {}).get('overtake', 0.5) or 0.5)
+            push = float(getattr(self, 'player_overrides', {}).get('push', state.push_intensity) or state.push_intensity)
+            if push >= 0.95 and overtake >= 0.90 and state.racing_mode == RacingMode.ATTACK:
+                penalty = 0.90
+        return penalty
 
     def _weibull_incremental_failure_prob(self, t_laps: float, delta_laps: float, eta: float, beta: float) -> float:
         """Return failure probability over one lap window using Weibull reliability.
@@ -1877,6 +2006,8 @@ class RealtimeRaceEngine:
         # Fatigue increases mistakes
         # Up to 4x when exhausted
         fatigue_multiplier = 1.0 + (state.push_fatigue * 3.0)
+        if self._is_player_full_attack(state):
+            fatigue_multiplier = 1.0 + (state.push_fatigue * 1.8)
 
         # Tire condition affects grip
         # Up to 3x on worn tires
@@ -1885,6 +2016,8 @@ class RealtimeRaceEngine:
         # Calculate final probability
         mistake_prob = base_probability * push_risk * \
             skill_factor * fatigue_multiplier * tire_multiplier
+        if self._is_player_full_attack(state):
+            mistake_prob *= 0.72
 
         # Roll the dice
         if self.rng.random() < mistake_prob:
@@ -2172,6 +2305,10 @@ class RealtimeRaceEngine:
         attempt.speed_advantage_kmh = speed_diff * 3.6
         attempt.lateral_overlap = lateral_overlap
 
+        if self._should_force_player_close_gap_pass(attacker_state, attempt):
+            self._apply_overtake_result("success", key, attempt, race_state, attacker_state, defender_state)
+            return True
+
         # Massive closing speed on a straight should convert into a near-immediate
         # run-by rather than getting trapped in prolonged side-by-side resolution.
         if (
@@ -2199,6 +2336,21 @@ class RealtimeRaceEngine:
         if attempt.speed_advantage_kmh > 12.0:
             retreat = 0.0
         return max(0.0, attempt.lateral_overlap - retreat)
+
+    def _should_force_player_close_gap_pass(self, attacker_state: DriverState, attempt: OvertakeAttempt) -> bool:
+        """Return True when a player max-attack run should instantly convert to a pass."""
+        if not self._is_player_controlled_driver(attacker_state):
+            return False
+        overrides = getattr(self, 'player_overrides', {}) if isinstance(getattr(self, 'player_overrides', None), dict) else {}
+        push = float(overrides.get('push', attacker_state.push_intensity) or attacker_state.push_intensity)
+        overtake = float(overrides.get('overtake', 0.5) or 0.5)
+        if push < 0.95 or overtake < 0.90:
+            return False
+        if attacker_state.racing_mode != RacingMode.ATTACK:
+            return False
+        if attempt.gap_m > 3.5:
+            return False
+        return attempt.speed_advantage_kmh >= 2.0
 
     def _should_resolve_overtake_attempt(self, outcome: Optional[str], attempt: OvertakeAttempt, lateral_overlap: float, attacker_state: DriverState) -> bool:
         if outcome:
