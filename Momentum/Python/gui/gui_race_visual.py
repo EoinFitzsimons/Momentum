@@ -60,6 +60,7 @@ import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
 import sys
 import os
+import json
 import math
 import re
 import time
@@ -3210,10 +3211,76 @@ class RaceWindow(QMainWindow):
             ('S', int(320 * (length_km / 6.0))),
         ]
 
+    def _build_field_based_circuit_instructions(self, track_length_m: float) -> List[Dict[str, Any]]:
+        """Build a compact closed-loop profile from DB fields.
+
+        This fallback is robust for short circuits (e.g. rallycross 0.8-1.2km)
+        where the legacy long-circuit template may fail closure.
+        """
+        track = self.track
+        turns_raw = int(getattr(track, 'turns', 10) or 10)
+        turns = max(4, min(16, turns_raw))
+
+        tightest = float(getattr(track, 'tightest_corner_radius_m', 30.0) or 30.0)
+        radius = max(22.0, min(120.0, tightest * 1.6))
+        angle_deg = 360.0 / float(turns)
+
+        # Arc length approximation per corner; keep a reasonable straight between corners.
+        corner_arc = max(8.0, radius * math.radians(angle_deg))
+        total_corner_len = corner_arc * turns
+        remaining = max(120.0, float(track_length_m) - total_corner_len)
+        straight_each = max(35.0, remaining / turns)
+        clothoid_len = max(8.0, min(40.0, radius * 0.45))
+
+        instructions: List[Dict[str, Any]] = []
+        for _ in range(turns):
+            instructions.append({'type': 'S', 'length_m': int(straight_each)})
+            instructions.append(
+                {
+                    'type': 'C',
+                    'angle_deg': float(angle_deg),
+                    'radius_m': float(radius),
+                    'clothoid_len': float(clothoid_len),
+                    'k': 0.00011,
+                }
+            )
+        return instructions
+
+    def _extract_track_instructions(self) -> Optional[List[Any]]:
+        """Return parsed per-track instructions if present in DB fields."""
+        track = getattr(self, 'track', None)
+        if track is None:
+            return None
+
+        raw = getattr(track, 'instructions_json', None)
+        if raw:
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else raw
+                if isinstance(parsed, list) and parsed:
+                    return parsed
+            except Exception:
+                LOGGER.debug("Failed to parse instructions_json from track", exc_info=True)
+
+        geom_raw = getattr(track, 'geometry_json', None)
+        if geom_raw:
+            try:
+                geom = json.loads(geom_raw) if isinstance(geom_raw, str) else geom_raw
+                if isinstance(geom, dict):
+                    candidate = geom.get('instructions')
+                    if isinstance(candidate, list) and candidate:
+                        return candidate
+            except Exception:
+                LOGGER.debug("Failed to parse geometry_json instructions from track", exc_info=True)
+
+        return None
+
     def _is_drag_discipline(self) -> bool:
         """Return True when the active race discipline is drag racing."""
         discipline = str(getattr(self, '_initial_discipline', '') or '').upper()
-        return discipline == 'DRAG_ACCELERATION'
+        if discipline == 'DRAG_ACCELERATION':
+            return True
+        track_discipline = str(getattr(self.track, 'primary_discipline', '') or '').upper()
+        return track_discipline == 'DRAG_ACCELERATION' or bool(getattr(self.track, 'is_point_to_point', False))
 
     def _is_rallycross_discipline(self) -> bool:
         """Return True when the active race discipline is sprint/rallycross."""
@@ -3356,14 +3423,27 @@ class RaceWindow(QMainWindow):
             track_km = getattr(track, 'length_km', 4.5)
             print(f"Generating circuit for {track_km}km track (closure solver enabled)...")
             track_length = track_km * 1000
+            imported_instructions = self._extract_track_instructions()
+            is_point_to_point = bool(getattr(track, 'is_point_to_point', False)) or self._is_drag_discipline()
 
-            if self._is_drag_discipline():
+            if imported_instructions:
+                wrapper = {'solve_closure': (not is_point_to_point), 'instructions': imported_instructions}
+                routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': is_point_to_point})
+            elif is_point_to_point:
                 instructions = self._build_drag_strip_instructions(track_length)
                 wrapper = {'instructions': instructions}
                 routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': True})
             else:
-                wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
-                routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+                try:
+                    field_instructions = self._build_field_based_circuit_instructions(track_length)
+                    wrapper = {'solve_closure': True, 'instructions': field_instructions}
+                    routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+                    if not routes.get('main'):
+                        raise RuntimeError('Field-based instructions produced no main route')
+                except Exception:
+                    # Last-resort fallback keeps backwards compatibility for legacy previews.
+                    wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
+                    routes = CircuitGenerator.generate_with_routes(wrapper, options={})
 
             track_points = routes.get('main')
             self.pit_points = routes.get('pit')

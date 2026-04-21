@@ -8,6 +8,7 @@ Usage:
 """
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -26,14 +27,18 @@ _SURFACE_GRIP_DEFAULTS = {
 
 def _parse_int(value, default: int) -> int:
     try:
-        return int(value)
+        # Accept both integer-like strings and float-like strings.
+        return int(float(value))
     except Exception:
         return default
 
 
 def _parse_float(value, default: float) -> float:
     try:
-        return float(value)
+        f = float(value)
+        if math.isnan(f) or math.isinf(f):
+            return default
+        return f
     except Exception:
         return default
 
@@ -45,10 +50,25 @@ def _normalise_surface(surface: str) -> str:
 
 def _build_track_payload(rec: dict) -> dict:
     surface = _normalise_surface(str(rec.get("surface", "asphalt")))
+    discipline = rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER"
+    raw_instructions = rec.get("instructions")
+    instructions_json = None
+    if isinstance(raw_instructions, list):
+        instructions_json = json.dumps(raw_instructions, ensure_ascii=False)
+    elif isinstance(rec.get("instructions_json"), str):
+        instructions_json = rec.get("instructions_json")
+
+    is_point_to_point = rec.get("is_point_to_point")
+    if is_point_to_point is None:
+        is_point_to_point = str(discipline).upper() == "DRAG_ACCELERATION"
+
     return {
         "name": rec.get("name") or "",
         "country": rec.get("country") or "",
-        "primary_discipline": rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER",
+        "primary_discipline": discipline,
+        "is_point_to_point": 1 if bool(is_point_to_point) else 0,
+        "joker_enabled": 1 if bool(rec.get("joker_enabled", False)) else 0,
+        "instructions_json": instructions_json,
         "geometry_json": json.dumps(rec, ensure_ascii=False),
         "length_km": _parse_float(rec.get("length_km"), 3.2),
         "turns": _parse_int(rec.get("turns"), 12),
@@ -65,6 +85,33 @@ def _build_track_payload(rec: dict) -> dict:
     }
 
 
+def _sanitize_payload(payload: dict) -> dict:
+    # Keep physically invalid values from entering the DB.
+    payload["name"] = str(payload.get("name") or "").strip()
+    payload["country"] = str(payload.get("country") or "").strip()
+    payload["length_km"] = max(0.1, _parse_float(payload.get("length_km"), 3.2))
+    payload["turns"] = max(1, _parse_int(payload.get("turns"), 12))
+    payload["avg_speed_kmh"] = max(1.0, _parse_float(payload.get("avg_speed_kmh"), 160.0))
+    payload["longest_straight_m"] = max(1.0, _parse_float(payload.get("longest_straight_m"), 700.0))
+    payload["tightest_corner_radius_m"] = max(1.0, _parse_float(payload.get("tightest_corner_radius_m"), 30.0))
+    payload["left_turns"] = max(0, _parse_int(payload.get("left_turns"), 6))
+    payload["right_turns"] = max(0, _parse_int(payload.get("right_turns"), 6))
+    payload["drs_zones"] = max(0, _parse_int(payload.get("drs_zones"), 1))
+    payload["surface_grip"] = min(1.5, max(0.0, _parse_float(payload.get("surface_grip"), 1.0)))
+    return payload
+
+
+def _load_circuits(data) -> list:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("circuits", "tracks", "items"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
 def _get_track_columns(conn) -> set:
     return {r[1] for r in conn.execute("PRAGMA table_info(tracks)").fetchall()}
 
@@ -72,10 +119,14 @@ def _get_track_columns(conn) -> set:
 def _upsert_tracks(conn, circuits) -> tuple:
     inserted = 0
     updated = 0
+    skipped = 0
     upsert_columns = [
         "name",
         "country",
         "primary_discipline",
+        "is_point_to_point",
+        "joker_enabled",
+        "instructions_json",
         "geometry_json",
         "length_km",
         "turns",
@@ -93,11 +144,14 @@ def _upsert_tracks(conn, circuits) -> tuple:
     available_columns = [c for c in upsert_columns if c in _get_track_columns(conn)]
 
     for rec in circuits:
-        payload = _build_track_payload(rec)
+        payload = _sanitize_payload(_build_track_payload(rec))
         name = payload["name"]
         country = payload["country"]
+        if not name:
+            skipped += 1
+            continue
         cur = conn.execute(
-            "SELECT id FROM tracks WHERE name = ? AND country = ? COLLATE NOCASE",
+            "SELECT id FROM tracks WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(country)) = lower(trim(?))",
             (name, country),
         ).fetchone()
         if cur:
@@ -124,14 +178,18 @@ def _upsert_tracks(conn, circuits) -> tuple:
             )
             inserted += 1
 
-    return inserted, updated
+    return inserted, updated, skipped
 
 
 def _insert_tracks(conn, circuits) -> tuple:
     inserted = 0
+    skipped = 0
     for c in circuits:
         try:
-            name = c.get("name") or f"Circuit {c.get('circuit_id', '')}"
+            name = (c.get("name") or f"Circuit {c.get('circuit_id', '')}").strip()
+            if not name:
+                skipped += 1
+                continue
             country = c.get("country") or ""
             primary = c.get("primary_discipline") or c.get("discipline") or "SINGLE_SEATER"
             geometry = json.dumps(c)
@@ -142,7 +200,7 @@ def _insert_tracks(conn, circuits) -> tuple:
             inserted += 1
         except Exception as e:
             print(f"Failed to insert circuit {c.get('circuit_id')}: {e}")
-    return inserted, 0
+    return inserted, 0, skipped
 
 
 def main(argv=None):
@@ -173,16 +231,23 @@ def main(argv=None):
         return 1
 
     with open(data_file, "r", encoding="utf-8") as f:
-        circuits = json.load(f)
+        circuits = _load_circuits(json.load(f))
+
+    if not circuits:
+        print("No circuits found in JSON payload.")
+        return 1
 
     with mgr.get_connection() as conn:
         if args.mode == "upsert":
-            inserted, updated = _upsert_tracks(conn, circuits)
+            inserted, updated, skipped = _upsert_tracks(conn, circuits)
         else:
-            inserted, updated = _insert_tracks(conn, circuits)
+            inserted, updated, skipped = _insert_tracks(conn, circuits)
         conn.commit()
 
-    print(f"Imported circuits into DB: {db_path} (mode={args.mode}, inserted={inserted}, updated={updated}, total_json={len(circuits)})")
+    print(
+        f"Imported circuits into DB: {db_path} "
+        f"(mode={args.mode}, inserted={inserted}, updated={updated}, skipped={skipped}, total_json={len(circuits)})"
+    )
     return 0
 
 

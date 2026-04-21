@@ -92,7 +92,7 @@ This loop runs 30 times per second in the race_runner thread:
 
 **Physics Calculation:**
 - Calculate speed using driver attributes, team capability, push intensity
-- Apply tire degradation, fuel weight, push fatigue
+- Apply tyre degradation, fuel weight, push fatigue
 - Check for slipstream boost or dirty air penalty
 - Apply collision avoidance logic
 
@@ -109,7 +109,7 @@ This loop runs 30 times per second in the race_runner thread:
 **Collision Detection:**
 - Check proximity to other cars (longitudinal gap < 10 meters)
 - Evaluate if cars are racing wheel-to-wheel (ATTACK/DEFEND modes)
-- Calculate contact probability based on driver skills and tire condition
+- Calculate contact probability based on driver skills and tyre condition
 - Trigger DNF if collision occurs, log incident details
 
 **Event Emission:**
