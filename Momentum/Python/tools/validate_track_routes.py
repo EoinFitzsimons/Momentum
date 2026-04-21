@@ -93,11 +93,48 @@ def _route_errors(row: dict, circuit_generator) -> list:
     is_ptp = _is_point_to_point(row)
     instructions = _parse_instructions(row.get("instructions_json"))
 
+    def route_gap(routes) -> float:
+        points = (routes or {}).get("main") or []
+        if len(points) < 2:
+            return float("inf")
+        s, e = points[0], points[-1]
+        return math.hypot(float(e.x) - float(s.x), float(e.y) - float(s.y))
+
+    def best_closed_routes(instr_list):
+        direct = None
+        solved = None
+        unsolved = None
+        with redirect_stdout(io.StringIO()):
+            try:
+                direct = circuit_generator.generate_with_routes(instr_list, options={})
+            except Exception:
+                direct = None
+            try:
+                solved = circuit_generator.generate_with_routes(
+                    {"solve_closure": True, "instructions": instr_list},
+                    options={},
+                )
+            except Exception:
+                solved = None
+            try:
+                unsolved = circuit_generator.generate_with_routes(
+                    {"solve_closure": False, "instructions": instr_list},
+                    options={},
+                )
+            except Exception:
+                unsolved = None
+
+        best = min([direct, unsolved, solved], key=route_gap)
+        return best or {"main": []}
+
     with redirect_stdout(io.StringIO()):
         if instructions:
-            wrapper = {"solve_closure": not is_ptp, "instructions": instructions}
-            routes = circuit_generator.generate_with_routes(wrapper, options={"is_point_to_point": is_ptp})
-            points = routes.get("main") or []
+            if is_ptp:
+                wrapper = {"instructions": instructions}
+                routes = circuit_generator.generate_with_routes(wrapper, options={"is_point_to_point": True})
+            else:
+                routes = best_closed_routes(instructions)
+            points = (routes or {}).get("main") or []
         elif is_ptp:
             points = circuit_generator.generate_with_routes(
                 {"instructions": [{"type": "S", "length_m": int(max(350.0, length_m))}]},
@@ -109,11 +146,8 @@ def _route_errors(row: dict, circuit_generator) -> list:
                 turns_raw=int(row.get("turns") or 10),
                 tightest_radius_m=float(row.get("tightest_corner_radius_m") or 30.0),
             )
-            routes = circuit_generator.generate_with_routes(
-                {"solve_closure": True, "instructions": field_based},
-                options={},
-            )
-            points = routes.get("main") or []
+            routes = best_closed_routes(field_based)
+            points = (routes or {}).get("main") or []
 
     if len(points) < 20:
         errs.append("too few generated points")
