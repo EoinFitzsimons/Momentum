@@ -3352,6 +3352,51 @@ class RaceWindow(QMainWindow):
             {'type': 'S', 'length_m': second_straight},
         ]
 
+    def _route_gap(self, routes: Optional[Dict[str, Any]]) -> float:
+        """Compute main-route start/end Euclidean gap (lower is better for loops)."""
+        if not routes:
+            return float('inf')
+        points = routes.get('main') or []
+        if len(points) < 2:
+            return float('inf')
+        start = points[0]
+        end = points[-1]
+        return math.hypot(float(end.x) - float(start.x), float(end.y) - float(start.y))
+
+    def _generate_best_closed_routes(self, instructions: List[Any]) -> Dict[str, Any]:
+        """Generate a closed circuit and keep whichever closure mode yields lower gap."""
+        candidates: List[Optional[Dict[str, Any]]] = []
+
+        # Primary mode: pass raw list (uses built-in iterative closure).
+        try:
+            candidates.append(CircuitGenerator.generate_with_routes(instructions, options={}))
+        except Exception:
+            candidates.append(None)
+
+        # Fallback modes: explicit wrapper toggles.
+        try:
+            candidates.append(
+                CircuitGenerator.generate_with_routes(
+                    {'solve_closure': False, 'instructions': instructions},
+                    options={},
+                )
+            )
+        except Exception:
+            candidates.append(None)
+
+        try:
+            candidates.append(
+                CircuitGenerator.generate_with_routes(
+                    {'solve_closure': True, 'instructions': instructions},
+                    options={},
+                )
+            )
+        except Exception:
+            candidates.append(None)
+
+        best = min(candidates, key=self._route_gap)
+        return best or {'main': []}
+
     def _build_offset_route(self, main_points: List[TrackPoint], lateral_offset_m: float) -> Optional[List[TrackPoint]]:
         """Create a full-loop auxiliary route by offsetting the main centerline."""
         if not main_points:
@@ -3427,8 +3472,11 @@ class RaceWindow(QMainWindow):
             is_point_to_point = bool(getattr(track, 'is_point_to_point', False)) or self._is_drag_discipline()
 
             if imported_instructions:
-                wrapper = {'solve_closure': (not is_point_to_point), 'instructions': imported_instructions}
-                routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': is_point_to_point})
+                if is_point_to_point:
+                    wrapper = {'instructions': imported_instructions}
+                    routes = CircuitGenerator.generate_with_routes(wrapper, options={'is_point_to_point': True})
+                else:
+                    routes = self._generate_best_closed_routes(imported_instructions)
             elif is_point_to_point:
                 instructions = self._build_drag_strip_instructions(track_length)
                 wrapper = {'instructions': instructions}
@@ -3436,14 +3484,12 @@ class RaceWindow(QMainWindow):
             else:
                 try:
                     field_instructions = self._build_field_based_circuit_instructions(track_length)
-                    wrapper = {'solve_closure': True, 'instructions': field_instructions}
-                    routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+                    routes = self._generate_best_closed_routes(field_instructions)
                     if not routes.get('main'):
                         raise RuntimeError('Field-based instructions produced no main route')
                 except Exception:
                     # Last-resort fallback keeps backwards compatibility for legacy previews.
-                    wrapper = {'solve_closure': True, 'instructions': self._build_legacy_circuit_instructions()}
-                    routes = CircuitGenerator.generate_with_routes(wrapper, options={})
+                    routes = self._generate_best_closed_routes(self._build_legacy_circuit_instructions())
 
             track_points = routes.get('main')
             self.pit_points = routes.get('pit')
