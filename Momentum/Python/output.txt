@@ -1,0 +1,1426 @@
+  [CLOSURE] Distance to start: 750.8m, Heading error: 95.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 607.6m, Heading error: 42.2deg
+  [CLOSURE ITER 1] Gap: 475.8m, Heading error: 26.2deg
+  [CLOSURE ITER 2] Gap: 362.6m, Heading error: 19.4deg
+  [CLOSURE ITER 3] Gap: 235.3m, Heading error: 9.4deg
+  [CLOSURE ITER 4] Gap: 86.1m, Heading error: -15.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=86.1m, heading=15.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 86.1m
+  [CLOSURE] Final gap after closure: 24.7m
+  [FINALIZE] Track closure gap: 25.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6720 points
+  [CLOSURE] Distance to start: 725.6m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 583.0m, Heading error: 42.8deg
+  [CLOSURE ITER 1] Gap: 451.7m, Heading error: 27.3deg
+  [CLOSURE ITER 2] Gap: 340.7m, Heading error: 21.5deg
+  [CLOSURE ITER 3] Gap: 218.3m, Heading error: 14.4deg
+  [CLOSURE ITER 4] Gap: 72.7m, Heading error: 0.6deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.7m, heading=0.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.7m
+  [CLOSURE] Final gap after closure: 4.4m
+  [FINALIZE] Track closure gap: 4.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6240 points
+  [CLOSURE] Distance to start: 707.7m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 564.9m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 433.6m, Heading error: 27.9deg
+  [CLOSURE ITER 2] Gap: 324.4m, Heading error: 23.0deg
+  [CLOSURE ITER 3] Gap: 205.6m, Heading error: 18.0deg
+  [CLOSURE ITER 4] Gap: 71.4m, Heading error: 16.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=71.4m, heading=16.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 71.4m
+  [CLOSURE] Final gap after closure: 21.4m
+  [FINALIZE] Track closure gap: 20.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5893 points
+  [CLOSURE] Distance to start: 756.6m, Heading error: 95.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 613.3m, Heading error: 42.0deg
+  [CLOSURE ITER 1] Gap: 481.1m, Heading error: 25.9deg
+  [CLOSURE ITER 2] Gap: 366.6m, Heading error: 18.6deg
+  [CLOSURE ITER 3] Gap: 237.7m, Heading error: 7.8deg
+  [CLOSURE ITER 4] Gap: 88.1m, Heading error: -20.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=88.1m, heading=20.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 88.1m
+  [CLOSURE] Final gap after closure: 33.0m
+  [FINALIZE] Track closure gap: 33.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6847 points
+  [CLOSURE] Distance to start: 770.1m, Heading error: 95.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 626.8m, Heading error: 41.8deg
+  [CLOSURE ITER 1] Gap: 495.0m, Heading error: 25.6deg
+  [CLOSURE ITER 2] Gap: 380.2m, Heading error: 18.0deg
+  [CLOSURE ITER 3] Gap: 249.8m, Heading error: 6.2deg
+  [CLOSURE ITER 4] Gap: 100.1m, Heading error: -24.6deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=100.1m, heading=24.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 100.1m
+  [CLOSURE] Final gap after closure: 43.9m
+  [FINALIZE] Track closure gap: 44.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7102 points
+  [CLOSURE] Distance to start: 711.1m, Heading error: 94.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 568.8m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 437.4m, Heading error: 27.8deg
+  [CLOSURE ITER 2] Gap: 328.2m, Heading error: 22.8deg
+  [CLOSURE ITER 3] Gap: 208.1m, Heading error: 17.2deg
+  [CLOSURE ITER 4] Gap: 71.9m, Heading error: 13.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=71.9m, heading=13.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 71.9m
+  [CLOSURE] Final gap after closure: 17.6m
+  [FINALIZE] Track closure gap: 16.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5966 points
+  [CLOSURE] Distance to start: 726.9m, Heading error: 94.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 583.1m, Heading error: 42.7deg
+  [CLOSURE ITER 1] Gap: 451.5m, Heading error: 27.0deg
+  [CLOSURE ITER 2] Gap: 340.3m, Heading error: 21.2deg
+  [CLOSURE ITER 3] Gap: 216.6m, Heading error: 13.6deg
+  [CLOSURE ITER 4] Gap: 70.7m, Heading error: -1.4deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=70.7m, heading=1.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 70.7m
+  [CLOSURE] Final gap after closure: 4.7m
+  [FINALIZE] Track closure gap: 4.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6254 points
+  [CLOSURE] Distance to start: 730.1m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 587.0m, Heading error: 42.7deg
+  [CLOSURE ITER 1] Gap: 455.4m, Heading error: 27.0deg
+  [CLOSURE ITER 2] Gap: 344.1m, Heading error: 21.1deg
+  [CLOSURE ITER 3] Gap: 220.3m, Heading error: 13.3deg
+  [CLOSURE ITER 4] Gap: 74.2m, Heading error: -2.8deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=74.2m, heading=2.8deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 74.2m
+  [CLOSURE] Final gap after closure: 6.1m
+  [FINALIZE] Track closure gap: 6.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6326 points
+  [CLOSURE] Distance to start: 734.5m, Heading error: 95.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 591.1m, Heading error: 42.5deg
+  [CLOSURE ITER 1] Gap: 460.0m, Heading error: 26.9deg
+  [CLOSURE ITER 2] Gap: 348.7m, Heading error: 20.9deg
+  [CLOSURE ITER 3] Gap: 224.6m, Heading error: 12.8deg
+  [CLOSURE ITER 4] Gap: 77.4m, Heading error: -5.0deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.4m, heading=5.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.4m
+  [CLOSURE] Final gap after closure: 8.3m
+  [FINALIZE] Track closure gap: 9.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6411 points
+  [CLOSURE] Distance to start: 710.7m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 567.6m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 436.2m, Heading error: 27.8deg
+  [CLOSURE ITER 2] Gap: 326.9m, Heading error: 22.8deg
+  [CLOSURE ITER 3] Gap: 206.8m, Heading error: 17.3deg
+  [CLOSURE ITER 4] Gap: 70.7m, Heading error: 13.6deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=70.7m, heading=13.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 70.7m
+  [CLOSURE] Final gap after closure: 17.8m
+  [FINALIZE] Track closure gap: 16.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5945 points
+  [CLOSURE] Distance to start: 728.9m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 585.5m, Heading error: 42.6deg
+  [CLOSURE ITER 1] Gap: 453.7m, Heading error: 26.9deg
+  [CLOSURE ITER 2] Gap: 342.4m, Heading error: 21.0deg
+  [CLOSURE ITER 3] Gap: 218.6m, Heading error: 13.3deg
+  [CLOSURE ITER 4] Gap: 72.5m, Heading error: -2.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.5m, heading=2.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.5m
+  [CLOSURE] Final gap after closure: 5.8m
+  [FINALIZE] Track closure gap: 6.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6309 points
+  [CLOSURE] Distance to start: 707.7m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 564.9m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 433.6m, Heading error: 27.9deg
+  [CLOSURE ITER 2] Gap: 324.4m, Heading error: 23.0deg
+  [CLOSURE ITER 3] Gap: 205.6m, Heading error: 18.0deg
+  [CLOSURE ITER 4] Gap: 71.4m, Heading error: 16.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=71.4m, heading=16.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 71.4m
+  [CLOSURE] Final gap after closure: 21.4m
+  [FINALIZE] Track closure gap: 20.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5893 points
+  [CLOSURE] Distance to start: 677.1m, Heading error: 93.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 533.1m, Heading error: 44.0deg
+  [CLOSURE ITER 1] Gap: 402.9m, Heading error: 29.4deg
+  [CLOSURE ITER 2] Gap: 296.7m, Heading error: 26.2deg
+  [CLOSURE ITER 3] Gap: 176.7m, Heading error: 23.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=176.7m, heading=23.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 176.7m
+  [CLOSURE] Final gap after closure: 72.6m
+  [FINALIZE] Track closure gap: 71.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5301 points
+  [CLOSURE] Distance to start: 712.5m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 568.9m, Heading error: 43.0deg
+  [CLOSURE ITER 1] Gap: 438.1m, Heading error: 27.8deg
+  [CLOSURE ITER 2] Gap: 328.9m, Heading error: 22.9deg
+  [CLOSURE ITER 3] Gap: 208.8m, Heading error: 17.2deg
+  [CLOSURE ITER 4] Gap: 72.6m, Heading error: 13.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.6m, heading=13.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.6m
+  [CLOSURE] Final gap after closure: 17.7m
+  [FINALIZE] Track closure gap: 16.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6005 points
+  [CLOSURE] Distance to start: 712.3m, Heading error: 94.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 569.1m, Heading error: 43.1deg
+  [CLOSURE ITER 1] Gap: 438.5m, Heading error: 27.9deg
+  [CLOSURE ITER 2] Gap: 329.3m, Heading error: 22.9deg
+  [CLOSURE ITER 3] Gap: 210.3m, Heading error: 17.6deg
+  [CLOSURE ITER 4] Gap: 75.4m, Heading error: 14.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=75.4m, heading=14.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 75.4m
+  [CLOSURE] Final gap after closure: 19.8m
+  [FINALIZE] Track closure gap: 18.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5984 points
+  [CLOSURE] Distance to start: 700.2m, Heading error: 94.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 557.3m, Heading error: 43.5deg
+  [CLOSURE ITER 1] Gap: 426.6m, Heading error: 28.4deg
+  [CLOSURE ITER 2] Gap: 319.1m, Heading error: 24.2deg
+  [CLOSURE ITER 3] Gap: 202.4m, Heading error: 20.3deg
+  [CLOSURE ITER 4] Gap: 73.1m, Heading error: 23.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=73.1m, heading=23.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.1m
+  [CLOSURE] Final gap after closure: 31.4m
+  [FINALIZE] Track closure gap: 30.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5767 points
+  [CLOSURE] Distance to start: 735.3m, Heading error: 95.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 593.0m, Heading error: 42.6deg
+  [CLOSURE ITER 1] Gap: 461.2m, Heading error: 26.8deg
+  [CLOSURE ITER 2] Gap: 349.7m, Heading error: 20.7deg
+  [CLOSURE ITER 3] Gap: 225.5m, Heading error: 12.5deg
+  [CLOSURE ITER 4] Gap: 78.2m, Heading error: -5.9deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=78.2m, heading=5.9deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 78.2m
+  [CLOSURE] Final gap after closure: 9.6m
+  [FINALIZE] Track closure gap: 10.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6419 points
+  [CLOSURE] Distance to start: 674.2m, Heading error: 93.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 530.5m, Heading error: 44.0deg
+  [CLOSURE ITER 1] Gap: 400.4m, Heading error: 29.6deg
+  [CLOSURE ITER 2] Gap: 294.5m, Heading error: 26.5deg
+  [CLOSURE ITER 3] Gap: 174.9m, Heading error: 24.0deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=174.9m, heading=24.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 174.9m
+  [CLOSURE] Final gap after closure: 73.7m
+  [FINALIZE] Track closure gap: 72.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5263 points
+  [CLOSURE] Distance to start: 728.9m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 585.5m, Heading error: 42.6deg
+  [CLOSURE ITER 1] Gap: 453.8m, Heading error: 26.9deg
+  [CLOSURE ITER 2] Gap: 342.5m, Heading error: 21.0deg
+  [CLOSURE ITER 3] Gap: 218.6m, Heading error: 13.3deg
+  [CLOSURE ITER 4] Gap: 72.5m, Heading error: -2.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.5m, heading=2.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.5m
+  [CLOSURE] Final gap after closure: 5.7m
+  [FINALIZE] Track closure gap: 6.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6299 points
+  [CLOSURE] Distance to start: 720.0m, Heading error: 94.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 577.4m, Heading error: 43.0deg
+  [CLOSURE ITER 1] Gap: 446.5m, Heading error: 27.6deg
+  [CLOSURE ITER 2] Gap: 336.9m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 216.3m, Heading error: 16.1deg
+  [CLOSURE ITER 4] Gap: 77.9m, Heading error: 8.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.9m, heading=8.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.9m
+  [CLOSURE] Final gap after closure: 12.3m
+  [FINALIZE] Track closure gap: 11.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6149 points
+  [CLOSURE] Distance to start: 742.4m, Heading error: 95.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 598.6m, Heading error: 42.3deg
+  [CLOSURE ITER 1] Gap: 467.1m, Heading error: 26.5deg
+  [CLOSURE ITER 2] Gap: 354.3m, Heading error: 19.9deg
+  [CLOSURE ITER 3] Gap: 228.4m, Heading error: 10.9deg
+  [CLOSURE ITER 4] Gap: 80.0m, Heading error: -11.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=80.0m, heading=11.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 80.0m
+  [CLOSURE] Final gap after closure: 16.5m
+  [FINALIZE] Track closure gap: 17.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6568 points
+  [CLOSURE] Distance to start: 712.3m, Heading error: 94.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 569.1m, Heading error: 43.1deg
+  [CLOSURE ITER 1] Gap: 438.5m, Heading error: 27.9deg
+  [CLOSURE ITER 2] Gap: 329.3m, Heading error: 22.9deg
+  [CLOSURE ITER 3] Gap: 210.3m, Heading error: 17.6deg
+  [CLOSURE ITER 4] Gap: 75.4m, Heading error: 14.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=75.4m, heading=14.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 75.4m
+  [CLOSURE] Final gap after closure: 19.8m
+  [FINALIZE] Track closure gap: 18.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5984 points
+  [CLOSURE] Distance to start: 767.3m, Heading error: 95.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 623.8m, Heading error: 41.8deg
+  [CLOSURE ITER 1] Gap: 492.1m, Heading error: 25.7deg
+  [CLOSURE ITER 2] Gap: 377.3m, Heading error: 18.1deg
+  [CLOSURE ITER 3] Gap: 247.0m, Heading error: 6.5deg
+  [CLOSURE ITER 4] Gap: 97.2m, Heading error: -24.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=97.2m, heading=24.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 97.2m
+  [CLOSURE] Final gap after closure: 41.9m
+  [FINALIZE] Track closure gap: 42.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7046 points
+  [CLOSURE] Distance to start: 728.7m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 585.2m, Heading error: 42.6deg
+  [CLOSURE ITER 1] Gap: 453.5m, Heading error: 26.9deg
+  [CLOSURE ITER 2] Gap: 342.2m, Heading error: 21.0deg
+  [CLOSURE ITER 3] Gap: 218.3m, Heading error: 13.3deg
+  [CLOSURE ITER 4] Gap: 72.2m, Heading error: -2.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.2m, heading=2.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.2m
+  [CLOSURE] Final gap after closure: 5.9m
+  [FINALIZE] Track closure gap: 6.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6304 points
+  [CLOSURE] Distance to start: 735.9m, Heading error: 95.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 592.7m, Heading error: 42.5deg
+  [CLOSURE ITER 1] Gap: 461.7m, Heading error: 26.9deg
+  [CLOSURE ITER 2] Gap: 350.3m, Heading error: 20.9deg
+  [CLOSURE ITER 3] Gap: 226.3m, Heading error: 12.8deg
+  [CLOSURE ITER 4] Gap: 79.0m, Heading error: -5.1deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=79.0m, heading=5.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 79.0m
+  [CLOSURE] Final gap after closure: 8.8m
+  [FINALIZE] Track closure gap: 9.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6453 points
+  [CLOSURE] Distance to start: 851.3m, Heading error: 97.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 708.4m, Heading error: 40.3deg
+  [CLOSURE ITER 1] Gap: 576.5m, Heading error: 23.5deg
+  [CLOSURE ITER 2] Gap: 456.4m, Heading error: 13.3deg
+  [CLOSURE ITER 3] Gap: 313.0m, Heading error: -5.6deg
+  [CLOSURE ITER 4] Gap: 164.0m, Heading error: 22.1deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=164.0m, heading=22.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 164.0m
+  [CLOSURE] Final gap after closure: 64.0m
+  [FINALIZE] Track closure gap: 63.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8645 points
+  [CLOSURE] Distance to start: 751.9m, Heading error: 95.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 608.2m, Heading error: 42.1deg
+  [CLOSURE ITER 1] Gap: 476.3m, Heading error: 26.1deg
+  [CLOSURE ITER 2] Gap: 363.0m, Heading error: 19.2deg
+  [CLOSURE ITER 3] Gap: 235.5m, Heading error: 9.2deg
+  [CLOSURE ITER 4] Gap: 86.4m, Heading error: -16.4deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=86.4m, heading=16.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 86.4m
+  [CLOSURE] Final gap after closure: 25.8m
+  [FINALIZE] Track closure gap: 26.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6753 points
+  [CLOSURE] Distance to start: 872.7m, Heading error: 97.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 728.9m, Heading error: 39.9deg
+  [CLOSURE ITER 1] Gap: 597.2m, Heading error: 23.0deg
+  [CLOSURE ITER 2] Gap: 476.7m, Heading error: 12.5deg
+  [CLOSURE ITER 3] Gap: 332.1m, Heading error: -7.2deg
+  [CLOSURE ITER 4] Gap: 183.4m, Heading error: 18.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=183.4m, heading=18.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 183.4m
+  [CLOSURE] Final gap after closure: 58.8m
+  [FINALIZE] Track closure gap: 58.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9074 points
+  [CLOSURE] Distance to start: 876.0m, Heading error: 97.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 732.3m, Heading error: 39.9deg
+  [CLOSURE ITER 1] Gap: 600.5m, Heading error: 22.9deg
+  [CLOSURE ITER 2] Gap: 479.9m, Heading error: 12.4deg
+  [CLOSURE ITER 3] Gap: 335.4m, Heading error: -7.4deg
+  [CLOSURE ITER 4] Gap: 186.6m, Heading error: 17.9deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=186.6m, heading=17.9deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 186.6m
+  [CLOSURE] Final gap after closure: 58.8m
+  [FINALIZE] Track closure gap: 58.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9107 points
+  [CLOSURE] Distance to start: 765.1m, Heading error: 95.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 621.9m, Heading error: 41.9deg
+  [CLOSURE ITER 1] Gap: 490.4m, Heading error: 25.9deg
+  [CLOSURE ITER 2] Gap: 375.8m, Heading error: 18.4deg
+  [CLOSURE ITER 3] Gap: 245.7m, Heading error: 6.9deg
+  [CLOSURE ITER 4] Gap: 95.6m, Heading error: -23.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=95.6m, heading=23.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 95.6m
+  [CLOSURE] Final gap after closure: 39.6m
+  [FINALIZE] Track closure gap: 40.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7005 points
+  [CLOSURE] Distance to start: 860.0m, Heading error: 97.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 716.9m, Heading error: 40.2deg
+  [CLOSURE ITER 1] Gap: 584.7m, Heading error: 23.2deg
+  [CLOSURE ITER 2] Gap: 464.3m, Heading error: 12.8deg
+  [CLOSURE ITER 3] Gap: 319.9m, Heading error: -6.7deg
+  [CLOSURE ITER 4] Gap: 171.3m, Heading error: 19.5deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=171.3m, heading=19.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 171.3m
+  [CLOSURE] Final gap after closure: 58.9m
+  [FINALIZE] Track closure gap: 58.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8824 points
+  [CLOSURE] Distance to start: 910.3m, Heading error: 97.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 766.8m, Heading error: 39.4deg
+  [CLOSURE ITER 1] Gap: 634.0m, Heading error: 22.0deg
+  [CLOSURE ITER 2] Gap: 510.7m, Heading error: 10.3deg
+  [CLOSURE ITER 3] Gap: 364.1m, Heading error: -11.1deg
+  [CLOSURE ITER 4] Gap: 218.5m, Heading error: 9.5deg
+  [CLOSURE ITER 5] Gap: 69.3m, Heading error: -16.4deg
+  [CLOSURE ITER 5] GOOD ENOUGH - gap=69.3m, heading=16.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 69.3m
+  [CLOSURE] Final gap after closure: 21.0m
+  [FINALIZE] Track closure gap: 21.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9791 points
+  [CLOSURE] Distance to start: 879.7m, Heading error: 97.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 736.0m, Heading error: 39.7deg
+  [CLOSURE ITER 1] Gap: 604.0m, Heading error: 22.7deg
+  [CLOSURE ITER 2] Gap: 482.3m, Heading error: 11.8deg
+  [CLOSURE ITER 3] Gap: 336.7m, Heading error: -8.6deg
+  [CLOSURE ITER 4] Gap: 188.5m, Heading error: 15.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=188.5m, heading=15.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 188.5m
+  [CLOSURE] Final gap after closure: 50.7m
+  [FINALIZE] Track closure gap: 49.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9198 points
+  [CLOSURE] Distance to start: 839.6m, Heading error: 96.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 695.6m, Heading error: 40.3deg
+  [CLOSURE ITER 1] Gap: 563.9m, Heading error: 23.7deg
+  [CLOSURE ITER 2] Gap: 444.0m, Heading error: 13.7deg
+  [CLOSURE ITER 3] Gap: 300.6m, Heading error: -5.0deg
+  [CLOSURE ITER 4] Gap: 151.3m, Heading error: 24.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=151.3m, heading=24.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 151.3m
+  [CLOSURE] Final gap after closure: 64.9m
+  [FINALIZE] Track closure gap: 64.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8443 points
+  [CLOSURE] Distance to start: 752.4m, Heading error: 95.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 609.3m, Heading error: 42.1deg
+  [CLOSURE ITER 1] Gap: 477.3m, Heading error: 26.1deg
+  [CLOSURE ITER 2] Gap: 364.1m, Heading error: 19.2deg
+  [CLOSURE ITER 3] Gap: 236.6m, Heading error: 9.1deg
+  [CLOSURE ITER 4] Gap: 87.4m, Heading error: -16.5deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=87.4m, heading=16.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 87.4m
+  [CLOSURE] Final gap after closure: 26.2m
+  [FINALIZE] Track closure gap: 27.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6762 points
+  [CLOSURE] Distance to start: 763.5m, Heading error: 95.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 619.9m, Heading error: 41.8deg
+  [CLOSURE ITER 1] Gap: 488.3m, Heading error: 25.8deg
+  [CLOSURE ITER 2] Gap: 373.7m, Heading error: 18.3deg
+  [CLOSURE ITER 3] Gap: 243.5m, Heading error: 6.9deg
+  [CLOSURE ITER 4] Gap: 93.5m, Heading error: -23.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=93.5m, heading=23.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 93.5m
+  [CLOSURE] Final gap after closure: 38.9m
+  [FINALIZE] Track closure gap: 39.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6945 points
+  [CLOSURE] Distance to start: 762.3m, Heading error: 95.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 618.8m, Heading error: 41.9deg
+  [CLOSURE ITER 1] Gap: 487.3m, Heading error: 25.9deg
+  [CLOSURE ITER 2] Gap: 372.8m, Heading error: 18.5deg
+  [CLOSURE ITER 3] Gap: 243.8m, Heading error: 7.5deg
+  [CLOSURE ITER 4] Gap: 94.3m, Heading error: -21.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=94.3m, heading=21.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 94.3m
+  [CLOSURE] Final gap after closure: 35.8m
+  [FINALIZE] Track closure gap: 36.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6959 points
+  [CLOSURE] Distance to start: 903.1m, Heading error: 97.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 759.3m, Heading error: 39.4deg
+  [CLOSURE ITER 1] Gap: 626.7m, Heading error: 22.1deg
+  [CLOSURE ITER 2] Gap: 503.4m, Heading error: 10.5deg
+  [CLOSURE ITER 3] Gap: 356.8m, Heading error: -10.8deg
+  [CLOSURE ITER 4] Gap: 210.3m, Heading error: 10.3deg
+  [CLOSURE ITER 5] Gap: 61.8m, Heading error: -13.1deg
+  [CLOSURE ITER 5] GOOD ENOUGH - gap=61.8m, heading=13.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 61.8m
+  [CLOSURE] Final gap after closure: 15.2m
+  [FINALIZE] Track closure gap: 15.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9641 points
+  [CLOSURE] Distance to start: 913.6m, Heading error: 97.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 769.9m, Heading error: 39.3deg
+  [CLOSURE ITER 1] Gap: 638.0m, Heading error: 22.1deg
+  [CLOSURE ITER 2] Gap: 514.7m, Heading error: 10.5deg
+  [CLOSURE ITER 3] Gap: 368.2m, Heading error: -10.9deg
+  [CLOSURE ITER 4] Gap: 222.5m, Heading error: 9.8deg
+  [CLOSURE ITER 5] Gap: 73.3m, Heading error: -15.1deg
+  [CLOSURE ITER 5] GOOD ENOUGH - gap=73.3m, heading=15.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.3m
+  [CLOSURE] Final gap after closure: 20.4m
+  [FINALIZE] Track closure gap: 21.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9858 points
+  [CLOSURE] Distance to start: 845.8m, Heading error: 96.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 702.3m, Heading error: 40.3deg
+  [CLOSURE ITER 1] Gap: 570.4m, Heading error: 23.6deg
+  [CLOSURE ITER 2] Gap: 450.5m, Heading error: 13.5deg
+  [CLOSURE ITER 3] Gap: 307.1m, Heading error: -5.3deg
+  [CLOSURE ITER 4] Gap: 157.5m, Heading error: 23.5deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=157.5m, heading=23.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 157.5m
+  [CLOSURE] Final gap after closure: 65.2m
+  [FINALIZE] Track closure gap: 64.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8537 points
+  [CLOSURE] Distance to start: 769.3m, Heading error: 95.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 625.6m, Heading error: 41.7deg
+  [CLOSURE ITER 1] Gap: 493.8m, Heading error: 25.5deg
+  [CLOSURE ITER 2] Gap: 378.8m, Heading error: 17.9deg
+  [CLOSURE ITER 3] Gap: 248.4m, Heading error: 6.1deg
+  [CLOSURE ITER 4] Gap: 98.8m, Heading error: -25.0deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=98.8m, heading=25.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 98.8m
+  [CLOSURE] Final gap after closure: 43.8m
+  [FINALIZE] Track closure gap: 44.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7062 points
+  [CLOSURE] Distance to start: 872.2m, Heading error: 97.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 728.8m, Heading error: 39.9deg
+  [CLOSURE ITER 1] Gap: 597.1m, Heading error: 23.0deg
+  [CLOSURE ITER 2] Gap: 476.6m, Heading error: 12.6deg
+  [CLOSURE ITER 3] Gap: 332.1m, Heading error: -7.1deg
+  [CLOSURE ITER 4] Gap: 183.4m, Heading error: 18.4deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=183.4m, heading=18.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 183.4m
+  [CLOSURE] Final gap after closure: 59.4m
+  [FINALIZE] Track closure gap: 58.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 9057 points
+  [CLOSURE] Distance to start: 922.4m, Heading error: 98.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 778.5m, Heading error: 39.2deg
+  [CLOSURE ITER 1] Gap: 646.3m, Heading error: 21.9deg
+  [CLOSURE ITER 2] Gap: 522.9m, Heading error: 10.1deg
+  [CLOSURE ITER 3] Gap: 376.3m, Heading error: -11.4deg
+  [CLOSURE ITER 4] Gap: 230.7m, Heading error: 9.1deg
+  [CLOSURE ITER 5] Gap: 81.6m, Heading error: -17.0deg
+  [CLOSURE ITER 5] GOOD ENOUGH - gap=81.6m, heading=17.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 81.6m
+  [CLOSURE] Final gap after closure: 25.1m
+  [FINALIZE] Track closure gap: 25.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 10019 points
+  [CLOSURE] Distance to start: 957.3m, Heading error: 98.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 813.7m, Heading error: 38.7deg
+  [CLOSURE ITER 1] Gap: 681.8m, Heading error: 21.4deg
+  [CLOSURE ITER 2] Gap: 556.9m, Heading error: 9.0deg
+  [CLOSURE ITER 3] Gap: 409.5m, Heading error: -13.3deg
+  [CLOSURE ITER 4] Gap: 266.1m, Heading error: 5.3deg
+  [CLOSURE ITER 5] Gap: 116.0m, Heading error: -26.1deg
+  [CLOSURE ITER 6] Gap: 43.6m, Heading error: -120.5deg
+  [CLOSURE ITER 7] Gap: 173.8m, Heading error: -154.2deg
+  [CLOSURE ITER 7] DIVERGING - stopping iterations (gap increased from 43.6m to 173.8m)
+  [CLOSURE FINAL] Gap before final straight: 173.8m
+  [CLOSURE] Final gap after closure: 342.9m
+  [FINALIZE] Track closure gap: 342.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 11042 points
+  [CLOSURE] Distance to start: 779.9m, Heading error: 95.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 635.8m, Heading error: 41.4deg
+  [CLOSURE ITER 1] Gap: 504.3m, Heading error: 25.3deg
+  [CLOSURE ITER 2] Gap: 389.2m, Heading error: 17.4deg
+  [CLOSURE ITER 3] Gap: 257.4m, Heading error: 4.9deg
+  [CLOSURE ITER 4] Gap: 106.2m, Heading error: -29.2deg
+  [CLOSURE ITER 5] Gap: 52.3m, Heading error: -126.5deg
+  [CLOSURE ITER 6] Gap: 186.2m, Heading error: -152.4deg
+  [CLOSURE ITER 6] DIVERGING - stopping iterations (gap increased from 52.3m to 186.2m)
+  [CLOSURE FINAL] Gap before final straight: 186.2m
+  [CLOSURE] Final gap after closure: 366.3m
+  [FINALIZE] Track closure gap: 365.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7666 points
+  [CLOSURE] Distance to start: 943.9m, Heading error: 98.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 799.9m, Heading error: 38.9deg
+  [CLOSURE ITER 1] Gap: 667.2m, Heading error: 21.3deg
+  [CLOSURE ITER 2] Gap: 542.3m, Heading error: 9.0deg
+  [CLOSURE ITER 3] Gap: 394.9m, Heading error: -13.3deg
+  [CLOSURE ITER 4] Gap: 251.5m, Heading error: 5.2deg
+  [CLOSURE ITER 5] Gap: 101.6m, Heading error: -27.6deg
+  [CLOSURE ITER 6] Gap: 53.0m, Heading error: -133.9deg
+  [CLOSURE ITER 7] Gap: 194.8m, Heading error: -153.1deg
+  [CLOSURE ITER 7] DIVERGING - stopping iterations (gap increased from 53.0m to 194.8m)
+  [CLOSURE FINAL] Gap before final straight: 194.8m
+  [CLOSURE] Final gap after closure: 383.0m
+  [FINALIZE] Track closure gap: 382.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 10809 points
+  [CLOSURE] Distance to start: 858.8m, Heading error: 97.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 714.7m, Heading error: 40.0deg
+  [CLOSURE ITER 1] Gap: 582.3m, Heading error: 23.0deg
+  [CLOSURE ITER 2] Gap: 461.8m, Heading error: 12.7deg
+  [CLOSURE ITER 3] Gap: 317.3m, Heading error: -6.9deg
+  [CLOSURE ITER 4] Gap: 168.7m, Heading error: 19.1deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=168.7m, heading=19.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 168.7m
+  [CLOSURE] Final gap after closure: 57.0m
+  [FINALIZE] Track closure gap: 56.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8805 points
+  [CLOSURE] Distance to start: 864.1m, Heading error: 97.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 720.1m, Heading error: 40.0deg
+  [CLOSURE ITER 1] Gap: 587.5m, Heading error: 22.9deg
+  [CLOSURE ITER 2] Gap: 465.9m, Heading error: 12.1deg
+  [CLOSURE ITER 3] Gap: 321.4m, Heading error: -7.7deg
+  [CLOSURE ITER 4] Gap: 173.4m, Heading error: 17.0deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=173.4m, heading=17.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 173.4m
+  [CLOSURE] Final gap after closure: 52.3m
+  [FINALIZE] Track closure gap: 51.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 8900 points
+  [CLOSURE] Distance to start: 781.9m, Heading error: 95.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 638.3m, Heading error: 41.5deg
+  [CLOSURE ITER 1] Gap: 507.0m, Heading error: 25.3deg
+  [CLOSURE ITER 2] Gap: 391.8m, Heading error: 17.4deg
+  [CLOSURE ITER 3] Gap: 260.1m, Heading error: 4.9deg
+  [CLOSURE ITER 4] Gap: 108.8m, Heading error: -29.0deg
+  [CLOSURE ITER 5] Gap: 51.3m, Heading error: -124.8deg
+  [CLOSURE ITER 6] Gap: 183.5m, Heading error: -152.5deg
+  [CLOSURE ITER 6] DIVERGING - stopping iterations (gap increased from 51.3m to 183.5m)
+  [CLOSURE FINAL] Gap before final straight: 183.5m
+  [CLOSURE] Final gap after closure: 360.8m
+  [FINALIZE] Track closure gap: 360.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7680 points
+  [CLOSURE] Distance to start: 791.0m, Heading error: 96.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 647.9m, Heading error: 41.4deg
+  [CLOSURE ITER 1] Gap: 516.2m, Heading error: 25.0deg
+  [CLOSURE ITER 2] Gap: 399.7m, Heading error: 16.6deg
+  [CLOSURE ITER 3] Gap: 266.5m, Heading error: 3.1deg
+  [CLOSURE ITER 4] Gap: 116.6m, Heading error: -32.4deg
+  [CLOSURE ITER 5] Gap: 53.8m, Heading error: -105.5deg
+  [CLOSURE ITER 6] Gap: 160.3m, Heading error: -149.9deg
+  [CLOSURE ITER 6] DIVERGING - stopping iterations (gap increased from 53.8m to 160.3m)
+  [CLOSURE FINAL] Gap before final straight: 160.3m
+  [CLOSURE] Final gap after closure: 314.1m
+  [FINALIZE] Track closure gap: 313.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 7827 points
+  [CLOSURE] Distance to start: 702.5m, Heading error: 94.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 560.0m, Heading error: 43.4deg
+  [CLOSURE ITER 1] Gap: 429.2m, Heading error: 28.2deg
+  [CLOSURE ITER 2] Gap: 321.4m, Heading error: 23.9deg
+  [CLOSURE ITER 3] Gap: 204.5m, Heading error: 19.8deg
+  [CLOSURE ITER 4] Gap: 74.4m, Heading error: 21.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=74.4m, heading=21.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 74.4m
+  [CLOSURE] Final gap after closure: 29.3m
+  [FINALIZE] Track closure gap: 28.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5798 points
+  [CLOSURE] Distance to start: 701.9m, Heading error: 94.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 559.0m, Heading error: 43.4deg
+  [CLOSURE ITER 1] Gap: 428.1m, Heading error: 28.3deg
+  [CLOSURE ITER 2] Gap: 320.4m, Heading error: 23.9deg
+  [CLOSURE ITER 3] Gap: 203.5m, Heading error: 19.9deg
+  [CLOSURE ITER 4] Gap: 73.6m, Heading error: 22.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=73.6m, heading=22.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.6m
+  [CLOSURE] Final gap after closure: 29.7m
+  [FINALIZE] Track closure gap: 28.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5808 points
+  [CLOSURE] Distance to start: 684.8m, Heading error: 93.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 540.9m, Heading error: 43.7deg
+  [CLOSURE ITER 1] Gap: 410.0m, Heading error: 28.9deg
+  [CLOSURE ITER 2] Gap: 303.1m, Heading error: 25.2deg
+  [CLOSURE ITER 3] Gap: 190.0m, Heading error: 23.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=190.0m, heading=23.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 190.0m
+  [CLOSURE] Final gap after closure: 78.1m
+  [FINALIZE] Track closure gap: 77.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5435 points
+  [CLOSURE] Distance to start: 669.4m, Heading error: 93.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 526.5m, Heading error: 44.2deg
+  [CLOSURE ITER 1] Gap: 396.0m, Heading error: 29.7deg
+  [CLOSURE ITER 2] Gap: 290.2m, Heading error: 26.8deg
+  [CLOSURE ITER 3] Gap: 172.1m, Heading error: 25.1deg
+  [CLOSURE ITER 4] Gap: 59.5m, Heading error: 48.6deg
+  [CLOSURE ITER 5] Gap: 90.7m, Heading error: 147.0deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 59.5m to 90.7m)
+  [CLOSURE FINAL] Gap before final straight: 90.7m
+  [CLOSURE] Final gap after closure: 178.0m
+  [FINALIZE] Track closure gap: 177.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5329 points
+  [CLOSURE] Distance to start: 670.3m, Heading error: 93.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 527.1m, Heading error: 44.3deg
+  [CLOSURE ITER 1] Gap: 396.5m, Heading error: 29.7deg
+  [CLOSURE ITER 2] Gap: 289.8m, Heading error: 26.5deg
+  [CLOSURE ITER 3] Gap: 171.4m, Heading error: 24.7deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=171.4m, heading=24.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 171.4m
+  [CLOSURE] Final gap after closure: 74.4m
+  [FINALIZE] Track closure gap: 73.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5161 points
+  [CLOSURE] Distance to start: 651.3m, Heading error: 93.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 508.5m, Heading error: 44.9deg
+  [CLOSURE ITER 1] Gap: 378.6m, Heading error: 30.9deg
+  [CLOSURE ITER 2] Gap: 255.5m, Heading error: 23.9deg
+  [CLOSURE ITER 3] Gap: 132.0m, Heading error: 22.7deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=132.0m, heading=22.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 132.0m
+  [CLOSURE] Final gap after closure: 53.2m
+  [FINALIZE] Track closure gap: 52.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4806 points
+  [CLOSURE] Distance to start: 720.0m, Heading error: 94.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 577.4m, Heading error: 43.0deg
+  [CLOSURE ITER 1] Gap: 446.5m, Heading error: 27.6deg
+  [CLOSURE ITER 2] Gap: 336.9m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 216.3m, Heading error: 16.1deg
+  [CLOSURE ITER 4] Gap: 77.9m, Heading error: 8.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.9m, heading=8.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.9m
+  [CLOSURE] Final gap after closure: 12.3m
+  [FINALIZE] Track closure gap: 11.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6149 points
+  [CLOSURE] Distance to start: 718.0m, Heading error: 94.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 574.5m, Heading error: 42.9deg
+  [CLOSURE ITER 1] Gap: 443.5m, Heading error: 27.5deg
+  [CLOSURE ITER 2] Gap: 333.9m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 213.3m, Heading error: 16.2deg
+  [CLOSURE ITER 4] Gap: 75.0m, Heading error: 9.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=75.0m, heading=9.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 75.0m
+  [CLOSURE] Final gap after closure: 13.4m
+  [FINALIZE] Track closure gap: 12.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6104 points
+  [CLOSURE] Distance to start: 700.9m, Heading error: 94.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 556.5m, Heading error: 43.3deg
+  [CLOSURE ITER 1] Gap: 425.4m, Heading error: 28.2deg
+  [CLOSURE ITER 2] Gap: 316.7m, Heading error: 23.7deg
+  [CLOSURE ITER 3] Gap: 198.6m, Heading error: 19.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=198.6m, heading=19.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 198.6m
+  [CLOSURE] Final gap after closure: 67.7m
+  [FINALIZE] Track closure gap: 66.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5760 points
+  [CLOSURE] Distance to start: 705.8m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 563.2m, Heading error: 43.3deg
+  [CLOSURE ITER 1] Gap: 432.1m, Heading error: 28.1deg
+  [CLOSURE ITER 2] Gap: 323.2m, Heading error: 23.3deg
+  [CLOSURE ITER 3] Gap: 204.7m, Heading error: 18.5deg
+  [CLOSURE ITER 4] Gap: 72.0m, Heading error: 18.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.0m, heading=18.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.0m
+  [CLOSURE] Final gap after closure: 24.0m
+  [FINALIZE] Track closure gap: 23.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5869 points
+  [CLOSURE] Distance to start: 694.2m, Heading error: 94.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 550.5m, Heading error: 43.5deg
+  [CLOSURE ITER 1] Gap: 419.9m, Heading error: 28.6deg
+  [CLOSURE ITER 2] Gap: 312.7m, Heading error: 24.6deg
+  [CLOSURE ITER 3] Gap: 197.6m, Heading error: 21.6deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=197.6m, heading=21.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 197.6m
+  [CLOSURE] Final gap after closure: 75.0m
+  [FINALIZE] Track closure gap: 74.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5643 points
+  [CLOSURE] Distance to start: 662.3m, Heading error: 93.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 519.8m, Heading error: 44.5deg
+  [CLOSURE ITER 1] Gap: 389.9m, Heading error: 30.3deg
+  [CLOSURE ITER 2] Gap: 266.8m, Heading error: 22.9deg
+  [CLOSURE ITER 3] Gap: 140.8m, Heading error: 19.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=140.8m, heading=19.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 140.8m
+  [CLOSURE] Final gap after closure: 48.4m
+  [FINALIZE] Track closure gap: 47.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5011 points
+  [CLOSURE] Distance to start: 668.4m, Heading error: 93.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 524.8m, Heading error: 44.2deg
+  [CLOSURE ITER 1] Gap: 394.2m, Heading error: 29.7deg
+  [CLOSURE ITER 2] Gap: 287.6m, Heading error: 26.6deg
+  [CLOSURE ITER 3] Gap: 169.4m, Heading error: 25.0deg
+  [CLOSURE ITER 4] Gap: 57.3m, Heading error: 50.3deg
+  [CLOSURE ITER 5] Gap: 92.4m, Heading error: 147.8deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 57.3m to 92.4m)
+  [CLOSURE FINAL] Gap before final straight: 92.4m
+  [CLOSURE] Final gap after closure: 181.9m
+  [FINALIZE] Track closure gap: 181.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5305 points
+  [CLOSURE] Distance to start: 688.2m, Heading error: 94.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 544.9m, Heading error: 43.7deg
+  [CLOSURE ITER 1] Gap: 413.9m, Heading error: 28.7deg
+  [CLOSURE ITER 2] Gap: 306.9m, Heading error: 25.0deg
+  [CLOSURE ITER 3] Gap: 192.4m, Heading error: 22.5deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=192.4m, heading=22.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 192.4m
+  [CLOSURE] Final gap after closure: 76.2m
+  [FINALIZE] Track closure gap: 75.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5524 points
+  [CLOSURE] Distance to start: 722.3m, Heading error: 94.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 578.5m, Heading error: 42.8deg
+  [CLOSURE ITER 1] Gap: 447.1m, Heading error: 27.3deg
+  [CLOSURE ITER 2] Gap: 336.2m, Heading error: 21.6deg
+  [CLOSURE ITER 3] Gap: 214.0m, Heading error: 14.8deg
+  [CLOSURE ITER 4] Gap: 69.6m, Heading error: 2.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=69.6m, heading=2.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 69.6m
+  [CLOSURE] Final gap after closure: 5.6m
+  [FINALIZE] Track closure gap: 4.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6188 points
+  [CLOSURE] Distance to start: 696.0m, Heading error: 94.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 552.4m, Heading error: 43.5deg
+  [CLOSURE ITER 1] Gap: 421.9m, Heading error: 28.6deg
+  [CLOSURE ITER 2] Gap: 314.6m, Heading error: 24.5deg
+  [CLOSURE ITER 3] Gap: 199.5m, Heading error: 21.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=199.5m, heading=21.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 199.5m
+  [CLOSURE] Final gap after closure: 75.0m
+  [FINALIZE] Track closure gap: 74.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5658 points
+  [CLOSURE] Distance to start: 663.8m, Heading error: 93.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 520.6m, Heading error: 44.4deg
+  [CLOSURE ITER 1] Gap: 390.4m, Heading error: 30.1deg
+  [CLOSURE ITER 2] Gap: 267.1m, Heading error: 22.6deg
+  [CLOSURE ITER 3] Gap: 140.7m, Heading error: 18.8deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=140.7m, heading=18.8deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 140.7m
+  [CLOSURE] Final gap after closure: 46.8m
+  [FINALIZE] Track closure gap: 45.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5027 points
+  [CLOSURE] Distance to start: 662.3m, Heading error: 93.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 519.8m, Heading error: 44.5deg
+  [CLOSURE ITER 1] Gap: 389.9m, Heading error: 30.3deg
+  [CLOSURE ITER 2] Gap: 266.8m, Heading error: 22.9deg
+  [CLOSURE ITER 3] Gap: 140.8m, Heading error: 19.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=140.8m, heading=19.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 140.8m
+  [CLOSURE] Final gap after closure: 48.4m
+  [FINALIZE] Track closure gap: 47.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5011 points
+  [CLOSURE] Distance to start: 681.3m, Heading error: 93.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 537.9m, Heading error: 43.9deg
+  [CLOSURE ITER 1] Gap: 407.5m, Heading error: 29.2deg
+  [CLOSURE ITER 2] Gap: 301.0m, Heading error: 25.8deg
+  [CLOSURE ITER 3] Gap: 188.5m, Heading error: 24.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=188.5m, heading=24.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 188.5m
+  [CLOSURE] Final gap after closure: 80.9m
+  [FINALIZE] Track closure gap: 80.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5411 points
+  [CLOSURE] Distance to start: 715.8m, Heading error: 94.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 572.6m, Heading error: 43.0deg
+  [CLOSURE ITER 1] Gap: 441.9m, Heading error: 27.7deg
+  [CLOSURE ITER 2] Gap: 332.5m, Heading error: 22.6deg
+  [CLOSURE ITER 3] Gap: 212.2m, Heading error: 16.8deg
+  [CLOSURE ITER 4] Gap: 75.5m, Heading error: 11.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=75.5m, heading=11.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 75.5m
+  [CLOSURE] Final gap after closure: 15.8m
+  [FINALIZE] Track closure gap: 14.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6064 points
+  [CLOSURE] Distance to start: 681.1m, Heading error: 93.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 538.2m, Heading error: 44.0deg
+  [CLOSURE ITER 1] Gap: 407.8m, Heading error: 29.3deg
+  [CLOSURE ITER 2] Gap: 301.4m, Heading error: 25.9deg
+  [CLOSURE ITER 3] Gap: 189.0m, Heading error: 24.5deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=189.0m, heading=24.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 189.0m
+  [CLOSURE] Final gap after closure: 81.5m
+  [FINALIZE] Track closure gap: 80.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5390 points
+  [CLOSURE] Distance to start: 696.0m, Heading error: 94.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 552.4m, Heading error: 43.5deg
+  [CLOSURE ITER 1] Gap: 421.9m, Heading error: 28.6deg
+  [CLOSURE ITER 2] Gap: 314.6m, Heading error: 24.5deg
+  [CLOSURE ITER 3] Gap: 199.5m, Heading error: 21.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=199.5m, heading=21.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 199.5m
+  [CLOSURE] Final gap after closure: 75.0m
+  [FINALIZE] Track closure gap: 74.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5658 points
+  [CLOSURE] Distance to start: 669.5m, Heading error: 93.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 525.8m, Heading error: 44.2deg
+  [CLOSURE ITER 1] Gap: 395.1m, Heading error: 29.6deg
+  [CLOSURE ITER 2] Gap: 289.3m, Heading error: 26.7deg
+  [CLOSURE ITER 3] Gap: 171.1m, Heading error: 25.0deg
+  [CLOSURE ITER 4] Gap: 58.6m, Heading error: 49.1deg
+  [CLOSURE ITER 5] Gap: 91.5m, Heading error: 147.4deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 58.6m to 91.5m)
+  [CLOSURE FINAL] Gap before final straight: 91.5m
+  [CLOSURE] Final gap after closure: 180.0m
+  [FINALIZE] Track closure gap: 179.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5363 points
+  [CLOSURE] Distance to start: 701.9m, Heading error: 94.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 559.0m, Heading error: 43.4deg
+  [CLOSURE ITER 1] Gap: 428.1m, Heading error: 28.3deg
+  [CLOSURE ITER 2] Gap: 320.4m, Heading error: 23.9deg
+  [CLOSURE ITER 3] Gap: 203.5m, Heading error: 19.9deg
+  [CLOSURE ITER 4] Gap: 73.6m, Heading error: 22.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=73.6m, heading=22.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.6m
+  [CLOSURE] Final gap after closure: 29.7m
+  [FINALIZE] Track closure gap: 28.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5808 points
+  [CLOSURE] Distance to start: 701.1m, Heading error: 94.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 558.2m, Heading error: 43.4deg
+  [CLOSURE ITER 1] Gap: 427.3m, Heading error: 28.3deg
+  [CLOSURE ITER 2] Gap: 319.7m, Heading error: 24.0deg
+  [CLOSURE ITER 3] Gap: 203.0m, Heading error: 20.1deg
+  [CLOSURE ITER 4] Gap: 73.3m, Heading error: 23.0deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=73.3m, heading=23.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.3m
+  [CLOSURE] Final gap after closure: 30.5m
+  [FINALIZE] Track closure gap: 29.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5778 points
+  [CLOSURE] Distance to start: 705.8m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 563.2m, Heading error: 43.3deg
+  [CLOSURE ITER 1] Gap: 432.1m, Heading error: 28.1deg
+  [CLOSURE ITER 2] Gap: 323.2m, Heading error: 23.3deg
+  [CLOSURE ITER 3] Gap: 204.7m, Heading error: 18.5deg
+  [CLOSURE ITER 4] Gap: 72.0m, Heading error: 18.2deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.0m, heading=18.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.0m
+  [CLOSURE] Final gap after closure: 24.0m
+  [FINALIZE] Track closure gap: 23.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5869 points
+  [CLOSURE] Distance to start: 639.5m, Heading error: 92.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 497.3m, Heading error: 45.3deg
+  [CLOSURE ITER 1] Gap: 367.5m, Heading error: 31.5deg
+  [CLOSURE ITER 2] Gap: 243.3m, Heading error: 24.8deg
+  [CLOSURE ITER 3] Gap: 122.5m, Heading error: 26.2deg
+  [CLOSURE ITER 4] Gap: 41.5m, Heading error: 112.1deg
+  [CLOSURE ITER 5] Gap: 163.3m, Heading error: 154.3deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 41.5m to 163.3m)
+  [CLOSURE FINAL] Gap before final straight: 163.3m
+  [CLOSURE] Final gap after closure: 323.0m
+  [FINALIZE] Track closure gap: 323.0m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4904 points
+  [CLOSURE] Distance to start: 707.4m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 564.1m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 432.8m, Heading error: 27.9deg
+  [CLOSURE ITER 2] Gap: 323.7m, Heading error: 23.1deg
+  [CLOSURE ITER 3] Gap: 204.9m, Heading error: 18.1deg
+  [CLOSURE ITER 4] Gap: 70.7m, Heading error: 16.7deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=70.7m, heading=16.7deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 70.7m
+  [CLOSURE] Final gap after closure: 21.5m
+  [FINALIZE] Track closure gap: 20.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5898 points
+  [CLOSURE] Distance to start: 720.0m, Heading error: 94.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 577.4m, Heading error: 43.0deg
+  [CLOSURE ITER 1] Gap: 446.5m, Heading error: 27.6deg
+  [CLOSURE ITER 2] Gap: 336.9m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 216.3m, Heading error: 16.1deg
+  [CLOSURE ITER 4] Gap: 77.9m, Heading error: 8.3deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.9m, heading=8.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.9m
+  [CLOSURE] Final gap after closure: 12.3m
+  [FINALIZE] Track closure gap: 11.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6149 points
+  [CLOSURE] Distance to start: 708.6m, Heading error: 94.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 564.7m, Heading error: 43.1deg
+  [CLOSURE ITER 1] Gap: 434.2m, Heading error: 28.0deg
+  [CLOSURE ITER 2] Gap: 325.1m, Heading error: 23.2deg
+  [CLOSURE ITER 3] Gap: 206.4m, Heading error: 18.2deg
+  [CLOSURE ITER 4] Gap: 72.4m, Heading error: 16.6deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=72.4m, heading=16.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 72.4m
+  [CLOSURE] Final gap after closure: 22.1m
+  [FINALIZE] Track closure gap: 21.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5901 points
+  [CLOSURE] Distance to start: 720.3m, Heading error: 94.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 577.4m, Heading error: 42.9deg
+  [CLOSURE ITER 1] Gap: 446.3m, Heading error: 27.5deg
+  [CLOSURE ITER 2] Gap: 336.7m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 216.0m, Heading error: 16.0deg
+  [CLOSURE ITER 4] Gap: 77.5m, Heading error: 8.1deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.5m, heading=8.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.5m
+  [CLOSURE] Final gap after closure: 12.1m
+  [FINALIZE] Track closure gap: 11.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6142 points
+  [CLOSURE] Distance to start: 658.6m, Heading error: 93.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 516.3m, Heading error: 44.7deg
+  [CLOSURE ITER 1] Gap: 386.8m, Heading error: 30.6deg
+  [CLOSURE ITER 2] Gap: 263.1m, Heading error: 23.1deg
+  [CLOSURE ITER 3] Gap: 137.4m, Heading error: 20.2deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=137.4m, heading=20.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 137.4m
+  [CLOSURE] Final gap after closure: 49.2m
+  [FINALIZE] Track closure gap: 48.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4938 points
+  [CLOSURE] Distance to start: 725.0m, Heading error: 94.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 582.4m, Heading error: 42.9deg
+  [CLOSURE ITER 1] Gap: 451.2m, Heading error: 27.3deg
+  [CLOSURE ITER 2] Gap: 340.3m, Heading error: 21.6deg
+  [CLOSURE ITER 3] Gap: 217.9m, Heading error: 14.5deg
+  [CLOSURE ITER 4] Gap: 73.3m, Heading error: 1.5deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=73.3m, heading=1.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 73.3m
+  [CLOSURE] Final gap after closure: 5.1m
+  [FINALIZE] Track closure gap: 4.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6234 points
+  [CLOSURE] Distance to start: 719.5m, Heading error: 94.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 575.9m, Heading error: 42.8deg
+  [CLOSURE ITER 1] Gap: 444.7m, Heading error: 27.4deg
+  [CLOSURE ITER 2] Gap: 334.0m, Heading error: 21.9deg
+  [CLOSURE ITER 3] Gap: 211.9m, Heading error: 15.2deg
+  [CLOSURE ITER 4] Gap: 71.9m, Heading error: 6.0deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=71.9m, heading=6.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 71.9m
+  [CLOSURE] Final gap after closure: 8.8m
+  [FINALIZE] Track closure gap: 7.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6116 points
+  [CLOSURE] Distance to start: 641.6m, Heading error: 92.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 498.9m, Heading error: 45.2deg
+  [CLOSURE ITER 1] Gap: 370.0m, Heading error: 31.6deg
+  [CLOSURE ITER 2] Gap: 246.0m, Heading error: 24.9deg
+  [CLOSURE ITER 3] Gap: 125.2m, Heading error: 26.0deg
+  [CLOSURE ITER 4] Gap: 40.6m, Heading error: 109.8deg
+  [CLOSURE ITER 5] Gap: 159.8m, Heading error: 154.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 40.6m to 159.8m)
+  [CLOSURE FINAL] Gap before final straight: 159.8m
+  [CLOSURE] Final gap after closure: 315.8m
+  [FINALIZE] Track closure gap: 315.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4957 points
+  [CLOSURE] Distance to start: 710.7m, Heading error: 94.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 567.6m, Heading error: 43.2deg
+  [CLOSURE ITER 1] Gap: 436.2m, Heading error: 27.8deg
+  [CLOSURE ITER 2] Gap: 326.9m, Heading error: 22.8deg
+  [CLOSURE ITER 3] Gap: 206.8m, Heading error: 17.3deg
+  [CLOSURE ITER 4] Gap: 70.7m, Heading error: 13.6deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=70.7m, heading=13.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 70.7m
+  [CLOSURE] Final gap after closure: 17.8m
+  [FINALIZE] Track closure gap: 16.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5945 points
+  [CLOSURE] Distance to start: 720.3m, Heading error: 94.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 577.4m, Heading error: 42.9deg
+  [CLOSURE ITER 1] Gap: 446.3m, Heading error: 27.5deg
+  [CLOSURE ITER 2] Gap: 336.7m, Heading error: 22.3deg
+  [CLOSURE ITER 3] Gap: 216.0m, Heading error: 16.0deg
+  [CLOSURE ITER 4] Gap: 77.5m, Heading error: 8.1deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=77.5m, heading=8.1deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 77.5m
+  [CLOSURE] Final gap after closure: 12.1m
+  [FINALIZE] Track closure gap: 11.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6142 points
+  [CLOSURE] Distance to start: 684.8m, Heading error: 93.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 540.9m, Heading error: 43.7deg
+  [CLOSURE ITER 1] Gap: 410.0m, Heading error: 28.9deg
+  [CLOSURE ITER 2] Gap: 303.1m, Heading error: 25.2deg
+  [CLOSURE ITER 3] Gap: 190.0m, Heading error: 23.4deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=190.0m, heading=23.4deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 190.0m
+  [CLOSURE] Final gap after closure: 78.1m
+  [FINALIZE] Track closure gap: 77.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5435 points
+  [CLOSURE] Distance to start: 663.8m, Heading error: 93.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 520.6m, Heading error: 44.4deg
+  [CLOSURE ITER 1] Gap: 390.4m, Heading error: 30.1deg
+  [CLOSURE ITER 2] Gap: 267.1m, Heading error: 22.6deg
+  [CLOSURE ITER 3] Gap: 140.7m, Heading error: 18.8deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=140.7m, heading=18.8deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 140.7m
+  [CLOSURE] Final gap after closure: 46.8m
+  [FINALIZE] Track closure gap: 45.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5027 points
+  [CLOSURE] Distance to start: 685.2m, Heading error: 93.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 542.1m, Heading error: 43.9deg
+  [CLOSURE ITER 1] Gap: 411.5m, Heading error: 29.0deg
+  [CLOSURE ITER 2] Gap: 304.8m, Heading error: 25.4deg
+  [CLOSURE ITER 3] Gap: 191.8m, Heading error: 23.6deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=191.8m, heading=23.6deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 191.8m
+  [CLOSURE] Final gap after closure: 79.4m
+  [FINALIZE] Track closure gap: 78.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5473 points
+  [CLOSURE] Distance to start: 730.3m, Heading error: 95.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 588.0m, Heading error: 42.8deg
+  [CLOSURE ITER 1] Gap: 456.5m, Heading error: 27.0deg
+  [CLOSURE ITER 2] Gap: 345.3m, Heading error: 21.1deg
+  [CLOSURE ITER 3] Gap: 221.5m, Heading error: 13.3deg
+  [CLOSURE ITER 4] Gap: 75.4m, Heading error: -2.8deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=75.4m, heading=2.8deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 75.4m
+  [CLOSURE] Final gap after closure: 6.0m
+  [FINALIZE] Track closure gap: 6.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 6333 points
+  [CLOSURE] Distance to start: 642.9m, Heading error: 92.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 500.0m, Heading error: 45.1deg
+  [CLOSURE ITER 1] Gap: 370.9m, Heading error: 31.5deg
+  [CLOSURE ITER 2] Gap: 246.7m, Heading error: 24.6deg
+  [CLOSURE ITER 3] Gap: 125.4m, Heading error: 25.4deg
+  [CLOSURE ITER 4] Gap: 39.2m, Heading error: 109.8deg
+  [CLOSURE ITER 5] Gap: 159.3m, Heading error: 155.0deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 39.2m to 159.3m)
+  [CLOSURE FINAL] Gap before final straight: 159.3m
+  [CLOSURE] Final gap after closure: 315.6m
+  [FINALIZE] Track closure gap: 315.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4965 points
+  [CLOSURE] Distance to start: 640.1m, Heading error: 92.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 497.7m, Heading error: 45.3deg
+  [CLOSURE ITER 1] Gap: 368.0m, Heading error: 31.5deg
+  [CLOSURE ITER 2] Gap: 243.9m, Heading error: 24.9deg
+  [CLOSURE ITER 3] Gap: 123.1m, Heading error: 26.2deg
+  [CLOSURE ITER 4] Gap: 41.4m, Heading error: 111.2deg
+  [CLOSURE ITER 5] Gap: 161.9m, Heading error: 154.3deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 41.4m to 161.9m)
+  [CLOSURE FINAL] Gap before final straight: 161.9m
+  [CLOSURE] Final gap after closure: 319.7m
+  [FINALIZE] Track closure gap: 319.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4927 points
+  [CLOSURE] Distance to start: 698.8m, Heading error: 94.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 555.3m, Heading error: 43.4deg
+  [CLOSURE ITER 1] Gap: 424.5m, Heading error: 28.3deg
+  [CLOSURE ITER 2] Gap: 316.9m, Heading error: 24.1deg
+  [CLOSURE ITER 3] Gap: 200.3m, Heading error: 20.4deg
+  [CLOSURE ITER 4] Gap: 71.2m, Heading error: 24.5deg
+  [CLOSURE ITER 4] GOOD ENOUGH - gap=71.2m, heading=24.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 71.2m
+  [CLOSURE] Final gap after closure: 31.6m
+  [FINALIZE] Track closure gap: 30.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5740 points
+  [CLOSURE] Distance to start: 659.2m, Heading error: 93.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 515.9m, Heading error: 44.5deg
+  [CLOSURE ITER 1] Gap: 386.1m, Heading error: 30.4deg
+  [CLOSURE ITER 2] Gap: 262.3m, Heading error: 23.0deg
+  [CLOSURE ITER 3] Gap: 136.4m, Heading error: 19.9deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=136.4m, heading=19.9deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 136.4m
+  [CLOSURE] Final gap after closure: 48.2m
+  [FINALIZE] Track closure gap: 47.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4971 points
+  [CLOSURE] Distance to start: 657.4m, Heading error: 93.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 514.8m, Heading error: 44.7deg
+  [CLOSURE ITER 1] Gap: 384.4m, Heading error: 30.4deg
+  [CLOSURE ITER 2] Gap: 260.5m, Heading error: 23.0deg
+  [CLOSURE ITER 3] Gap: 134.8m, Heading error: 20.2deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=134.8m, heading=20.2deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 134.8m
+  [CLOSURE] Final gap after closure: 48.1m
+  [FINALIZE] Track closure gap: 47.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4925 points
+  [CLOSURE] Distance to start: 694.8m, Heading error: 94.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 551.5m, Heading error: 43.5deg
+  [CLOSURE ITER 1] Gap: 421.0m, Heading error: 28.6deg
+  [CLOSURE ITER 2] Gap: 313.7m, Heading error: 24.6deg
+  [CLOSURE ITER 3] Gap: 198.6m, Heading error: 21.5deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=198.6m, heading=21.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 198.6m
+  [CLOSURE] Final gap after closure: 75.0m
+  [FINALIZE] Track closure gap: 74.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5652 points
+  [CLOSURE] Distance to start: 678.4m, Heading error: 93.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 535.4m, Heading error: 44.0deg
+  [CLOSURE ITER 1] Gap: 405.1m, Heading error: 29.4deg
+  [CLOSURE ITER 2] Gap: 298.9m, Heading error: 26.1deg
+  [CLOSURE ITER 3] Gap: 178.6m, Heading error: 23.0deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=178.6m, heading=23.0deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 178.6m
+  [CLOSURE] Final gap after closure: 72.2m
+  [FINALIZE] Track closure gap: 71.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5339 points
+  [CLOSURE] Distance to start: 677.4m, Heading error: 93.8deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 534.3m, Heading error: 44.0deg
+  [CLOSURE ITER 1] Gap: 404.1m, Heading error: 29.5deg
+  [CLOSURE ITER 2] Gap: 298.0m, Heading error: 26.2deg
+  [CLOSURE ITER 3] Gap: 178.0m, Heading error: 23.3deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=178.0m, heading=23.3deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 178.0m
+  [CLOSURE] Final gap after closure: 72.8m
+  [FINALIZE] Track closure gap: 71.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5322 points
+  [CLOSURE] Distance to start: 688.5m, Heading error: 94.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 545.7m, Heading error: 43.7deg
+  [CLOSURE ITER 1] Gap: 414.7m, Heading error: 28.7deg
+  [CLOSURE ITER 2] Gap: 307.6m, Heading error: 24.9deg
+  [CLOSURE ITER 3] Gap: 193.1m, Heading error: 22.5deg
+  [CLOSURE ITER 3] GOOD ENOUGH - gap=193.1m, heading=22.5deg - final straight will handle it
+  [CLOSURE FINAL] Gap before final straight: 193.1m
+  [CLOSURE] Final gap after closure: 76.3m
+  [FINALIZE] Track closure gap: 75.4m (should be near 0)
+  [FINALIZE] Track scaled and centred: 5519 points
+  [CLOSURE] Distance to start: 576.6m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 434.5m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 308.5m, Heading error: 36.6deg
+  [CLOSURE ITER 2] Gap: 186.2m, Heading error: 34.9deg
+  [CLOSURE ITER 3] Gap: 91.7m, Heading error: 59.2deg
+  [CLOSURE ITER 4] Gap: 104.8m, Heading error: 128.8deg
+  [CLOSURE ITER 5] Gap: 251.8m, Heading error: 137.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 104.8m to 251.8m)
+  [CLOSURE FINAL] Gap before final straight: 251.8m
+  [CLOSURE] Final gap after closure: 473.3m
+  [FINALIZE] Track closure gap: 473.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3859 points
+  [CLOSURE] Distance to start: 586.7m, Heading error: 91.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 443.0m, Heading error: 47.2deg
+  [CLOSURE ITER 1] Gap: 316.3m, Heading error: 35.7deg
+  [CLOSURE ITER 2] Gap: 193.6m, Heading error: 33.0deg
+  [CLOSURE ITER 3] Gap: 96.0m, Heading error: 53.0deg
+  [CLOSURE ITER 4] Gap: 92.4m, Heading error: 124.7deg
+  [CLOSURE ITER 5] Gap: 235.9m, Heading error: 139.1deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 92.4m to 235.9m)
+  [CLOSURE FINAL] Gap before final straight: 235.9m
+  [CLOSURE] Final gap after closure: 446.0m
+  [FINALIZE] Track closure gap: 446.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4040 points
+  [CLOSURE] Distance to start: 586.0m, Heading error: 91.3deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 444.0m, Heading error: 47.4deg
+  [CLOSURE ITER 1] Gap: 316.7m, Heading error: 35.6deg
+  [CLOSURE ITER 2] Gap: 194.0m, Heading error: 32.9deg
+  [CLOSURE ITER 3] Gap: 96.1m, Heading error: 52.8deg
+  [CLOSURE ITER 4] Gap: 91.9m, Heading error: 124.6deg
+  [CLOSURE ITER 5] Gap: 235.5m, Heading error: 139.2deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 91.9m to 235.5m)
+  [CLOSURE FINAL] Gap before final straight: 235.5m
+  [CLOSURE] Final gap after closure: 445.7m
+  [FINALIZE] Track closure gap: 445.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4037 points
+  [CLOSURE] Distance to start: 598.4m, Heading error: 91.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 456.4m, Heading error: 46.8deg
+  [CLOSURE ITER 1] Gap: 328.3m, Heading error: 34.5deg
+  [CLOSURE ITER 2] Gap: 205.0m, Heading error: 30.6deg
+  [CLOSURE ITER 3] Gap: 104.5m, Heading error: 45.4deg
+  [CLOSURE ITER 4] Gap: 77.4m, Heading error: 115.9deg
+  [CLOSURE ITER 5] Gap: 211.1m, Heading error: 141.4deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 77.4m to 211.1m)
+  [CLOSURE FINAL] Gap before final straight: 211.1m
+  [CLOSURE] Final gap after closure: 403.1m
+  [FINALIZE] Track closure gap: 403.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4220 points
+  [CLOSURE] Distance to start: 591.7m, Heading error: 91.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 449.5m, Heading error: 47.1deg
+  [CLOSURE ITER 1] Gap: 322.4m, Heading error: 35.2deg
+  [CLOSURE ITER 2] Gap: 198.7m, Heading error: 31.8deg
+  [CLOSURE ITER 3] Gap: 99.5m, Heading error: 49.2deg
+  [CLOSURE ITER 4] Gap: 85.0m, Heading error: 121.3deg
+  [CLOSURE ITER 5] Gap: 225.4m, Heading error: 140.2deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 85.0m to 225.4m)
+  [CLOSURE FINAL] Gap before final straight: 225.4m
+  [CLOSURE] Final gap after closure: 428.2m
+  [FINALIZE] Track closure gap: 428.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4130 points
+  [CLOSURE] Distance to start: 593.8m, Heading error: 91.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 451.3m, Heading error: 47.0deg
+  [CLOSURE ITER 1] Gap: 323.7m, Heading error: 34.9deg
+  [CLOSURE ITER 2] Gap: 200.4m, Heading error: 31.4deg
+  [CLOSURE ITER 3] Gap: 100.2m, Heading error: 48.1deg
+  [CLOSURE ITER 4] Gap: 82.7m, Heading error: 120.4deg
+  [CLOSURE ITER 5] Gap: 222.4m, Heading error: 140.6deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 82.7m to 222.4m)
+  [CLOSURE FINAL] Gap before final straight: 222.4m
+  [CLOSURE] Final gap after closure: 423.1m
+  [FINALIZE] Track closure gap: 423.2m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4163 points
+  [CLOSURE] Distance to start: 593.7m, Heading error: 91.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 451.5m, Heading error: 47.0deg
+  [CLOSURE ITER 1] Gap: 323.9m, Heading error: 34.9deg
+  [CLOSURE ITER 2] Gap: 200.6m, Heading error: 31.4deg
+  [CLOSURE ITER 3] Gap: 100.5m, Heading error: 48.0deg
+  [CLOSURE ITER 4] Gap: 82.6m, Heading error: 120.2deg
+  [CLOSURE ITER 5] Gap: 222.2m, Heading error: 140.6deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 82.6m to 222.2m)
+  [CLOSURE FINAL] Gap before final straight: 222.2m
+  [CLOSURE] Final gap after closure: 422.9m
+  [FINALIZE] Track closure gap: 422.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4153 points
+  [CLOSURE] Distance to start: 583.2m, Heading error: 91.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 440.8m, Heading error: 47.4deg
+  [CLOSURE ITER 1] Gap: 313.8m, Heading error: 35.8deg
+  [CLOSURE ITER 2] Gap: 190.6m, Heading error: 33.3deg
+  [CLOSURE ITER 3] Gap: 94.1m, Heading error: 54.6deg
+  [CLOSURE ITER 4] Gap: 95.7m, Heading error: 126.4deg
+  [CLOSURE ITER 5] Gap: 240.8m, Heading error: 138.8deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 95.7m to 240.8m)
+  [CLOSURE FINAL] Gap before final straight: 240.8m
+  [CLOSURE] Final gap after closure: 454.8m
+  [FINALIZE] Track closure gap: 454.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4003 points
+  [CLOSURE] Distance to start: 581.4m, Heading error: 91.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 439.8m, Heading error: 47.6deg
+  [CLOSURE ITER 1] Gap: 313.3m, Heading error: 36.1deg
+  [CLOSURE ITER 2] Gap: 190.7m, Heading error: 33.9deg
+  [CLOSURE ITER 3] Gap: 94.5m, Heading error: 55.5deg
+  [CLOSURE ITER 4] Gap: 97.7m, Heading error: 126.4deg
+  [CLOSURE ITER 5] Gap: 242.1m, Heading error: 138.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 97.7m to 242.1m)
+  [CLOSURE FINAL] Gap before final straight: 242.1m
+  [CLOSURE] Final gap after closure: 457.4m
+  [FINALIZE] Track closure gap: 457.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3962 points
+  [CLOSURE] Distance to start: 574.4m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 432.4m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 306.7m, Heading error: 36.8deg
+  [CLOSURE ITER 2] Gap: 183.8m, Heading error: 35.2deg
+  [CLOSURE ITER 3] Gap: 90.5m, Heading error: 60.6deg
+  [CLOSURE ITER 4] Gap: 107.4m, Heading error: 129.7deg
+  [CLOSURE ITER 5] Gap: 255.4m, Heading error: 137.2deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 107.4m to 255.4m)
+  [CLOSURE FINAL] Gap before final straight: 255.4m
+  [CLOSURE] Final gap after closure: 479.8m
+  [FINALIZE] Track closure gap: 480.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3855 points
+  [CLOSURE] Distance to start: 596.4m, Heading error: 91.6deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 454.2m, Heading error: 46.9deg
+  [CLOSURE ITER 1] Gap: 326.4m, Heading error: 34.7deg
+  [CLOSURE ITER 2] Gap: 202.6m, Heading error: 30.9deg
+  [CLOSURE ITER 3] Gap: 102.1m, Heading error: 46.5deg
+  [CLOSURE ITER 4] Gap: 79.5m, Heading error: 118.1deg
+  [CLOSURE ITER 5] Gap: 216.8m, Heading error: 141.1deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 79.5m to 216.8m)
+  [CLOSURE FINAL] Gap before final straight: 216.8m
+  [CLOSURE] Final gap after closure: 412.7m
+  [FINALIZE] Track closure gap: 412.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4190 points
+  [CLOSURE] Distance to start: 581.4m, Heading error: 91.2deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 439.8m, Heading error: 47.6deg
+  [CLOSURE ITER 1] Gap: 313.3m, Heading error: 36.1deg
+  [CLOSURE ITER 2] Gap: 190.7m, Heading error: 33.9deg
+  [CLOSURE ITER 3] Gap: 94.5m, Heading error: 55.5deg
+  [CLOSURE ITER 4] Gap: 97.7m, Heading error: 126.4deg
+  [CLOSURE ITER 5] Gap: 242.1m, Heading error: 138.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 97.7m to 242.1m)
+  [CLOSURE FINAL] Gap before final straight: 242.1m
+  [CLOSURE] Final gap after closure: 457.4m
+  [FINALIZE] Track closure gap: 457.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3962 points
+  [CLOSURE] Distance to start: 574.4m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 432.5m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 306.7m, Heading error: 36.8deg
+  [CLOSURE ITER 2] Gap: 183.9m, Heading error: 35.2deg
+  [CLOSURE ITER 3] Gap: 90.5m, Heading error: 60.6deg
+  [CLOSURE ITER 4] Gap: 107.4m, Heading error: 129.7deg
+  [CLOSURE ITER 5] Gap: 254.7m, Heading error: 137.3deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 107.4m to 254.7m)
+  [CLOSURE FINAL] Gap before final straight: 254.7m
+  [CLOSURE] Final gap after closure: 478.5m
+  [FINALIZE] Track closure gap: 478.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3843 points
+  [CLOSURE] Distance to start: 574.1m, Heading error: 90.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 431.8m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 306.0m, Heading error: 36.8deg
+  [CLOSURE ITER 2] Gap: 183.2m, Heading error: 35.3deg
+  [CLOSURE ITER 3] Gap: 90.3m, Heading error: 61.0deg
+  [CLOSURE ITER 4] Gap: 108.5m, Heading error: 130.0deg
+  [CLOSURE ITER 4] DIVERGING - stopping iterations (gap increased from 90.3m to 108.5m)
+  [CLOSURE FINAL] Gap before final straight: 108.5m
+  [CLOSURE] Final gap after closure: 200.8m
+  [FINALIZE] Track closure gap: 200.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3501 points
+  [CLOSURE] Distance to start: 587.6m, Heading error: 91.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 445.7m, Heading error: 47.3deg
+  [CLOSURE ITER 1] Gap: 319.1m, Heading error: 35.6deg
+  [CLOSURE ITER 2] Gap: 196.3m, Heading error: 32.7deg
+  [CLOSURE ITER 3] Gap: 97.7m, Heading error: 51.7deg
+  [CLOSURE ITER 4] Gap: 89.8m, Heading error: 123.3deg
+  [CLOSURE ITER 5] Gap: 231.3m, Heading error: 139.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 89.8m to 231.3m)
+  [CLOSURE FINAL] Gap before final straight: 231.3m
+  [CLOSURE] Final gap after closure: 438.5m
+  [FINALIZE] Track closure gap: 438.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4017 points
+  [CLOSURE] Distance to start: 574.4m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 432.4m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 306.7m, Heading error: 36.8deg
+  [CLOSURE ITER 2] Gap: 183.8m, Heading error: 35.2deg
+  [CLOSURE ITER 3] Gap: 90.5m, Heading error: 60.6deg
+  [CLOSURE ITER 4] Gap: 107.4m, Heading error: 129.7deg
+  [CLOSURE ITER 5] Gap: 255.4m, Heading error: 137.2deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 107.4m to 255.4m)
+  [CLOSURE FINAL] Gap before final straight: 255.4m
+  [CLOSURE] Final gap after closure: 479.8m
+  [FINALIZE] Track closure gap: 480.1m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3855 points
+  [CLOSURE] Distance to start: 597.1m, Heading error: 91.7deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 454.9m, Heading error: 46.9deg
+  [CLOSURE ITER 1] Gap: 327.0m, Heading error: 34.6deg
+  [CLOSURE ITER 2] Gap: 203.1m, Heading error: 30.7deg
+  [CLOSURE ITER 3] Gap: 102.2m, Heading error: 46.1deg
+  [CLOSURE ITER 4] Gap: 78.7m, Heading error: 118.0deg
+  [CLOSURE ITER 5] Gap: 216.3m, Heading error: 141.2deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 78.7m to 216.3m)
+  [CLOSURE FINAL] Gap before final straight: 216.3m
+  [CLOSURE] Final gap after closure: 412.5m
+  [FINALIZE] Track closure gap: 412.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4187 points
+  [CLOSURE] Distance to start: 578.3m, Heading error: 91.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 436.1m, Heading error: 47.7deg
+  [CLOSURE ITER 1] Gap: 309.8m, Heading error: 36.4deg
+  [CLOSURE ITER 2] Gap: 187.0m, Heading error: 34.4deg
+  [CLOSURE ITER 3] Gap: 91.9m, Heading error: 57.9deg
+  [CLOSURE ITER 4] Gap: 102.3m, Heading error: 128.4deg
+  [CLOSURE ITER 5] Gap: 249.0m, Heading error: 137.9deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 102.3m to 249.0m)
+  [CLOSURE FINAL] Gap before final straight: 249.0m
+  [CLOSURE] Final gap after closure: 469.5m
+  [FINALIZE] Track closure gap: 469.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3928 points
+  [CLOSURE] Distance to start: 579.2m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 436.4m, Heading error: 47.5deg
+  [CLOSURE ITER 1] Gap: 309.8m, Heading error: 36.2deg
+  [CLOSURE ITER 2] Gap: 186.5m, Heading error: 34.1deg
+  [CLOSURE ITER 3] Gap: 91.0m, Heading error: 57.7deg
+  [CLOSURE ITER 4] Gap: 101.9m, Heading error: 128.9deg
+  [CLOSURE ITER 5] Gap: 250.0m, Heading error: 138.0deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 101.9m to 250.0m)
+  [CLOSURE FINAL] Gap before final straight: 250.0m
+  [CLOSURE] Final gap after closure: 470.6m
+  [FINALIZE] Track closure gap: 470.8m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3944 points
+  [CLOSURE] Distance to start: 576.2m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 434.3m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 308.5m, Heading error: 36.7deg
+  [CLOSURE ITER 2] Gap: 186.3m, Heading error: 35.0deg
+  [CLOSURE ITER 3] Gap: 92.0m, Heading error: 59.4deg
+  [CLOSURE ITER 4] Gap: 105.1m, Heading error: 128.6deg
+  [CLOSURE ITER 5] Gap: 251.7m, Heading error: 137.4deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 105.1m to 251.7m)
+  [CLOSURE FINAL] Gap before final straight: 251.7m
+  [CLOSURE] Final gap after closure: 473.1m
+  [FINALIZE] Track closure gap: 473.3m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3885 points
+  [CLOSURE] Distance to start: 587.6m, Heading error: 91.4deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 445.7m, Heading error: 47.3deg
+  [CLOSURE ITER 1] Gap: 319.1m, Heading error: 35.6deg
+  [CLOSURE ITER 2] Gap: 196.3m, Heading error: 32.7deg
+  [CLOSURE ITER 3] Gap: 97.7m, Heading error: 51.7deg
+  [CLOSURE ITER 4] Gap: 89.8m, Heading error: 123.3deg
+  [CLOSURE ITER 5] Gap: 231.3m, Heading error: 139.5deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 89.8m to 231.3m)
+  [CLOSURE FINAL] Gap before final straight: 231.3m
+  [CLOSURE] Final gap after closure: 438.5m
+  [FINALIZE] Track closure gap: 438.6m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4017 points
+  [CLOSURE] Distance to start: 589.6m, Heading error: 91.5deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 447.9m, Heading error: 47.2deg
+  [CLOSURE ITER 1] Gap: 321.0m, Heading error: 35.4deg
+  [CLOSURE ITER 2] Gap: 197.6m, Heading error: 32.2deg
+  [CLOSURE ITER 3] Gap: 98.4m, Heading error: 50.2deg
+  [CLOSURE ITER 4] Gap: 87.0m, Heading error: 122.4deg
+  [CLOSURE ITER 5] Gap: 228.6m, Heading error: 139.9deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 87.0m to 228.6m)
+  [CLOSURE FINAL] Gap before final straight: 228.6m
+  [CLOSURE] Final gap after closure: 433.6m
+  [FINALIZE] Track closure gap: 433.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 4077 points
+  [CLOSURE] Distance to start: 577.7m, Heading error: 91.1deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 436.4m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 310.4m, Heading error: 36.5deg
+  [CLOSURE ITER 2] Gap: 187.8m, Heading error: 34.6deg
+  [CLOSURE ITER 3] Gap: 92.9m, Heading error: 57.9deg
+  [CLOSURE ITER 4] Gap: 102.3m, Heading error: 127.9deg
+  [CLOSURE ITER 5] Gap: 248.3m, Heading error: 137.8deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 102.3m to 248.3m)
+  [CLOSURE FINAL] Gap before final straight: 248.3m
+  [CLOSURE] Final gap after closure: 467.7m
+  [FINALIZE] Track closure gap: 467.9m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3903 points
+  [CLOSURE] Distance to start: 574.4m, Heading error: 91.0deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 432.5m, Heading error: 47.8deg
+  [CLOSURE ITER 1] Gap: 306.7m, Heading error: 36.8deg
+  [CLOSURE ITER 2] Gap: 183.9m, Heading error: 35.2deg
+  [CLOSURE ITER 3] Gap: 90.5m, Heading error: 60.6deg
+  [CLOSURE ITER 4] Gap: 107.4m, Heading error: 129.7deg
+  [CLOSURE ITER 5] Gap: 254.7m, Heading error: 137.3deg
+  [CLOSURE ITER 5] DIVERGING - stopping iterations (gap increased from 107.4m to 254.7m)
+  [CLOSURE FINAL] Gap before final straight: 254.7m
+  [CLOSURE] Final gap after closure: 478.5m
+  [FINALIZE] Track closure gap: 478.7m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3843 points
+  [CLOSURE] Distance to start: 574.6m, Heading error: 90.9deg, Angle deficit: 100.0deg
+  [CLOSURE ITER 0] Gap: 431.8m, Heading error: 47.7deg
+  [CLOSURE ITER 1] Gap: 305.8m, Heading error: 36.7deg
+  [CLOSURE ITER 2] Gap: 182.9m, Heading error: 35.2deg
+  [CLOSURE ITER 3] Gap: 89.7m, Heading error: 61.0deg
+  [CLOSURE ITER 4] Gap: 108.4m, Heading error: 130.3deg
+  [CLOSURE ITER 4] DIVERGING - stopping iterations (gap increased from 89.7m to 108.4m)
+  [CLOSURE FINAL] Gap before final straight: 108.4m
+  [CLOSURE] Final gap after closure: 200.9m
+  [FINALIZE] Track closure gap: 200.5m (should be near 0)
+  [FINALIZE] Track scaled and centred: 3528 points
+Track route validation: 122/150 passed
+Failures:
+- id=102 name=Pinecrest Rally Stage: closed-loop gap too large (184.2m)
+- id=110 name=Ikari Autodromo: closed-loop gap too large (178.0m)
+- id=118 name=Noboru Loop: closed-loop gap too large (181.3m)
+- id=151 name=Valentia Grand Prix Circuit: closed-loop gap too large (347.4m)
+- id=152 name=Valentia Rally Stage: closed-loop gap too large (311.6m)
+- id=153 name=Carlsen Track: closed-loop gap too large (311.6m)
+- id=154 name=Highbridge Motor Stadium: closed-loop gap too large (267.5m)
+- id=155 name=Underhill Motor Stadium: closed-loop gap too large (291.8m)
+- id=156 name=Marakesh Speedway: closed-loop gap too large (285.9m)
+- id=157 name=Mjolnir International Piste: closed-loop gap too large (286.4m)
+- id=158 name=Kingsgate International Racing Arena: closed-loop gap too large (321.2m)
+- id=159 name=Pinecrest Autodromo: closed-loop gap too large (326.1m)
+- id=160 name=Byakko Autodrome: closed-loop gap too large (353.5m)
+- id=161 name=Fujimura Autobahn: closed-loop gap too large (276.4m)
+- id=162 name=Chikara Endurance Circuit: closed-loop gap too large (326.1m)
+- id=163 name=Greater Jazirah Loop: closed-loop gap too large (353.2m)
+- id=164 name=Frostpeak Grand Prix Circuit: closed-loop gap too large (147.6m)
+- id=165 name=North Whitestone Rally Stage: closed-loop gap too large (307.1m)
+- id=166 name=South Skulstad Ring: closed-loop gap too large (353.5m)
+- id=167 name=North Luminos Ring: closed-loop gap too large (276.2m)
+- id=168 name=Oldgate Rally Stage: closed-loop gap too large (338.8m)
+- id=169 name=Oriente Arena: closed-loop gap too large (338.6m)
+- id=170 name=Bergstrom International Sprint Track: closed-loop gap too large (345.1m)
+- id=171 name=Chikara International Rennstrecke: closed-loop gap too large (307.1m)
+- id=172 name=Imperial Fortezza Park: closed-loop gap too large (299.4m)
+- id=173 name=Crosswell International Circuit: closed-loop gap too large (339.2m)
+- id=174 name=Uzumaki Racing Centre: closed-loop gap too large (353.2m)
+- id=175 name=Greater Zahir Arena: closed-loop gap too large (146.9m)

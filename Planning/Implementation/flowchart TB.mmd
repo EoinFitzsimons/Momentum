@@ -9,12 +9,12 @@ flowchart TB
     subgraph Backend["Backend - Race Simulation"]
         RaceAPI["Race API<br/>Public Interface"]
         Engine["Realtime Engine<br/>30 FPS Simulation"]
-        Disciplines["Discipline Modules<br/>7 Racing Types"]
+        Disciplines["Discipline Modules<br/>6 Active Racing Types"]
     end
     
     subgraph Storage["Data Layer"]
         DBManager["Database Manager<br/>CRUD Operations"]
-        SQLite[("SQLite Database<br/>1781 Drivers, 1095 Teams<br/>175 Tracks")]
+        SQLite[("SQLite Database<br/>Drivers, Teams, Tracks,<br/>Championships, Results")]
     end
     
     Launcher -->|"Creates and shows"| MainMenu

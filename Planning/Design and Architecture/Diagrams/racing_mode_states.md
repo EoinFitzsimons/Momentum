@@ -11,7 +11,7 @@ This diagram shows the AI decision-making states and transitions for autonomous 
 - Conservative push intensity based on driver personality
 - Consistent drivers conserve more than aggressive drivers
 - Ideal racing line
-- Conservation mode for tire and fuel management
+- Conservation mode for tyre and fuel management
 
 **ATTACK** (Overtaking State)
 

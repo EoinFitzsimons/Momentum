@@ -1,14 +1,14 @@
 # Requirements Traceability Matrix
 
 ## Status Key
-- Verified Implemented: Requirement behavior is present, evidenced in code, and supported by tests/demo.
+- Verified Implemented: Requirement behaviour is present, evidenced in code, and supported by tests/demo.
 - Deferred: Requirement intentionally moved out of current submission scope.
 
 ## Scope Note
 This matrix is limited to gameplay-facing use cases. Administrative, seed, and database-maintenance flows are excluded from the gameplay evidence set.
 
 ## Priority Key
-- High: Core gameplay and core platform behavior.
+- High: Core gameplay and core platform behaviour.
 - Medium: Career depth, management systems, progression quality.
 - Low: Polish, extended customization, advanced tools.
 
@@ -26,7 +26,7 @@ This matrix is limited to gameplay-facing use cases. Administrative, seed, and d
 | UC-9 | Update race status | Medium | Verified Implemented | Momentum/Python/simulation.py, Momentum/Python/services/championship_service.py | Momentum/Python/tests/test_integration_championship_flow.py | Race lifecycle transitions | Document valid transition rules in report |
 | UC-10 | Create championship | Medium | Verified Implemented | Momentum/Python/simulation.py, Momentum/Python/services/championship_service.py | Momentum/Python/tests/test_integration_championship_flow.py | New championship flow | Add output example to technical report |
 | UC-11 | Read team details | Medium | Verified Implemented | Momentum/Python/services/team_service.py, Momentum/Python/simulation.py | Momentum/Python/tests/test_integration_api_contracts.py | Team profile screen | Add role-based access note |
-| UC-13 | Read player team details | Medium | Verified Implemented | Momentum/Python/simulation.py, Momentum/Python/services/team_service.py | Momentum/Python/tests/test_integration_api_contracts.py | Player team endpoint call | Verify header behavior in demo script |
+| UC-13 | Read player team details | Medium | Verified Implemented | Momentum/Python/simulation.py, Momentum/Python/services/team_service.py | Momentum/Python/tests/test_integration_api_contracts.py | Player team endpoint call | Verify header behaviour in demo script |
 | UC-14 | Update team attributes | Medium | Verified Implemented | Momentum/Python/services/team_service.py, Momentum/Python/simulation.py | Momentum/Python/tests/test_integration_database_layer.py | Team edit interaction | Add optimistic locking explanation if used |
 | UC-15 | Read available drivers | Medium | Verified Implemented | Momentum/Python/services/hiring_service.py, Momentum/Python/simulation.py | Momentum/Python/tests/test_integration_api_contracts.py | Hiring browse flow | Add filtering demonstration |
 | UC-16 | Update driver contract | Medium | Verified Implemented | Momentum/Python/services/hiring_service.py, Momentum/Python/simulation.py | Momentum/Python/tests/test_integration_database_layer.py | Contract update operation | Add salary cap example in appendix |

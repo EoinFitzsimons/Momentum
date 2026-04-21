@@ -38,13 +38,13 @@ Player Input: The window captures keyboard input for pace adjustments (up/down a
 RealtimeRaceEngine (Simulation Core)
 Location: Momentum/Python/RaceLogic/realtime_race_engine.py
 
-This is the simulation engine that drives the race. The engine runs at 30 FPS and updates each driver's state every timestep (0.033 seconds). Each driver is represented by a DriverState object that tracks physical state (position, velocity, lap), race situation (gaps, position, nearby cars), strategic state (racing mode, push intensity), and component degradation (tires, fuel).
+This is the simulation engine that drives the race. The engine runs at 30 FPS and updates each driver's state every timestep (0.033 seconds). Each driver is represented by a DriverState object that tracks physical state (position, velocity, lap), race situation (gaps, position, nearby cars), strategic state (racing mode, push intensity), and component degradation (tyres, fuel).
 
 The engine's main loop performs these steps every frame:
 
 AI Decision Making: For each driver call update_racing_mode which examines gaps to cars ahead and behind and decides whether to attack, defend, manage pace, or cruise. Player-controlled drivers skip AI logic and use player_overrides from the UI sliders instead.
 
-Performance Calculation: Calculate speed based on driver attributes, team capability, push intensity, tire condition, fuel load, and whether the car is in a slipstream.
+Performance Calculation: Calculate speed based on driver attributes, team capability, push intensity, tyre condition, fuel load, and whether the car is in a slipstream.
 
 Position Update: Move the car forward based on calculated speed and timestep. Update velocity and position values.
 
@@ -52,7 +52,7 @@ Lap Detection: Check if the car crossed the start/finish line by comparing previ
 
 Incident Checking: Check for collisions by examining gaps between nearby cars. If a car is too close to another trigger an incident (spin, contact, or mechanical failure).
 
-Degradation and Fatigue: Reduce tire condition and fuel load based on push intensity. Accumulate push fatigue when drivers push hard which increases mistake probability.
+Degradation and Fatigue: Reduce tyre condition and fuel load based on push intensity. Accumulate push fatigue when drivers push hard which increases mistake probability.
 
 Position Emission: Create a position event containing all car states and emit it via the event callback so the GUI can update.
 
@@ -66,13 +66,13 @@ The manager initializes the database schema on first run creating tables for dri
 VehicleRenderer (Visual Representation)
 Location: Momentum/Python/vehicles/vehicle_appearance.py
 
-This class renders simplified top-down car sprites using PyQt's QPainter. Each car is drawn as a polygon body with wings, cockpit, suspension hints, and rectangular tires. The renderer supports a steering_angle parameter that rotates the front tires to show steering input. Livery colors are generated deterministically based on team ID so the same team always gets the same colors.
+This class renders simplified top-down car sprites using PyQt's QPainter. Each car is drawn as a polygon body with wings, cockpit, suspension hints, and rectangular tyres. The renderer supports a steering_angle parameter that rotates the front tyres to show steering input. Livery colors are generated deterministically based on team ID so the same team always gets the same colors.
 
 Folder Structure Breakdown
 
 Momentum/Python/GUI: All user interface code including launcher, main menu, race window, and component health displays.
 
-Momentum/Python/RaceLogic: Core simulation engine and discipline-specific modules. The realtime_race_engine contains the 30 FPS tick loop. base_race_engine defines the abstract BaseDisciplineEngine class. disciplines folder contains concrete implementations for single seater, rally, endurance, etc.
+Momentum/Python/RaceLogic: Core simulation engine and discipline-specific modules. The realtime_race_engine contains the 30 FPS tick loop. base_race_engine defines the abstract BaseDisciplineEngine class. disciplines folder contains concrete implementations for the six active disciplines: single seater, production/touring, urban/street, drag/acceleration, sprint/rallycross, and endurance.
 
 Momentum/Python/database: Database models and manager. models.py defines Driver, Team, Track, Race, RaceResult classes and the SQL schema. database_manager.py provides all CRUD operations.
 

@@ -39,16 +39,16 @@ This is the core gameplay class. It manages the visual track display, live car r
 
 Location: `Momentum/Python/RaceLogic/realtime_race_engine.py`
 
-The engine runs at 30 FPS and updates each driver's state every timestep (0.033s). Each driver is represented by a `DriverState` object that tracks physical state (position, velocity, lap), race situation (gaps, nearby cars), strategic state (racing mode, push intensity), and component degradation (tires, fuel).
+The engine runs at 30 FPS and updates each driver's state every timestep (0.033s). Each driver is represented by a `DriverState` object that tracks physical state (position, velocity, lap), race situation (gaps, nearby cars), strategic state (racing mode, push intensity), and component degradation (tyres, fuel).
 
 Main loop steps per frame:
 
 - AI Decision Making: `update_racing_mode` decides to attack, defend, manage pace, or cruise. Player-controlled drivers skip AI logic and use `player_overrides`.
-- Performance Calculation: Speed based on driver attributes, team capability, push intensity, tire condition, fuel load, and slipstream.
+- Performance Calculation: Speed based on driver attributes, team capability, push intensity, tyre condition, fuel load, and slipstream.
 - Position Update: Move car forward based on speed and timestep.
 - Lap Detection: Detect crossing of start/finish; record lap times.
 - Incident Checking: Detect collisions or incidents and log them.
-- Degradation and Fatigue: Update tires, fuel, and push fatigue which affect mistake probability.
+- Degradation and Fatigue: Update tyres, fuel, and push fatigue which affect mistake probability.
 - Position Emission: Emit position events for the GUI to render.
 
 #### DatabaseManager (Persistence Layer)

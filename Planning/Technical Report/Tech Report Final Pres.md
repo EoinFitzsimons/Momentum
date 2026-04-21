@@ -300,7 +300,7 @@ interactions), then run a workspace-wide error check to report any syntax/type
 errors. Expected outcome: updated todo state and a short errors summary.
 
 Starting
-(2/5) *Analyze core interactions*
+(2/5) *Analyse core interactions*
 
 Now
 I'll run a project-wide error check to surface syntax or lint-like errors so I
@@ -390,7 +390,7 @@ tests and other tests
 
 - Unit/test files exist
   (`test_driver_system.py`, `test_staff_system.py`, etc.) and examples. Useful
-  starting points for test coverage and behavior descriptions.
+  starting points for test coverage and behaviour descriptions.
 - 
 
 Docs and supporting files
@@ -2148,7 +2148,7 @@ Scope]()
 
 Retrieve
 championship information including season parameters, calendar of events,
-current standings, and points allocations across 7 racing disciplines.
+current standings, and points allocations across 6 active racing disciplines.
 
 ### [2.6.2
 
@@ -2685,7 +2685,7 @@ drivers.
 ### [2.12.2     Description]()
 
 The
-system maintains 1,095 team records across 7 racing disciplines. Each team has
+system maintains 1,095 team records across 6 active racing disciplines. Each team has
 budget constraints, tier classification (tier1/tier2/tier3), and performance
 multipliers that affect simulation outcomes.
 
@@ -4851,7 +4851,7 @@ The
 engine runs at 30 FPS and updates each driver's state every timestep (0.033s).
 Each driver is represented by a DriverState object that tracks physical state
 (position, velocity, lap), race situation (gaps, nearby cars), strategic state
-(racing mode, push intensity), and component degradation (tires, fuel).
+(racing mode, push intensity), and component degradation (tyres, fuel).
 
 Main
 loop steps per frame:
@@ -4860,7 +4860,7 @@ loop steps per frame:
   update_racing_mode decides to attack, defend, manage pace, or cruise.
   Player-controlled drivers skip AI logic and use player_overrides.
 * Performance Calculation:
-  Speed based on driver attributes, team capability, push intensity, tire
+  Speed based on driver attributes, team capability, push intensity, tyre
   condition, fuel load, and slipstream.
 * Position Update: Move
   car forward based on speed and timestep.
@@ -4869,7 +4869,7 @@ loop steps per frame:
 * Incident Checking:
   Detect collisions or incidents and log them.
 * Degradation and Fatigue:
-  Update tires, fuel, and push fatigue which affect mistake probability.
+  Update tyres, fuel, and push fatigue which affect mistake probability.
 * Position Emission: Emit
   position events for the GUI to render.
 
@@ -5350,7 +5350,8 @@ on every simulation tick, targeting a frame rate of about 30 ticks per second.
 Agents consider their attributes, car condition, tyre state, fuel, nearby
 rivals, team orders and track conditions when choosing actions such as attack,
 defend, overtake or conserve. Discipline specific rules are applied by the
-engine to reflect differences between single seater, rally, endurance and other
+engine to reflect differences between single seater, production/touring,
+urban/street, drag/acceleration, sprint/rallycross, endurance and other
 formats. Randomness is retained for low probability events such as mechanical
 failures or incidents so outcomes remain unpredictable, but most race behaviour
 emerges from agent interactions rather than repeated sampling. Performance
