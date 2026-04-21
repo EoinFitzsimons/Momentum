@@ -218,6 +218,11 @@ class RealtimeRaceEngine:
         self.BASE_INCIDENT_RATE = 0.0000002  # Base rate for normal driving
         self.OVERTAKE_INCIDENT_MULTIPLIER = 3.0  # Multiplier during overtakes
 
+        # High closing-speed straight-line run-by tuning.
+        self.OVERSPEED_AUTO_PASS_KMH = 18.0
+        self.OVERSPEED_AUTO_PASS_MAX_GAP_M = 34.0
+        self.OVERSPEED_HIGH_CONFIDENCE_PROB = 0.995
+
         # Pit strategy and service model
         self.PIT_LANE_SPEED_MPS = 22.0
         self.PIT_SERVICE_BASE_SECONDS = 4.0
@@ -800,44 +805,78 @@ class RealtimeRaceEngine:
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> bool:
         """Decide pit stops once per lap using tire/fuel and mandatory-stop heuristics."""
-        if state.last_pit_eval_lap == state.lap:
+        if self._pit_eval_already_processed_this_lap(state):
             return False
-        state.last_pit_eval_lap = state.lap
 
         # Player one-shot override: come in at next lap opportunity.
         if self._player_requests_come_in_for_driver(state):
             return True
 
         laps_remaining = race_state.total_laps - state.lap
-        if state.lap <= 0 or laps_remaining < self.PIT_MIN_LAPS_REMAINING:
+        if self._pit_eval_not_in_window(state, laps_remaining):
             return False
 
-        # Hard triggers
-        if state.tire_condition <= self.PIT_TIRE_THRESHOLD:
+        if self._pit_hard_trigger_active(state):
             return True
-        if state.fuel_load <= 0.14:
+        if self._should_pit_for_ai_tyre_strategy(state, laps_remaining):
             return True
-
-        if self.player_driver_id is None or int(state.driver_id) != int(self.player_driver_id):
-            projected_loss = self._projected_tyre_loss_seconds(state, self.TYRE_AI_STINT_MARGIN_LAPS)
-            if state.tire_condition <= self.TYRE_AI_PIT_WEAR_THRESHOLD:
-                return True
-            if projected_loss >= self.TYRE_AI_PIT_PACE_LOSS_THRESHOLD and laps_remaining > self.PIT_MIN_LAPS_REMAINING:
-                return True
-
-        # One mandatory stop for longer races if none taken yet
-        if race_state.total_laps >= 20 and state.pit_stops_completed == 0:
-            mandatory_window_lap = int(race_state.total_laps * 0.55)
-            self._emit_pit_window_open_if_needed(state, mandatory_window_lap, event_callback)
-            if state.lap >= mandatory_window_lap and state.tire_condition < 0.72:
-                return True
-
-        # Simple undercut behaviour in traffic
-        in_traffic_window = 0.8 < state.gap_ahead < 2.5
-        if in_traffic_window and state.tire_condition < 0.65 and self.rng.random() < 0.20:
+        if self._should_take_mandatory_stop(state, race_state, event_callback):
+            return True
+        if self._should_attempt_traffic_undercut(state):
             return True
 
         return False
+
+    def _pit_eval_already_processed_this_lap(self, state: DriverState) -> bool:
+        """Guard against repeated pit decisions within the same lap."""
+        if state.last_pit_eval_lap == state.lap:
+            return True
+        state.last_pit_eval_lap = state.lap
+        return False
+
+    def _pit_eval_not_in_window(self, state: DriverState, laps_remaining: int) -> bool:
+        """Return True when pit decisioning should be skipped this lap."""
+        return state.lap <= 0 or laps_remaining < self.PIT_MIN_LAPS_REMAINING
+
+    def _pit_hard_trigger_active(self, state: DriverState) -> bool:
+        """Immediate pit triggers that ignore strategic nuance."""
+        return state.tire_condition <= self.PIT_TIRE_THRESHOLD or state.fuel_load <= 0.14
+
+    def _is_player_controlled_for_pit_strategy(self, state: DriverState) -> bool:
+        """Return True for the player-controlled driver in pit strategy logic."""
+        return self.player_driver_id is not None and int(state.driver_id) == int(self.player_driver_id)
+
+    def _should_pit_for_ai_tyre_strategy(self, state: DriverState, laps_remaining: int) -> bool:
+        """AI-only tyre strategy triggers based on wear and projected pace loss."""
+        if self._is_player_controlled_for_pit_strategy(state):
+            return False
+
+        projected_loss = self._projected_tyre_loss_seconds(state, self.TYRE_AI_STINT_MARGIN_LAPS)
+        if state.tire_condition <= self.TYRE_AI_PIT_WEAR_THRESHOLD:
+            return True
+        return (
+            projected_loss >= self.TYRE_AI_PIT_PACE_LOSS_THRESHOLD
+            and laps_remaining > self.PIT_MIN_LAPS_REMAINING
+        )
+
+    def _should_take_mandatory_stop(
+        self,
+        state: DriverState,
+        race_state: RaceState,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+    ) -> bool:
+        """Evaluate mandatory-stop policy for longer races."""
+        if race_state.total_laps < 20 or state.pit_stops_completed != 0:
+            return False
+
+        mandatory_window_lap = int(race_state.total_laps * 0.55)
+        self._emit_pit_window_open_if_needed(state, mandatory_window_lap, event_callback)
+        return state.lap >= mandatory_window_lap and state.tire_condition < 0.72
+
+    def _should_attempt_traffic_undercut(self, state: DriverState) -> bool:
+        """Return True for occasional undercut calls when trapped in traffic."""
+        in_traffic_window = 0.8 < state.gap_ahead < 2.5
+        return in_traffic_window and state.tire_condition < 0.65 and self.rng.random() < 0.20
 
     def _emit_pit_window_open_if_needed(
         self,
@@ -1282,6 +1321,16 @@ class RealtimeRaceEngine:
             logistic_slopes=self._active_logistic_slopes,
         )
 
+        speed_advantage_kmh = (state.velocity_mps - car_ahead.velocity_mps) * 3.6
+        should_attempt, success_prob, attempt_type = self._apply_overspeed_straight_override(
+            should_attempt=should_attempt,
+            success_prob=float(success_prob),
+            attempt_type=attempt_type,
+            section_type=section_type,
+            gap_m=float(gap_m),
+            speed_advantage_kmh=float(speed_advantage_kmh),
+        )
+
         if not should_attempt:
             state.racing_mode = RacingMode.MANAGE
             return
@@ -1299,6 +1348,24 @@ class RealtimeRaceEngine:
             section_type,
             float(success_prob),
         )
+
+    def _apply_overspeed_straight_override(
+        self,
+        should_attempt: bool,
+        success_prob: float,
+        attempt_type: OvertakeAttemptType,
+        section_type: Any,
+        gap_m: float,
+        speed_advantage_kmh: float,
+    ) -> Tuple[bool, float, OvertakeAttemptType]:
+        """Force a clean straight-line pass when closing speed is overwhelming."""
+        if section_type != TrackSection.STRAIGHT:
+            return should_attempt, success_prob, attempt_type
+        if speed_advantage_kmh < self.OVERSPEED_AUTO_PASS_KMH:
+            return should_attempt, success_prob, attempt_type
+        if gap_m > self.OVERSPEED_AUTO_PASS_MAX_GAP_M:
+            return should_attempt, success_prob, attempt_type
+        return True, max(success_prob, self.OVERSPEED_HIGH_CONFIDENCE_PROB), OvertakeAttemptType.SLIPSTREAM_STRAIGHT
 
     def _log_overtake_attempt(self, attacker_name: str, defender_name: str, gap_m: float, success_prob: float) -> None:
         if not hasattr(self, '_overtake_log_counter'):
@@ -1343,6 +1410,7 @@ class RealtimeRaceEngine:
             gap_m=gap_m,
             speed_advantage_kmh=(state.velocity_mps - car_ahead.velocity_mps) * 3.6,
             corner=corner,
+            success_probability=float(np.clip(success_prob, 0.05, 0.95)),
         )
 
         # Emit quality context so calibration can reward realistic opportunities,
@@ -2104,6 +2172,16 @@ class RealtimeRaceEngine:
         attempt.speed_advantage_kmh = speed_diff * 3.6
         attempt.lateral_overlap = lateral_overlap
 
+        # Massive closing speed on a straight should convert into a near-immediate
+        # run-by rather than getting trapped in prolonged side-by-side resolution.
+        if (
+            attempt.attempt_type == OvertakeAttemptType.SLIPSTREAM_STRAIGHT
+            and attempt.speed_advantage_kmh >= self.OVERSPEED_AUTO_PASS_KMH
+            and gap_meters <= self.OVERSPEED_AUTO_PASS_MAX_GAP_M
+        ):
+            self._apply_overtake_result("success", key, attempt, race_state, attacker_state, defender_state)
+            return True
+
         outcome = attempt.update(1.0 / 30.0)
         if not self._should_resolve_overtake_attempt(outcome, attempt, lateral_overlap, attacker_state):
             return False
@@ -2114,15 +2192,20 @@ class RealtimeRaceEngine:
 
     def _compute_overtake_lateral_overlap(self, attempt: OvertakeAttempt, gap_meters: float) -> float:
         if gap_meters < 5.0:
-            return min(0.8, 0.2 + (5.0 - gap_meters) * 0.12)
-        return max(0.0, attempt.lateral_overlap - 0.05)
+            # Keep overlap growth progressive at close range instead of clamping too
+            # early, which can force unresolved battles to terminate as failures.
+            return min(1.1, max(attempt.lateral_overlap, 0.2 + (5.0 - gap_meters) * 0.12))
+        retreat = 0.01
+        if attempt.speed_advantage_kmh > 12.0:
+            retreat = 0.0
+        return max(0.0, attempt.lateral_overlap - retreat)
 
     def _should_resolve_overtake_attempt(self, outcome: Optional[str], attempt: OvertakeAttempt, lateral_overlap: float, attacker_state: DriverState) -> bool:
         if outcome:
             return True
-        if attempt.frames_active > 30:
+        if attempt.frames_active > 45:
             return True
-        if lateral_overlap > 0.7:
+        if lateral_overlap > 0.95:
             return True
         if attacker_state.gap_ahead > 2.0:
             return True
