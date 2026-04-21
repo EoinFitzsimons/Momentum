@@ -12,8 +12,12 @@ foreach ($line in $lines) {
                 if ($word -like "*visualiz*") { $suggested = $word -replace "visualiz", "visualis" }
                 elseif ($word -like "*localiz*") { $suggested = $word -replace "localiz", "localis" }
                 elseif ($word -eq "tire") { $suggested = "tyre" }
-                elseif ($word -like "*center*") { $suggested = $word -replace "center", "centre" }
-                elseif ($word -like "*meter*" -and $word -notmatch "(therm|speed|acceler|volt|am|multi|galvano|para)meter") { $suggested = $word -replace "meter", "metre" }
+                elseif ($word -match "(?i)\bcentering\b") { $suggested = $word -replace "(?i)\bcentering\b", "centring" }
+                elseif ($word -match "(?i)\bcentered\b") { $suggested = $word -replace "(?i)\bcentered\b", "centred" }
+                elseif ($word -match "(?i)\bcenters\b") { $suggested = $word -replace "(?i)\bcenters\b", "centres" }
+                elseif ($word -match "(?i)\bcenter\b") { $suggested = $word -replace "(?i)\bcenter\b", "centre" }
+                elseif ($word -match "(?i)\bmeters\b" -and $word -notmatch "(?i)\b(therm|speed|acceler|volt|am|multi|galvano|para)meters\b") { $suggested = $word -replace "(?i)\bmeters\b", "metres" }
+                elseif ($word -match "(?i)\bmeter\b" -and $word -notmatch "(?i)\b(therm|speed|acceler|volt|am|multi|galvano|para)meter\b") { $suggested = $word -replace "(?i)\bmeter\b", "metre" }
                 elseif ($word -like "*behavior*") { $suggested = $word -replace "behavior", "behaviour" }
                 elseif ($word -like "*optimiz*") { $suggested = $word -replace "optimiz", "optimise" }
                 elseif ($word -like "*analyze*") { $suggested = $word -replace "analyze", "analyse" }
