@@ -46,6 +46,10 @@ INTEGER_DEFAULT_NULL = 'INTEGER DEFAULT NULL'
 @dataclass
 class SimpleTrack:
     name: str
+    primary_discipline: str = "SINGLE_SEATER"
+    is_point_to_point: bool = False
+    joker_enabled: bool = False
+    instructions_json: Optional[str] = None
     length_km: float = 3.2
     turns: int = 12
     left_turns: int = 6
@@ -976,12 +980,12 @@ class DatabaseManager:
         """Fetch requested track row, seeding a fallback track when needed."""
         if track_id is not None:
             row = conn.execute(
-                "SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?",
+                "SELECT id, name, country, primary_discipline, is_point_to_point, joker_enabled, instructions_json, geometry_json FROM tracks WHERE id = ?",
                 (track_id,),
             ).fetchone()
         else:
             row = conn.execute(
-                "SELECT id, name, country, primary_discipline, geometry_json FROM tracks ORDER BY id LIMIT 1"
+                "SELECT id, name, country, primary_discipline, is_point_to_point, joker_enabled, instructions_json, geometry_json FROM tracks ORDER BY id LIMIT 1"
             ).fetchone()
 
         if row:
@@ -994,7 +998,7 @@ class DatabaseManager:
         )
         new_id = cursor.lastrowid
         return conn.execute(
-            "SELECT id, name, country, primary_discipline, geometry_json FROM tracks WHERE id = ?",
+            "SELECT id, name, country, primary_discipline, is_point_to_point, joker_enabled, instructions_json, geometry_json FROM tracks WHERE id = ?",
             (new_id,),
         ).fetchone()
 
@@ -1039,6 +1043,10 @@ class DatabaseManager:
         """Build `SimpleTrack` init attrs from DB row and optional geometry payload."""
         return {
             'name': rowd.get('name') or 'Unnamed Circuit',
+            'primary_discipline': rowd.get('primary_discipline') or 'SINGLE_SEATER',
+            'is_point_to_point': bool(rowd.get('is_point_to_point', 0)),
+            'joker_enabled': bool(rowd.get('joker_enabled', 0)),
+            'instructions_json': rowd.get('instructions_json'),
             'length_km': self._pick_float(geom, 'length_km', rowd.get('length_km') or 3.2),
             'turns': self._pick_int(geom, 'turns', rowd.get('turns') or 12),
             'left_turns': self._pick_int(geom, 'left_turns', rowd.get('left_turns') or 6),
