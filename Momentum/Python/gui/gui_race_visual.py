@@ -2588,6 +2588,7 @@ class RaceWindow(QMainWindow):
 
         # Right: Controls and standings - widened for readability
         right_container = QWidget()
+        self._right_container = right_container
         right_container.setFixedWidth(sidebar_width)
         right_container.setMinimumWidth(sidebar_width)
         right_container.setMaximumWidth(sidebar_width)
@@ -2908,7 +2909,7 @@ class RaceWindow(QMainWindow):
             header.setStretchLastSection(False)
         
         self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.standings_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.standings_table.setSizeAdjustPolicy(QTableWidget.SizeAdjustPolicy.AdjustToContents)
         # Use fixed row height for performance (avoid resizeRowsToContents each frame)
         self._standings_row_height = 26
@@ -6070,8 +6071,17 @@ class RaceWindow(QMainWindow):
             margins = self.standings_table.contentsMargins()
             frame = self.standings_table.frameWidth() * 2
             total = header_h + row_heights + margins.top() + margins.bottom() + frame + 4
-            self.standings_table.setMinimumHeight(total)
-            self.standings_table.setMaximumHeight(total)
+            available_height = total
+            right_container = getattr(self, '_right_container', None)
+            if right_container is not None:
+                try:
+                    available_height = max(0, right_container.contentsRect().height())
+                except Exception:
+                    available_height = total
+
+            capped_height = total if available_height <= 0 else min(total, available_height)
+            self.standings_table.setMinimumHeight(0)
+            self.standings_table.setMaximumHeight(max(0, capped_height))
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
 
