@@ -10,7 +10,7 @@ Integrates:
 from services.race_simulation_api import simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
-from vehicles.appearance_integration import VehicleAppearanceManager
+from vehicles.appearance_integration import VehicleAppearanceManager, get_vehicle_type_for_discipline
 from vehicles.vehicle_appearance import (
     Livery,
     VehicleRenderer,
@@ -665,7 +665,8 @@ class TrackWidget(QWidget):
                  track_surface: str = "asphalt", surface_grip: Optional[float] = None,
                  pit_points: Optional[List[TrackPoint]] = None,
                  joker_points: Optional[List[TrackPoint]] = None,
-                 is_drag_track: bool = False):
+                 is_drag_track: bool = False,
+                 discipline: str = "SINGLE_SEATER"):
         super().__init__()
         self.track_points = track_points
         self.track_length = track_length
@@ -675,6 +676,8 @@ class TrackWidget(QWidget):
         self.pit_points = pit_points
         self.joker_points = joker_points
         self.is_drag_track = bool(is_drag_track)
+        self.discipline = str(discipline or "SINGLE_SEATER")
+        self.default_vehicle_type = get_vehicle_type_for_discipline(self.discipline)
         self.cars: List[Car] = []
         # Remove fixed minimum size - let layout determine size
         # self.setMinimumSize(1400, 900)
@@ -2353,7 +2356,8 @@ class TrackWidget(QWidget):
         painter.translate(offset_x, offset_y)
         painter.rotate(math.degrees(movement_angle) + 90)
         livery = self._resolve_car_livery(car)
-        VehicleRenderer.render_single_seater_car(painter, livery, scale=1.5, steering_angle=steering_angle)
+        vehicle_type = self.appearance_manager.get_vehicle_type(car.driver_id, self.discipline)
+        VehicleRenderer.render_car(painter, vehicle_type, livery, scale=1.5, steering_angle=steering_angle)
         painter.restore()
         self._draw_player_halo_if_needed(painter, car, offset_x, offset_y)
         return True
@@ -2584,6 +2588,7 @@ class RaceWindow(QMainWindow):
 
         # Right: Controls and standings - widened for readability
         right_container = QWidget()
+        self._right_container = right_container
         right_container.setFixedWidth(sidebar_width)
         right_container.setMinimumWidth(sidebar_width)
         right_container.setMaximumWidth(sidebar_width)
@@ -2904,7 +2909,7 @@ class RaceWindow(QMainWindow):
             header.setStretchLastSection(False)
         
         self.standings_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.standings_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.standings_table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.standings_table.setSizeAdjustPolicy(QTableWidget.SizeAdjustPolicy.AdjustToContents)
         # Use fixed row height for performance (avoid resizeRowsToContents each frame)
         self._standings_row_height = 26
@@ -3133,6 +3138,10 @@ class RaceWindow(QMainWindow):
                 livery.secondary_color = secondary
                 livery.trim_color = QColor(255, 255, 255)
                 self.appearance_manager.driver_liveries[driver.id] = livery
+                team = teams_dict.get(getattr(driver, 'current_team_id', 0))
+                team_discipline = getattr(team, 'discipline', None) if team is not None else None
+                resolved_discipline = str(team_discipline or getattr(self, '_initial_discipline', 'SINGLE_SEATER'))
+                self.appearance_manager.set_vehicle_type(driver.id, resolved_discipline)
             print(f"[LIVERY] Initialized {len(self.appearance_manager.driver_liveries)} liveries for {len(self.drivers)} drivers")
         except Exception as e:
             print(f"ERROR: Livery initialisation failed: {e}")
@@ -3252,26 +3261,38 @@ class RaceWindow(QMainWindow):
         if track is None:
             return None
 
-        raw = getattr(track, 'instructions_json', None)
-        if raw:
-            try:
-                parsed = json.loads(raw) if isinstance(raw, str) else raw
-                if isinstance(parsed, list) and parsed:
-                    return parsed
-            except Exception:
-                LOGGER.debug("Failed to parse instructions_json from track", exc_info=True)
+        direct = self._parse_instruction_list_field(
+            getattr(track, 'instructions_json', None),
+            "Failed to parse instructions_json from track",
+        )
+        if direct is not None:
+            return direct
 
-        geom_raw = getattr(track, 'geometry_json', None)
-        if geom_raw:
-            try:
-                geom = json.loads(geom_raw) if isinstance(geom_raw, str) else geom_raw
-                if isinstance(geom, dict):
-                    candidate = geom.get('instructions')
-                    if isinstance(candidate, list) and candidate:
-                        return candidate
-            except Exception:
-                LOGGER.debug("Failed to parse geometry_json instructions from track", exc_info=True)
+        geometry = self._parse_json_field(
+            getattr(track, 'geometry_json', None),
+            "Failed to parse geometry_json instructions from track",
+        )
+        candidate = geometry.get('instructions') if isinstance(geometry, dict) else None
+        if isinstance(candidate, list) and candidate:
+            return candidate
 
+        return None
+
+    def _parse_json_field(self, raw_value: Any, log_message: str) -> Any:
+        """Parse a JSON-capable field and return the parsed value when possible."""
+        if not raw_value:
+            return None
+        try:
+            return json.loads(raw_value) if isinstance(raw_value, str) else raw_value
+        except Exception:
+            LOGGER.debug(log_message, exc_info=True)
+            return None
+
+    def _parse_instruction_list_field(self, raw_value: Any, log_message: str) -> Optional[List[Any]]:
+        """Parse a track field and return non-empty instruction lists only."""
+        parsed = self._parse_json_field(raw_value, log_message)
+        if isinstance(parsed, list) and parsed:
+            return parsed
         return None
 
     def _is_drag_discipline(self) -> bool:
@@ -3522,6 +3543,7 @@ class RaceWindow(QMainWindow):
                 pit_points=getattr(self, 'pit_points', None),
                 joker_points=getattr(self, 'joker_points', None),
                 is_drag_track=self._is_drag_discipline(),
+                discipline=getattr(self, '_initial_discipline', 'SINGLE_SEATER'),
             )
             while self.left_layout.count():
                 item = self.left_layout.takeAt(0)
@@ -4719,9 +4741,11 @@ class RaceWindow(QMainWindow):
             return
         print(f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
         for i, collision in enumerate(self._collision_log, 1):
-            lap = collision.get('lap', '?')
+            lap_raw = collision.get('lap', 0)
+            # Convert 0-indexed lap to 1-indexed display lap
+            lap_display = int(lap_raw) + 1 if lap_raw != '?' else '?'
             description = collision.get('description', 'Unknown incident')
-            print(f"  {i}. Lap {lap}: {description}")
+            print(f"  {i}. Lap {lap_display}: {description}")
         print("")
 
     def _reset_ui_for_race_finished(self) -> None:
@@ -5795,7 +5819,8 @@ class RaceWindow(QMainWindow):
         if not standings_list:
             return
 
-        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
+        # Sort by DNF status first, then by race position from engine, then by total progress as tiebreaker
+        standings_list.sort(key=lambda x: (x['dnf'], x['position'], -x['total_progress']))
 
         finished_drivers, lapped_drivers, dnf_drivers, leader_lap = self._classify_standings_entries(standings_list)
         all_classified = finished_drivers + lapped_drivers + dnf_drivers
@@ -5956,9 +5981,28 @@ class RaceWindow(QMainWindow):
         self._log_lapped_drivers_debug(lapped_drivers, leader_lap)
 
     def _log_finished_drivers_debug(self, finished_drivers: List[Dict[str, Any]]) -> None:
-        """Log top finished drivers with live gap metadata."""
-        for i, entry in enumerate(finished_drivers[:5]):
-            print(f"    P{i + 1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
+        """Log top finished drivers with live gap metadata, ensuring unique positions."""
+        # De-duplicate by total_progress to avoid multiple drivers showing as P1
+        seen_progress = set()
+        position = 1
+        for entry in finished_drivers:
+            progress = entry.get('total_progress', 0.0)
+            # Only show driver if we haven't seen this progress value yet
+            if progress not in seen_progress:
+                gap = entry.get('gap_ahead', 0.0)
+                # Display gap correctly: if on same lap, show time gap; if lapped, show lap deficit
+                if gap >= 999.0 and gap < 1000.0:
+                    gap_str = "--"
+                elif gap >= 1000.0:
+                    lap_deficit = int(gap - 999.0)
+                    gap_str = f"+{lap_deficit}L"
+                else:
+                    gap_str = f"{gap:.1f}s"
+                print(f"    P{position}: {entry['name']} (L{entry['lap']}, gap={gap_str})")
+                seen_progress.add(progress)
+                position += 1
+                if position > 5:
+                    break
 
     def _log_lapped_drivers_debug(self, lapped_drivers: List[Dict[str, Any]], leader_lap: int) -> None:
         """Log top lapped drivers with lap deficit markers."""
@@ -6027,8 +6071,17 @@ class RaceWindow(QMainWindow):
             margins = self.standings_table.contentsMargins()
             frame = self.standings_table.frameWidth() * 2
             total = header_h + row_heights + margins.top() + margins.bottom() + frame + 4
-            self.standings_table.setMinimumHeight(total)
-            self.standings_table.setMaximumHeight(total)
+            available_height = total
+            right_container = getattr(self, '_right_container', None)
+            if right_container is not None:
+                try:
+                    available_height = max(0, right_container.contentsRect().height())
+                except Exception:
+                    available_height = total
+
+            capped_height = total if available_height <= 0 else min(total, available_height)
+            self.standings_table.setMinimumHeight(0)
+            self.standings_table.setMaximumHeight(max(0, capped_height))
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
 

@@ -1,12 +1,11 @@
 """
-Vehicle Appearance Integration for GUI
+Vehicle Appearance Integration for GUI.
 
-Provides utilities to bridge vehicle appearance system with race visualisation.
-Handles livery creation, single seater car rendering during races, and telemetry display.
-
-MVP Focus: Single Seater Formula Racing Only
+Provides utilities to bridge vehicle appearance system with race visualisation,
+including discipline-specific vehicle model selection.
 """
 
+import re
 from typing import Dict, Optional
 from PyQt6.QtGui import QColor, QPainter
 from database.models import Driver, Team
@@ -23,6 +22,7 @@ class VehicleAppearanceManager:
         """Initialise appearance cache for drivers"""
         self.vehicle_configs: Dict[int, VehicleConfiguration] = {}
         self.driver_liveries: Dict[int, Livery] = {}
+        self.driver_vehicle_types: Dict[int, VehicleType] = {}
 
     def create_vehicle_for_driver(self, driver: Driver, team: Team) -> VehicleConfiguration:
         """
@@ -36,9 +36,11 @@ class VehicleAppearanceManager:
             VehicleConfiguration with livery and specifications
         """
         # Use driver.id as the racing number (unique identifier)
-        # Phase 1: simple driver-based liveries (teams not yet used)
         livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
         self.driver_liveries[driver.id] = livery
+        team_discipline = getattr(team, "discipline", None) if team is not None else None
+        vehicle_type = get_vehicle_type_for_discipline(str(team_discipline or "SINGLE_SEATER"))
+        self.driver_vehicle_types[driver.id] = vehicle_type
 
         config = VehicleConfiguration(
             livery=livery,
@@ -86,7 +88,7 @@ class VehicleAppearanceManager:
         painter.rotate(rotation)
 
         VehicleRenderer.render_car(
-            painter, VehicleType.SINGLE_SEATER, config.livery, scale
+            painter, self.get_vehicle_type(driver_id), config.livery, scale
         )
 
         painter.restore()
@@ -98,6 +100,14 @@ class VehicleAppearanceManager:
         if livery:
             return livery.primary_color
         return None
+
+    def set_vehicle_type(self, driver_id: int, discipline: str) -> None:
+        """Persist resolved vehicle type for a driver."""
+        self.driver_vehicle_types[driver_id] = get_vehicle_type_for_discipline(discipline)
+
+    def get_vehicle_type(self, driver_id: int, default_discipline: str = "SINGLE_SEATER") -> VehicleType:
+        """Return cached driver vehicle type, falling back to discipline mapping."""
+        return self.driver_vehicle_types.get(driver_id, get_vehicle_type_for_discipline(default_discipline))
 
     def set_vehicle_setup(self, driver_id: int, fuel_load: Optional[float] = None,
                          tire_compound: Optional[str] = None,
@@ -136,10 +146,19 @@ def get_vehicle_type_for_discipline(discipline: str) -> VehicleType:
         discipline: Discipline name (e.g., SINGLE_SEATER)
 
     Returns:
-        VehicleType - for MVP, always SINGLE_SEATER
+        VehicleType matching the discipline
     """
-    # MVP only supports SINGLE_SEATER
-    return VehicleType.SINGLE_SEATER
+    normalized = re.sub(r"[^a-z0-9]+", "_", str(discipline or "").strip().lower()).strip("_")
+    mapping = {
+        "single_seater": VehicleType.SINGLE_SEATER,
+        "production_touring": VehicleType.PRODUCTION_TOURING,
+        "production_touring_gt": VehicleType.PRODUCTION_TOURING,
+        "urban_street": VehicleType.URBAN_STREET,
+        "drag_acceleration": VehicleType.DRAG_ACCELERATION,
+        "sprint_rallycross": VehicleType.SPRINT_RALLYCROSS,
+        "endurance": VehicleType.ENDURANCE,
+    }
+    return mapping.get(normalized, VehicleType.SINGLE_SEATER)
 
 
 # Global appearance manager instance
