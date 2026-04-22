@@ -4258,6 +4258,11 @@ class RaceWindow(QMainWindow):
         if not hasattr(self, '_animation_started'):
             self._animation_started = False
         self._race_finished_emitted = False
+        # Reset per-race standings state to avoid stale order/gap carryover.
+        self._race_state = {}
+        self._driver_push_intensity = {}
+        self._last_standings_row_count = 0
+        self._finish_sequence_counter = 0
         print("[RACE START] Waiting for simulation to send first position data...")
 
         self._launch_race_thread()
@@ -4486,8 +4491,11 @@ class RaceWindow(QMainWindow):
         push_intensity = float(pos_data.get("push_intensity", 0.7))
         gap_ahead = float(pos_data.get("gap_ahead", 0.0))
         position_m = float(pos_data.get("position_m", 0.0))
+        total_time = float(pos_data.get("total_time", race_time))
+        running = bool(pos_data.get("running", True))
+        running_flag = 1 if running else 0
         self.emitter.event_signal.emit(
-            f"standings_update|{driver_id}|{position}|{lap}|{push_intensity:.2f}|{gap_ahead:.2f}|{position_m:.2f}|{race_time:.2f}"
+            f"standings_update|{driver_id}|{position}|{lap}|{push_intensity:.2f}|{gap_ahead:.2f}|{position_m:.2f}|{race_time:.2f}|{total_time:.2f}|{running_flag}"
         )
 
     def _handle_thread_dnf_event(self, event: dict) -> None:
@@ -5360,11 +5368,18 @@ class RaceWindow(QMainWindow):
         detail = QTableWidget()
         detail.setColumnCount(7)
         detail.setHorizontalHeaderLabels(["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"])
-        detail.setRowCount(len(results_sorted))
-        leader_time = float(results_sorted[0].get('time_seconds', 0.0) or 0.0) if results_sorted else 0.0
+        display_results = self._sorted_results_for_detail_display(results_sorted)
+        detail.setRowCount(len(display_results))
+        leader_time = self._detail_leader_time(display_results)
 
-        for row_idx, res in enumerate(results_sorted):
-            pos, name, time_text, gap_text, reaction_text, trap_text, status = self._format_detail_row(res, row_idx, leader_time)
+        for row_idx, res in enumerate(display_results):
+            display_pos = row_idx + 1
+            pos, name, time_text, gap_text, reaction_text, trap_text, status = self._format_detail_row(
+                res,
+                row_idx,
+                leader_time,
+                display_pos,
+            )
             detail.setItem(row_idx, 0, QTableWidgetItem(str(pos)))
             detail.setItem(row_idx, 1, QTableWidgetItem(name))
             detail.setItem(row_idx, 2, QTableWidgetItem(time_text))
@@ -5390,9 +5405,46 @@ class RaceWindow(QMainWindow):
         detail.setMinimumHeight(340)
         return detail
 
-    def _format_detail_row(self, res: Dict[str, Any], row_idx: int, leader_time: float) -> Tuple[int, str, str, str, str, str, str]:
+    def _sorted_results_for_detail_display(self, results: list) -> list:
+        """Return race results in visual finish order for summary table rendering."""
+        def sort_key(res: Dict[str, Any]) -> Tuple[int, float, int]:
+            dnf = 1 if res.get('dnf_reason') else 0
+
+            time_raw = res.get('time_seconds')
+            if isinstance(time_raw, (int, float)) and float(time_raw) != float('inf'):
+                time_key = float(time_raw)
+            else:
+                time_key = float('inf')
+
+            pos_raw = res.get('position')
+            try:
+                pos_key = int(pos_raw)
+            except (TypeError, ValueError):
+                pos_key = 9999
+
+            return (dnf, time_key, pos_key)
+
+        return sorted(results, key=sort_key)
+
+    def _detail_leader_time(self, results: list) -> float:
+        """Return leader finish time from already sorted detailed results."""
+        for res in results:
+            if res.get('dnf_reason'):
+                continue
+            time_raw = res.get('time_seconds')
+            if isinstance(time_raw, (int, float)) and float(time_raw) != float('inf'):
+                return float(time_raw)
+        return 0.0
+
+    def _format_detail_row(
+        self,
+        res: Dict[str, Any],
+        row_idx: int,
+        leader_time: float,
+        display_pos: int,
+    ) -> Tuple[int, str, str, str, str, str, str]:
         """Format a single detailed result row payload."""
-        pos = int(res.get('position', row_idx + 1) or (row_idx + 1))
+        pos = int(display_pos)
         name = str(res.get('driver_name', f"Driver {pos}"))
         time_s = res.get('time_seconds')
         reaction = res.get('reaction_time_ms')
@@ -5732,6 +5784,8 @@ class RaceWindow(QMainWindow):
         position_m: float,
         gap_ahead: float,
         push_intensity: float,
+        total_time: float,
+        running: bool,
     ) -> None:
         """Merge standings payload into race state and push-intensity cache."""
         if not hasattr(self, '_driver_push_intensity'):
@@ -5743,14 +5797,24 @@ class RaceWindow(QMainWindow):
 
         existing = self._race_state.get(driver_id, {}) if hasattr(self, '_race_state') else {}
         dnf_flag = existing.get('dnf', False)
+        finish_order = existing.get('finish_order')
+        was_running = bool(existing.get('running', True))
+        if not hasattr(self, '_finish_sequence_counter'):
+            self._finish_sequence_counter = 0
+        if was_running and not running and not dnf_flag and finish_order is None:
+            self._finish_sequence_counter += 1
+            finish_order = int(self._finish_sequence_counter)
         self._ensure_race_state()
         self._race_state[driver_id] = {
             'name': driver.name,
             'position': race_position,
             'lap': lap,
             'time': race_time,
+            'total_time': total_time,
             'distance': position_m,
             'gap_ahead': gap_ahead,
+            'running': running,
+            'finish_order': finish_order,
             'dnf': dnf_flag,
         }
         self._driver_push_intensity[driver_id] = push_intensity
@@ -5790,6 +5854,8 @@ class RaceWindow(QMainWindow):
             gap_ahead = float(parts[5]) if len(parts) > 5 else 0.0
             position_m = float(parts[6]) if len(parts) > 6 else 0.0
             race_time = float(parts[7]) if len(parts) > 7 else 0.0
+            total_time = float(parts[8]) if len(parts) > 8 else race_time
+            running = bool(int(parts[9])) if len(parts) > 9 else True
 
             self._update_race_state_from_standings(
                 driver_id,
@@ -5799,6 +5865,8 @@ class RaceWindow(QMainWindow):
                 position_m,
                 gap_ahead,
                 push_intensity,
+                total_time,
+                running,
             )
             self._record_position_history(driver_id, lap, position_m, race_position, race_time)
             self._rebuild_standings_table()
@@ -5851,14 +5919,19 @@ class RaceWindow(QMainWindow):
         for did, data in self._race_state.items():
             lap_for_progress = max(0, int(data.get('lap', 1)) - 1)
             total_progress = lap_for_progress * track_length + (data.get('distance', 0.0) % track_length)
+            running = bool(data.get('running', True))
             standings_list.append({
                 'driver_id': did,
                 'name': data['name'],
                 'position': data['position'],
                 'lap': data['lap'],
                 'time': data.get('time', 0.0),
+                'total_time': data.get('total_time', data.get('time', 0.0)),
                 'distance': data.get('distance', 0.0),
                 'gap_ahead': data.get('gap_ahead', 0.0),
+                'running': running,
+                'finished': (not running),
+                'finish_order': data.get('finish_order'),
                 'dnf': data.get('dnf', False),
                 'total_progress': total_progress,
             })
@@ -5866,7 +5939,7 @@ class RaceWindow(QMainWindow):
 
     def _classify_standings_entries(self, standings_list: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], int]:
         """Split standings into finished, lapped, and DNF buckets."""
-        leader_lap = int(standings_list[0]['lap']) if standings_list else 0
+        leader_lap = max((int(e.get('lap', 0) or 0) for e in standings_list if not e.get('dnf', False)), default=0)
         finished_drivers: List[Dict[str, Any]] = []
         lapped_drivers: List[Dict[str, Any]] = []
         dnf_drivers: List[Dict[str, Any]] = []
@@ -5874,10 +5947,15 @@ class RaceWindow(QMainWindow):
             if entry['dnf']:
                 dnf_drivers.append(entry)
                 continue
+            if entry.get('finished', False):
+                finished_drivers.append(entry)
+                continue
             if entry['lap'] < leader_lap:
                 lapped_drivers.append(entry)
                 continue
             finished_drivers.append(entry)
+        finished_drivers.sort(key=lambda x: (x.get('finish_order', 9999), x.get('total_time', float('inf'))))
+        lapped_drivers.sort(key=lambda x: (-int(x.get('lap', 0) or 0), int(x.get('position', 999))))
         return finished_drivers, lapped_drivers, dnf_drivers, leader_lap
 
     def _ensure_standings_row_count(self, row_count: int) -> None:
@@ -5944,6 +6022,8 @@ class RaceWindow(QMainWindow):
         """Return formatted gap text and updated cumulative gap value."""
         if entry.get('dnf', False) or entry in dnf_drivers:
             return "DNF", cumulative_gap
+        if entry.get('finished', False):
+            return "FIN", cumulative_gap
         if row == 0:
             return "LEADER", cumulative_gap
         if entry in lapped_drivers:
@@ -5951,6 +6031,8 @@ class RaceWindow(QMainWindow):
             return f"+{lap_deficit}L", cumulative_gap
 
         raw_gap = entry.get('gap_ahead', 0.0)
+        if 999.0 <= raw_gap < 1000.0:
+            return "-", cumulative_gap
         if raw_gap >= 1000.0:
             laps_behind = int(raw_gap - 999.0)
             if laps_behind > 0:

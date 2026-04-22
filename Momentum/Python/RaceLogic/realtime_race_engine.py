@@ -2546,6 +2546,7 @@ class RealtimeRaceEngine:
                 "position": state.position,
                 "lap": state.lap,
                 "position_m": display_position,
+                "total_time": state.total_time,
                 "velocity_mps": state.velocity_mps,
                 "racing_mode": state.racing_mode.value,
                 "push_intensity": state.push_intensity,
@@ -2575,11 +2576,13 @@ class RealtimeRaceEngine:
 
         finished_drivers, lapped_drivers, dnf_drivers = self._classify_result_states(race_state)
         
-        # Sort finished drivers by position on track
-        finished_drivers.sort(key=lambda s: s.position_m)
+        # Sort finishers by actual elapsed race time (lowest wins).
+        finished_drivers.sort(key=lambda s: float(s.total_time))
         
-        # Sort lapped drivers by laps completed (descending), then by position (ascending)
-        lapped_drivers.sort(key=lambda s: (-s.lap, s.position_m))
+        # Sort lapped drivers by laps completed (descending), then elapsed time.
+        lapped_drivers.sort(key=lambda s: (-s.lap, float(s.total_time)))
+        # Keep DNF ordering deterministic for UI and persistence.
+        dnf_drivers.sort(key=lambda s: (-s.lap, float(s.total_time)))
         
         # Add finished drivers first (positions 1, 2, 3...)
         for position, state in enumerate(finished_drivers, 1):

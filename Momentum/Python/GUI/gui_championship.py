@@ -1277,6 +1277,29 @@ class PostRaceResultsDialog(QDialog):
         self.setMinimumSize(700, 500)  # Usable minimum
         self.resize(width, height)
         self.setup_ui()
+
+    @staticmethod
+    def _result_sort_key(result: Any) -> tuple:
+        """Sort by finish time when available, otherwise fall back to position."""
+        if isinstance(result, dict):
+            position = result.get("position", 0) or 0
+            finish_time = result.get("time_seconds", result.get("finish_time"))
+        else:
+            position = getattr(result, "position", 0) or 0
+            finish_time = getattr(result, "time_seconds", None)
+            if finish_time is None:
+                finish_time = getattr(result, "finish_time", None)
+
+        try:
+            finish_time_key = float(finish_time)
+        except (TypeError, ValueError):
+            finish_time_key = float("inf")
+
+        return (finish_time_key, int(position))
+
+    def _sorted_results(self) -> List[Any]:
+        """Return race results ordered by actual finish order."""
+        return sorted(self.results, key=self._result_sort_key)
     
     def setup_ui(self):
         """Setup results display UI."""
@@ -1310,8 +1333,9 @@ class PostRaceResultsDialog(QDialog):
             results_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         
         # Populate results
-        self.results_table.setRowCount(len(self.results))
-        for i, result in enumerate(self.results):
+        sorted_results = self._sorted_results()
+        self.results_table.setRowCount(len(sorted_results))
+        for i, result in enumerate(sorted_results):
             self.results_table.setItem(i, 0, QTableWidgetItem(str(result.get('position', '-'))))
             self.results_table.setItem(i, 1, QTableWidgetItem(result.get('driver_name', 'Unknown')))
             self.results_table.setItem(i, 2, QTableWidgetItem(result.get('team_name', 'Unknown')))
