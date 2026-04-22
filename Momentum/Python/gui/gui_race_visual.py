@@ -4719,9 +4719,11 @@ class RaceWindow(QMainWindow):
             return
         print(f"\n*** COLLISION SUMMARY ({len(self._collision_log)} incidents) ***")
         for i, collision in enumerate(self._collision_log, 1):
-            lap = collision.get('lap', '?')
+            lap_raw = collision.get('lap', 0)
+            # Convert 0-indexed lap to 1-indexed display lap
+            lap_display = int(lap_raw) + 1 if lap_raw != '?' else '?'
             description = collision.get('description', 'Unknown incident')
-            print(f"  {i}. Lap {lap}: {description}")
+            print(f"  {i}. Lap {lap_display}: {description}")
         print("")
 
     def _reset_ui_for_race_finished(self) -> None:
@@ -5795,7 +5797,8 @@ class RaceWindow(QMainWindow):
         if not standings_list:
             return
 
-        standings_list.sort(key=lambda x: (x['dnf'], -x['total_progress']))
+        # Sort by DNF status first, then by race position from engine, then by total progress as tiebreaker
+        standings_list.sort(key=lambda x: (x['dnf'], x['position'], -x['total_progress']))
 
         finished_drivers, lapped_drivers, dnf_drivers, leader_lap = self._classify_standings_entries(standings_list)
         all_classified = finished_drivers + lapped_drivers + dnf_drivers
@@ -5956,9 +5959,28 @@ class RaceWindow(QMainWindow):
         self._log_lapped_drivers_debug(lapped_drivers, leader_lap)
 
     def _log_finished_drivers_debug(self, finished_drivers: List[Dict[str, Any]]) -> None:
-        """Log top finished drivers with live gap metadata."""
-        for i, entry in enumerate(finished_drivers[:5]):
-            print(f"    P{i + 1}: {entry['name']} (L{entry['lap']}, gap={entry.get('gap_ahead', 0.0):.1f}s)")
+        """Log top finished drivers with live gap metadata, ensuring unique positions."""
+        # De-duplicate by total_progress to avoid multiple drivers showing as P1
+        seen_progress = set()
+        position = 1
+        for entry in finished_drivers:
+            progress = entry.get('total_progress', 0.0)
+            # Only show driver if we haven't seen this progress value yet
+            if progress not in seen_progress:
+                gap = entry.get('gap_ahead', 0.0)
+                # Display gap correctly: if on same lap, show time gap; if lapped, show lap deficit
+                if gap >= 999.0 and gap < 1000.0:
+                    gap_str = "--"
+                elif gap >= 1000.0:
+                    lap_deficit = int(gap - 999.0)
+                    gap_str = f"+{lap_deficit}L"
+                else:
+                    gap_str = f"{gap:.1f}s"
+                print(f"    P{position}: {entry['name']} (L{entry['lap']}, gap={gap_str})")
+                seen_progress.add(progress)
+                position += 1
+                if position > 5:
+                    break
 
     def _log_lapped_drivers_debug(self, lapped_drivers: List[Dict[str, Any]], leader_lap: int) -> None:
         """Log top lapped drivers with lap deficit markers."""
