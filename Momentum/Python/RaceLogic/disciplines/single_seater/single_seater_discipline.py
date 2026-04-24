@@ -29,6 +29,7 @@ from typing import List, Dict, Any, Optional
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
 from database.models import Driver, Team
+from services.race_engine_factory import create_realtime_engine
 
 
 class SingleSeaterEngine(BaseDisciplineEngine):
@@ -190,8 +191,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
         Returns the list of result dictionaries produced by the realtime engine.
         """
-        # Instantiate realtime engine and tune for single-seater behaviour
-        engine = RealtimeRaceEngine(seed=None)
+        # Instantiate realtime engine through the shared factory and tune it for single-seater behaviour
+        engine = create_realtime_engine(seed=getattr(self, 'seed', None))
         tc = self._extract_track_conditions(context)
         preset_choice = self._extract_preset_choice(tc)
         self._apply_preset_tuning(engine, preset_choice)

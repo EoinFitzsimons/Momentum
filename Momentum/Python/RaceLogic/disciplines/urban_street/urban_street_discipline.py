@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from database.models import Driver, Team
+from services.race_engine_factory import create_realtime_engine
 
 
 class UrbanStreetEngine(BaseDisciplineEngine):
@@ -93,7 +94,7 @@ class UrbanStreetEngine(BaseDisciplineEngine):
             return default
 
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
-        engine = RealtimeRaceEngine(seed=None)
+        engine = create_realtime_engine(seed=getattr(self, 'seed', None))
         self._apply_tuning(engine)
 
         tc = self._track_conditions(context)

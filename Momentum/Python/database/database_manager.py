@@ -34,9 +34,10 @@ Authors: Eoin Fitzsimons
 import sqlite3
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Sequence
 from pathlib import Path
 from database.models import Driver, Team, Track, Championship, Race, RaceResult, SCHEMA_SQL
+from database.race_result_persistence import RaceResultPersistence
 from config import DATABASE_PATH
 
 
@@ -71,7 +72,7 @@ class SimpleTrack:
     drs_zones: int = 1
 
 
-class DatabaseManager:
+class DatabaseManager(RaceResultPersistence):
     """
     Database Manager - Core Data Access Layer
 
@@ -1256,20 +1257,39 @@ class DatabaseManager:
                 (status, race_id)
             )
 
-    def save_race_result(self, result: RaceResult) -> Optional[int]:
-        """Save race result and return ID"""
+    def save_race_results(self, race_result_batch: Sequence[RaceResult]) -> None:
+        """Persist a batch of race results using the canonical interface."""
+        if not race_result_batch:
+            return
+
         with self.get_connection() as conn:
-            cursor = conn.execute("""
-                INSERT OR REPLACE INTO race_results
-                (race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (result.race_id, result.driver_id, result.team_id, result.position,
-                  result.points, result.fastest_lap, result.dnf_reason, result.grid_position))
-            return cursor.lastrowid
+            grouped_results: Dict[int, List[RaceResult]] = {}
+            for result in race_result_batch:
+                grouped_results.setdefault(int(getattr(result, "race_id", 0) or 0), []).append(result)
+
+            for race_id, results in grouped_results.items():
+                conn.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+                for result in results:
+                    cursor = conn.execute("""
+                        INSERT OR REPLACE INTO race_results
+                        (race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (result.race_id, result.driver_id, result.team_id, result.position,
+                          result.points, result.fastest_lap, result.dnf_reason, result.grid_position))
+                    if getattr(result, "id", None) in (None, 0):
+                        try:
+                            result.id = cursor.lastrowid
+                        except Exception:
+                            pass
+
+    def save_race_result(self, result: RaceResult) -> Optional[int]:
+        """Compatibility wrapper that delegates to save_race_results."""
+        self.save_race_results([result])
+        return getattr(result, "id", None)
 
     # Alias for consistency with game loop
     def create_race_result(self, result: RaceResult) -> Optional[int]:
-        """Create race result (alias for save_race_result)"""
+        """Create race result (alias for save_race_result)."""
         return self.save_race_result(result)
 
     def get_all_championships(self) -> List[Championship]:

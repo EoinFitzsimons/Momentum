@@ -112,6 +112,8 @@ class BaseDisciplineEngine(ABC):
         Args:
             seed: Random seed for numpy and python random generators
         """
+        # Preserve the seed for downstream adapters and deterministic wrappers.
+        self.seed = seed
         # Initialise numpy random generator (modern API)
         self.rng = np.random.default_rng(seed)
         random.seed(seed)

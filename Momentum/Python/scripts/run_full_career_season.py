@@ -22,7 +22,7 @@ if _PKG_ROOT not in sys.path:
 from database.database_manager import DatabaseManager
 from database.models import Championship
 from services.championship_service import ChampionshipService
-from services.race_simulation_api import simulate_race
+from services.race_simulation_api import persist_race_results, simulate_race
 
 
 def _select_grid(db: DatabaseManager, discipline: str, grid_size: int):
@@ -112,7 +112,8 @@ def run_season(
                 discipline=discipline,
                 fastest_lap=bool(getattr(result, "fastest_lap", False)),
             )
-            db.create_race_result(result)
+
+        persist_race_results(db, results)
 
         ok, error = service.update_race_lifecycle_status(race_id, "completed")
         if not ok:
