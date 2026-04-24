@@ -2,6 +2,26 @@
 
 This diagram shows the AI decision-making states and transitions for autonomous driver agents in Momentum.
 
+```mermaid
+stateDiagram-v2
+  [*] --> MANAGE
+
+  MANAGE --> ATTACK : gap_ahead < 3s\nand overtake opportunity
+  ATTACK --> MANAGE : overtake complete\nor gap_ahead >= 3s
+
+  MANAGE --> DEFEND : gap_behind < 2s
+  DEFEND --> MANAGE : pressure relieved\ngap_behind >= 3s
+
+  ATTACK --> DEFEND : pass completed\nand car behind closes
+  DEFEND --> ATTACK : pressure cleared\nand new chance ahead
+
+  state "Player Override" as PLAYER_OVERRIDE
+  MANAGE --> PLAYER_OVERRIDE : player-controlled driver
+  ATTACK --> PLAYER_OVERRIDE : player-controlled driver
+  DEFEND --> PLAYER_OVERRIDE : player-controlled driver
+  PLAYER_OVERRIDE --> PLAYER_OVERRIDE : slider/keyboard updates
+```
+
 
 ## State Descriptions
 

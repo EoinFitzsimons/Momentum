@@ -9,8 +9,11 @@ sequenceDiagram
     participant MainMenu as Main Menu<br/>Player Setup
     participant RaceWindow as Race Window<br/>Main Game View
     participant RaceAPI as Race API<br/>Public Interface
-    participant Engine as Realtime Engine<br/>30 FPS Simulation
-    participant DBManager as Database Manager<br/>CRUD Operations
+    participant Factory as Race Engine Factory<br/>Canonical Registry
+    participant Adapter as Discipline Adapter<br/>6 Disciplines
+    participant Engine as Runtime Engine<br/>Realtime or Drag
+    participant Persist as Persistence Port<br/>save_race_results(batch)
+    participant DBManager as Database Manager<br/>Persistence Impl
     participant EventEmitter as EventEmitter<br/>Qt Signals
     
     Player->>Launcher: Start Application
@@ -24,7 +27,9 @@ sequenceDiagram
     RaceWindow->>RaceWindow: Generate circuit<br/>(CircuitGenerator)
     RaceWindow->>RaceAPI: Spawn race_runner thread<br/>call simulate_race()
     
-    RaceAPI->>Engine: Create RealtimeRaceEngine
+    RaceAPI->>Factory: Resolve engine via context.discipline
+    Factory->>Adapter: Create discipline adapter
+    Adapter->>Engine: Build runtime engine<br/>(realtime for 5, isolated for drag)
     Engine->>DBManager: Load drivers and teams
     DBManager-->>Engine: Return driver/team data
     Engine->>Engine: Initialize race<br/>(20m starting spacing)
@@ -48,6 +53,9 @@ sequenceDiagram
     Engine->>Engine: Race complete<br/>(all laps finished)
     Engine->>EventEmitter: Emit race_finished event<br/>with results
     EventEmitter-->>RaceWindow: Final results and collision log
+    RaceWindow->>RaceAPI: persist_race_results(batch)
+    RaceAPI->>Persist: save_race_results(batch)
+    Persist->>DBManager: Batch write race results
     RaceWindow->>RaceWindow: Display final standings
     
     Player->>RaceWindow: Return to menu
@@ -77,7 +85,8 @@ sequenceDiagram
 
 ### 4. Engine Setup
 - race_runner thread calls simulate_race from RaceAPI
-- RaceAPI creates RealtimeRaceEngine instance
+- RaceAPI asks RaceEngineFactory for discipline adapter
+- Adapter builds either RealtimeRaceEngine (5 disciplines) or drag-specific engine
 - Engine queries DatabaseManager for driver and team data
 - Initialize race with 20 meter starting spacing to reduce first-lap collisions
 
@@ -134,6 +143,8 @@ When player presses keyboard arrows:
 - Create final results with finishing positions, lap times, best laps
 - Collect collision_log with all incidents
 - Emit race_finished event with complete data
+- RaceWindow delegates persistence to RaceAPI persist_race_results(batch)
+- Persistence implementation saves through canonical save_race_results(batch)
 
 ### 8. Results Display
 - RaceWindow receives race_finished event
@@ -157,7 +168,7 @@ When player presses keyboard arrows:
 
 **Race Runner Thread (Simulation):**
 - Spawned by RaceWindow when race starts
-- Runs RealtimeRaceEngine simulation loop
+- Runs discipline-selected engine simulation loop
 - Updates driver states 30 times per second
 - Emits events back to main thread via EventEmitter
 - Thread terminates when race finishes
@@ -178,4 +189,4 @@ When player presses keyboard arrows:
 **race_finished (emitted once at end):**
 - results: final standings with finishing positions and times
 - collision_log: list of all incidents with lap, time, position, type, involved drivers
-- Used to display final results screen
+- Used to display final results screen and trigger batch persistence

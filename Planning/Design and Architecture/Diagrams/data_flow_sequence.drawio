@@ -1,0 +1,63 @@
+<mxfile host="app.diagrams.net" modified="2026-04-25T14:05:00.000Z" agent="5.0" version="24.0.0" type="device">
+  <diagram id="data-flow-sequence" name="Data Flow Sequence">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Race Flow Sequence (Readable Step Timeline)" style="text;fontSize=34;fontStyle=1;fontFamily=Arial;fillColor=none;strokeColor=none;fontColor=#353839" vertex="1" parent="1">
+          <mxGeometry x="420" y="24" width="1100" height="54" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="lane1" value="UI and Player Actions" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1F5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
+          <mxGeometry x="80" y="110" width="640" height="1400" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane2" value="Services and Engine Resolution" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFE1E1;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
+          <mxGeometry x="760" y="110" width="640" height="1400" as="geometry"/>
+        </mxCell>
+        <mxCell id="lane3" value="Persistence" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3E5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
+          <mxGeometry x="1440" y="110" width="640" height="1400" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="s1" value="1. Player starts Launcher" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="130" y="190" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s2" value="2. Launcher opens Main Menu" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="130" y="290" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s3" value="3. Main Menu loads driver database" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="130" y="390" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s4" value="4. Player configures race and starts" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="130" y="490" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s5" value="5. RaceWindow creates circuit and simulation thread" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="130" y="590" width="560" height="92" as="geometry"/></mxCell>
+
+        <mxCell id="s6" value="6. RaceAPI simulate_race called" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="220" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s7" value="7. RaceAPI asks Factory for discipline adapter" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="320" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s8" value="8. Factory builds runtime engine path (realtime or drag)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="420" width="560" height="92" as="geometry"/></mxCell>
+        <mxCell id="s9" value="9. Engine loads drivers and teams" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="530" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s10" value="10. 30 FPS loop updates AI, physics, positions, incidents" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#BDB76B;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="630" width="560" height="106" as="geometry"/></mxCell>
+        <mxCell id="s11" value="11. race_finished emitted to RaceWindow" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="754" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s12" value="12. RaceWindow calls persist_race_results(batch)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#DD2D4A;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="810" y="854" width="560" height="82" as="geometry"/></mxCell>
+
+        <mxCell id="s13" value="13. Port save_race_results(batch) invoked" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="1490" y="350" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s14" value="14. DatabaseManager writes race results in batch" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="1490" y="450" width="560" height="82" as="geometry"/></mxCell>
+        <mxCell id="s15" value="15. Final standings shown; return to menu" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7B1FA2;strokeWidth=2;fontFamily=Arial;fontSize=18;spacing=8;align=left;verticalAlign=middle" vertex="1" parent="1"><mxGeometry x="1490" y="550" width="560" height="82" as="geometry"/></mxCell>
+
+        <mxCell id="c1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s1" target="s2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s2" target="s3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s3" target="s4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s4" target="s5"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="c5" value="handoff" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="s5" target="s6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s6" target="s7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s7" target="s8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s8" target="s9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s9" target="s10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s10" target="s11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#DD2D4A;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s11" target="s12"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="c12" value="persist" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#7B1FA2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="s12" target="s13"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#7B1FA2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s13" target="s14"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="c14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#7B1FA2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="s14" target="s15"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="legend" value="Color key&#xa;Blue: UI/player orchestration&#xa;Red: simulation and runtime path&#xa;Purple: persistence and completion" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=left;verticalAlign=top;spacing=10" vertex="1" parent="1">
+          <mxGeometry x="1490" y="1290" width="560" height="150" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
