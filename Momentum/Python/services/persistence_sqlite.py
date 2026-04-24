@@ -7,7 +7,7 @@ contains a runnable persistence implementation.
 """
 import sqlite3
 import dataclasses
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Sequence
 import os
 import sys
 import logging
@@ -24,12 +24,13 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from database.models import Driver as DBDriver, Track as DBTrack, SCHEMA_SQL
+from database.race_result_persistence import RaceResultPersistence
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class PersistenceSQLite:
+class PersistenceSQLite(RaceResultPersistence):
     _PRAGMA_RACE_RESULTS_TABLE_INFO = "PRAGMA table_info(race_results)"
 
     def __init__(self, db_path: str = "database/momentum.db"):
@@ -403,17 +404,29 @@ class PersistenceSQLite:
             except Exception as e:
                 raise oe from e
 
-    def save_race_results(self, race_id: int, results: List) -> None:
+    def save_race_results(self, race_result_batch: Sequence) -> None:
+        if not race_result_batch:
+            return
+
         cur = self.conn.cursor()
-        cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+        grouped_results = {}
+        for res in race_result_batch:
+            race_id = int(getattr(res, "race_id", 0) or 0)
+            grouped_results.setdefault(race_id, []).append(res)
 
-        existing_cols = self._get_existing_result_columns(cur)
-        insert_cols, insert_sql = self._build_result_insert_statement(existing_cols)
+        for race_id, results in grouped_results.items():
+            cur.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+            existing_cols = self._get_existing_result_columns(cur)
+            insert_cols, insert_sql = self._build_result_insert_statement(existing_cols)
 
-        for res in results:
-            vals = self._build_result_values(res, insert_cols, race_id)
-            self._insert_result_row(cur, insert_sql, vals, race_id, res)
+            for res in results:
+                vals = self._build_result_values(res, insert_cols, race_id)
+                self._insert_result_row(cur, insert_sql, vals, race_id, res)
 
         self.conn.commit()
+
+    def save_race_result(self, result) -> Optional[int]:
+        self.save_race_results([result])
+        return getattr(result, "id", None)
 
 __all__ = ['PersistenceSQLite']
