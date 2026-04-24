@@ -7,7 +7,8 @@ Integrates:
 - Real-time car position updates based on simulation events
 """
 
-from services.race_simulation_api import simulate_race
+from services.career_result_service import persist_career_race_result
+from services.race_simulation_api import persist_race_results, simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
 from vehicles.appearance_integration import VehicleAppearanceManager, get_vehicle_type_for_discipline
@@ -4901,7 +4902,7 @@ class RaceWindow(QMainWindow):
                         dnf_reason=dnf_reason,
                     )
                 else:
-                    self.db.save_race_result(race_result)
+                    persist_race_results(self.db, [race_result])
                 return True
         except Exception as e:
             print(f"WARNING: Could not save result for driver {driver_id}: {e}")
@@ -4920,33 +4921,18 @@ class RaceWindow(QMainWindow):
         """Persist one career-mode race result into career-specific storage."""
         if self.db is None:
             return
-        race_id = getattr(self, '_race_id', None)
-        if race_id is None:
-            return
-        with self.db.get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO career_race_results
-                    (player_id, career_race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
-                VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(career_race_id, driver_id) DO UPDATE SET
-                    team_id = excluded.team_id,
-                    position = excluded.position,
-                    points = excluded.points,
-                    fastest_lap = excluded.fastest_lap,
-                    dnf_reason = excluded.dnf_reason,
-                    grid_position = excluded.grid_position,
-                    recorded_at = CURRENT_TIMESTAMP
-                """,
-                (
-                    "local_player",
-                    int(race_id),
-                    int(driver_id),
-                    int(team_id),
-                    int(position),
-                    int(points),
-                    1 if fastest_lap else 0,
+            persist_career_race_result(
+                db=self.db,
+                player_id=str(getattr(self, 'player_id', '')),
+                career_race_id=race_id,
+                driver_id=driver_id,
+                team_id=team_id,
+                position=position,
+                points=points,
+                fastest_lap=fastest_lap,
+                dnf_reason=dnf_reason,
+                grid_position=result.get('grid_position', result.get('position')),
+            )
                     dnf_reason,
                     int(result.get('grid_position', result.get('position')) or 0),
                 ),

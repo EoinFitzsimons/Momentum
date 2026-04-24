@@ -37,26 +37,24 @@ def test_simulate_and_save_results():
     drivers = db.list_drivers()
     track = db.get_track(1)
 
-    # Teams are out-of-scope for this MVP test; pass an empty teams dict
-    teams = {}
-
     # Run simulation via the public race simulation API (GUI/backed)
     results = simulate_race(
         drivers,
         track,
         seed=1,
         laps=1,
+        race_id=42,
         verbose=False,
         event_callback=None,
         stop_event=None,
-        db=db,
+        db=None,
         track_points=None,
     )
 
     # The API returns a list of RaceResult-like objects
     assert len(results) == len(drivers)
-    # Persist results using persistence layer
-    db.save_race_results(42, results)
+    # Persist results using the service adapter
+    sim_api.persist_race_results(db, results)
     # Verify persistence: ensure rows were written for the race
     import sqlite3
     conn = sqlite3.connect(db.db_path)

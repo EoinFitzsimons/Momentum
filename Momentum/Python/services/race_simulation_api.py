@@ -12,47 +12,18 @@ from typing import List, Callable, Optional, Dict, Any
 import contextlib
 import io
 from database.models import Driver, Track, RaceResult, Team
-from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline, BaseDisciplineEngine
-import importlib
-import inspect
 import logging
+
+from services.race_engine_factory import create_discipline_engine, create_realtime_engine
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _load_discipline_engine(context: RaceContext, seed: Optional[int] = None) -> Optional[BaseDisciplineEngine]:
-    """Dynamically load a discipline adapter matching the context.discipline.
-
-    Strategy:
-    - Derive module path from discipline enum value (lowercase). Example:
-      RacingDiscipline.SINGLE_SEATER -> module `RaceLogic.disciplines.single_seater.single_seater_discipline`
-    - Import module and find the first class that subclasses BaseDisciplineEngine.
-    - Instantiate with seed and return instance.
-    - Return None on failure to allow fallback to RealtimeRaceEngine.
-    """
-    if not context or not getattr(context, 'discipline', None):
-        return None
-
-    disc_name = context.discipline.value.lower()
-    module_path = f"RaceLogic.disciplines.{disc_name}.{disc_name}_discipline"
-    try:
-        mod = importlib.import_module(module_path)
-    except Exception:
-        LOGGER.debug("Could not import discipline module '%s'", module_path, exc_info=True)
-        return None
-
-    # Find first concrete subclass of BaseDisciplineEngine
-    for _, cls in inspect.getmembers(mod, inspect.isclass):
-        try:
-            if issubclass(cls, BaseDisciplineEngine) and cls is not BaseDisciplineEngine:
-                return cls(seed=seed if seed is not None else 0)
-        except Exception:
-            LOGGER.debug("Skipping candidate discipline engine class %s", getattr(cls, '__name__', repr(cls)), exc_info=True)
-            continue
-
-    return None
+    """Dynamically load a discipline adapter matching the context.discipline."""
+    return create_discipline_engine(context, seed=seed)
 
 
 def _setup_context_teams(context: RaceContext) -> None:
@@ -73,9 +44,8 @@ def _setup_context_teams(context: RaceContext) -> None:
         context.teams = ctx_teams
 
 
-def _extract_context_fields(context: RaceContext, seed: Optional[int]) -> tuple:
+def _extract_context_fields(context: RaceContext) -> tuple:
     """Extract fields from RaceContext for simulation"""
-    engine = RealtimeRaceEngine(seed=seed, db=getattr(context, 'db', None))
     drivers = context.drivers
     track = context.track
     laps = context.total_laps
@@ -91,7 +61,7 @@ def _extract_context_fields(context: RaceContext, seed: Optional[int]) -> tuple:
         player_driver_id = context.track_conditions.get('player_driver_id')
         player_overrides = context.track_conditions.get('player_overrides')
     
-    return engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides
+    return drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides
 
 
 def _populate_team_data_from_db(teams_dict: Dict[int, Team], drivers: Optional[List[Driver]], 
@@ -239,25 +209,26 @@ def _print_final_results_summary(verbose: bool, results_list: List[dict]) -> Non
     print(f"{'='*70}\n")
 
 
-def _persist_race_results(db: Optional[Any], race_id: int, results_list: List[dict]) -> None:
+def _persist_race_results(db: Optional[Any], results_list: List[dict]) -> None:
     """Persist race results to database if available"""
-    if not db or not race_id or not getattr(db, 'save_race_results', None):
+    persist_race_results(db, results_list)
+
+
+def persist_race_results(persistence: Optional[Any], race_result_batch: List[RaceResult]) -> None:
+    """Persist a batch of race results through the canonical service adapter."""
+    if not persistence or not getattr(persistence, 'save_race_results', None):
         return
-    
+
     try:
-        save_fn = getattr(db, 'save_race_results')
-        save_fn(race_id, results_list)
+        save_fn = getattr(persistence, 'save_race_results')
+        save_fn(race_result_batch)
     except Exception:
-        LOGGER.warning("Failed to persist race results for race_id=%s", race_id, exc_info=True)
+        LOGGER.warning("Failed to persist race results", exc_info=True)
 
 
-def _create_realtime_engine(seed: Optional[int], verbose: bool, db: Optional[Any]) -> RealtimeRaceEngine:
+def _create_realtime_engine(seed: Optional[int], verbose: bool, db: Optional[Any]) -> Any:
     """Create and configure the realtime engine instance."""
-    engine = RealtimeRaceEngine(seed=seed)
-    engine.debug_logging = bool(verbose)
-    if db is not None:
-        engine.db = db
-    return engine
+    return create_realtime_engine(seed=seed, db=db, debug_logging=verbose)
 
 
 def _try_run_context_adapter(context: RaceContext, seed: Optional[int], verbose: bool):
@@ -277,7 +248,7 @@ def _try_run_context_adapter(context: RaceContext, seed: Optional[int], verbose:
 
 def _resolve_simulation_inputs_from_context(
     context: Optional[RaceContext],
-    engine: RealtimeRaceEngine,
+    engine: Any,
     drivers: Optional[List[Driver]],
     track: Optional[Track],
     laps: Optional[int],
@@ -286,12 +257,11 @@ def _resolve_simulation_inputs_from_context(
     track_points: Optional[List],
     player_driver_id: Optional[int],
     player_overrides: Optional[Dict[str, float]],
-    seed: Optional[int],
 ) -> tuple:
     """Return normalized simulation inputs after optional RaceContext extraction."""
     if context is None:
         return engine, drivers, track, laps, event_callback, teams_dict, track_points, player_driver_id, player_overrides
-    return _extract_context_fields(context, seed)
+    return _extract_context_fields(context)
 
 
 def _validate_required_simulation_inputs(drivers: Optional[List[Driver]], track: Optional[Track]) -> None:
@@ -335,7 +305,7 @@ def _build_engine_run_kwargs(
 
 
 def _execute_engine_simulation(
-    engine: RealtimeRaceEngine,
+    engine: Any,
     run_kwargs: Dict[str, Any],
     verbose: bool,
     event_callback: Optional[Callable[[dict], None]],
@@ -388,7 +358,6 @@ def simulate_race(
         track_points,
         player_driver_id,
         player_overrides,
-        seed,
     )
     
     # Fetch team data from database if provided
@@ -439,6 +408,6 @@ def simulate_race(
     _print_final_results_summary(verbose, results_list)
     
     # Persist results to database
-    _persist_race_results(db, race_id, db_results)
+    _persist_race_results(db, db_results)
 
     return db_results
