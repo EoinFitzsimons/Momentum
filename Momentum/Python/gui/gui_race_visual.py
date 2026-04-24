@@ -4921,23 +4921,23 @@ class RaceWindow(QMainWindow):
         """Persist one career-mode race result into career-specific storage."""
         if self.db is None:
             return
-            persist_career_race_result(
-                db=self.db,
-                player_id=str(getattr(self, 'player_id', '')),
-                career_race_id=race_id,
-                driver_id=driver_id,
-                team_id=team_id,
-                position=position,
-                points=points,
-                fastest_lap=fastest_lap,
-                dnf_reason=dnf_reason,
-                grid_position=result.get('grid_position', result.get('position')),
-            )
-                    dnf_reason,
-                    int(result.get('grid_position', result.get('position')) or 0),
-                ),
-            )
-            conn.commit()
+
+        race_id = getattr(self, '_race_id', None)
+        if race_id is None:
+            return
+
+        persist_career_race_result(
+            db=self.db,
+            player_id=str(getattr(self, 'player_id', '')),
+            career_race_id=int(race_id),
+            driver_id=driver_id,
+            team_id=team_id,
+            position=position,
+            points=points,
+            fastest_lap=fastest_lap,
+            dnf_reason=dnf_reason,
+            grid_position=result.get('grid_position', result.get('position')),
+        )
 
     def _show_position_change_summary_safe(self, results_sorted: list) -> None:
         """Display post-race position summary while keeping flow fail-safe."""
