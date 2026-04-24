@@ -1,6 +1,7 @@
 """Integration tests for championship lifecycle and standings flow."""
 
 from database.models import RaceResult
+from services.race_simulation_api import persist_race_results
 import pytest
 
 
@@ -59,19 +60,19 @@ def test_recalculate_standings_orders_by_points_then_tiebreakers(seeded_champion
     driver_ids = seeded_championship["seed"]["driver_ids"][:3]
     team_ids = seeded_championship["seed"]["team_ids"]
 
-    for position, driver_id in enumerate(driver_ids, start=1):
-        points = service.calculate_points(position=position, discipline="SPRINT_RALLYCROSS")
-        db.create_race_result(
-            RaceResult(
-                id=0,
-                race_id=race_id,
-                driver_id=driver_id,
-                team_id=team_ids[(position - 1) % len(team_ids)],
-                position=position,
-                points=points,
-                fastest_lap=(position == 1),
-            )
+    results = [
+        RaceResult(
+            id=0,
+            race_id=race_id,
+            driver_id=driver_id,
+            team_id=team_ids[(position - 1) % len(team_ids)],
+            position=position,
+            points=service.calculate_points(position=position, discipline="SPRINT_RALLYCROSS"),
+            fastest_lap=(position == 1),
         )
+        for position, driver_id in enumerate(driver_ids, start=1)
+    ]
+    persist_race_results(db, results)
 
     db.update_race_status(race_id, "completed")
 

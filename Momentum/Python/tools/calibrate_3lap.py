@@ -38,7 +38,7 @@ if PYTHON_ROOT not in sys.path:
     sys.path.insert(0, PYTHON_ROOT)
 
 from database.database_manager import DatabaseManager
-from RaceLogic.realtime_race_engine import RealtimeRaceEngine
+from services.race_engine_factory import create_realtime_engine
 from RaceLogic.disciplines.single_seater.single_seater_discipline import SingleSeaterEngine
 from RaceLogic.disciplines.production_touring.production_touring_discipline import ProductionTouringEngine
 from RaceLogic.disciplines.urban_street.urban_street_discipline import UrbanStreetEngine
@@ -199,7 +199,7 @@ def _run_profile(db: DatabaseManager, discipline: str, profile: Dict[str, float]
         def cb(evt, sink=events):
             sink.append(evt)
 
-        engine = RealtimeRaceEngine(seed=seed_start + i, db=db)
+        engine = create_realtime_engine(seed=seed_start + i, db=db)
         engine.debug_logging = False
         engine.START_GRID_SPACING_M = 12.0
         _apply_discipline_method_tuning(engine, discipline)

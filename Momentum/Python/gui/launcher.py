@@ -252,6 +252,8 @@ class MomentumLauncher:
         if db is None:
             return
 
+        from services.race_simulation_api import persist_race_results
+
         try:
             results = db.get_race_results(race_id)
         except Exception as e:
@@ -277,13 +279,13 @@ class MomentumLauncher:
                 continue
 
             result.points = expected_points
-            try:
-                db.save_race_result(result)
-                updated += 1
-            except Exception as e:
-                print(f"[LAUNCHER] WARNING: Could not update points for driver {getattr(result, 'driver_id', '?')}: {e}")
+            updated += 1
 
         if updated:
+            try:
+                persist_race_results(db, results)
+            except Exception as e:
+                print(f"[LAUNCHER] WARNING: Could not persist backfilled race results: {e}")
             print(f"[LAUNCHER] Backfilled points for {updated} race result rows in race {race_id}")
 
     def _get_next_scheduled_race(self, championship_service, championship_id, season):

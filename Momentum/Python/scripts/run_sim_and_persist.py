@@ -31,10 +31,11 @@ def main():
             track,
             seed=1,
             laps=1,
+            race_id=42,
             verbose=False,
             event_callback=None,
             stop_event=None,
-            db=db,
+            db=None,
             track_points=None,
         )
 
@@ -43,7 +44,7 @@ def main():
         pos = getattr(first, 'position', None) if not isinstance(first, dict) else first.get('position')
         print("first pos:", pos)
 
-        db.save_race_results(42, results)
+        simmod.persist_race_results(db, results)
         import sqlite3
 
         conn = sqlite3.connect(db.db_path)

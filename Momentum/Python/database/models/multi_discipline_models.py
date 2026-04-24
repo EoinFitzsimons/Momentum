@@ -1,5 +1,8 @@
 """
-Momentum Motorsport Simulation - Multi-Discipline Models
+Deprecated: Momentum Motorsport Simulation - Multi-Discipline Models
+
+This module is retained for archival and documentation compatibility only.
+Runtime code uses `database.models` and the canonical race-engine factory.
 
 This module extends the base data models to support 6 active racing disciplines:
 - Single Seater: Open-wheel formula racing with aerodynamic focus
