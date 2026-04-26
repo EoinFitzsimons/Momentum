@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="utf-8"?>
+<b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography">
+  <b:Source>
+    <b:Tag>PythonDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:Corporate>Python Software Foundation</b:Corporate>
+      </b:Author>
+    </b:Author>
+    <b:Title>Python 3 Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://docs.python.org/3/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed>
+    <b:MonthAccessed>4</b:MonthAccessed>
+    <b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>FastAPIDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>FastAPI</b:Corporate></b:Author></b:Author>
+    <b:Title>FastAPI Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://fastapi.tiangolo.com/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>UvicornDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Uvicorn</b:Corporate></b:Author></b:Author>
+    <b:Title>Uvicorn Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://www.uvicorn.org/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PydanticDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Pydantic</b:Corporate></b:Author></b:Author>
+    <b:Title>Pydantic Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://docs.pydantic.dev/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>SQLiteDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>SQLite Consortium</b:Corporate></b:Author></b:Author>
+    <b:Title>SQLite Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://www.sqlite.org/docs.html</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>NumPyDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>NumPy Developers</b:Corporate></b:Author></b:Author>
+    <b:Title>NumPy Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://numpy.org/doc/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>SciPyDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>SciPy Community</b:Corporate></b:Author></b:Author>
+    <b:Title>SciPy Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://docs.scipy.org/doc/scipy/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>MatplotlibDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Matplotlib Development Team</b:Corporate></b:Author></b:Author>
+    <b:Title>Matplotlib Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://matplotlib.org/stable/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PyQt62026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Riverbank Computing Limited</b:Corporate></b:Author></b:Author>
+    <b:Title>PyQt6 Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://www.riverbankcomputing.com/software/pyqt/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>FakerDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Faker Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>Faker Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://faker.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>DotenvDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Kumar</b:Last><b:First>Saurabh</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>python-dotenv Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://saurabh-kumar.com/python-dotenv/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PillowDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Python Pillow Team</b:Corporate></b:Author></b:Author>
+    <b:Title>Pillow Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pillow.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>RequestsDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Requests Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>Requests Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://requests.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>UnidecodePyPI2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Gross</b:Last><b:First>Avi</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Unidecode (PyPI project)</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pypi.org/project/Unidecode/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PytestDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>pytest-dev</b:Corporate></b:Author></b:Author>
+    <b:Title>pytest Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://docs.pytest.org/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PytestCov2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>pytest-dev</b:Corporate></b:Author></b:Author>
+    <b:Title>pytest-cov (PyPI project)</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pypi.org/project/pytest-cov/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>BlackDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Python Software Foundation</b:Corporate></b:Author></b:Author>
+    <b:Title>Black Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://black.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>Flake8Docs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>PyCQA</b:Corporate></b:Author></b:Author>
+    <b:Title>Flake8 Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://flake8.pycqa.org/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>MypyDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Mypy Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>mypy Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://mypy.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>IPythonDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>IPython Development Team</b:Corporate></b:Author></b:Author>
+    <b:Title>IPython Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://ipython.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PandasDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>pandas development team</b:Corporate></b:Author></b:Author>
+    <b:Title>pandas Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pandas.pydata.org/docs/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PyTorchDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>PyTorch Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>PyTorch Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pytorch.org/docs/stable/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>ShapelyDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Shapely Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>Shapely Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://shapely.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>ISO2911932021</b:Tag>
+    <b:SourceType>Report</b:SourceType>
+    <b:Author><b:Author><b:Corporate>ISO/IEC/IEEE</b:Corporate></b:Author></b:Author>
+    <b:Title>ISO/IEC/IEEE 29119-3:2021 Software and systems engineering - Software testing - Part 3: Test documentation</b:Title>
+    <b:Year>2021</b:Year>
+    <b:City>Geneva</b:City>
+    <b:Institution>International Organization for Standardization</b:Institution>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>IEEE8292008</b:Tag>
+    <b:SourceType>Report</b:SourceType>
+    <b:Author><b:Author><b:Corporate>IEEE</b:Corporate></b:Author></b:Author>
+    <b:Title>IEEE Std 829-2008: IEEE Standard for Software and System Test Documentation</b:Title>
+    <b:Year>2008</b:Year>
+    <b:City>New York</b:City>
+    <b:Institution>IEEE</b:Institution>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>ISTQBCTFL4012023</b:Tag>
+    <b:SourceType>Report</b:SourceType>
+    <b:Author><b:Author><b:Corporate>ISTQB</b:Corporate></b:Author></b:Author>
+    <b:Title>ISTQB Certified Tester Foundation Level (CTFL) Syllabus v4.0.1</b:Title>
+    <b:Year>2023</b:Year>
+    <b:URL>https://www.istqb.org/certifications/certified-tester-foundation-level-ctfl-v4-0</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>26</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>TreiberHenneckeHelbing2000</b:Tag>
+    <b:SourceType>JournalArticle</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Treiber</b:Last><b:First>Martin</b:First></b:Person>
+          <b:Person><b:Last>Hennecke</b:Last><b:First>Ansgar</b:First></b:Person>
+          <b:Person><b:Last>Helbing</b:Last><b:First>Dirk</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Congested traffic states in empirical observations and microscopic simulations</b:Title>
+    <b:JournalName>Physical Review E</b:JournalName>
+    <b:Year>2000</b:Year>
+    <b:Volume>62</b:Volume>
+    <b:Issue>2</b:Issue>
+    <b:StartPage>1805</b:StartPage>
+    <b:EndPage>1824</b:EndPage>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>Pacejka2012</b:Tag>
+    <b:SourceType>Book</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Pacejka</b:Last><b:First>Hans B.</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Tire and Vehicle Dynamics</b:Title>
+    <b:Year>2012</b:Year>
+    <b:Edition>3rd</b:Edition>
+    <b:City>Oxford</b:City>
+    <b:Publisher>Butterworth-Heinemann</b:Publisher>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>Rajamani2012</b:Tag>
+    <b:SourceType>Book</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Rajamani</b:Last><b:First>Rajesh</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Vehicle Dynamics and Control</b:Title>
+    <b:Year>2012</b:Year>
+    <b:Edition>2nd</b:Edition>
+    <b:City>New York</b:City>
+    <b:Publisher>Springer</b:Publisher>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>Gillespie1992</b:Tag>
+    <b:SourceType>Book</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Gillespie</b:Last><b:First>Thomas D.</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Fundamentals of Vehicle Dynamics</b:Title>
+    <b:Year>1992</b:Year>
+    <b:City>Warrendale, PA</b:City>
+    <b:Publisher>SAE International</b:Publisher>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>MetropolisUlam1949</b:Tag>
+    <b:SourceType>JournalArticle</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Metropolis</b:Last><b:First>Nicholas</b:First></b:Person>
+          <b:Person><b:Last>Ulam</b:Last><b:First>Stanislaw</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>The Monte Carlo Method</b:Title>
+    <b:JournalName>Journal of the American Statistical Association</b:JournalName>
+    <b:Year>1949</b:Year>
+    <b:Volume>44</b:Volume>
+    <b:Issue>247</b:Issue>
+    <b:StartPage>335</b:StartPage>
+    <b:EndPage>341</b:EndPage>
+  </b:Source>
+</b:Sources>
