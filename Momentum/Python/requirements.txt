@@ -1,5 +1,4 @@
-# Consolidated requirements (full list of libraries used in the project)
-# The project owner requested a single requirements file while developing.
+# Runtime requirements (used to run the application)
 
 # Web / API
 fastapi
@@ -7,12 +6,8 @@ uvicorn
 
 # Data & Numeric
 numpy
-pandas
 scipy
 matplotlib
-
-# Machine learning
-torch
 
 # GUI
 PyQt6
@@ -25,21 +20,11 @@ pydantic
 # Utilities
 Faker
 python-dotenv
-requests
 unidecode
 
-# Geometry and track generation
-shapely
 
-
-# Dev & Test tools (included while coding)
+# Test runtime dependency
 pytest
-pytest-cov
-black
-flake8
-mypy
-ipython
 
 # Optional / extras that may be platform-specific
-# - PyTorch wheels (torch) should be installed following https://pytorch.org/
 # - PyQt6 on some Windows setups requires MSVC redistributables
