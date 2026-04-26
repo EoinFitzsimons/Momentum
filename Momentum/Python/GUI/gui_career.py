@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
 
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
+from services.career_season_service import CareerSeasonService
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
@@ -125,7 +126,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             if button.text().strip().lower() == "create new championship":
                 button.setText("Create New Career Save")
                 button.setToolTip("Reset to 1 Jan 2026 and create a new career profile")
-                return
+            elif button.text().strip().lower() == "delete championship":
+                button.setEnabled(False)
+                button.setToolTip("Career championships cannot be deleted individually.")
 
     def select_championship(self):
         """Ensure a valid career world exists and return selected career series."""
@@ -166,35 +169,12 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self.accept()
 
     def delete_championship(self):
-        """Delete selected career series from career tables only."""
-        row = self.championships_table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a career series to delete.")
-            return
-        item = self.championships_table.item(row, 0)
-        selected = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
-        if not selected:
-            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not resolve selected career series.")
-            return
-
-        confirm = QMessageBox.question(
+        """Career championships are protected from per-series deletion."""
+        QMessageBox.information(
             self,
-            "Delete Career Series",
-            f"Delete '{selected['name']}' from this career world?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+            "Deletion Disabled",
+            "Career championships cannot be deleted individually. Use 'Create New Career Save' to reset career progression.",
         )
-        if confirm != QMessageBox.StandardButton.Yes:
-            return
-
-        series_id = int(selected["id"])
-        with self.db.get_connection() as conn:
-            conn.execute("DELETE FROM career_race_results WHERE career_race_id IN (SELECT id FROM career_races WHERE career_championship_id = ?)", (series_id,))
-            conn.execute("DELETE FROM career_races WHERE career_championship_id = ?", (series_id,))
-            conn.execute("DELETE FROM career_championships WHERE id = ?", (series_id,))
-            conn.commit()
-
-        self.load_championships()
 
     def _create_or_reset_career_save(self) -> bool:
         profile_dialog = CareerProfileDialog(self)
@@ -618,6 +598,7 @@ class CareerWindow(QMainWindow):
         super().__init__(parent)
         self.championship = championship
         self.db = DatabaseManager()
+        self.career_season_service = CareerSeasonService(self.db)
         self.player_id = PLAYER_ID
 
         self.owned_team = None
@@ -1100,7 +1081,27 @@ class CareerWindow(QMainWindow):
 
     def start_next_race(self):
         if not self.next_race:
-            QMessageBox.information(self, SEASON_COMPLETE_TEXT, "No scheduled races remain.")
+            result = self.career_season_service.advance_season(
+                player_id=self.player_id,
+                completed_season=int(getattr(self.championship, "current_season", 1) or 1),
+                discipline=str(getattr(self.championship, "discipline", "") or ""),
+            )
+            if result.get("rolled_over"):
+                self._sync_selected_series_from_team()
+                self.load_data()
+
+                promoted = int(len(result.get("promoted", [])))
+                relegated = int(len(result.get("relegated", [])))
+                QMessageBox.information(
+                    self,
+                    SEASON_COMPLETE_TEXT,
+                    (
+                        "Season finalized and advanced to next year.\n"
+                        f"Promoted teams: {promoted} | Relegated teams: {relegated}"
+                    ),
+                )
+            else:
+                QMessageBox.information(self, SEASON_COMPLETE_TEXT, "No scheduled races remain.")
             return
 
         if not self.selected_driver:

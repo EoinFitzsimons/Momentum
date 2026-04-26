@@ -7,12 +7,60 @@ from typing import Callable, Optional, Any
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget,
+    QDialog,
     QHBoxLayout,
+    QVBoxLayout,
     QLabel,
     QComboBox,
+    QLineEdit,
     QPushButton,
     QMessageBox,
+    QHeaderView,
+    QTableWidget,
+    QTableWidgetItem,
 )
+
+
+class SearchResultsDialog(QDialog):
+    """Display search results in a sortable table popup."""
+
+    def __init__(self, title: str, headers: list[str], rows: list[list[str]], parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.resize(980, 560)
+        self._build_ui(headers=headers, rows=rows)
+
+    def _build_ui(self, headers: list[str], rows: list[list[str]]) -> None:
+        layout = QVBoxLayout(self)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(len(rows))
+        self.table.setSortingEnabled(False)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setAlternatingRowColors(True)
+
+        for row_idx, row_values in enumerate(rows):
+            for col_idx, cell_value in enumerate(row_values):
+                self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(cell_value)))
+
+        header = self.table.horizontalHeader()
+        if header is not None:
+            for idx in range(len(headers)):
+                if idx == 0:
+                    header.setSectionResizeMode(idx, QHeaderView.ResizeMode.Stretch)
+                else:
+                    header.setSectionResizeMode(idx, QHeaderView.ResizeMode.ResizeToContents)
+
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
+        layout.addWidget(self.table)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
 
 
 class NavigationBar(QWidget):
@@ -31,6 +79,11 @@ class NavigationBar(QWidget):
         "SPRINT_RALLYCROSS",
     ]
     TIER_VALUES = ["TOP_TIER", "TIER_1", "TIER_2", "TIER_3"]
+    SQL_DISCIPLINE_FILTER = "LOWER(REPLACE(discipline, ' ', '_')) = ?"
+    SQL_TIER_FILTER = "tier = ?"
+    SQL_NAME_FILTER = "LOWER(name) LIKE ?"
+    SQL_WHERE_PREFIX = "WHERE "
+    SQL_AND = " AND "
 
     def __init__(
         self,
@@ -72,6 +125,16 @@ class NavigationBar(QWidget):
             self.tier_combo.addItem(_player_label(value), value)
         layout.addWidget(self.tier_combo)
 
+        search_label = QLabel("Name:")
+        layout.addWidget(search_label)
+
+        self.search_input = QLineEdit()
+        self.search_input.setAccessibleName("Search Name Filter")
+        self.search_input.setPlaceholderText("Team/championship name contains...")
+        self.search_input.setClearButtonEnabled(True)
+        self.search_input.returnPressed.connect(self._search_teams)
+        layout.addWidget(self.search_input)
+
         search_teams_btn = QPushButton(self.SEARCH_TEAMS_TEXT)
         search_teams_btn.clicked.connect(self._search_teams)
         search_teams_btn.setToolTip("Browse teams by discipline and tier")
@@ -99,22 +162,22 @@ class NavigationBar(QWidget):
         except Exception:
             return None
 
-    def _selected_filters(self) -> tuple[Optional[str], Optional[str]]:
+    def _selected_filters(self) -> tuple[Optional[str], Optional[str], str]:
         discipline = self.discipline_combo.currentData()
         tier = self.tier_combo.currentData()
-        return discipline, tier
+        name_query = str(self.search_input.text() or "").strip()
+        return discipline, tier, name_query
 
-    def _show_results(self, title: str, rows: list[str]) -> None:
+    def _show_results(self, title: str, headers: list[str], rows: list[list[str]]) -> None:
         if not rows:
             QMessageBox.information(self, title, "No results found.")
             return
-        msg = "\n".join(rows[:20])
-        if len(rows) > 20:
-            msg += f"\n... and {len(rows) - 20} more"
-        QMessageBox.information(self, title, msg)
+
+        dialog = SearchResultsDialog(title=title, headers=headers, rows=rows, parent=self)
+        dialog.exec()
 
     def _search_teams(self) -> None:
-        discipline, tier = self._selected_filters()
+        discipline, tier, name_query = self._selected_filters()
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
@@ -125,15 +188,18 @@ class NavigationBar(QWidget):
             where_parts = []
             params = []
             if discipline:
-                where_parts.append("discipline = ?")
-                params.append(discipline)
+                where_parts.append(self.SQL_DISCIPLINE_FILTER)
+                params.append(str(discipline).lower())
             if tier:
-                where_parts.append("tier = ?")
+                where_parts.append(self.SQL_TIER_FILTER)
                 params.append(tier)
+            if name_query:
+                where_parts.append(self.SQL_NAME_FILTER)
+                params.append(f"%{name_query.lower()}%")
 
             where_clause = ""
             if where_parts:
-                where_clause = "WHERE " + " AND ".join(where_parts)
+                where_clause = self.SQL_WHERE_PREFIX + self.SQL_AND.join(where_parts)
 
             with db.get_connection() as conn:
                 rows = conn.execute(
@@ -146,16 +212,20 @@ class NavigationBar(QWidget):
                     """,
                     tuple(params),
                 ).fetchall()
-            formatted = [
-                f"{name} | {_safe(discipline)} | {_safe(tier)} | HQ: {_safe(hq)}"
+            table_rows = [
+                [_safe(name), _safe(discipline), _safe(tier), _safe(hq)]
                 for name, discipline, tier, hq in rows
             ]
-            self._show_results("Team Search Results", formatted)
+            self._show_results(
+                title="Team Search Results",
+                headers=["Team", "Discipline", "Tier", "Headquarters"],
+                rows=table_rows,
+            )
         except Exception as exc:
             QMessageBox.critical(self, self.SEARCH_TEAMS_TEXT, f"Search failed: {exc}")
 
     def _search_championships(self) -> None:
-        discipline, _ = self._selected_filters()
+        discipline, tier, name_query = self._selected_filters()
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
@@ -163,24 +233,75 @@ class NavigationBar(QWidget):
             return
 
         try:
-            where_clause = "WHERE discipline = ?" if discipline else ""
-            params = (discipline,) if discipline else ()
+            std_where_parts = []
+            career_where_parts = []
+            params = []
+
+            if discipline:
+                std_where_parts.append(self.SQL_DISCIPLINE_FILTER)
+                career_where_parts.append(self.SQL_DISCIPLINE_FILTER)
+                params.append(str(discipline).lower())
+            if tier:
+                std_where_parts.append(self.SQL_TIER_FILTER)
+                career_where_parts.append(self.SQL_TIER_FILTER)
+                params.append(tier)
+            if name_query:
+                std_where_parts.append(self.SQL_NAME_FILTER)
+                career_where_parts.append(self.SQL_NAME_FILTER)
+                params.append(f"%{name_query.lower()}%")
+
+            std_where_clause = (self.SQL_WHERE_PREFIX + self.SQL_AND.join(std_where_parts)) if std_where_parts else ""
+            career_where_clause = (self.SQL_WHERE_PREFIX + self.SQL_AND.join(career_where_parts)) if career_where_parts else ""
+
             with db.get_connection() as conn:
-                rows = conn.execute(
-                    f"""
-                    SELECT name, discipline, current_season, archived
-                    FROM championships
-                    {where_clause}
-                    ORDER BY archived ASC, current_season DESC, name ASC
-                    LIMIT 100
-                    """,
-                    params,
-                ).fetchall()
-            formatted = [
-                f"{name} | {_safe(discipline)} | Season {int(season or 0)} | {'Archived' if int(archived or 0) else 'Active'}"
-                for name, discipline, season, archived in rows
+                rows = []
+
+                try:
+                    std_rows = conn.execute(
+                        f"""
+                        SELECT name, discipline, tier, current_season, archived, 'Standard' AS source
+                        FROM championships
+                        {std_where_clause}
+                        ORDER BY archived ASC, current_season DESC, name ASC
+                        LIMIT 100
+                        """,
+                        tuple(params),
+                    ).fetchall()
+                    rows.extend(std_rows)
+                except Exception:
+                    pass
+
+                try:
+                    career_rows = conn.execute(
+                        f"""
+                        SELECT name, discipline, tier, current_season, 0 AS archived, 'Career' AS source
+                        FROM career_championships
+                        {career_where_clause}
+                        ORDER BY current_season DESC, name ASC
+                        LIMIT 100
+                        """,
+                        tuple(params),
+                    ).fetchall()
+                    rows.extend(career_rows)
+                except Exception:
+                    pass
+
+            table_rows = [
+                [
+                    _safe(name),
+                    _safe(discipline),
+                    _safe(tier),
+                    f"{int(season or 0)}",
+                    "Archived" if int(archived or 0) else "Active",
+                    _safe(source),
+                ]
+                for name, discipline, tier, season, archived, source in rows
             ]
-            self._show_results("Championship Search Results", formatted)
+            self._show_results(
+                title="Championship Search Results",
+                headers=["Championship", "Discipline", "Tier", "Season", "Status", "Source"],
+                rows=table_rows,
+            )
         except Exception as exc:
             QMessageBox.critical(self, self.SEARCH_CHAMPIONSHIPS_TEXT, f"Search failed: {exc}")
 
