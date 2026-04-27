@@ -368,4 +368,47 @@
     <b:StartPage>335</b:StartPage>
     <b:EndPage>341</b:EndPage>
   </b:Source>
+
+  <b:Source>
+    <b:Tag>StatologyWeibull2025</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Chugani</b:Last><b:First>Vinod</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>The Concise Guide to Weibull Distribution</b:Title>
+    <b:Year>2025</b:Year>
+    <b:URL>https://www.statology.org/the-concise-guide-to-weibull-distribution/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed>
+    <b:MonthAccessed>4</b:MonthAccessed>
+    <b:DayAccessed>27</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>OLearyGolubHansen1999</b:Tag>
+    <b:SourceType>JournalArticle</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:Last>Golub</b:Last><b:First>Gene H.</b:First></b:Person>
+          <b:Person><b:Last>Hansen</b:Last><b:First>Per Christian</b:First></b:Person>
+          <b:Person><b:Last>O'Leary</b:Last><b:First>Dianne P.</b:First></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>Tikhonov Regularization and Total Least Squares</b:Title>
+    <b:JournalName>SIAM Journal on Matrix Analysis and Applications</b:JournalName>
+    <b:Year>1999</b:Year>
+    <b:Volume>21</b:Volume>
+    <b:Issue>1</b:Issue>
+    <b:StartPage>185</b:StartPage>
+    <b:EndPage>194</b:EndPage>
+    <b:URL>https://www.cs.umd.edu/users/oleary/reprints/j51.pdf</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed>
+    <b:MonthAccessed>4</b:MonthAccessed>
+    <b:DayAccessed>27</b:DayAccessed>
+  </b:Source>
 </b:Sources>
