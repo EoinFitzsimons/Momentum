@@ -158,7 +158,7 @@ Speed construction (conceptual):
 `speed = reference_speed * push_multiplier * driver_modifier * team_modifier * corner_modifier`
 
 Then multiplied by:
-- tire penalty
+- tyre penalty
 - fuel bonus
 - fatigue penalty
 - slipstream bonus (if active)
@@ -174,11 +174,11 @@ Collision-avoidance speed shaping now uses a smooth desired-gap ratio instead of
 
 `speed_next = speed * clip((actual_gap / desired_gap)^1.35, 0.40, 1.0)`
 
-Tire and fuel update per frame:
+Tyre and fuel update per frame:
 
-`degradation = TIRE_DEGRADATION_RATE * push_intensity * surface_multiplier * compound_multiplier`
+`degradation = TYRE_DEGRADATION_RATE * push_intensity * surface_multiplier * compound_multiplier`
 
-`tire_condition = max(0.0, tire_condition - degradation)`
+`tyre_condition = max(0.0, tyre_condition - degradation)`
 
 `fuel_load = fuel_load - FUEL_BURN_RATE`
 
@@ -198,7 +198,7 @@ Where compound profile values are:
 
 Progressive pace falloff from wear:
 
-`wear = 1.0 - clamp(tire_condition, 0.0, 1.0)`
+`wear = 1.0 - clamp(tyre_condition, 0.0, 1.0)`
 
 `pace_multiplier = clamp(pace_base - pace_falloff_max * wear ^ pace_falloff_curve - extra_wear_penalty, 0.72, 1.03)`
 
@@ -236,9 +236,9 @@ Source function:
 
 ### Equation
 
-`mistake_prob = base_probability * push_risk * skill_factor * fatigue_multiplier * tire_multiplier`
+`mistake_prob = base_probability * push_risk * skill_factor * fatigue_multiplier * tyre_multiplier`
 
-Where factors are built from consistency, vehicle control, fatigue, tires, and push level.
+Where factors are built from consistency, vehicle control, fatigue, tyres, and push level.
 
 Consistency and vehicle control are now passed through the same nonlinear driver mapping before contributing to `skill_factor`.
 
@@ -310,7 +310,7 @@ Source functions:
 
 Pit decisions combine thresholds on:
 - laps remaining
-- tire condition
+- tyre condition
 - fuel load
 - mandatory-stop window
 - player `come_in` override
@@ -320,13 +320,13 @@ Boolean form (player override + threshold logic):
 `pit_now = player_come_in or hard_tyre_trigger or fuel_trigger or mandatory_window_trigger or ai_projected_loss_trigger`
 
 AI tyre compound choice is also selected here using stint length and wear state:
-
+```
 `soft` for short stints or late-race fuel-offensive runs
 
 `medium` for balanced stints
 
 `hard` for longer stints when wear is already low and the remaining race distance is high
-
+```
 Joker penalty:
 
 `penalty = RALLYCROSS_JOKER_BASE_PENALTY_S * skill_adjust + jitter`
@@ -566,7 +566,7 @@ This creates strong early gains and progressively smaller gains near cap.
 - Team pace multiplier via operations, car_performance, power, handling, aero, strategy
 - Pit service time reduction via pitstop, operations, strategy
 - Overtake/contact and rear-end DNF risk reduction via reliability, consistency, racecraft
-- Solo tire-spin and mechanical risk reduction via tyre_management, setup, reliability
+- Solo tyre-spin and mechanical risk reduction via tyre_management, setup, reliability
 
 ## 13) Curve Calibration Reference
 

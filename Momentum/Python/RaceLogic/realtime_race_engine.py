@@ -10,7 +10,7 @@ Key Features:
 - Spatial awareness: drivers know positions of cars around them
 - Active AI decision-making: push/conserve, attack/defend
 - Real-time overtaking with skill-based outcomes
-- Tire degradation and fuel effects over time
+- Tyre degradation and fuel effects over time
 - Slipstream/drafting physics
 - Live position updates for GUI visualisation
 
@@ -51,7 +51,7 @@ class RacingMode(Enum):
     """Driver's current racing mode"""
     ATTACK = "attack"          # Pushing hard to overtake
     DEFEND = "defend"          # Protecting position
-    MANAGE = "manage"          # Conserving tires/fuel, managing gap
+    MANAGE = "manage"          # Conserving tyres/fuel, managing gap
     CRUISE = "cruise"          # No immediate pressure
 
 
@@ -88,9 +88,9 @@ class DriverState:
     racing_line: RacingLine = RacingLine.IDEAL  # Current racing line choice
 
     # Component degradation
-    tire_condition: float = 1.0     # 1.0=new tires, 0.0=completely worn
+    tyre_condition: float = 1.0     # 1.0=new tyres, 0.0=completely worn
     fuel_load: float = 1.0          # 1.0=full tank, 0.0=empty
-    tire_compound: str = "medium"  # soft, medium, hard, rain
+    tyre_compound: str = "medium"  # soft, medium, hard, rain
     in_pit_lane: bool = False
     pit_time_remaining_s: float = 0.0
     pit_total_time_s: float = 0.0
@@ -126,6 +126,8 @@ class DriverState:
     frames_since_mistake: int = 999  # Frames since last mistake (cooldown)
     # Stall detection: consecutive frames with no position change
     stall_frames: int = 0
+
+    # (No compatibility aliases remain; attributes use 'tyre_' spelling)
 
 
 @dataclass
@@ -204,7 +206,7 @@ class RealtimeRaceEngine:
         self.DIRTY_AIR_PENALTY = 0.15
         # Metres - dirty air affects up to this distance (was 100m)
         self.DIRTY_AIR_DISTANCE = 150.0
-        self.TIRE_DEGRADATION_RATE = 0.00001  # Per timestep degradation
+        self.TYRE_DEGRADATION_RATE = 0.00001  # Per timestep degradation
         self.FUEL_BURN_RATE = 0.00002    # Per timestep fuel consumption
 
         # AI decision parameters - MUCH MORE AGGRESSIVE
@@ -227,9 +229,9 @@ class RealtimeRaceEngine:
         self.PIT_LANE_SPEED_MPS = 22.0
         self.PIT_SERVICE_BASE_SECONDS = 4.0
         self.PIT_LANE_TRANSIT_SECONDS = 11.0
-        self.PIT_TIRE_RESET = 0.94
+        self.PIT_TYRE_RESET = 0.94
         self.PIT_FUEL_GAIN = 0.40
-        self.PIT_TIRE_THRESHOLD = 0.42
+        self.PIT_TYRE_THRESHOLD = 0.42
         self.PIT_MIN_LAPS_REMAINING = 3
         self.TYRE_BASE_WEAR_RATE = 0.000018
         self.TYRE_WEAR_PROFILES = {
@@ -278,10 +280,10 @@ class RealtimeRaceEngine:
         Profile key guide:
         - *_slope: logistic steepness for overtake/incident probability curves.
           Higher slope means a sharper jump between unlikely and likely.
-        - tire_eta / mech_eta: Weibull scale ("life") parameters.
-          Higher values delay typical failures.
-        - tire_beta / mech_beta: Weibull shape parameters.
-          Values > 1 model wear-out behaviour where risk increases over laps.
+                - tyre_eta / mech_eta: Weibull scale ("life") parameters.
+                    Higher values delay typical failures.
+                - tyre_beta / mech_beta: Weibull shape parameters.
+                    Values > 1 model wear-out behaviour where risk increases over laps.
         """
         default = {
             'straight_slope': 3.8,
@@ -289,8 +291,8 @@ class RealtimeRaceEngine:
             'outside_slope': 3.2,
             'switch_slope': 3.0,
             'risk_slope': 3.4,
-            'tire_eta': 28.0,
-            'tire_beta': 2.6,
+            'tyre_eta': 28.0,
+            'tyre_beta': 2.6,
             'mech_eta': 95.0,
             'mech_beta': 2.1,
         }
@@ -552,8 +554,8 @@ class RealtimeRaceEngine:
         race_state = getattr(self, '_current_race_state', None)
         total_laps = int(getattr(race_state, 'total_laps', 12) or 12)
         laps_remaining = max(1, total_laps - int(state.lap))
-        current_compound = self._normalise_tyre_compound(getattr(state, 'tire_compound', 'medium'))
-        current_wear = float(getattr(state, 'tire_condition', 1.0))
+        current_compound = self._normalise_tyre_compound(getattr(state, 'tyre_compound', 'medium'))
+        current_wear = float(getattr(state, 'tyre_condition', 1.0))
 
         if total_laps <= 10:
             return 'soft' if laps_remaining <= 4 else 'medium'
@@ -582,7 +584,7 @@ class RealtimeRaceEngine:
 
     def _tyre_wear_per_step(self, state: DriverState) -> float:
         """Calculate tyre wear applied during one timestep."""
-        profile = self._tyre_profile(state.tire_compound)
+        profile = self._tyre_profile(state.tyre_compound)
         track_obj = getattr(self.track_map, 'track', None) if self.track_map is not None else None
         surf = getattr(track_obj, 'surface', None) or getattr(track_obj, 'surface_type', None)
         surface_multipliers = {
@@ -605,8 +607,8 @@ class RealtimeRaceEngine:
 
     def _tyre_pace_multiplier(self, state: DriverState) -> float:
         """Return a speed multiplier that decays smoothly as tyres wear."""
-        profile = self._tyre_profile(state.tire_compound)
-        wear = 1.0 - float(np.clip(state.tire_condition, 0.0, 1.0))
+        profile = self._tyre_profile(state.tyre_compound)
+        wear = 1.0 - float(np.clip(state.tyre_condition, 0.0, 1.0))
         pace_base = profile['pace_base']
         falloff = profile['pace_falloff_max'] * (wear ** profile['pace_falloff_curve'])
         if wear > 0.70:
@@ -632,15 +634,15 @@ class RealtimeRaceEngine:
         est_lap_seconds = float(np.clip(est_lap_seconds, 45.0, 220.0))
         steps_per_lap = max(1.0, est_lap_seconds / max(1e-6, timestep))
         projected_wear = wear_rate * steps_per_lap * laps_ahead
-        projected_condition = max(0.0, float(state.tire_condition) - projected_wear)
+        projected_condition = max(0.0, float(state.tyre_condition) - projected_wear)
         current_mult = self._tyre_pace_multiplier(state)
         future_state = DriverState(
             driver_id=state.driver_id,
             driver_name=state.driver_name,
             driver=state.driver,
             team=state.team,
-            tire_condition=projected_condition,
-            tire_compound=state.tire_compound,
+            tyre_condition=projected_condition,
+            tyre_compound=state.tyre_compound,
         )
         future_mult = self._tyre_pace_multiplier(future_state)
         baseline_lap_seconds = 92.0
@@ -804,7 +806,7 @@ class RealtimeRaceEngine:
         race_state: RaceState,
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> bool:
-        """Decide pit stops once per lap using tire/fuel and mandatory-stop heuristics."""
+        """Decide pit stops once per lap using tyre/fuel and mandatory-stop heuristics."""
         if self._pit_eval_already_processed_this_lap(state):
             return False
 
@@ -840,7 +842,7 @@ class RealtimeRaceEngine:
 
     def _pit_hard_trigger_active(self, state: DriverState) -> bool:
         """Immediate pit triggers that ignore strategic nuance."""
-        return state.tire_condition <= self.PIT_TIRE_THRESHOLD or state.fuel_load <= 0.14
+        return state.tyre_condition <= self.PIT_TYRE_THRESHOLD or state.fuel_load <= 0.14
 
     def _is_player_controlled_for_pit_strategy(self, state: DriverState) -> bool:
         """Return True for the player-controlled driver in pit strategy logic."""
@@ -852,7 +854,7 @@ class RealtimeRaceEngine:
             return False
 
         projected_loss = self._projected_tyre_loss_seconds(state, self.TYRE_AI_STINT_MARGIN_LAPS)
-        if state.tire_condition <= self.TYRE_AI_PIT_WEAR_THRESHOLD:
+        if state.tyre_condition <= self.TYRE_AI_PIT_WEAR_THRESHOLD:
             return True
         return (
             projected_loss >= self.TYRE_AI_PIT_PACE_LOSS_THRESHOLD
@@ -871,12 +873,12 @@ class RealtimeRaceEngine:
 
         mandatory_window_lap = int(race_state.total_laps * 0.55)
         self._emit_pit_window_open_if_needed(state, mandatory_window_lap, event_callback)
-        return state.lap >= mandatory_window_lap and state.tire_condition < 0.72
+        return state.lap >= mandatory_window_lap and state.tyre_condition < 0.72
 
     def _should_attempt_traffic_undercut(self, state: DriverState) -> bool:
         """Return True for occasional undercut calls when trapped in traffic."""
         in_traffic_window = 0.8 < state.gap_ahead < 2.5
-        return in_traffic_window and state.tire_condition < 0.65 and self.rng.random() < 0.20
+        return in_traffic_window and state.tyre_condition < 0.65 and self.rng.random() < 0.20
 
     def _emit_pit_window_open_if_needed(
         self,
@@ -942,9 +944,9 @@ class RealtimeRaceEngine:
         state.pit_time_remaining_s = 0.0
         state.pit_total_time_s = 0.0
         state.pit_stops_completed += 1
-        state.tire_condition = 1.0
+        state.tyre_condition = 1.0
         state.fuel_load = min(1.0, state.fuel_load + self.PIT_FUEL_GAIN)
-        state.tire_compound = state.requested_tyre_compound or 'medium'
+        state.tyre_compound = state.requested_tyre_compound or 'medium'
         if event_callback:
             event_callback({
                 "type": "pit_exit",
@@ -952,7 +954,7 @@ class RealtimeRaceEngine:
                 "driver_name": state.driver_name,
                 "lap": state.lap,
                 "pit_stops_completed": state.pit_stops_completed,
-                "tyre_compound": state.tire_compound,
+                "tyre_compound": state.tyre_compound,
             })
 
     def _advance_driver_position(
@@ -975,9 +977,9 @@ class RealtimeRaceEngine:
         state.total_time += timestep
 
     def _apply_driver_degradation(self, state: DriverState) -> None:
-        """Apply tire wear and fuel burn from surface and tire compound."""
+        """Apply tyre wear and fuel burn from surface and tyre compound."""
         degradation = self._tyre_wear_per_step(state)
-        state.tire_condition = max(0.0, state.tire_condition - degradation)
+        state.tyre_condition = max(0.0, state.tyre_condition - degradation)
         state.fuel_load -= self.FUEL_BURN_RATE
 
     def _update_driver_stall_state(
@@ -1546,10 +1548,10 @@ class RealtimeRaceEngine:
         state.racing_line = RacingLine.IDEAL
 
     def _apply_post_mode_push_adjustments(self, state: DriverState, consistency: float) -> None:
-        """Apply tire/fatigue randomization and clamp final push intensity."""
-        if state.tire_condition < 0.7:
-            tire_factor = 0.5 + (state.tire_condition * 0.5)
-            state.push_intensity *= tire_factor
+        """Apply tyre/fatigue randomization and clamp final push intensity."""
+        if state.tyre_condition < 0.7:
+            tyre_factor = 0.5 + (state.tyre_condition * 0.5)
+            state.push_intensity *= tyre_factor
         variance = (1.0 - consistency) * 0.15
         state.push_intensity += self.rng.normal(0, variance)
         state.push_intensity = np.clip(state.push_intensity, 0.3, 1.0)
@@ -1976,7 +1978,7 @@ class RealtimeRaceEngine:
         - High push_intensity (overdriving)
         - Low consistency skill
         - Accumulated fatigue
-        - Worn tires
+        - Worn tyres
 
         Returns True if mistake occurs (causing time loss)
         """
@@ -2009,13 +2011,13 @@ class RealtimeRaceEngine:
         if self._is_player_full_attack(state):
             fatigue_multiplier = 1.0 + (state.push_fatigue * 1.8)
 
-        # Tire condition affects grip
-        # Up to 3x on worn tires
-        tire_multiplier = 1.0 + ((1.0 - state.tire_condition) * 2.0)
+        # Tyre condition affects grip
+        # Up to 3x on worn tyres
+        tyre_multiplier = 1.0 + ((1.0 - state.tyre_condition) * 2.0)
 
         # Calculate final probability
         mistake_prob = base_probability * push_risk * \
-            skill_factor * fatigue_multiplier * tire_multiplier
+            skill_factor * fatigue_multiplier * tyre_multiplier
         if self._is_player_full_attack(state):
             mistake_prob *= 0.72
 
@@ -2109,7 +2111,7 @@ class RealtimeRaceEngine:
         my_racecraft = self._racecraft_score(state)
         other_racecraft = self._racecraft_score(other_state)
         combined_skill = (my_racecraft + other_racecraft) / 2.0
-        control_factor = min(state.tire_condition, other_state.tire_condition)
+        control_factor = min(state.tyre_condition, other_state.tyre_condition)
         safety_bonus = (
             self._get_team_staff_effect(state.team, 'reliability')
             + self._get_team_staff_effect(state.team, 'consistency')
@@ -2201,8 +2203,8 @@ class RealtimeRaceEngine:
             f"  !!! NEAR MISS/CONTACT (no DNF): {state.driver_name} & {other_state.driver_name} "
             f"- closing {relative_velocity:.1f}m/s"
         )
-        state.tire_condition = max(0.2, state.tire_condition - 0.12)
-        other_state.tire_condition = max(0.2, other_state.tire_condition - 0.08)
+        state.tyre_condition = max(0.2, state.tyre_condition - 0.12)
+        other_state.tyre_condition = max(0.2, other_state.tyre_condition - 0.08)
         race_state.collision_log.append({
             "lap": state.lap,
             "time": race_state.current_time,
@@ -2217,7 +2219,7 @@ class RealtimeRaceEngine:
         return False
 
     def _check_solo_incident(self, state: DriverState, race_state: RaceState) -> bool:
-        """Handle non-contact DNFs (tire failure spin and mechanical failure)."""
+        """Handle non-contact DNFs (tyre failure spin and mechanical failure)."""
         tyre_management_effect = self._get_team_staff_effect(state.team, 'tyre_management')
         setup_effect = self._get_team_staff_effect(state.team, 'setup')
         reliability_effect = self._get_team_staff_effect(state.team, 'reliability')
@@ -2227,27 +2229,27 @@ class RealtimeRaceEngine:
         race_progress_laps = max(0.0, float(state.lap) + lap_fraction)
         delta_laps = max(1e-6, float(state.velocity_mps) / track_length / 30.0)
 
-        tire_eta = float(self._active_discipline_calibration.get('tire_eta', 28.0))
-        tire_beta = float(self._active_discipline_calibration.get('tire_beta', 2.6))
+        tyre_eta = float(self._active_discipline_calibration.get('tyre_eta', 28.0))
+        tyre_beta = float(self._active_discipline_calibration.get('tyre_beta', 2.6))
         mech_eta = float(self._active_discipline_calibration.get('mech_eta', 95.0))
         mech_beta = float(self._active_discipline_calibration.get('mech_beta', 2.1))
 
-        if state.tire_condition < 0.1:
+        if state.tyre_condition < 0.1:
             consistency = self._driver_attr_factor(state.driver.consistency)
-            tire_spin_risk_reduction = min(0.45, (tyre_management_effect * 0.6) + (setup_effect * 0.4))
-            spin_threshold = consistency + tire_spin_risk_reduction
-            tire_hazard = self._weibull_incremental_failure_prob(
+            tyre_spin_risk_reduction = min(0.45, (tyre_management_effect * 0.6) + (setup_effect * 0.4))
+            spin_threshold = consistency + tyre_spin_risk_reduction
+            tyre_hazard = self._weibull_incremental_failure_prob(
                 t_laps=race_progress_laps,
                 delta_laps=delta_laps,
-                eta=tire_eta,
-                beta=tire_beta,
+                eta=tyre_eta,
+                beta=tyre_beta,
             )
-            tire_hazard *= 1.0 + ((1.0 - state.tire_condition) * 2.8)
-            tire_hazard *= max(0.35, 1.0 - tire_spin_risk_reduction)
-            tire_hazard *= max(0.40, 1.0 - (consistency * 0.55))
-            if self.rng.random() < np.clip(tire_hazard, 0.0, 0.95) and self.rng.random() > min(0.98, spin_threshold):
-                state.dnf_reason = "tire_failure_spin"
-                print(f"  X {state.driver_name} spins off - tire condition critical!")
+            tyre_hazard *= 1.0 + ((1.0 - state.tyre_condition) * 2.8)
+            tyre_hazard *= max(0.35, 1.0 - tyre_spin_risk_reduction)
+            tyre_hazard *= max(0.40, 1.0 - (consistency * 0.55))
+            if self.rng.random() < np.clip(tyre_hazard, 0.0, 0.95) and self.rng.random() > min(0.98, spin_threshold):
+                state.dnf_reason = "tyre_failure_spin"
+                print(f"  X {state.driver_name} spins off - tyre condition critical!")
                 return True
 
         push_stress = 0.85 + (float(state.push_intensity) * 0.35) + (float(state.push_fatigue) * 0.25)
@@ -2551,8 +2553,8 @@ class RealtimeRaceEngine:
                 "racing_mode": state.racing_mode.value,
                 "push_intensity": state.push_intensity,
                 "push_fatigue": state.push_fatigue,
-                "tire_condition": state.tire_condition,
-                "tire_compound": state.tire_compound,
+                "tyre_condition": state.tyre_condition,
+                "tyre_compound": state.tyre_compound,
                 "fuel_load": state.fuel_load,
                 "in_pit_lane": state.in_pit_lane,
                 "pit_time_remaining_s": state.pit_time_remaining_s,

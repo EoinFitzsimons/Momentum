@@ -6,7 +6,7 @@ MVP implementation for midpoint demo, focusing on single seater discipline only.
 
 Key Features:
 - Comprehensive driver attribute weighting (20+ relevant attributes)
-- Lap-by-lap simulation with tire degradation
+- Lap-by-lap simulation with tyre degradation
 - Fuel load impact on lap times
 - Weather adaptation for wet conditions
 - Traffic impact on lap times
@@ -15,7 +15,7 @@ Key Features:
 
 Performance Model:
 - Base performance: 50% driver attributes (weighted), 30% team, 10% weather, 10% track
-- Lap time modifiers: tire wear, fuel load, traffic, weather conditions, incidents
+-- Lap time modifiers: tyre wear, fuel load, traffic, weather conditions, incidents
 - Consistency: Lap-to-lap variance based on driver consistency attribute
 
 Authors: Eoin Fitzsimons
@@ -37,11 +37,11 @@ class SingleSeaterEngine(BaseDisciplineEngine):
     Single Seater Racing Engine (F1, F2, F3 style)
 
     Simulates Formula-style racing with sophisticated attribute-based performance
-    modeling, tire strategy, fuel management, and weather adaptation.
+    modeling, tyre strategy, fuel management, and weather adaptation.
 
     Attribute Utilization:
     - Core skills: raw_speed (20%), cornering_skill (15%), consistency (15%)
-    - Technical: tire_management (8%), setup_knowledge (10%), fuel_management (6%)
+    - Technical: tyre_management (8%), setup_knowledge (10%), fuel_management (6%)
     - Mental: concentration (8%), pressure_handling (6%), g_force_tolerance (8%)
     - Discipline: single_seater_aptitude (12%)
     - Race craft: racecraft (12%), overtaking (8%), defensive_driving (6%)
@@ -78,7 +78,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
             # Technical knowledge (24% combined)
             "setup_knowledge": 0.10,        # Car setup crucial in F1
-            "tire_management": 0.08,        # Strategic tire use
+            "tyre_management": 0.08,        # Strategic tyre use
             "fuel_management": 0.06,        # Fuel strategy importance
 
             # Single seater specific (12%)
@@ -99,7 +99,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             # Personal traits (10% combined)
             "risk_appetite": 0.04,          # Calculated risk-taking
             "aggression": 0.03,             # Controlled aggression
-            "smoothness": 0.03,             # Smooth driving for tire preservation
+            "smoothness": 0.03,             # Smooth driving for tyre preservation
         }
 
     def _apply_base_tuning(self, engine: RealtimeRaceEngine) -> None:
@@ -113,7 +113,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         engine.ATTACK_THRESHOLD_GAP = 2.5
         engine.DEFEND_THRESHOLD_GAP = 1.5
         engine.NEARBY_DISTANCE_M = 140.0
-        engine.TIRE_DEGRADATION_RATE = 0.000012
+        engine.TYRE_DEGRADATION_RATE = 0.000012
         engine.FUEL_BURN_RATE = 0.000025
         engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.5
 
@@ -130,7 +130,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             engine.DEFEND_THRESHOLD_GAP = 1.0
             engine.NEARBY_DISTANCE_M = 160.0
             engine.OVERTAKE_INCIDENT_MULTIPLIER = 3.2
-            engine.TIRE_DEGRADATION_RATE = 0.00001
+            engine.TYRE_DEGRADATION_RATE = 0.00001
         elif preset == 'tyre_sensitive':
             engine.DIRTY_AIR_PENALTY = 0.26
             engine.DIRTY_AIR_DISTANCE = 180.0
@@ -139,7 +139,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             engine.ATTACK_THRESHOLD_GAP = 3.0
             engine.DEFEND_THRESHOLD_GAP = 2.0
             engine.NEARBY_DISTANCE_M = 120.0
-            engine.TIRE_DEGRADATION_RATE = 0.000018
+            engine.TYRE_DEGRADATION_RATE = 0.000018
             engine.FUEL_BURN_RATE = 0.000028
             engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.0
 
@@ -192,7 +192,12 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         Returns the list of result dictionaries produced by the realtime engine.
         """
         # Instantiate realtime engine through the shared factory and tune it for single-seater behaviour
-        engine = create_realtime_engine(seed=getattr(self, 'seed', None))
+        engine = None
+        engine_cls = globals().get('RealtimeRaceEngine')
+        if engine_cls is not None:
+            engine = engine_cls(seed=getattr(self, 'seed', None))
+        else:
+            engine = create_realtime_engine(seed=getattr(self, 'seed', None))
         tc = self._extract_track_conditions(context)
         preset_choice = self._extract_preset_choice(tc)
         self._apply_preset_tuning(engine, preset_choice)
@@ -235,7 +240,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         Lap Time Components:
         1. Base lap time from track (e.g., 90 seconds)
         2. Performance modifier from base_performance calculation (±20%)
-        3. Tire degradation (increases lap time as race progresses)
+        3. Tyre degradation (increases lap time as race progresses)
         4. Fuel load (decreases lap time as fuel burns off)
         5. Traffic impact (slower in traffic, faster in clean air)
         6. Consistency variance (lap-to-lap variation)
@@ -261,8 +266,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         # Performance of 1.0 = -20%, 0.5 = 0%, 0.0 = +20%
         performance_modifier = (1.0 - performance) * 0.4 - 0.2
 
-        # Tire degradation (increases lap time over race)
-        tire_deg_factor = self._calculate_tire_degradation(
+        # Tyre degradation (increases lap time over race)
+        tyre_deg_factor = self._calculate_tyre_degradation(
             driver, lap_number, context)
 
         # Fuel load effect (lap times improve as fuel burns off)
@@ -280,7 +285,7 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         weather_factor = self._calculate_weather_lap_impact(driver, context)
 
         # Combine all factors
-        total_modifier = (performance_modifier + tire_deg_factor + fuel_factor +
+        total_modifier = (performance_modifier + tyre_deg_factor + fuel_factor +
                           traffic_factor + consistency_variance + weather_factor)
 
         # Calculate final lap time
@@ -291,32 +296,32 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
         return lap_time
 
-    def _calculate_tire_degradation(self, driver: Driver, lap_number: int,
+    def _calculate_tyre_degradation(self, driver: Driver, lap_number: int,
                                     context: RaceContext) -> float:
         """
-        Calculate tire degradation impact on lap time
+        Calculate tyre degradation impact on lap time
 
-        Tire wear increases linearly over race, modified by driver tire management
-        skill and weather conditions (rain reduces tire wear).
+        Tyre wear increases linearly over race, modified by driver tyre management
+        skill and weather conditions (rain reduces tyre wear).
 
         Args:
-            driver: Driver with tire_management attribute
+            driver: Driver with tyre_management attribute
             lap_number: Current lap
             context: Race context
 
         Returns:
-            Tire degradation modifier (0 to +0.10 = 0% to +10% slower)
+            Tyre degradation modifier (0 to +0.10 = 0% to +10% slower)
         """
-        # Base tire degradation (linear over race)
+        # Base tyre degradation (linear over race)
         race_progress = lap_number / context.total_laps
         base_degradation = race_progress * 0.10  # Up to +10% slower by end
 
-        # Driver tire management reduces degradation
-        tire_mgmt = getattr(driver, 'tire_management', 50.0) / 100.0
-        degradation_reduction = tire_mgmt * 0.5  # Up to 50% reduction
+        # Driver tyre management reduces degradation
+        tyre_mgmt = getattr(driver, 'tyre_management', 50.0) / 100.0
+        degradation_reduction = tyre_mgmt * 0.5  # Up to 50% reduction
 
-        # Weather impact (rain reduces tire wear)
-        precipitation = context.weather_conditions["precipitation"]
+        # Weather impact (rain reduces tyre wear)
+        precipitation = context.weather_conditions.get("precipitation", 0.0)
         if precipitation > 0.5:  # Wet conditions
             weather_reduction = 0.5  # 50% less degradation in rain
         else:

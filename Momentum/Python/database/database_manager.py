@@ -388,7 +388,9 @@ class DatabaseManager(RaceResultPersistence):
         setattr(driver, 'reaction_time', _safe_float(getattr(driver, 'reactions', 50.0), 50.0))
         setattr(driver, 'mental_fortitude', _safe_float(getattr(driver, 'pressure', 50.0), 50.0))
         setattr(driver, 'wet_weather_skill', _safe_float(getattr(driver, 'adaptability', 50.0), 50.0))
-        setattr(driver, 'tire_management', _safe_float(getattr(driver, 'tyre_management', 50.0), 50.0))
+        # Normalize to canonical 'tyre_management' attribute
+        _tyre_val = _safe_float(getattr(driver, 'tyre_management', 50.0), 50.0)
+        setattr(driver, 'tyre_management', _tyre_val)
         setattr(driver, 'age', int(getattr(driver, 'computed_age', 0) or 0))
         setattr(driver, 'decision_making', _safe_float(getattr(driver, 'racecraft', 50.0), 50.0))
         setattr(driver, 'physical_fitness', _safe_float(getattr(driver, 'fitness', 50.0), 50.0))
@@ -427,7 +429,7 @@ class DatabaseManager(RaceResultPersistence):
                     physical_fitness, reaction_time, concentration, pressure_handling, pain_tolerance,
                     g_force_tolerance, coordination, multitasking, mental_resilience, adrenaline_management,
                     -- Technical Knowledge
-                    setup_knowledge, mechanical_sympathy, tire_management, fuel_management,
+                    setup_knowledge, mechanical_sympathy, tyre_management, fuel_management,
                     aerodynamics_understanding, suspension_feel, engine_management, data_analysis,
                     -- Discipline Specializations
                     single_seater_aptitude, touring_car_aptitude, rally_aptitude, street_racing_aptitude,
@@ -461,7 +463,7 @@ class DatabaseManager(RaceResultPersistence):
                 driver.physical_fitness, driver.reaction_time, driver.concentration, driver.pressure_handling, driver.pain_tolerance,
                 driver.g_force_tolerance, driver.coordination, driver.multitasking, driver.mental_resilience, driver.adrenaline_management,
                 # Technical Knowledge
-                driver.setup_knowledge, driver.mechanical_sympathy, driver.tire_management, driver.fuel_management,
+                driver.setup_knowledge, driver.mechanical_sympathy, getattr(driver, 'tyre_management', 50.0), driver.fuel_management,
                 driver.aerodynamics_understanding, driver.suspension_feel, driver.engine_management, driver.data_analysis,
                 # Discipline Specializations
                 driver.single_seater_aptitude, driver.touring_car_aptitude, driver.rally_aptitude, driver.street_racing_aptitude,

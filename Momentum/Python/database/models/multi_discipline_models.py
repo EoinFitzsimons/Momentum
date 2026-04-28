@@ -89,8 +89,8 @@ class Vehicle:
     # Braking performance and cooling (especially Endurance)
     brakes: float = 0.5
     transmission: float = 0.5                # Gearbox and drivetrain efficiency
-    # Tire selection and performance optimization
-    tires_compound: float = 0.5
+    # Tyre selection and performance optimization
+    tyres_compound: float = 0.5
 
     # ===== DISCIPLINE-SPECIFIC SPECIALIZATIONS =====
     # Components that are particularly important for certain disciplines
@@ -138,8 +138,8 @@ class Vehicle:
     # Track which components are in-house vs supplier-provided
     # Engine supplier (None = in-house)
     engine_supplier_id: Optional[int] = None
-    # Tire supplier (None = in-house)
-    tire_supplier_id: Optional[int] = None
+    # Tyre supplier (None = in-house)
+    tyre_supplier_id: Optional[int] = None
     # Brake supplier (None = in-house)
     brake_supplier_id: Optional[int] = None
     # Transmission supplier (None = in-house)
@@ -190,7 +190,7 @@ class Vehicle:
         """Check if a component is developed in-house"""
         supplier_map = {
             "engine": self.engine_supplier_id,
-            "tires": self.tire_supplier_id,
+            "tyres": self.tyre_supplier_id,
             "brakes": self.brake_supplier_id,
             "transmission": self.transmission_supplier_id,
             "suspension": self.suspension_supplier_id,
@@ -205,7 +205,7 @@ class Vehicle:
     def get_supplier_dependencies(self) -> List[int]:
         """Get list of all supplier IDs this vehicle depends on"""
         supplier_ids = [
-            self.engine_supplier_id, self.tire_supplier_id, self.brake_supplier_id,
+            self.engine_supplier_id, self.tyre_supplier_id, self.brake_supplier_id,
             self.transmission_supplier_id, self.suspension_supplier_id,
             self.electronics_supplier_id, self.aerodynamics_supplier_id,
             self.fuel_supplier_id, self.specialty_supplier_id
@@ -289,7 +289,7 @@ class MultiDisciplineDriver:
     setup_knowledge: float = 50.0             # Car setup and tuning understanding
     # Preserving car components and reliability
     mechanical_sympathy: float = 50.0
-    tire_management: float = 50.0             # Managing tire wear and grip
+    tyre_management: float = 50.0             # Managing tyre wear and grip
     # Fuel saving and consumption optimization
     fuel_management: float = 50.0
     aerodynamics_understanding: float = 50.0  # Knowledge of aero effects and setup
@@ -316,7 +316,7 @@ class MultiDisciplineDriver:
     race_strategy: float = 50.0               # Understanding race strategy and timing
     pit_stop_coordination: float = 50.0       # Working with pit crew effectively
     traffic_management: float = 50.0          # Navigating through slower cars
-    tire_strategy: float = 50.0               # Strategic tire choice and timing
+    tyre_strategy: float = 50.0               # Strategic tyre choice and timing
     fuel_strategy: float = 50.0               # Strategic fuel management decisions
     safety_car_awareness: float = 50.0        # Maximizing safety car opportunities
     qualifying_optimization: float = 50.0     # Extracting maximum single-lap pace
@@ -448,7 +448,7 @@ class MultiDisciplineDriver:
         core_skills = [
             self.raw_speed, self.consistency, self.racecraft, self.overtaking,
             self.vehicle_control, self.concentration, self.pressure_handling,
-            self.setup_knowledge, self.tire_management, self.race_strategy
+            self.setup_knowledge, self.tyre_management, self.race_strategy
         ]
 
         return sum(core_skills) / len(core_skills)
@@ -591,7 +591,7 @@ class Track:
 
     # Track characteristics affecting strategy (0.0-1.0)
     overtaking_difficulty: float = 0.5
-    tire_wear_factor: float = 0.5
+    tyre_wear_factor: float = 0.5
     fuel_consumption_factor: float = 0.5
     crash_risk: float = 0.3
 
@@ -733,7 +733,7 @@ DISCIPLINE_DEVELOPMENT_TREES = {
         "engine": ["nitrous_systems", "supercharging", "power_optimization"],
         "transmission": ["launch_control", "gear_ratios", "torque_converter"],
         "chassis": ["weight_transfer", "aerodynamic_drag", "safety_systems"],
-        "tires": ["compound_selection", "pressure_optimization"],
+        "tyres": ["compound_selection", "pressure_optimization"],
         "safety": ["roll_cage", "fire_suppression", "parachute_systems"]
     },
     "SPRINT_RALLYCROSS": {
@@ -748,7 +748,7 @@ DISCIPLINE_DEVELOPMENT_TREES = {
         "engine": ["fuel_efficiency", "durability", "hybrid_systems"],
         "chassis": ["driver_comfort", "pit_accessibility", "weight_distribution"],
         "reliability": ["component_lifecycle", "preventive_systems"],
-        "strategy": ["fuel_management", "tire_strategy", "driver_rotation"]
+        "strategy": ["fuel_management", "tyre_strategy", "driver_rotation"]
     }
 }
 
@@ -761,7 +761,7 @@ DISCIPLINE_SKILL_WEIGHTS = {
         "cornering_skill": 0.07, "overtaking": 0.06, "spatial_awareness": 0.06,
 
         # Technical knowledge (important for setup)
-        "setup_knowledge": 0.06, "tire_management": 0.05, "aerodynamics_understanding": 0.04,
+        "setup_knowledge": 0.06, "tyre_management": 0.05, "aerodynamics_understanding": 0.04,
         "data_analysis": 0.04, "fuel_management": 0.03,
 
         # Physical & mental (moderate importance)
@@ -782,7 +782,7 @@ DISCIPLINE_SKILL_WEIGHTS = {
         "adrenaline_management": 0.04, "mental_resilience": 0.04,
 
         # Technical and strategy
-        "setup_knowledge": 0.05, "tire_management": 0.04, "race_strategy": 0.04,
+        "setup_knowledge": 0.05, "tyre_management": 0.04, "race_strategy": 0.04,
         "traffic_management": 0.03, "mechanical_sympathy": 0.03
     },
 
@@ -823,7 +823,7 @@ DISCIPLINE_SKILL_WEIGHTS = {
 
         # Technical and environmental
         "setup_knowledge": 0.05, "track_learning": 0.05, "wet_weather_skill": 0.04,
-        "tire_management": 0.04, "suspension_feel": 0.03
+        "tyre_management": 0.04, "suspension_feel": 0.03
     },
 
     "ENDURANCE": {
@@ -832,7 +832,7 @@ DISCIPLINE_SKILL_WEIGHTS = {
         "mental_resilience": 0.08, "stint_management": 0.08,  # Custom endurance skill
 
         # Technical management over long distances
-        "tire_management": 0.08, "fuel_management": 0.07, "mechanical_sympathy": 0.06,
+        "tyre_management": 0.08, "fuel_management": 0.07, "mechanical_sympathy": 0.06,
         "setup_knowledge": 0.05, "engine_management": 0.05,
 
         # Strategic thinking

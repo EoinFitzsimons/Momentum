@@ -299,7 +299,7 @@ DRIVER_PHYSICAL_MENTAL = [
 DRIVER_TECHNICAL = [
     "setup_knowledge",
     "mechanical_sympathy",
-    "tire_management",
+    "tyre_management",
     "fuel_management",
     "aerodynamics_understanding",
     "suspension_feel",
@@ -322,7 +322,7 @@ DRIVER_STRATEGY = [
     "race_strategy",
     "pit_stop_coordination",
     "traffic_management",
-    "tire_strategy",
+    "tyre_strategy",
     "fuel_strategy",
     "safety_car_awareness",
     "qualifying_optimization",
