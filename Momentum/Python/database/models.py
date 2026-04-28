@@ -133,7 +133,7 @@ class Track:
     surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
     surface_type: str = "asphalt"  # Legacy surface type field (kept for database compatibility)
     surface_grip: float = 1.0  # Grip level for visualisation and simulation (0-1 scale)
-    surface_abrasiveness: float = 8.0  # Abrasiveness for tire wear
+    surface_abrasiveness: float = 8.0  # Abrasiveness for tyre wear
     climate: str = "temperate"  # Climate type for track conditions
 
 

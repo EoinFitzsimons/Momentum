@@ -5,7 +5,7 @@ Provides:
 - Championship selection/creation
 - Season progression with proper race transitions
 - Standings view with auto-refresh
-- Pre-race setup (driver/team selection, weather, tire strategies)
+- Pre-race setup (driver/team selection, weather, tyre strategies)
 - Post-race results integration
 - Race lifecycle management (scheduled → in-progress → completed)
 - Notifications and status updates
@@ -905,7 +905,7 @@ class ChampionshipWindow(QMainWindow):
 
 
 class PreRaceSetupDialog(QDialog):
-    """Dialog for pre-race setup: driver selection, weather, tire strategy."""
+    """Dialog for pre-race setup: driver selection, weather, tyre strategy."""
     
     def __init__(
         self,
@@ -1035,17 +1035,17 @@ class PreRaceSetupDialog(QDialog):
         weather_layout.addStretch()
         right_layout.addWidget(weather_group)
         
-        # Tire Strategy
-        tire_group = QGroupBox("Tire Strategy")
-        tire_layout = QVBoxLayout(tire_group)
-        
-        tire_layout.addWidget(QLabel("Starting tires:"))
-        self.tire_combo = QComboBox()
-        self.tire_combo.addItems(["Soft", "Medium", "Hard", "Intermediate", "Wet"])
-        tire_layout.addWidget(self.tire_combo)
-        
-        tire_layout.addStretch()
-        right_layout.addWidget(tire_group)
+        # Tyre Strategy
+        tyre_group = QGroupBox("Tyre Strategy")
+        tyre_layout = QVBoxLayout(tyre_group)
+
+        tyre_layout.addWidget(QLabel("Starting tyres:"))
+        self.tyre_combo = QComboBox()
+        self.tyre_combo.addItems(["Soft", "Medium", "Hard", "Intermediate", "Wet"])
+        tyre_layout.addWidget(self.tyre_combo)
+
+        tyre_layout.addStretch()
+        right_layout.addWidget(tyre_group)
         
         # Race Info Summary
         info_group = QGroupBox("Race Information")
@@ -1245,7 +1245,7 @@ class PreRaceSetupDialog(QDialog):
             "team": selected_team,
             "discipline": self.championship.discipline,
             "weather": self.weather_combo.currentText(),
-            "tire_strategy": self.tire_combo.currentText(),
+            "tyre_strategy": self.tyre_combo.currentText(),
             "laps": self.race.laps
         }
 

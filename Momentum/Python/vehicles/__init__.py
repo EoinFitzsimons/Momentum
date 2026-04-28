@@ -6,7 +6,7 @@ Racing vehicle systems including:
 - Aerodynamic elements (front wing, DRS flap, rear wing)
 - Visible mechanical components (suspension, wheels, cockpit)
 - Livery management (team colours, driver numbers)
-- Vehicle configuration (fuel, tires, brake balance)
+- Vehicle configuration (fuel, tyres, brake balance)
 - GUI integration for race visualisation
 
 MVP focuses exclusively on Formula-style open-wheel single seater racing.

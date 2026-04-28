@@ -28,7 +28,7 @@ class ProductionTouringEngine(BaseDisciplineEngine):
             "braking_technique": 0.10,
             "overtaking": 0.08,
             "defensive_driving": 0.08,
-            "tire_management": 0.10,
+            "tyre_management": 0.10,
             "fuel_management": 0.08,
             "raw_speed": 0.08,
             "concentration": 0.06,
@@ -53,7 +53,8 @@ class ProductionTouringEngine(BaseDisciplineEngine):
         engine.BASE_SPEED_MPS = 64.0
         engine.MAX_SPEED_MPS = 85.0
         engine.MIN_SPEED_MPS = 24.0
-        engine.TIRE_DEGRADATION_RATE = 0.000013
+        engine.TYRE_DEGRADATION_RATE = 0.000013
+        pass
         engine.FUEL_BURN_RATE = 0.000019
         engine.ATTACK_THRESHOLD_GAP = 2.4
         engine.DEFEND_THRESHOLD_GAP = 1.4
@@ -94,7 +95,14 @@ class ProductionTouringEngine(BaseDisciplineEngine):
             return default
 
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
-        engine = create_realtime_engine(seed=getattr(self, 'seed', None))
+        # Prefer a module-level RealtimeRaceEngine (tests may monkeypatch this),
+        # otherwise use the canonical factory.
+        engine = None
+        engine_cls = globals().get('RealtimeRaceEngine')
+        if engine_cls is not None:
+            engine = engine_cls(seed=getattr(self, 'seed', None))
+        else:
+            engine = create_realtime_engine(seed=getattr(self, 'seed', None))
         self._apply_tuning(engine)
 
         tc = self._track_conditions(context)

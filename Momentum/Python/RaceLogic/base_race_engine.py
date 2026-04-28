@@ -151,7 +151,7 @@ class BaseDisciplineEngine(ABC):
                 "consistency": 0.15,            # Essential for race performance
                 "cornering_skill": 0.15,        # Crucial in formula racing
                 "single_seater_aptitude": 0.12, # Discipline preference
-                "tire_management": 0.08,        # Strategic importance
+                "tyre_management": 0.08,        # Strategic importance
                 "concentration": 0.08,          # Mental endurance
                 # ... more attributes
             }
@@ -173,13 +173,13 @@ class BaseDisciplineEngine(ABC):
         Calculate lap time for a driver considering all factors
 
         Must be implemented by each discipline to apply discipline-specific
-        lap time calculations (tire wear, fuel load, traffic, etc.).
+        lap time calculations (tyre wear, fuel load, traffic, etc.).
 
         Args:
             driver: Driver with comprehensive attributes
             team: Team with budget and tier
             context: Race context with track and conditions
-            lap_number: Current lap number (for tire/fuel degradation)
+            lap_number: Current lap number (for tyre/fuel degradation)
             current_position: Driver's current race position (for traffic)
 
         Returns:

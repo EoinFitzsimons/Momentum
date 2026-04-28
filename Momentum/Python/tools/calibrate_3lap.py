@@ -3,7 +3,7 @@
 
 Runs controlled short simulations and tunes:
 - Logistic slopes (straight/braking/outside/switch/risk)
-- Weibull parameters (tire/mechanical eta,beta)
+- Weibull parameters (tyre/mechanical eta,beta)
 
 Terminology:
 - Logistic slope: controls how sharply overtake/incident probability changes
@@ -69,7 +69,7 @@ TARGETS: Dict[str, Dict[str, float]] = {
 
 SLOPE_CANDIDATES = [0.80, 0.92, 1.00, 1.08, 1.20]
 HAZARD_CANDIDATES: List[Tuple[float, float, float, float]] = [
-    # (tire_eta, tire_beta, mech_eta, mech_beta)
+    # (tyre_eta, tyre_beta, mech_eta, mech_beta)
     (22.0, 2.2, 75.0, 1.9),
     (28.0, 2.6, 95.0, 2.1),
     (36.0, 3.0, 120.0, 2.3),
@@ -283,8 +283,8 @@ def calibrate(
             "outside_slope": 3.2,
             "switch_slope": 3.0,
             "risk_slope": 3.4,
-            "tire_eta": 28.0,
-            "tire_beta": 2.6,
+            "tyre_eta": 28.0,
+                "tyre_beta": 2.6,
             "mech_eta": 95.0,
             "mech_beta": 2.1,
         }
@@ -321,11 +321,11 @@ def calibrate(
 
         # Stage 2: tune Weibull eta/beta.
         print(f"[CAL] {discipline}: stage2 hazard search ({stage2_iters} iters/candidate)", flush=True)
-        for tire_eta, tire_beta, mech_eta, mech_beta in HAZARD_CANDIDATES:
+        for tyre_eta, tyre_beta, mech_eta, mech_beta in HAZARD_CANDIDATES:
             candidate = dict(best_profile)
             candidate.update({
-                "tire_eta": tire_eta,
-                "tire_beta": tire_beta,
+                "tyre_eta": tyre_eta,
+                "tyre_beta": tyre_beta,
                 "mech_eta": mech_eta,
                 "mech_beta": mech_beta,
             })
