@@ -54,7 +54,6 @@ class SprintRallycrossEngine(BaseDisciplineEngine):
         engine.MAX_SPEED_MPS = 78.0
         engine.MIN_SPEED_MPS = 20.0
         engine.TYRE_DEGRADATION_RATE = 0.000014
-        pass
         engine.FUEL_BURN_RATE = 0.000014
         engine.ATTACK_THRESHOLD_GAP = 1.9
         engine.DEFEND_THRESHOLD_GAP = 1.1

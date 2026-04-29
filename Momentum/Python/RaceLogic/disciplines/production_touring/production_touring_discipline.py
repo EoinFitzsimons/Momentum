@@ -54,7 +54,6 @@ class ProductionTouringEngine(BaseDisciplineEngine):
         engine.MAX_SPEED_MPS = 85.0
         engine.MIN_SPEED_MPS = 24.0
         engine.TYRE_DEGRADATION_RATE = 0.000013
-        pass
         engine.FUEL_BURN_RATE = 0.000019
         engine.ATTACK_THRESHOLD_GAP = 2.4
         engine.DEFEND_THRESHOLD_GAP = 1.4

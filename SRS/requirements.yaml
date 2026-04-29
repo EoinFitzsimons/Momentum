@@ -1,0 +1,121 @@
+---
+project: FinalProject - Race Simulation SRS
+version: 0.1
+generated_by: copilot-analysis
+requirements:
+  - id: R-SIM-001
+    title: Deterministic simulation execution
+    description: |
+      Given an identical RaceContext and integer seed, the simulation engine
+      shall produce identical serialized event streams and final standings.
+    acceptance_criteria:
+      - For each canonical fixture in `SRS/fixtures/` running the simulation
+        with the same seed at least 5 times must yield byte-for-byte identical
+        serialized outputs (events.json and results.json).
+    tests:
+      - Momentum/Python/mvp_tests/test_simulation_reproducibility.py
+    owner: Simulation Team
+    priority: high
+    verification: CI automated unit tests
+
+  - id: R-SIM-002
+    title: Realtime mode and event streaming
+    description: |
+      Engine shall support realtime execution with `realtime_speed`, an
+      `event_callback` for streaming events, and a `stop_event` mechanism for
+      graceful cancellation.
+    acceptance_criteria:
+      - Realtime run accepts `realtime_speed` float > 0 and streams events to
+        callback in monotonic lap order. `stop_event` triggers graceful shutdown
+        and persists last consistent state.
+    tests:
+      - Momentum/Python/mvp_tests/test_realtime_stop_and_streaming.py
+    owner: UI/Integration
+    priority: high
+    verification: functional and integration tests
+
+  - id: R-DISC-001
+    title: Discipline adapter contract
+    description: |
+      Every discipline adapter shall implement BaseDisciplineEngine contract
+      providing get_attribute_weights, calculate_lap_time, and
+      simulate_race(context) or delegate to the realtime engine.
+    acceptance_criteria:
+      - Adapter instances must be constructible given optional seed and
+        produce lap-time values consistent with documented ranges.
+    tests:
+      - Momentum/Python/mvp_tests/test_discipline_adapter_contract.py
+    owner: Design
+    priority: medium
+    verification: unit tests
+
+  - id: R-DB-001
+    title: Domain object schemas and persistence
+    description: |
+      Canonical JSON Schemas for Driver, Team, Track, and Result
+      shall be defined and validated on write/read boundaries.
+    acceptance_criteria:
+      - All persisted records conform to SRS/schemas/*.json.
+    tests:
+      - Momentum/Python/mvp_tests/test_schema_validation.py
+    owner: Data
+    priority: high
+    verification: schema validation tests
+
+  - id: R-EVT-001
+    title: Event contract and ordering guarantees
+    description: |
+      The event_callback contract shall include versioned event schemas,
+      ordering guarantees per-lap/per-driver, and idempotency tokens for
+      downstream processing.
+    acceptance_criteria:
+      - Event types and schemas exist under SRS/event_schemas/ and include
+        mandatory event_id, event_type, timestamp, and race_id fields.
+    tests:
+      - Momentum/Python/mvp_tests/test_event_contract.py
+    owner: Integration
+    priority: high
+    verification: contract tests
+
+  - id: R-PERF-001
+    title: Performance profiles and SLAs
+    description: |
+      Define baseline hardware profiles and measurable SLAs for latency and
+      throughput including workload definitions (drivers, laps, concurrent
+      simulations).
+    acceptance_criteria:
+      - Benchmarks for DEV/PROD baselines exist and meet documented SLAs.
+    tests:
+      - perf/bench_single_sim.py
+    owner: Ops
+    priority: medium
+    verification: performance benchmarks
+
+  - id: R-STATE-001
+    title: Race state machine
+    description: |
+      The simulation must implement and expose a canonical state machine for
+      race lifecycle and incident resolution.
+    acceptance_criteria:
+      - State transition tests validate transitions and guards for incident
+        resolution and abort scenarios.
+    tests:
+      - Momentum/Python/mvp_tests/test_state_transitions.py
+    owner: Simulation
+    priority: medium
+    verification: unit tests
+
+  - id: R-FAIL-001
+    title: Failure modes and recovery
+    description: |
+      Define failure classes (validation, runtime, persistence) and required
+      recovery/compensation behaviors (abort semantics, partial persistence,
+      retry/fallback policies).
+    acceptance_criteria:
+      - Fault-injection tests exercise recovery behaviours and document
+        expected persisted state for aborted runs.
+    tests:
+      - Momentum/Python/mvp_tests/test_failure_recovery.py
+    owner: Ops
+    priority: high
+    verification: chaos/fault-injection tests

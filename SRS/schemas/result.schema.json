@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Result",
+  "type": "object",
+  "required": ["race_id", "driver_id", "finishing_position", "seed"],
+  "properties": {
+    "race_id": {"type": "string"},
+    "driver_id": {"type": "integer"},
+    "finishing_position": {"type": "integer"},
+    "lap_times": {"type": "array", "items": {"type": "number"}},
+    "incidents": {"type": "array", "items": {"type": "object"}},
+    "seed": {"type": "integer"}
+  },
+  "additionalProperties": false
+}
