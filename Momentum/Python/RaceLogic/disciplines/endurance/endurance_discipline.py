@@ -54,7 +54,6 @@ class EnduranceEngine(BaseDisciplineEngine):
         engine.MAX_SPEED_MPS = 88.0
         engine.MIN_SPEED_MPS = 26.0
         engine.TYRE_DEGRADATION_RATE = 0.000010
-        pass
         engine.FUEL_BURN_RATE = 0.000018
         engine.ATTACK_THRESHOLD_GAP = 3.2
         engine.DEFEND_THRESHOLD_GAP = 1.9

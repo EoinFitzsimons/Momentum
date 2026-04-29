@@ -54,7 +54,6 @@ class UrbanStreetEngine(BaseDisciplineEngine):
         engine.MAX_SPEED_MPS = 82.0
         engine.MIN_SPEED_MPS = 22.0
         engine.TYRE_DEGRADATION_RATE = 0.000016
-        pass
         engine.FUEL_BURN_RATE = 0.000016
         engine.ATTACK_THRESHOLD_GAP = 2.1
         engine.DEFEND_THRESHOLD_GAP = 1.2
