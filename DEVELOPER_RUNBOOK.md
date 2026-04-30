@@ -48,13 +48,13 @@ Tests that identical RaceContext + seed produce identical results.
 cd Momentum/Python
 
 # Run single reproducibility test
-python -m pytest mvp_tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v
+python -m pytest tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v
 
 # Run all reproducibility tests
-python -m pytest mvp_tests/test_simulation_reproducibility.py -v
+python -m pytest tests/test_simulation_reproducibility.py -v
 
 # Run with determinism summary
-python -m pytest mvp_tests/test_simulation_reproducibility.py::test_determinism_across_multiple_runs -v -s
+python -m pytest tests/test_simulation_reproducibility.py::test_determinism_across_multiple_runs -v -s
 ```
 
 **Expected output**: All tests pass; 5 consecutive runs with seed=42 produce identical hashes.
@@ -65,23 +65,23 @@ Tests for realtime mode, discipline adapters, event contracts, and failure recov
 
 ```bash
 # Run all integration tests
-python -m pytest mvp_tests/test_integration_srs.py -v
+python -m pytest tests/test_integration_srs.py -v
 
 # Run discipline adapter tests only
-python -m pytest mvp_tests/test_integration_srs.py::TestDisciplineAdapterContract -v
+python -m pytest tests/test_integration_srs.py::TestDisciplineAdapterContract -v
 
 # Run event contract tests
-python -m pytest mvp_tests/test_integration_srs.py::TestEventContract -v
+python -m pytest tests/test_integration_srs.py::TestEventContract -v
 
 # Run failure mode tests
-python -m pytest mvp_tests/test_integration_srs.py::TestFailureModes -v
+python -m pytest tests/test_integration_srs.py::TestFailureModes -v
 ```
 
 ### **Full SRS Test Suite**
 
 ```bash
 # From Momentum/Python folder
-python -m pytest mvp_tests/test_simulation_reproducibility.py mvp_tests/test_integration_srs.py -v --tb=short
+python -m pytest tests/test_simulation_reproducibility.py tests/test_integration_srs.py -v --tb=short
 ```
 
 ---
@@ -192,7 +192,7 @@ When implementing a new feature:
 
 2. **Create schema if needed**: Add JSON Schema to `SRS/schemas/` or `SRS/event_schemas/`
 
-3. **Write test first**: Create test in `mvp_tests/` that validates acceptance criteria
+3. **Write test first**: Create test in `tests/` that validates acceptance criteria
 
 4. **Run test to confirm failure**: Verify baseline before implementation
 
@@ -218,7 +218,7 @@ To adjust race mechanics for a discipline (e.g., urban street):
 
 4. **Run reproducibility tests** to ensure determinism is preserved:
    ```bash
-   python -m pytest mvp_tests/test_simulation_reproducibility.py -v
+   python -m pytest tests/test_simulation_reproducibility.py -v
    ```
 
 5. **Test in UI** or run an experiment with known seed to observe behavior
@@ -320,7 +320,7 @@ Run before committing:
 
 ```bash
 # Reproducibility + integration tests
-python -m pytest mvp_tests/test_simulation_reproducibility.py mvp_tests/test_integration_srs.py --tb=short
+python -m pytest tests/test_simulation_reproducibility.py tests/test_integration_srs.py --tb=short
 
 # Linting (if configured)
 python -m pylint Momentum/Python/services/race_simulation_api.py
@@ -361,7 +361,7 @@ Key steps:
 
 For questions on:
 - **SRS & requirements**: See `SRS/requirements.yaml` and `SRS/README.md`
-- **Test failures**: Check `mvp_tests/` and run with `-v -s` for verbose output
+- **Test failures**: Check `tests/` and run with `-v -s` for verbose output
 - **Schema validation**: Review `tools/schema_validator.py` and JSON schemas
 - **Architecture**: See `Planning/Design and Architecture/` and `SRS/state_machine.md`
 - **Employment positioning**: Review `EMPLOYMENT_ANALYSIS.md`

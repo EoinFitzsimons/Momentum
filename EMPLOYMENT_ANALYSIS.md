@@ -171,7 +171,7 @@
 - **Data Models**: `SRS/schemas/` (JSON Schemas for `Driver`, `Team`, `Track`, `Result`)
 - **Event Schemas**: `SRS/event_schemas/` (versioned schemas for `lap_complete`, `overtake`, `incident`)
 - **Implementation**: `Momentum/Python/{simulation.py, RaceLogic/realtime_race_engine.py, services/race_simulation_api.py, tools/schema_validator.py}`
-- **Tests**: `Momentum/Python/mvp_tests/{test_simulation_reproducibility.py, test_integration_srs.py}`
+- **Tests**: `Momentum/Python/tests/{test_simulation_reproducibility.py, test_integration_srs.py}`
 - **Fixtures**: `SRS/fixtures/` (example RaceContext for reproducibility validation)
 
 ---
