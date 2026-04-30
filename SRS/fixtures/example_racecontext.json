@@ -1,0 +1,12 @@
+{
+  "race_id": "fixture-001",
+  "total_laps": 5,
+  "track": {"id": 1, "name": "Example Track", "lap_time": 78.0, "length_m": 5000},
+  "drivers": [
+    {"id": 1, "name": "Driver A", "attributes": {"raw_speed": 0.8, "racecraft": 0.7}},
+    {"id": 2, "name": "Driver B", "attributes": {"raw_speed": 0.78, "racecraft": 0.72}}
+  ],
+  "teams": [],
+  "track_conditions": {},
+  "seed": 42
+}

@@ -18,7 +18,7 @@ Q: Does the GUI persist results automatically?
 A: Persistence is available via `PersistenceSQLite.save_race_results`. Scripts and service code call this when configured; the GUI flow can be wired to persistence but demo mode focuses on live visual output and returning to menu.
 
 Q: How did you validate the simulation?
-A: Small unit/validation tests live under `Momentum/Python/mvp_tests/` and targeted playtests capture DNFs, lap-time variance and incidents. Early Monte Carlo runs also helped stress-test edge cases.
+A: Small unit/validation tests live under `Momentum/Python/tests/` and targeted playtests capture DNFs, lap-time variance and incidents. Early Monte Carlo runs also helped stress-test edge cases.
 
 Q: What are the main limitations today?
 A: The prototype is single-process and optimised for demo scale. Season progression, persistent world state, and full UI polish remain future work.

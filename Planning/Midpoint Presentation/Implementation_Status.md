@@ -16,7 +16,7 @@ Implemented / Demo-ready (GUI demo - use these)
 - `Momentum/Python/services/driver_attributes.py` — canonical driver attributes and derived signals used by the GUI and engine.
 - `Momentum/Python/services/persistence_sqlite.py` — persistence layer used by the application to save results when invoked by the GUI.
  - `Momentum/Python/data/circuits_database.json` — track asset file with many definitions; not used by the current GUI demo. The live demo uses a single active track (seeded in the DB or provided by `PersistenceSQLite.seed_sample_data()`).
-- `Momentum/Python/mvp_tests/` — small validation/unit tests useful for validating demo behaviour (example files: `test_uc01_driver.py`, `test_uc02_race_config.py`).
+- `Momentum/Python/tests/` — comprehensive test suite with integration and unit tests.
 
 How to run the GUI demo (recommended)
 -------------------------------------

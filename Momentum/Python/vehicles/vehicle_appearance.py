@@ -6,11 +6,28 @@ and headless PNG preview tests. This implementation is concise and
 avoids stray top-level statements so it imports cleanly for pytest.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
-from PyQt6.QtCore import Qt, QPointF
+
+try:
+    from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
+    from PyQt6.QtCore import Qt, QPointF
+except Exception:
+    @dataclass(frozen=True)
+    class QColor:
+        red: int
+        green: int
+        blue: int
+        alpha: int = 255
+
+        def getRgb(self):
+            return self.red, self.green, self.blue, self.alpha
+
+        def __iter__(self):
+            yield from (self.red, self.green, self.blue, self.alpha)
 
 
 class VehicleType(Enum):
@@ -150,16 +167,16 @@ class VehicleRenderer:
         front_wheel_y = -2.3 * scale  # moved further forward (halfway to front wing)
         rear_wheel_y = 2.1 * scale    # moved further back (halfway to rear wing)
         
-        tire_color = QColor(20, 20, 20)
-        tire_outline = QColor(80, 80, 80)
-        
+        tyre_color = QColor(20, 20, 20)
+        tyre_outline = QColor(80, 80, 80)
+
         # All wheels same size
-        tire_radius = 0.64 * scale
-        wheel_w = int(max(1, 2 * tire_radius * 0.62))  # short dimension across track
-        wheel_h = int(max(1, 2 * tire_radius * 1.12))  # long dimension along car length
-        
-        painter.setBrush(QBrush(tire_color))
-        painter.setPen(QPen(tire_outline, 1))
+        tyre_radius = 0.64 * scale
+        wheel_w = int(max(1, 2 * tyre_radius * 0.62))  # short dimension across track
+        wheel_h = int(max(1, 2 * tyre_radius * 1.12))  # long dimension along car length
+
+        painter.setBrush(QBrush(tyre_color))
+        painter.setPen(QPen(tyre_outline, 1))
         
         # Front wheels with steering rotation
         if abs(steering_angle) > 0.1:
@@ -280,11 +297,11 @@ class VehicleRenderer:
         # Wheels inside arches (small circles, mostly hidden)
         painter.setBrush(QBrush(QColor(25, 25, 25)))
         painter.setPen(QPen(QColor(60, 60, 60), 1.0))
-        tire_r = 0.5 * scale
+        tyre_r = 0.5 * scale
         for wheel_y in [front_wheel_y, rear_wheel_y]:
             for wheel_x in [-half_w * 0.75, half_w * 0.75]:
-                painter.drawEllipse(int(wheel_x - tire_r), int(wheel_y - tire_r), 
-                                   int(2 * tire_r), int(2 * tire_r))
+                painter.drawEllipse(int(wheel_x - tyre_r), int(wheel_y - tyre_r), 
+                                   int(2 * tyre_r), int(2 * tyre_r))
 
         painter.restore()
 
@@ -363,8 +380,8 @@ class VehicleRenderer:
         painter.drawPolygon(QPolygonF(rw_poly))
 
         # WHEELS - dramatic size contrast
-        tire_color = QColor(20, 20, 20)
-        painter.setBrush(QBrush(tire_color))
+        tyre_color = QColor(20, 20, 20)
+        painter.setBrush(QBrush(tyre_color))
         painter.setPen(QPen(QColor(70, 70, 70), 1.5))
 
         # Tiny skinny front wheels
@@ -481,11 +498,11 @@ class VehicleRenderer:
         # Wheels partially visible in arches
         painter.setBrush(QBrush(QColor(30, 30, 30)))
         painter.setPen(QPen(QColor(80, 80, 80), 1.5))
-        tire_r = 0.55 * scale
+        tyre_r = 0.55 * scale
         for wheel_y in [front_wheel_y, rear_wheel_y]:
             for wheel_x in [-half_w * 0.7, half_w * 0.7]:
-                painter.drawEllipse(int(wheel_x - tire_r), int(wheel_y - tire_r),
-                                   int(2 * tire_r), int(2 * tire_r))
+                painter.drawEllipse(int(wheel_x - tyre_r), int(wheel_y - tyre_r),
+                                   int(2 * tyre_r), int(2 * tyre_r))
 
         painter.restore()
 
@@ -587,11 +604,11 @@ class VehicleRenderer:
         # Wheels mostly hidden in arches
         painter.setBrush(QBrush(QColor(25, 25, 25)))
         painter.setPen(QPen(QColor(70, 70, 70), 1.3))
-        tire_r = 0.6 * scale
+        tyre_r = 0.6 * scale
         for wheel_y in [front_wheel_y, rear_wheel_y]:
             for wheel_x in [-half_w * 0.7, half_w * 0.7]:
-                painter.drawEllipse(int(wheel_x - tire_r), int(wheel_y - tire_r),
-                                   int(2 * tire_r), int(2 * tire_r))
+                painter.drawEllipse(int(wheel_x - tyre_r), int(wheel_y - tyre_r),
+                                   int(2 * tyre_r), int(2 * tyre_r))
 
         painter.restore()
 
@@ -690,11 +707,11 @@ class VehicleRenderer:
         # Wheels in arches
         painter.setBrush(QBrush(QColor(30, 30, 30)))
         painter.setPen(QPen(QColor(90, 90, 90), 1.4))
-        tire_r = 0.56 * scale
+        tyre_r = 0.56 * scale
         for wheel_y in [front_wheel_y, rear_wheel_y]:
             for wheel_x in [-half_w * 0.68, half_w * 0.68]:
-                painter.drawEllipse(int(wheel_x - tire_r), int(wheel_y - tire_r),
-                                   int(2 * tire_r), int(2 * tire_r))
+                painter.drawEllipse(int(wheel_x - tyre_r), int(wheel_y - tyre_r),
+                                   int(2 * tyre_r), int(2 * tyre_r))
 
         painter.restore()
 
@@ -746,7 +763,7 @@ class VehicleConfiguration:
     driver_number: int
     team_id: int
     fuel_load_kg: float = 105.0
-    tire_compound: str = "medium"
+    tyre_compound: str = "medium"
     aerodynamic_setup: str = "balanced"
     brake_balance: float = 0.5
 

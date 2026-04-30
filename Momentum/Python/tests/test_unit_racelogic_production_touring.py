@@ -83,5 +83,5 @@ def test_production_touring_adapter_delegates_to_realtime_engine(monkeypatch):
 @pytest.mark.unit
 def test_production_touring_placeholder_for_extended_behaviour():
     engine = ProductionTouringEngine(seed=7)
-    # Placeholder for future touring-specific assertions (e.g., tire model or contact handling).
+    # Placeholder for future touring-specific assertions (e.g., tyre model or contact handling).
     assert engine.discipline == RacingDiscipline.PRODUCTION_TOURING

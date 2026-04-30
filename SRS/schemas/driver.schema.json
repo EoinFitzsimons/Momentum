@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Driver",
+  "type": "object",
+  "required": ["id", "name", "attributes"],
+  "properties": {
+    "id": {"type": "integer"},
+    "name": {"type": "string"},
+    "team_id": {"type": ["integer", "null"]},
+    "status": {"type": "string", "enum": ["active","retired","injured"]},
+    "attributes": {
+      "type": "object",
+      "description": "Map of attribute name to float value",
+      "additionalProperties": {"type": "number"}
+    }
+  },
+  "additionalProperties": false
+}

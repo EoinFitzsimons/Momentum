@@ -568,7 +568,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
                 'racing_mode': 'attack',
                 'push_intensity': 0.95,
                 'push_fatigue': min(1.0, progress * 0.5),
-                'tire_condition': 0.98,
+                'tyre_condition': 0.98,
                 'fuel_load': 0.98,
                 'gap_ahead': 0.0 if idx == 1 else float(idx - 1) * 0.12,
                 'gap_behind': 0.0,

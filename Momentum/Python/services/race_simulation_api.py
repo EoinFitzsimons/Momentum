@@ -94,10 +94,13 @@ def _create_fallback_teams(teams_dict: Dict[int, Team], drivers: Optional[List[D
 
     created = 0
     for driver in drivers:
-        if driver.current_team_id not in teams_dict:
-            teams_dict[driver.current_team_id] = Team(
-                id=driver.current_team_id,
-                name=f"Fallback Entry {driver.current_team_id}",
+        team_id = getattr(driver, "current_team_id", None)
+        if team_id is None:
+            continue
+        if team_id not in teams_dict:
+            teams_dict[team_id] = Team(
+                id=team_id,
+                name=f"Fallback Entry {team_id}",
                 nationality="USA",
                 discipline="formula",
                 tier="tier2",
@@ -116,7 +119,10 @@ def _create_fallback_teams(teams_dict: Dict[int, Team], drivers: Optional[List[D
 def _calculate_race_laps(track: Optional[Track], laps: Optional[int]) -> int:
     """Calculate appropriate lap count based on track length"""
     if laps is not None:
-        return laps
+        try:
+            return max(1, int(laps))
+        except Exception:
+            return 1
     if track is not None:
         return max(20, min(int(300 / track.length_km), 80))
     return 20

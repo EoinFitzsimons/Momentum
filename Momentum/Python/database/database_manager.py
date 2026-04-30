@@ -42,6 +42,7 @@ from config import DATABASE_PATH
 
 
 INTEGER_DEFAULT_NULL = 'INTEGER DEFAULT NULL'
+DELETE_RACE_RESULTS_SQL = "DELETE FROM race_results WHERE race_id = ?"
 
 
 @dataclass
@@ -388,7 +389,9 @@ class DatabaseManager(RaceResultPersistence):
         setattr(driver, 'reaction_time', _safe_float(getattr(driver, 'reactions', 50.0), 50.0))
         setattr(driver, 'mental_fortitude', _safe_float(getattr(driver, 'pressure', 50.0), 50.0))
         setattr(driver, 'wet_weather_skill', _safe_float(getattr(driver, 'adaptability', 50.0), 50.0))
-        setattr(driver, 'tire_management', _safe_float(getattr(driver, 'tyre_management', 50.0), 50.0))
+        # Normalize to canonical 'tyre_management' attribute
+        _tyre_val = _safe_float(getattr(driver, 'tyre_management', 50.0), 50.0)
+        setattr(driver, 'tyre_management', _tyre_val)
         setattr(driver, 'age', int(getattr(driver, 'computed_age', 0) or 0))
         setattr(driver, 'decision_making', _safe_float(getattr(driver, 'racecraft', 50.0), 50.0))
         setattr(driver, 'physical_fitness', _safe_float(getattr(driver, 'fitness', 50.0), 50.0))
@@ -414,89 +417,34 @@ class DatabaseManager(RaceResultPersistence):
 
     # Driver operations
     def create_driver(self, driver: Driver) -> Optional[int]:
-        """Create a new driver with all 50+ attributes and return ID"""
+        """Create a new driver using the compact schema-backed driver model."""
+        team_id = getattr(driver, 'current_team_id', None)
+        if team_id in (0, ''):
+            team_id = None
+
         try:
-            with self.get_connection() as conn:
-                cursor = conn.execute("""
-                INSERT INTO drivers (
-                    name, nationality, birth_date, age,
-                    -- Core Driving Skills
-                    raw_speed, consistency, racecraft, overtaking, defensive_driving,
-                    cornering_skill, braking_technique, acceleration_control, spatial_awareness, vehicle_control,
-                    -- Physical & Mental Traits
-                    physical_fitness, reaction_time, concentration, pressure_handling, pain_tolerance,
-                    g_force_tolerance, coordination, multitasking, mental_resilience, adrenaline_management,
-                    -- Technical Knowledge
-                    setup_knowledge, mechanical_sympathy, tire_management, fuel_management,
-                    aerodynamics_understanding, suspension_feel, engine_management, data_analysis,
-                    -- Discipline Specializations
-                    single_seater_aptitude, touring_car_aptitude, rally_aptitude, street_racing_aptitude,
-                    drag_racing_aptitude, rallycross_aptitude, endurance_aptitude,
-                    -- Race Craft & Strategy
-                    race_strategy, pit_entry_exit, traffic_management, qualifying_pace, race_pace,
-                    starting_skill, tyre_warming, energy_management,
-                    -- Environmental Adaptation
-                    wet_weather_skill, night_driving, heat_tolerance, cold_tolerance,
-                    altitude_adaptation, visibility_adaptation, surface_adaptation,
-                    -- Personal & Social Traits
-                    media_handling, sponsorship_appeal, fan_engagement, team_player, leadership, professionalism,
-                    -- Career Stats
-                    career_wins, career_podiums, career_points, biography, current_team_id
-                )
-                VALUES (?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?)
-                """, (
-                driver.name, driver.nationality, driver.birth_date, driver.age,
-                # Core Driving Skills
-                driver.raw_speed, driver.consistency, driver.racecraft, driver.overtaking, driver.defensive_driving,
-                driver.cornering_skill, driver.braking_technique, driver.acceleration_control, driver.spatial_awareness, driver.vehicle_control,
-                # Physical & Mental Traits
-                driver.physical_fitness, driver.reaction_time, driver.concentration, driver.pressure_handling, driver.pain_tolerance,
-                driver.g_force_tolerance, driver.coordination, driver.multitasking, driver.mental_resilience, driver.adrenaline_management,
-                # Technical Knowledge
-                driver.setup_knowledge, driver.mechanical_sympathy, driver.tire_management, driver.fuel_management,
-                driver.aerodynamics_understanding, driver.suspension_feel, driver.engine_management, driver.data_analysis,
-                # Discipline Specializations
-                driver.single_seater_aptitude, driver.touring_car_aptitude, driver.rally_aptitude, driver.street_racing_aptitude,
-                driver.drag_racing_aptitude, driver.rallycross_aptitude, driver.endurance_aptitude,
-                # Race Craft & Strategy
-                driver.race_strategy, driver.pit_entry_exit, driver.traffic_management, driver.qualifying_pace, driver.race_pace,
-                driver.starting_skill, driver.tyre_warming, driver.energy_management,
-                # Environmental Adaptation
-                driver.wet_weather_skill, driver.night_driving, driver.heat_tolerance, driver.cold_tolerance,
-                driver.altitude_adaptation, driver.visibility_adaptation, driver.surface_adaptation,
-                # Personal & Social Traits
-                driver.media_handling, driver.sponsorship_appeal, driver.fan_engagement, driver.team_player, driver.leadership, driver.professionalism,
-                # Career Stats
-                driver.career_wins, driver.career_podiums, driver.career_points, driver.biography, driver.current_team_id
-                ))
-                return cursor.lastrowid
-        except Exception:
-            # Fallback path for compact Driver objects used in newer code/tests.
             with self.get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO drivers (name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO drivers (
+                        name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline, current_team_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         getattr(driver, 'name', 'Unknown Driver'),
                         getattr(driver, 'nationality', 'Unknown'),
                         getattr(driver, 'birth_date', '1995-01-01'),
-                        float(getattr(driver, 'speed', getattr(driver, 'raw_speed', 50.0))),
+                        float(getattr(driver, 'speed', 50.0)),
                         float(getattr(driver, 'racecraft', 50.0)),
                         float(getattr(driver, 'consistency', 50.0)),
                         str(getattr(driver, 'preferred_discipline', getattr(driver, 'discipline', 'SINGLE_SEATER'))),
+                        team_id,
                     ),
                 )
                 return cursor.lastrowid
+        except Exception:
+            return None
 
     def update_driver(self, driver: Driver) -> bool:
         """Update core driver fields used by tests and API flows."""
@@ -1121,6 +1069,30 @@ class DatabaseManager(RaceResultPersistence):
         except Exception:
             # Error updating surface, but continue gracefully
             return False
+
+    def delete_track(self, track_id: int) -> bool:
+        """Delete a track and any races/results that depend on it."""
+        with self.get_connection() as conn:
+            race_rows = conn.execute(
+                "SELECT id FROM races WHERE track_id = ?",
+                (track_id,),
+            ).fetchall()
+            race_ids = [int(row[0]) for row in race_rows]
+
+            for race_id in race_ids:
+                conn.execute(DELETE_RACE_RESULTS_SQL, (race_id,))
+
+            conn.execute(
+                "DELETE FROM races WHERE track_id = ?",
+                (track_id,),
+            )
+
+            cursor = conn.execute(
+                "DELETE FROM tracks WHERE id = ?",
+                (track_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
     
     # Alias for consistency
     def get_track_by_id(self, track_id: int) -> Optional[Track]:
@@ -1182,10 +1154,7 @@ class DatabaseManager(RaceResultPersistence):
             race_ids = [int(row[0]) for row in race_rows]
 
             for race_id in race_ids:
-                conn.execute(
-                    "DELETE FROM race_results WHERE race_id = ?",
-                    (race_id,),
-                )
+                conn.execute(DELETE_RACE_RESULTS_SQL, (race_id,))
 
             conn.execute(
                 "DELETE FROM races WHERE championship_id = ?",
@@ -1268,7 +1237,7 @@ class DatabaseManager(RaceResultPersistence):
                 grouped_results.setdefault(int(getattr(result, "race_id", 0) or 0), []).append(result)
 
             for race_id, results in grouped_results.items():
-                conn.execute("DELETE FROM race_results WHERE race_id = ?", (race_id,))
+                conn.execute(DELETE_RACE_RESULTS_SQL, (race_id,))
                 for result in results:
                     cursor = conn.execute("""
                         INSERT OR REPLACE INTO race_results

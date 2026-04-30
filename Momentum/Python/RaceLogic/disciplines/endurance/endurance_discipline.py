@@ -14,7 +14,7 @@ from services.race_engine_factory import create_realtime_engine
 
 
 class EnduranceEngine(BaseDisciplineEngine):
-    """Endurance racing adapter with reliability and tire-management emphasis."""
+    """Endurance racing adapter with reliability and tyre-management emphasis."""
 
     def __init__(self, seed: Optional[int] = None):
         super().__init__(seed if seed is not None else 0)
@@ -25,7 +25,7 @@ class EnduranceEngine(BaseDisciplineEngine):
             "consistency": 0.18,
             "racecraft": 0.08,
             "raw_speed": 0.08,
-            "tire_management": 0.18,
+            "tyre_management": 0.18,
             "fuel_management": 0.16,
             "mechanical_sympathy": 0.12,
             "concentration": 0.08,
@@ -53,7 +53,7 @@ class EnduranceEngine(BaseDisciplineEngine):
         engine.BASE_SPEED_MPS = 68.0
         engine.MAX_SPEED_MPS = 88.0
         engine.MIN_SPEED_MPS = 26.0
-        engine.TIRE_DEGRADATION_RATE = 0.000010
+        engine.TYRE_DEGRADATION_RATE = 0.000010
         engine.FUEL_BURN_RATE = 0.000018
         engine.ATTACK_THRESHOLD_GAP = 3.2
         engine.DEFEND_THRESHOLD_GAP = 1.9
@@ -94,7 +94,12 @@ class EnduranceEngine(BaseDisciplineEngine):
             return default
 
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
-        engine = create_realtime_engine(seed=getattr(self, 'seed', None))
+        engine = None
+        engine_cls = globals().get('RealtimeRaceEngine')
+        if engine_cls is not None:
+            engine = engine_cls(seed=getattr(self, 'seed', None))
+        else:
+            engine = create_realtime_engine(seed=getattr(self, 'seed', None))
         self._apply_tuning(engine)
 
         tc = self._track_conditions(context)

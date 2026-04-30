@@ -1,0 +1,11 @@
+# Development-only tooling
+black
+flake8
+mypy
+ipython
+jsonschema
+hypothesis
+httpx
+pytest
+pytest-cov
+pyyaml
