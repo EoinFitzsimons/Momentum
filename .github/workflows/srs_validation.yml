@@ -12,7 +12,7 @@ jobs:
     name: SRS Requirements & Schema Validation
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -72,7 +72,7 @@ jobs:
     name: Reproducibility Tests (R-SIM-001)
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -104,7 +104,7 @@ jobs:
     name: Integration Tests (SRS Contracts & Schemas)
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -136,7 +136,7 @@ jobs:
     name: Test Coverage Report
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -167,7 +167,7 @@ jobs:
     name: Code Quality Checks
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -192,7 +192,7 @@ jobs:
     name: SRS Documentation
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Verify employment analysis exists
         run: |
