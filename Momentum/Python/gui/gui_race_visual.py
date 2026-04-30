@@ -4438,8 +4438,8 @@ class RaceWindow(QMainWindow):
         velocity_mps = float(pos_data.get("velocity_mps", 0.0))
         push_intensity = float(pos_data.get("push_intensity", 0.7))
         push_fatigue = float(pos_data.get("push_fatigue", 0.0))
-        tyre_condition = float(pos_data.get("tire_condition", 1.0))
-        tyre_compound = str(pos_data.get("tire_compound", "medium") or "medium")
+        tyre_condition = float(pos_data.get("tyre_condition", 1.0))
+        tyre_compound = str(pos_data.get("tyre_compound", "medium") or "medium")
         self.player_telemetry['speed_kph'] = velocity_mps * 3.6
         self.player_telemetry['push_intensity'] = push_intensity
         self.player_telemetry['push_fatigue'] = push_fatigue
@@ -4460,7 +4460,7 @@ class RaceWindow(QMainWindow):
         in_pit_lane = bool(pos_data.get("in_pit_lane", False))
         pit_time_remaining_s = float(pos_data.get("pit_time_remaining_s", 0.0) or 0.0)
         pit_total_time_s = float(pos_data.get("pit_total_time_s", 0.0) or 0.0)
-        tyre_compound = str(pos_data.get("tire_compound", "medium") or "medium")
+        tyre_compound = str(pos_data.get("tyre_compound", "medium") or "medium")
         if hasattr(self.track_widget, 'update_car_realtime'):
             self.track_widget.update_car_realtime(
                 driver_id=driver_id,

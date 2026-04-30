@@ -1134,7 +1134,7 @@ class CareerWindow(QMainWindow):
             "discipline": self.championship.discipline,
             "tier": str(getattr(self.championship, "tier", "TIER_2") or "TIER_2"),
             "weather": race_data.get("weather_conditions", "clear"),
-            "tire_strategy": "Medium",
+            "tyre_strategy": "Medium",
             "laps": int(race_data.get("laps", 3) or 3),
         }
 

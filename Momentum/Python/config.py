@@ -1,5 +1,7 @@
 # Configuration settings for Momentum simulation
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -28,12 +30,20 @@ PARANAMES_DB_PATH = os.getenv("PARANAMES_DB_PATH", "data/paranames.db")
 # ============================================================================
 
 # Database Configuration
-DATABASE_PATH = os.getenv(
-    "DATABASE_PATH",
-    os.path.join(
-        os.path.dirname(__file__),
-        "database",
-        "momentum.db"))
+if getattr(sys, "frozen", False):
+    _default_database_path = Path(
+        os.getenv(
+            "MOMENTUM_DATA_DIR",
+            os.path.join(
+                os.getenv("LOCALAPPDATA", os.path.expanduser("~")),
+                "Momentum",
+            ),
+        )
+    ) / "momentum.db"
+else:
+    _default_database_path = Path(__file__).resolve().parent / "database" / "momentum.db"
+
+DATABASE_PATH = os.getenv("DATABASE_PATH", str(_default_database_path))
 
 # Ensure DATABASE_PATH is absolute and anchored to this package directory.
 # This prevents a relative path from .env (e.g. "database/momentum.db") resolving
@@ -299,7 +309,7 @@ DRIVER_PHYSICAL_MENTAL = [
 DRIVER_TECHNICAL = [
     "setup_knowledge",
     "mechanical_sympathy",
-    "tire_management",
+    "tyre_management",
     "fuel_management",
     "aerodynamics_understanding",
     "suspension_feel",
@@ -322,7 +332,7 @@ DRIVER_STRATEGY = [
     "race_strategy",
     "pit_stop_coordination",
     "traffic_management",
-    "tire_strategy",
+    "tyre_strategy",
     "fuel_strategy",
     "safety_car_awareness",
     "qualifying_optimization",

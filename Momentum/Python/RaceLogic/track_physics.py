@@ -68,7 +68,7 @@ class TrackCorner:
     barrier_proximity_m: float = 5.0  # Distance to barriers
 
     def get_ideal_line_speed(self, driver: Driver,
-                             tire_condition: float) -> float:
+                             tyre_condition: float) -> float:
         """Calculate optimal corner speed for driver"""
         # Base corner speed
         base_speed = self.apex_speed_kmh
@@ -95,14 +95,14 @@ class TrackCorner:
         elif self.radius_m > 100:  # Fast corner
             skill_factor *= (1.0 + (consistency / 2.0))
 
-        # Tire degradation impact
-        tire_factor = 0.7 + (0.3 * tire_condition)
+        # Tyre degradation impact
+        tyre_factor = 0.7 + (0.3 * tyre_condition)
 
         # Grip level
         grip_factor = self.grip_level
 
         return base_speed * (0.85 + 0.15 * skill_factor) * \
-            tire_factor * grip_factor
+            tyre_factor * grip_factor
 
 
 @dataclass
@@ -302,7 +302,7 @@ class TrackMap:
 def calculate_corner_performance(
     driver: Driver,
     corner: TrackCorner,
-    tire_condition: float,
+    tyre_condition: float,
     racing_line: RacingLine,
     cars_nearby: int = 0
 ) -> Dict[str, float]:
@@ -312,7 +312,7 @@ def calculate_corner_performance(
     Returns time loss/gain and exit speed based on:
     - Driver cornering skills
     - Chosen racing line
-    - Tire condition
+    - Tyre condition
     - Traffic (dirty air, blocking)
     """
     # Base corner time (perfect conditions, ideal line)
@@ -321,7 +321,7 @@ def calculate_corner_performance(
 
     # Driver skill multiplier
     skill_factor = corner.get_ideal_line_speed(
-        driver, tire_condition) / corner.apex_speed_kmh
+        driver, tyre_condition) / corner.apex_speed_kmh
 
     # Racing line impact
     line_factors = {
@@ -345,5 +345,5 @@ def calculate_corner_performance(
         "time_s": actual_time_s,
         "time_delta": actual_time_s - base_time_s,
         "exit_speed_kmh": exit_speed_kmh,
-        "grip_used": (1.0 - tire_condition) * 0.5 + 0.5  # Tire wear indicator
+        "grip_used": (1.0 - tyre_condition) * 0.5 + 0.5  # Tyre wear indicator
     }

@@ -101,3 +101,4 @@ Thumbs.db
 Momentum/Python/saves/telemetry_*.csv
 **/saves/telemetry_*.csv
 telemetry_*.csv
+/Momentum/Python/dist/Momentum/_internal

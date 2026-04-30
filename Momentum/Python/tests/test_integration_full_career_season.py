@@ -6,7 +6,9 @@ import pytest
 
 
 def _seed_single_seater_roster(db):
-    from scripts import seed_career_mode as career_seed
+    import importlib
+
+    career_seed = importlib.import_module("scripts.seed_career_mode")
 
     disciplines = ["SINGLE_SEATER"]
     career_seed.seed_teams(db, 2, disciplines)

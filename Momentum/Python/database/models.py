@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 class Driver:
     id: int
     name: str
-    nationality: str
-    birth_date: str
+    nationality: str = "Unknown"
+    birth_date: str = "1995-01-01"
 
     # Core performance attributes (0-100 scale)
     speed: float = 50.0
@@ -133,7 +133,7 @@ class Track:
     surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
     surface_type: str = "asphalt"  # Legacy surface type field (kept for database compatibility)
     surface_grip: float = 1.0  # Grip level for visualisation and simulation (0-1 scale)
-    surface_abrasiveness: float = 8.0  # Abrasiveness for tire wear
+    surface_abrasiveness: float = 8.0  # Abrasiveness for tyre wear
     climate: str = "temperate"  # Climate type for track conditions
 
 
@@ -336,7 +336,7 @@ CREATE TABLE IF NOT EXISTS races (
     race_duration_minutes INTEGER DEFAULT 90,
     status TEXT DEFAULT 'scheduled',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (championship_id) REFERENCES championships(id),
+    FOREIGN KEY (championship_id) REFERENCES championships(id) ON DELETE CASCADE,
     FOREIGN KEY (track_id) REFERENCES tracks(id)
 );
 
@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS race_results (
     gap_to_winner_seconds REAL DEFAULT NULL,
     status TEXT DEFAULT 'FINISHED',
     recorded_at TEXT DEFAULT NULL,
-    FOREIGN KEY (race_id) REFERENCES races(id),
+    FOREIGN KEY (race_id) REFERENCES races(id) ON DELETE CASCADE,
     FOREIGN KEY (driver_id) REFERENCES drivers(id),
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
