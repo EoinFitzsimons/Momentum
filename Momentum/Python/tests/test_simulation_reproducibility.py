@@ -146,13 +146,19 @@ def _serialize_results(results: List[RaceResult]) -> str:
     """Serialize RaceResult objects to stable JSON for comparison."""
     out = []
     for r in results:
+        best_lap_time = None if getattr(r, "best_lap_time", None) is None else round(float(r.best_lap_time), 6)
+        average_lap_time = None if getattr(r, "average_lap_time", None) is None else round(float(r.average_lap_time), 6)
+        time_seconds = None if getattr(r, "time_seconds", None) is None else round(float(r.time_seconds), 6)
         out.append({
             "driver_id": r.driver_id,
             "position": r.position,
             "points": r.points,
             "fastest_lap": r.fastest_lap,
             "dnf_reason": r.dnf_reason,
-            "status": getattr(r, "status", "FINISHED")
+            "status": getattr(r, "status", "FINISHED"),
+            "time_seconds": time_seconds,
+            "best_lap_time": best_lap_time,
+            "average_lap_time": average_lap_time,
         })
     return json.dumps(out, sort_keys=True)
 
