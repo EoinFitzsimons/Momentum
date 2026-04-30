@@ -110,12 +110,12 @@ When modifying simulation logic:
 
 1. **Before change**: Commit current state to ensure reproducibility test passes:
    ```bash
-   python -m pytest mvp_tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v
+   python -m pytest tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v
    ```
 
 2. **After change**: Re-run reproducibility tests to confirm determinism preserved:
    ```bash
-   python -m pytest mvp_tests/test_simulation_reproducibility.py -v
+   python -m pytest tests/test_simulation_reproducibility.py -v
    ```
 
 3. **If test fails**: Audit your changes for non-deterministic code:
@@ -191,7 +191,7 @@ Before committing:
 ```bash
 # Run all SRS tests
 cd Momentum/Python
-python -m pytest mvp_tests/test_simulation_reproducibility.py mvp_tests/test_integration_srs.py -v
+python -m pytest tests/test_simulation_reproducibility.py tests/test_integration_srs.py -v
 
 # If any fail, check logs and fix before committing
 ```

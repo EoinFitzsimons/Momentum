@@ -46,7 +46,6 @@ FinalProject/
 |  |  |- tests/
 |  |  |- scripts/
 |  |  |- docs/
-|  |  |- mvp_tests/
 |- Planning/
 |- Branding/
 |- Reflections/
@@ -121,7 +120,7 @@ python GUI/launcher.py
 
 ## Testing
 
-This repo contains multiple targeted test scripts under `Momentum/Python/tests/` and `Momentum/Python/mvp_tests/`.
+This repo contains multiple targeted test scripts under `Momentum/Python/tests/`.
 
 Examples:
 
@@ -129,7 +128,7 @@ Examples:
 python tests/test_championship_management.py
 python tests/test_hiring_system.py
 python tests/test_progression_system.py
-python mvp_tests/test_uc01_driver.py
+python tests/test_simulation_reproducibility.py
 ```
 
 Run tests from `Momentum/Python` so relative paths resolve correctly.
