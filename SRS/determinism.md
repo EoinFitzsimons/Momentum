@@ -37,4 +37,4 @@ cmp out1.json out2.json  # must be identical
 
 Test mapping
 ------------
-- Momentum/Python/mvp_tests/test_simulation_reproducibility.py (CI)
+- Momentum/Python/tests/test_simulation_reproducibility.py (CI)

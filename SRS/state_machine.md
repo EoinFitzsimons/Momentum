@@ -27,5 +27,5 @@ Guards and policies
 - `stop_event` must allow the engine to persist last consistent snapshot.
 
 Testing
-- `Momentum/Python/mvp_tests/test_state_transitions.py` should feed events and
+- `Momentum/Python/tests/test_simulation_reproducibility.py` should feed events and
   assert the observed state sequence equals expected sequence.
