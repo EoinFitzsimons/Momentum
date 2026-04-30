@@ -5,3 +5,6 @@ mypy
 ipython
 jsonschema
 hypothesis
+httpx
+pytest
+pytest-cov
