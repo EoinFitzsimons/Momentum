@@ -296,7 +296,7 @@ Breaking Changes: None (backward compatible; field is optional)
 **Diagnosis**:
 ```bash
 cd Momentum/Python
-python -m pytest mvp_tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v -s
+python -m pytest tests/test_simulation_reproducibility.py::test_reproducibility_with_seed -v -s
 ```
 
 **Common causes**:
@@ -313,7 +313,7 @@ python -m pytest mvp_tests/test_simulation_reproducibility.py::test_reproducibil
 
 **Diagnosis**:
 ```bash
-python -m pytest mvp_tests/test_integration_srs.py::TestDisciplineAdapterContract -v -s
+python -m pytest tests/test_integration_srs.py::TestDisciplineAdapterContract -v -s
 ```
 
 **Fix depends on test**:
@@ -355,7 +355,7 @@ python -m pytest mvp_tests/test_integration_srs.py::TestDisciplineAdapterContrac
 ### **Testing & QA**
 - **Owner**: QA engineers / Tech leads
 - **Tasks**: Run tests, validate against acceptance criteria, file bugs
-- **Artifacts**: `mvp_tests/`, coverage reports
+- **Artifacts**: `tests/`, coverage reports
 
 ### **DevOps / Platform**
 - **Owner**: DevOps / SRE team

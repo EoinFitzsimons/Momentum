@@ -21,5 +21,5 @@ Compensation and rollback
   leaderboard entries and re-ingest after reconciliation).
 
 Testing
-- Add fault-injection tests under `Momentum/Python/mvp_tests/` to assert
+- Add fault-injection tests under `Momentum/Python/tests/` to assert
   expected persisted state on injected failures.
