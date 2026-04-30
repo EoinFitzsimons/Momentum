@@ -417,121 +417,18 @@ class DatabaseManager(RaceResultPersistence):
 
     # Driver operations
     def create_driver(self, driver: Driver) -> Optional[int]:
-        """Create a new driver with a robust attribute extraction and return ID"""
-        # Use getattr for all potentially-missing attributes so this method
-        # can accept both the large legacy driver objects and the compact
-        # `Driver` dataclass used in tests.
+        """Create a new driver using the compact schema-backed driver model."""
+        team_id = getattr(driver, 'current_team_id', None)
+        if team_id in (0, ''):
+            team_id = None
+
         try:
-            with self.get_connection() as conn:
-                cursor = conn.execute("""
-                INSERT INTO drivers (
-                    name, nationality, birth_date, age,
-                    -- Core Driving Skills
-                    raw_speed, consistency, racecraft, overtaking, defensive_driving,
-                    cornering_skill, braking_technique, acceleration_control, spatial_awareness, vehicle_control,
-                    -- Physical & Mental Traits
-                    physical_fitness, reaction_time, concentration, pressure_handling, pain_tolerance,
-                    g_force_tolerance, coordination, multitasking, mental_resilience, adrenaline_management,
-                    -- Technical Knowledge
-                    setup_knowledge, mechanical_sympathy, tyre_management, fuel_management,
-                    aerodynamics_understanding, suspension_feel, engine_management, data_analysis,
-                    -- Discipline Specializations
-                    single_seater_aptitude, touring_car_aptitude, rally_aptitude, street_racing_aptitude,
-                    drag_racing_aptitude, rallycross_aptitude, endurance_aptitude,
-                    -- Race Craft & Strategy
-                    race_strategy, pit_entry_exit, traffic_management, qualifying_pace, race_pace,
-                    starting_skill, tyre_warming, energy_management,
-                    -- Environmental Adaptation
-                    wet_weather_skill, night_driving, heat_tolerance, cold_tolerance,
-                    altitude_adaptation, visibility_adaptation, surface_adaptation,
-                    -- Personal & Social Traits
-                    media_handling, sponsorship_appeal, fan_engagement, team_player, leadership, professionalism,
-                    -- Career Stats
-                    career_wins, career_podiums, career_points, biography, current_team_id
-                )
-                VALUES (%s)
-                """ % (', '.join(['?'] * 79)), (
-                    getattr(driver, 'name', 'Unknown Driver'),
-                    getattr(driver, 'nationality', 'Unknown'),
-                    getattr(driver, 'birth_date', '1995-01-01'),
-                    int(getattr(driver, 'computed_age', getattr(driver, 'age', 0) or 0)),
-                    # Core Driving Skills
-                    float(getattr(driver, 'raw_speed', getattr(driver, 'speed', 50.0))),
-                    float(getattr(driver, 'consistency', 50.0)),
-                    float(getattr(driver, 'racecraft', 50.0)),
-                    float(getattr(driver, 'overtaking', 50.0)),
-                    float(getattr(driver, 'defensive_driving', 50.0)),
-                    float(getattr(driver, 'cornering_skill', getattr(driver, 'racecraft', 50.0))),
-                    float(getattr(driver, 'braking_technique', 50.0)),
-                    float(getattr(driver, 'acceleration_control', 50.0)),
-                    float(getattr(driver, 'spatial_awareness', 50.0)),
-                    float(getattr(driver, 'vehicle_control', 50.0)),
-                    # Physical & Mental Traits
-                    float(getattr(driver, 'physical_fitness', getattr(driver, 'fitness', 50.0))),
-                    float(getattr(driver, 'reaction_time', getattr(driver, 'reactions', 50.0))),
-                    float(getattr(driver, 'concentration', 50.0)),
-                    float(getattr(driver, 'pressure_handling', getattr(driver, 'pressure', 50.0))),
-                    float(getattr(driver, 'pain_tolerance', 50.0)),
-                    float(getattr(driver, 'g_force_tolerance', 50.0)),
-                    float(getattr(driver, 'coordination', 50.0)),
-                    float(getattr(driver, 'multitasking', 50.0)),
-                    float(getattr(driver, 'mental_resilience', 50.0)),
-                    float(getattr(driver, 'adrenaline_management', 50.0)),
-                    # Technical Knowledge
-                    float(getattr(driver, 'setup_knowledge', 50.0)),
-                    float(getattr(driver, 'mechanical_sympathy', 50.0)),
-                    float(getattr(driver, 'tyre_management', 50.0)),
-                    float(getattr(driver, 'fuel_management', 50.0)),
-                    float(getattr(driver, 'aerodynamics_understanding', 50.0)),
-                    float(getattr(driver, 'suspension_feel', 50.0)),
-                    float(getattr(driver, 'engine_management', 50.0)),
-                    float(getattr(driver, 'data_analysis', 50.0)),
-                    # Discipline Specializations
-                    float(getattr(driver, 'single_seater_aptitude', 0.0)),
-                    float(getattr(driver, 'touring_car_aptitude', 0.0)),
-                    float(getattr(driver, 'rally_aptitude', 0.0)),
-                    float(getattr(driver, 'street_racing_aptitude', 0.0)),
-                    float(getattr(driver, 'drag_racing_aptitude', 0.0)),
-                    float(getattr(driver, 'rallycross_aptitude', 0.0)),
-                    float(getattr(driver, 'endurance_aptitude', 0.0)),
-                    # Race Craft & Strategy
-                    float(getattr(driver, 'race_strategy', 0.0)),
-                    float(getattr(driver, 'pit_entry_exit', 0.0)),
-                    float(getattr(driver, 'traffic_management', 0.0)),
-                    float(getattr(driver, 'qualifying_pace', getattr(driver, 'speed', 50.0))),
-                    float(getattr(driver, 'race_pace', getattr(driver, 'speed', 50.0))),
-                    float(getattr(driver, 'starting_skill', 50.0)),
-                    float(getattr(driver, 'tyre_warming', 50.0)),
-                    float(getattr(driver, 'energy_management', 50.0)),
-                    # Environmental Adaptation
-                    float(getattr(driver, 'wet_weather_skill', getattr(driver, 'adaptability', 50.0))),
-                    float(getattr(driver, 'night_driving', 0.0)),
-                    float(getattr(driver, 'heat_tolerance', 50.0)),
-                    float(getattr(driver, 'cold_tolerance', 50.0)),
-                    float(getattr(driver, 'altitude_adaptation', 0.0)),
-                    float(getattr(driver, 'visibility_adaptation', 0.0)),
-                    float(getattr(driver, 'surface_adaptation', 0.0)),
-                    # Personal & Social Traits
-                    float(getattr(driver, 'media_handling', 0.0)),
-                    float(getattr(driver, 'sponsorship_appeal', 0.0)),
-                    float(getattr(driver, 'fan_engagement', 0.0)),
-                    float(getattr(driver, 'team_player', 0.0)),
-                    float(getattr(driver, 'leadership', 0.0)),
-                    float(getattr(driver, 'professionalism', 0.0)),
-                    # Career Stats
-                    int(getattr(driver, 'career_wins', 0)),
-                    int(getattr(driver, 'career_podiums', 0)),
-                    int(getattr(driver, 'career_points', 0)),
-                    getattr(driver, 'biography', ''),
-                    int(getattr(driver, 'current_team_id', 0) or 0),
-                ))
-                return cursor.lastrowid
-        except Exception:
-            # Fallback compact insert for minimal Driver dataclass
             with self.get_connection() as conn:
                 cursor = conn.execute(
                     """
-                    INSERT INTO drivers (name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline, current_team_id)
+                    INSERT INTO drivers (
+                        name, nationality, birth_date, speed, racecraft, consistency, preferred_discipline, current_team_id
+                    )
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
@@ -542,11 +439,12 @@ class DatabaseManager(RaceResultPersistence):
                         float(getattr(driver, 'racecraft', 50.0)),
                         float(getattr(driver, 'consistency', 50.0)),
                         str(getattr(driver, 'preferred_discipline', getattr(driver, 'discipline', 'SINGLE_SEATER'))),
-                        int(getattr(driver, 'current_team_id', 0) or 0),
+                        team_id,
                     ),
                 )
                 return cursor.lastrowid
-                
+        except Exception:
+            return None
 
     def update_driver(self, driver: Driver) -> bool:
         """Update core driver fields used by tests and API flows."""

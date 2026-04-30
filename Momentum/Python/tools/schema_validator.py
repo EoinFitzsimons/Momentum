@@ -4,6 +4,7 @@ Schema validation utilities for SRS artifacts.
 Validates domain objects and events against canonical JSON schemas.
 """
 
+from pathlib import Path
 import json
 import os
 from typing import Dict, Any, List, Optional, Tuple
@@ -14,9 +15,23 @@ class SchemaValidator:
     """Load and validate JSON schemas from SRS/schemas/"""
 
     def __init__(self, schema_base_path: str = "SRS"):
-        self.schema_base = schema_base_path
+        self.schema_base = self._resolve_schema_base_path(schema_base_path)
         self.schemas: Dict[str, Dict] = {}
         self._load_all_schemas()
+
+    def _resolve_schema_base_path(self, schema_base_path: str) -> str:
+        """Resolve the schema base path relative to the repository root if needed."""
+        candidate = Path(schema_base_path)
+        if candidate.is_dir():
+            return str(candidate)
+
+        module_path = Path(__file__).resolve()
+        for parent in module_path.parents:
+            repo_candidate = parent / schema_base_path
+            if repo_candidate.is_dir():
+                return str(repo_candidate)
+
+        return schema_base_path
 
     def _load_all_schemas(self) -> None:
         """Load all JSON schemas from SRS/schemas/ and SRS/event_schemas/"""

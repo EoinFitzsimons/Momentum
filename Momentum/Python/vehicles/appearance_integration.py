@@ -5,13 +5,18 @@ Provides utilities to bridge vehicle appearance system with race visualisation,
 including discipline-specific vehicle model selection.
 """
 
+from __future__ import annotations
+
 import re
 from typing import Dict, Optional
-from PyQt6.QtGui import QColor, QPainter
 from database.models import Driver, Team
 from vehicles.vehicle_appearance import (
-    VehicleRenderer, VehicleType, Livery, VehicleConfiguration,
-    create_team_livery
+    QColor,
+    VehicleRenderer,
+    VehicleType,
+    Livery,
+    VehicleConfiguration,
+    create_team_livery,
 )
 
 
