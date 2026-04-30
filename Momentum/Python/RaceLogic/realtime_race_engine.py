@@ -354,7 +354,7 @@ class RealtimeRaceEngine:
 
         # Headless runs are used by the statistical and performance tests, so
         # use a coarser simulation step there to keep the test suite tractable.
-        timestep = 1.0 / 30.0 if event_callback else 0.5
+        timestep = 1.0 / 30.0 if event_callback else 1.0
         frame = 0
         if event_callback:
             event_callback(self._create_position_event(race_state, frame))
