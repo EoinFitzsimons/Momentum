@@ -1,11 +1,5 @@
 """
 R-SIM-002, R-DISC-001, R-EVT-001, R-FAIL-001: Integration and contract tests.
-
-Tests that verify:
-- Realtime mode event streaming and stop_event behavior
-- Discipline adapter contract compliance
-- Event contract and validation
-- Failure mode recovery
 """
 
 import sys
@@ -23,28 +17,28 @@ from tools.schema_validator import SchemaValidator
 
 
 class TestDisciplineAdapterContract:
-    """R-DISC-001: Verify discipline adapters comply with BaseDisciplineEngine contract."""
-
     def _create_test_context(self) -> RaceContext:
-        """Create a minimal RaceContext for adapter testing."""
-        track = Track(id=1, name="Test", lap_time=78.0, length_km=5.0)
+        track = Track(id=1, name="Test", country="UK", primary_discipline="SINGLE_SEATER", length_km=5.0)
         drivers = [
-            Driver(id=1, name="D1", preferred_discipline="formula"),
-            Driver(id=2, name="D2", preferred_discipline="formula")
+            Driver(id=1, name="D1", nationality="GBR", birth_date="1990-01-01", preferred_discipline="SINGLE_SEATER", current_team_id=1),
+            Driver(id=2, name="D2", nationality="GBR", birth_date="1990-01-01", preferred_discipline="SINGLE_SEATER", current_team_id=2),
         ]
+        teams = {
+            1: Team(id=1, name="Team 1", nationality="GBR", discipline="SINGLE_SEATER", tier="TIER_1", budget=10_000_000),
+            2: Team(id=2, name="Team 2", nationality="GBR", discipline="SINGLE_SEATER", tier="TIER_1", budget=10_000_000),
+        }
         return RaceContext(
-            race_id="adapter-test",
-            total_laps=3,
+            discipline=RacingDiscipline.SINGLE_SEATER,
             track=track,
-            drivers=drivers
+            drivers=drivers,
+            teams=teams,
+            total_laps=3,
         )
 
     def test_adapter_instantiation_with_seed(self):
-        """Adapter must be instantiable with optional seed parameter."""
         context = self._create_test_context()
         context.discipline = RacingDiscipline.URBAN_STREET
 
-        # Should not raise
         adapter = create_discipline_engine(context, seed=42)
         assert adapter is not None
         assert hasattr(adapter, "simulate_race")
@@ -52,11 +46,11 @@ class TestDisciplineAdapterContract:
         assert hasattr(adapter, "calculate_lap_time")
 
     def test_adapter_get_attribute_weights(self):
-        """Adapter.get_attribute_weights() must return dict with 0 <= weight <= 1."""
         context = self._create_test_context()
         context.discipline = RacingDiscipline.URBAN_STREET
 
         adapter = create_discipline_engine(context, seed=42)
+        assert adapter is not None
         weights = adapter.get_attribute_weights()
 
         assert isinstance(weights, dict)
@@ -68,24 +62,25 @@ class TestDisciplineAdapterContract:
 
 
 class TestRealtimeModeAndStreaming:
-    """R-SIM-002: Realtime mode, event_callback, and stop_event."""
-
     def _create_test_context(self) -> RaceContext:
-        """Create a minimal RaceContext."""
-        track = Track(id=1, name="Test", lap_time=78.0, length_km=5.0)
+        track = Track(id=1, name="Test", country="UK", primary_discipline="SINGLE_SEATER", length_km=5.0)
         drivers = [
-            Driver(id=1, name="D1", preferred_discipline="formula"),
-            Driver(id=2, name="D2", preferred_discipline="formula")
+            Driver(id=1, name="D1", nationality="GBR", birth_date="1990-01-01", preferred_discipline="SINGLE_SEATER", current_team_id=1),
+            Driver(id=2, name="D2", nationality="GBR", birth_date="1990-01-01", preferred_discipline="SINGLE_SEATER", current_team_id=2),
         ]
+        teams = {
+            1: Team(id=1, name="Team 1", nationality="GBR", discipline="SINGLE_SEATER", tier="TIER_1", budget=10_000_000),
+            2: Team(id=2, name="Team 2", nationality="GBR", discipline="SINGLE_SEATER", tier="TIER_1", budget=10_000_000),
+        }
         return RaceContext(
-            race_id="realtime-test",
-            total_laps=2,
+            discipline=RacingDiscipline.SINGLE_SEATER,
             track=track,
-            drivers=drivers
+            drivers=drivers,
+            teams=teams,
+            total_laps=2,
         )
 
     def test_event_callback_is_invoked(self):
-        """Event callback must be called during simulation."""
         context = self._create_test_context()
         events_captured = []
 
@@ -101,17 +96,12 @@ class TestRealtimeModeAndStreaming:
             verbose=False
         )
 
-        # Should have results
         assert len(results) > 0
-        # Should have captured at least some events (depends on engine)
-        # Note: May be empty in headless mode; just verify callback was wired
         assert isinstance(events_captured, list)
 
     def test_realtime_speed_parameter_accepted(self):
-        """Realtime speed parameter should be accepted without error."""
         context = self._create_test_context()
 
-        # Should not raise
         results = simulate_race(
             drivers=context.drivers,
             track=context.track,
@@ -125,13 +115,9 @@ class TestRealtimeModeAndStreaming:
 
 
 class TestEventContract:
-    """R-EVT-001: Event schema and contract compliance."""
-
     def test_event_schema_load(self):
-        """Event schemas must be loadable from SRS/event_schemas/"""
         validator = SchemaValidator()
 
-        # Should have loaded event schemas
         expected_schemas = ["lap_complete", "overtake", "incident"]
         for schema_name in expected_schemas:
             assert schema_name in validator.schemas, (
@@ -139,7 +125,6 @@ class TestEventContract:
             )
 
     def test_event_has_required_fields(self):
-        """Events must have event_id, schema_version, event_type, race_id, timestamp."""
         example_event = {
             "event_id": "evt-001",
             "schema_version": "1.0.0",
@@ -154,20 +139,15 @@ class TestEventContract:
             }
         }
 
-        # Validation should accept this structure
         validator = SchemaValidator()
         valid, error = validator.validate_event(example_event, "lap_complete")
-        # If not valid, log but don't fail (schemas may not be present)
         if not valid:
             print(f"Warning: event validation failed: {error}")
 
 
 class TestFailureModes:
-    """R-FAIL-001: Failure handling and recovery."""
-
     def test_missing_drivers_raises_error(self):
-        """Missing drivers should raise ValueError."""
-        track = Track(id=1, name="Test", lap_time=78.0, length_km=5.0)
+        track = Track(id=1, name="Test", country="UK", primary_discipline="SINGLE_SEATER", length_km=5.0)
 
         with pytest.raises(ValueError, match="drivers parameter is required"):
             simulate_race(
@@ -178,7 +158,6 @@ class TestFailureModes:
             )
 
     def test_missing_track_raises_error(self):
-        """Missing track should raise ValueError."""
         driver = Driver(id=1, name="D1", preferred_discipline="formula")
 
         with pytest.raises(ValueError, match="track parameter is required"):
@@ -190,28 +169,22 @@ class TestFailureModes:
             )
 
     def test_invalid_laps_handled(self):
-        """Invalid lap count should be handled gracefully."""
-        track = Track(id=1, name="Test", lap_time=78.0, length_km=5.0)
-        driver = Driver(id=1, name="D1", preferred_discipline="formula")
+        track = Track(id=1, name="Test", country="UK", primary_discipline="SINGLE_SEATER", length_km=5.0)
+        driver = Driver(id=1, name="D1", nationality="GBR", birth_date="1990-01-01", preferred_discipline="SINGLE_SEATER")
 
-        # Should not raise; engine will use default or calculated value
         results = simulate_race(
             drivers=[driver],
             track=track,
-            laps=0,  # Invalid
+            laps=0,
             seed=42,
             verbose=False
         )
 
-        # Should produce some result
         assert isinstance(results, list)
 
 
 class TestSchemaValidation:
-    """R-DB-001: Schema validation for domain objects."""
-
     def test_driver_schema_validation(self):
-        """Driver objects must conform to driver.schema.json."""
         validator = SchemaValidator()
 
         valid_driver = {
@@ -223,12 +196,10 @@ class TestSchemaValidation:
         }
 
         valid, error = validator.validate_driver(valid_driver)
-        # If schema loaded, should validate
         if "driver" in validator.schemas:
             assert valid, f"Driver validation failed: {error}"
 
     def test_track_schema_validation(self):
-        """Track objects must conform to track.schema.json."""
         validator = SchemaValidator()
 
         valid_track = {
@@ -243,7 +214,6 @@ class TestSchemaValidation:
             assert valid, f"Track validation failed: {error}"
 
     def test_result_schema_validation(self):
-        """Result objects must conform to result.schema.json."""
         validator = SchemaValidator()
 
         valid_result = {
