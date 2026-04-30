@@ -89,14 +89,14 @@ jobs:
       - name: Run reproducibility tests
         run: |
           cd Momentum/Python
-          python -m pytest mvp_tests/test_simulation_reproducibility.py -v --tb=short
+          python -m pytest tests/test_simulation_reproducibility.py -v --tb=short
 
       - name: Report reproducibility results
         if: always()
         run: |
           echo "::group::Reproducibility Test Summary"
           cd Momentum/Python
-          python -m pytest mvp_tests/test_simulation_reproducibility.py -v --tb=line || true
+          python -m pytest tests/test_simulation_reproducibility.py -v --tb=line || true
           echo "::endgroup::"
 
   integration-tests:
@@ -121,14 +121,14 @@ jobs:
       - name: Run integration tests
         run: |
           cd Momentum/Python
-          python -m pytest mvp_tests/test_integration_srs.py -v --tb=short
+          python -m pytest tests/test_integration_srs.py -v --tb=short
 
       - name: Report integration test results
         if: always()
         run: |
           echo "::group::Integration Test Summary"
           cd Momentum/Python
-          python -m pytest mvp_tests/test_integration_srs.py -v --tb=line || true
+          python -m pytest tests/test_integration_srs.py -v --tb=line || true
           echo "::endgroup::"
 
   test-coverage:
@@ -153,7 +153,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           cd Momentum/Python
-          python -m pytest mvp_tests/ --cov=services --cov=RaceLogic --cov=tools --cov-report=term-missing --cov-report=html
+          python -m pytest tests/ --cov=services --cov=RaceLogic --cov=tools --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage artifacts
         if: always()
