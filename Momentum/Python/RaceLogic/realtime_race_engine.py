@@ -24,6 +24,7 @@ Authors: Eoin Fitzsimons
 Date: December 2025
 """
 
+import random
 import numpy as np
 import time
 from typing import List, Dict, Callable, Optional, Any, Tuple
@@ -164,6 +165,9 @@ class RealtimeRaceEngine:
     def __init__(self, seed: Optional[int] = None, db: Optional[Any] = None):
         """Initialise engine with random generator"""
         self.rng = np.random.default_rng(seed)
+        # Also seed the global random module for backward compatibility
+        # (some code paths use random.choice instead of self.rng.choice)
+        random.seed(seed)
         # Kept for backward compatibility with older tests that pass `db=`.
         self.db = db
         self.debug_logging: bool = False
@@ -1119,6 +1123,7 @@ class RealtimeRaceEngine:
         """Backward-compatible wrapper for older tests and API adapters."""
         if seed is not None:
             self.rng = np.random.default_rng(seed)
+            random.seed(seed)
 
         # Kept for signature compatibility.
         _ = discipline
