@@ -6,11 +6,28 @@ and headless PNG preview tests. This implementation is concise and
 avoids stray top-level statements so it imports cleanly for pytest.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
-from PyQt6.QtCore import Qt, QPointF
+
+try:
+    from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
+    from PyQt6.QtCore import Qt, QPointF
+except Exception:
+    @dataclass(frozen=True)
+    class QColor:
+        red: int
+        green: int
+        blue: int
+        alpha: int = 255
+
+        def getRgb(self):
+            return self.red, self.green, self.blue, self.alpha
+
+        def __iter__(self):
+            yield from (self.red, self.green, self.blue, self.alpha)
 
 
 class VehicleType(Enum):

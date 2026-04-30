@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 class Driver:
     id: int
     name: str
-    nationality: str
-    birth_date: str
+    nationality: str = "Unknown"
+    birth_date: str = "1995-01-01"
 
     # Core performance attributes (0-100 scale)
     speed: float = 50.0

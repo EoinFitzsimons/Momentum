@@ -429,11 +429,17 @@ class RealtimeRaceEngine:
 
     def _hydrate_staff_effects_for_teams(self, teams: Dict[int, Team]) -> None:  # NOSONAR
         """Compute normalised per-team staff effects from DB roster and role config."""
-        self._team_staff_effects = {int(team_id): {} for team_id in teams.keys()}
+        self._team_staff_effects = {
+            int(team_id): {}
+            for team_id in teams.keys()
+            if team_id is not None
+        }
         if not self.db or not hasattr(self.db, 'get_staff_by_team'):
             return
 
         for team_id, team in teams.items():
+            if team_id is None:
+                continue
             try:
                 staff = self.db.get_staff_by_team(int(team_id))
             except Exception:
