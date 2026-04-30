@@ -208,7 +208,7 @@ def test_different_seeds_produce_different_outcomes(seeded_db):
     assert drivers
     
     # Run races with different seeds
-    all_positions = []
+    all_finishing_orders = []
     
     for seed in range(20):
         results = simulate_race(
@@ -219,11 +219,11 @@ def test_different_seeds_produce_different_outcomes(seeded_db):
         )
         
         if results:
-            positions = tuple(r.position for r in results)
-            all_positions.append(positions)
+            finishing_order = tuple(r.driver_id for r in results)
+            all_finishing_orders.append(finishing_order)
     
     # Should have variation across runs
-    unique_outcomes = len(set(all_positions))
+    unique_outcomes = len(set(all_finishing_orders))
     assert unique_outcomes > 1, "Different seeds should produce different outcomes"
 
 
