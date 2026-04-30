@@ -54,6 +54,7 @@ Source evidence used:
 | black      | Formatting                   | Enforce consistent code formatting        | Removes style debates, fast formatting | Opinionated formatting choices                                 | Active               | `BlackDocs2026`   |
 | flake8     | Linting                      | Catch style and simple quality issues     | Lightweight and familiar               | Needs configuration to avoid noisy warnings                    | Active               | `Flake8Docs2026`  |
 | mypy       | Static type checking         | Improve correctness in typed Python code  | Catches interface/type errors early    | Requires disciplined annotations and stubs                     | Active               | `MypyDocs2026`    |
+| hypothesis | Property-based testing       | Generate extensive test cases from specifications | Finds edge cases automatically, improves coverage | Requires rethinking test design around properties           | Active               | `HypothesisDocs2026` |
 | ipython    | Developer shell tooling      | Interactive debugging and experimentation | Fast exploratory workflow              | Not part of runtime deliverable                                | Active (development) | `IPythonDocs2026` |
 
 ## Mathematical Formulae and Method References

@@ -400,8 +400,9 @@ class SingleSeaterEngine(BaseDisciplineEngine):
         # Consistent driver (100): ±2%, Inconsistent driver (0): ±5%
         variance_range = 0.02 + (1.0 - consistency) * 0.03
 
-        # Random variance (normal distribution)
-        variance = self.rng.normal(0, variance_range / 2.0)
+        # Random variance (normal distribution) - ensure non-negative scale
+        scale = max(0.0, variance_range / 2.0)
+        variance = self.rng.normal(0, scale)
 
         # Clamp to range
         return max(-variance_range, min(variance, variance_range))

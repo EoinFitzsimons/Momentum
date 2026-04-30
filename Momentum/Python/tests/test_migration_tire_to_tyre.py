@@ -2,6 +2,7 @@ import os
 import sqlite3
 import tempfile
 import subprocess
+import pytest
 
 DB_TEMPLATE_SQL = '''
 CREATE TABLE drivers (
@@ -16,6 +17,7 @@ INSERT INTO drivers (name, tire_management, tire_strategy) VALUES ('Bob', 45.0, 
 '''
 
 
+@pytest.mark.integration
 def test_migration_creates_tyre_columns(tmp_path):
     db_file = tmp_path / 'test_mig.db'
     with open(db_file, 'wb') as f:

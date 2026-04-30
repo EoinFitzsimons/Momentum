@@ -219,6 +219,16 @@
   </b:Source>
 
   <b:Source>
+    <b:Tag>HypothesisDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>Hypothesis Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>Hypothesis Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://hypothesis.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>30</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
     <b:Tag>PandasDocs2026</b:Tag>
     <b:SourceType>DocumentFromInternetSite</b:SourceType>
     <b:Author><b:Author><b:Corporate>pandas development team</b:Corporate></b:Author></b:Author>

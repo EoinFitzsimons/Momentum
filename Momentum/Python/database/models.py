@@ -336,7 +336,7 @@ CREATE TABLE IF NOT EXISTS races (
     race_duration_minutes INTEGER DEFAULT 90,
     status TEXT DEFAULT 'scheduled',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (championship_id) REFERENCES championships(id),
+    FOREIGN KEY (championship_id) REFERENCES championships(id) ON DELETE CASCADE,
     FOREIGN KEY (track_id) REFERENCES tracks(id)
 );
 
@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS race_results (
     gap_to_winner_seconds REAL DEFAULT NULL,
     status TEXT DEFAULT 'FINISHED',
     recorded_at TEXT DEFAULT NULL,
-    FOREIGN KEY (race_id) REFERENCES races(id),
+    FOREIGN KEY (race_id) REFERENCES races(id) ON DELETE CASCADE,
     FOREIGN KEY (driver_id) REFERENCES drivers(id),
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );

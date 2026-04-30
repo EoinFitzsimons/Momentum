@@ -116,7 +116,7 @@ def get_available_staff(self, role: Optional[str] = None,
 def sign_driver_contract(self, driver_id: int, team_id: int,
                        contract_length: int, salary: float,
                        contract_start_season: Optional[int] = None,
-                       performance_bonus: float = 0.0) -> None:
+                       performance_bonus: float = 0.0) -> bool:
     """UC-16: Sign driver to team contract"""
     if contract_start_season is None:
         contract_start_season = datetime.now().year
@@ -141,11 +141,12 @@ def sign_driver_contract(self, driver_id: int, team_id: int,
             performance_bonus,
             driver_id
         ))
+        return True
 
 
 def sign_staff_contract(self, staff_id: int, team_id: int,
                       contract_length: int, salary: float,
-                      contract_start_season: Optional[int] = None) -> None:
+                      contract_start_season: Optional[int] = None) -> bool:
     """UC-18: Sign staff to team contract"""
     if contract_start_season is None:
         contract_start_season = datetime.now().year
@@ -168,6 +169,7 @@ def sign_staff_contract(self, staff_id: int, team_id: int,
             contract_end_season,
             staff_id
         ))
+    return True
 
 
 def release_driver(self, driver_id: int) -> None:
