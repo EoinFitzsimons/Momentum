@@ -10,6 +10,28 @@ $projectRoot = Split-Path -Parent $scriptDir
 
 Set-Location $projectRoot
 
+# Pre-clean: stop any running Momentum process and remove previous dist folder
+try {
+    Stop-Process -Name Momentum -ErrorAction SilentlyContinue -Force
+} catch {
+    # ignore
+}
+
+$distDir = Join-Path $projectRoot 'dist\Momentum'
+if (Test-Path $distDir) {
+    Write-Output "Removing existing dist folder: $distDir"
+    $retries = 5
+    for ($i = 0; $i -lt $retries; $i++) {
+        try {
+            Remove-Item -LiteralPath $distDir -Recurse -Force -ErrorAction Stop
+            break
+        } catch {
+            Write-Output "Failed to remove dist folder (attempt $($i+1)/$retries). Retrying..."
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw 'Python is not available on PATH.'
 }
