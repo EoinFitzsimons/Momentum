@@ -4,1218 +4,1537 @@
 
 ### Scope
 
-Retrieve a complete driver profile with 50+ attributes across 7 categories (technical, mental, physical, racecraft, personality, discipline preferences) from the SQLite database for race simulation initialisation.
+Retrieve a complete driver profile with attributes across multiple categories (technical, physical, mental, racecraft) to configure drivers for race simulation.
 
 ### Description
 
-The GUI or Simulation Service queries the database manager to retrieve a driver record containing all racing attributes, team assignment, and current status. The system returns the full driver object which is used to initialise the AI agent for real-time race simulation.
+The system provides driver information to the GUI and simulation engine. A driver profile contains name, nationality, age, skill ratings, and team assignment.
 
 ### Actors
 
-- `GUI` - requests driver data for race setup screens and displays.
-- `Simulation Service` - requests driver profiles for real-time race engine initialisation.
-- `Database Manager` - executes SQL queries against the SQLite database and returns driver objects.
+- **GUI** - displays driver information for race setup and team management screens.
+- **Simulation Engine** - retrieves driver data to initialise AI agents for race simulation.
+- **System** - retrieves and returns driver records.
 
 ### Flow Description
 
 #### Precondition
 
-The system has loaded the database; driver records exist with complete attribute sets.
+The system has a populated driver database; requested driver record exists.
 
 #### Activation
 
-This use case starts when the GUI loads the race setup screen or when the Simulation Service initialises a race session.
+Starts when the GUI loads a race setup screen or the simulation engine initialises a race.
 
-#### Main flow
+#### Main Flow
 
-1. The GUI or Simulation Service calls `DatabaseManager.get_all_drivers()` or `get_driver(driver_id)`.
-2. The Database Manager executes a `SELECT` query against the `drivers` table.
-3. The system validates that driver records contain all required attributes (0-100 scale for skills).
-4. The system returns `Driver` objects with full attribute payloads.
-5. For race simulation, each driver is instantiated as an AI agent with decision-making capabilities.
+- The GUI or simulation engine requests a driver profile.
+- The system retrieves the driver record with all attributes.
+- The system validates the driver data is complete.
+- The GUI displays the driver details, or the simulation engine initialises the driver for race execution.
+- **Flow ends** when the driver profile is displayed or race initialisation is complete.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Requested `driverId` does not exist - return `None` and GUI displays error message.
-A2: Database file not found - GUI displays connection error and prompts database regeneration.
+- The requested driver does not exist in the system.
+- The system notifies the caller that the driver was not found.
+- **Flow returns to** the driver selection screen or the screen that initiated the request.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read failure or corruption - GUI catches exception, logs to `logs/` directory, and displays user-friendly error with regeneration option.
-E2: Missing or invalid attributes - Database Manager logs warning and uses default values (50.0) for missing skills.
+- The driver database connection fails.
+- The system displays an error message and offers to retry or regenerate the database.
+- **Flow returns to** the main menu or returns control to the user.
+
+#### Exceptional Flow E1
+
+- The driver record contains incomplete or corrupt data.
+- The system logs the error for diagnostic purposes.
+- The system uses default attribute values to allow continued operation.
+- **Flow continues** with the operation using the default values and the user is notified of degraded data.
 
 #### Termination
 
-Client receives driver objects and proceeds with race initialisation or display rendering.
+The driver profile is displayed or used for simulation initialisation.
 
-### Use Case Diagram
+---
 
 ## UC-2: Read Race Configuration
 
 ### Scope
 
-Retrieve track information (175 circuits with IMA grading, surface types, characteristics) and race parameters from the SQLite database to configure the real-time race simulation engine.
+Retrieve track information including layout, surface type, and race parameters to configure the simulation engine.
 
 ### Description
 
-The GUI and Simulation Service query track records containing length, surface type, corners, and IMA characteristics. The system loads this data to initialise the track map with 100 evenly-spaced checkpoints, corner types (slow/medium/fast), and DRS zones for the physics engine.
+The system provides track data to the GUI and simulation engine. Track records include name, location, length, surface characteristics, and corner configuration.
 
 ### Actors
 
-- `GUI` - requests track data for race setup and displays circuit information.
-- `Simulation Service` - loads track configuration to initialise the `TrackMap` and physics calculations.
-- `Database Manager` - queries the `tracks` table and returns `Track` objects.
+- **GUI** - displays track information on race setup screens.
+- **Simulation Engine** - loads track configuration for physics calculations.
+- **System** - retrieves and provides track records.
 
 ### Flow Description
 
 #### Precondition
 
-Database contains 175 circuit definitions imported from `data/circuits_database.json`.
+The system has a populated track database with at least one track record.
 
 #### Activation
 
-Starts when the GUI loads the race setup screen and requests available tracks, or when the Simulation Service begins a race session.
+Starts when the GUI loads a race setup screen or the simulation engine begins initialisation.
 
-#### Main flow
+#### Main Flow
 
-1. GUI calls `DatabaseManager.get_all_tracks()` or `get_track(track_id)`.
-2. Database Manager executes `SELECT` query against the `tracks` table.
-3. System returns `Track` objects containing name, length (km), country, surface type, and IMA grading.
-4. For simulation, the engine generates a `TrackMap` with corner sections and racing physics parameters.
-5. The circuit is rendered in the GUI with 100 checkpoint markers at 1% intervals.
+- The GUI or simulation engine requests track data.
+- The system retrieves the track record with configuration details.
+- The system validates the track data is complete and consistent.
+- The GUI displays the track information, or the simulation engine loads the track for race execution.
+- **Flow ends** when the track is displayed or ready for simulation.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Invalid `track_id` requested - return `None` and GUI displays error or fallback message.
-A2: No tracks available in database - GUI prompts user to run `scripts/import_circuits.py` to populate track data.
+- The requested track does not exist.
+- The system notifies the caller that the track was not found.
+- **Flow returns to** the track selection screen with guidance to select another track.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read error - GUI logs exception to `logs/database_generation.log` and displays connection error.
-E2: Missing track characteristics - System uses default values (medium corners, standard grip) and logs warning.
+- The track database is empty or unpopulated.
+- The system notifies the user and displays a message explaining that tracks are not yet available.
+- **Flow returns to** the main menu.
+
+#### Exceptional Flow E1
+
+- The track record contains missing or invalid data.
+- The system logs the error and uses reasonable defaults for missing attributes.
+- The system allows the race to proceed with the available track data.
+- **Flow continues** with the operation and the user is notified of the issue.
 
 #### Termination
 
-Caller receives track configuration and proceeds to simulation or display rendering.
+The track is displayed or loaded for simulation.
 
-### Use Case Diagram
+---
 
 ## UC-3: Create Race Result
 
 ### Scope
 
-Capture race outcomes from the real-time simulation engine (positions, lap times, DNF reasons, incidents) and persist results to the SQLite database for historical tracking and future standings calculations.
+Capture and persist the outcome of a completed race simulation, including positions, lap times, and DNF information.
 
 ### Description
 
-The real-time race engine runs a physics simulation at 30 FPS where each driver is controlled by an AI decision-making agent. These agents process track conditions, competitor positions, and vehicle state to make strategic decisions (overtaking, defending, pit strategy) every frame. Upon race completion, the engine returns classification data including final positions, lap times, DNF status, and incident details. Results are validated and persisted to the database with atomic transactions.
+When a race simulation completes, the system records the final classification with finishing positions, times, and any retirements.
 
 ### Actors
 
-- `Real-time Race Engine` - executes race simulation and generates position updates every frame (30 FPS).
-- `GUI` - receives race results and displays final classification to the user.
-- `Database Manager` - persists race results to the `race_results` table (planned feature).
+- **Simulation Engine** - executes the race and generates final results.
+- **GUI** - displays the race results to the user.
+- **System** - persists race results to storage.
 
 ### Flow Description
 
 #### Precondition
 
-Race simulation has been initialised with drivers, teams, and track configuration; simulation is running or has completed.
+A race simulation has been executed and completed or terminated by the user.
 
 #### Activation
 
-Starts when the race simulation completes all laps or is terminated early via the stop button.
+Starts when the race simulation finishes or is stopped.
 
-#### Main flow
+#### Main Flow
 
-1. The Real-time Race Engine completes the simulation loop and generates final classification.
-2. Engine returns a list of `RaceResult` objects containing driver ID, position, laps completed, best lap time, total time, and DNF reason if applicable.
-3. GUI receives the `race_finished` event with results payload.
-4. System validates that all drivers are accounted for and positions are sequential.
-5. (Planned) Database Manager persists results using `INSERT INTO race_results` within a transaction.
-6. GUI displays final standings table with positions, times, and gaps.
+- The simulation engine completes the race and generates classification data.
+- The system validates that all participants are accounted for and positions are sequential.
+- The system stores the race results with the final classification, times, and any DNF statuses.
+- The GUI displays the race results to the user.
+- **Flow ends** when the results are persisted and displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Race stopped early by user - engine returns partial results with current positions and marks race as incomplete.
-A2: All drivers DNF - return valid results with DNF status for all participants and log reason distribution.
+- The user stops the race before completion.
+- The simulation engine returns partial results with the current positions.
+- The system stores the partial results and marks the race as incomplete.
+- **Flow returns to** the race results screen showing the partial classification.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write failure during persistence - log error to `logs/` directory, display results in GUI but warn that they were not saved.
-E2: Results validation failure (missing drivers, duplicate positions) - log detailed diagnostic and display what data is available.
+- All participants fail to finish (all DNF).
+- The system creates result records for all drivers marked as DNF.
+- The system persists the results with DNF reasons recorded.
+- **Flow continues** and the GUI displays the DNF results.
+
+#### Exceptional Flow E1
+
+- The system fails to store race results.
+- The system displays an error message and allows the user to retry or proceed.
+- The race results remain visible on screen but a warning indicates they were not saved.
+- **Flow continues** with manual backup options offered to the user.
+
+#### Exceptional Flow E2
+
+- The race result data is invalid or incomplete.
+- The system logs the error and attempts to store what data is available.
+- The user is warned that some race data could not be saved.
+- **Flow continues** with partial results displayed.
 
 #### Termination
 
-Race results displayed in GUI standings table; system ready for next race or user action.
+Race results are persisted and displayed to the user.
 
-### Use Case Diagram
+---
 
 ## UC-4: Read Race Results
 
 ### Scope
 
-Retrieve historical race results from the database for display in the GUI, including final classification, lap times, and DNF information.
+Retrieve and display historical race classification and result data from completed races.
 
 ### Description
 
-The system queries completed race records to display historical results. Results include finishing positions, lap times, DNF reasons, and incident details for analysis and comparison.
+The system provides access to stored race results including finishing positions, times, and DNF information for analysis and display.
 
 ### Actors
 
-- `GUI` - requests and displays historical race results.
-- `Database Manager` - queries the `race_results` table and joins with driver/team data.
+- **GUI** - requests and displays race results.
+- **User** - navigates to view race history.
+- **System** - retrieves and provides stored results.
 
 ### Flow Description
 
 #### Precondition
 
-Race results have been persisted to the database from previous simulations.
+At least one race has been completed and results have been stored.
 
 #### Activation
 
-Starts when user navigates to race history screen or requests results for a specific event.
+Starts when the user navigates to view race results or race history.
 
-#### Main flow
+#### Main Flow
 
-1. GUI calls `DatabaseManager.get_race_results(race_id)` or `get_championship_results(championship_id)`.
-2. Database Manager executes `SELECT` query joining `race_results`, `drivers`, and `teams` tables.
-3. System returns ordered list of results with driver names, positions, times, and DNF reasons.
-4. GUI displays results in standings table format.
+- The user requests race results for a specific race or championship.
+- The system retrieves the stored race results.
+- The system assembles the complete classification with driver names, teams, positions, and times.
+- The GUI displays the results in a standings table format.
+- **Flow ends** when the race results are displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: No results found for requested race - GUI displays "No results available" message.
-A2: Partial results due to incomplete race - GUI displays available data and marks as "Race Incomplete".
+- No results are found for the requested race.
+- The system notifies the user that no results are available.
+- **Flow returns to** the race history screen or menu.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read failure - GUI logs error and displays cached results if available from previous session.
-E2: Corrupt result data - System logs validation errors and displays partial data with warning.
+- The race was incomplete or partial.
+- The system displays the available results and marks them as incomplete.
+- **Flow returns to** the race history view with the incomplete flag visible.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve stored results.
+- The system displays an error message.
+- If cached results are available from memory, the system displays them marked as possibly stale.
+- **Flow continues** with the best available data shown.
+
+#### Exceptional Flow E2
+
+- Stored result data is corrupted or inconsistent.
+- The system logs the error and displays the data that could be recovered.
+- The user is warned that some result data may be missing or incorrect.
+- **Flow continues** with partial or degraded results displayed.
 
 #### Termination
 
-GUI displays historical results and awaits user navigation.
+Race results are displayed to the user, who can then navigate to other screens or compare results.
 
-### Use Case Diagram
+---
 
 ## UC-5: Read Championship Details
 
 ### Scope
 
-Retrieve championship information including season parameters, calendar of events, current standings, and points allocations across 7 racing disciplines.
+Retrieve championship metadata including season information, standings, and calendar of scheduled races.
 
 ### Description
 
-The system maintains championship records tracking season-long competitions. Each championship contains a calendar of races, points standings, and discipline-specific rules for the simulation.
+The system provides comprehensive championship information to the GUI for display during season progression.
 
 ### Actors
 
-- `GUI` - displays championship standings, calendar, and season progress.
-- `Game Loop` - manages season progression and championship state (planned feature).
-- `Database Manager` - queries championship, standings, and calendar data.
+- **GUI** - displays championship information and standings.
+- **User** - navigates to view championship details.
+- **System** - retrieves and aggregates championship data.
 
 ### Flow Description
 
 #### Precondition
 
-Championship has been created with discipline, season year, and initial calendar.
+At least one championship exists and is active.
 
 #### Activation
 
-Starts when user navigates to championship screen or game loop initialises a season.
+Starts when the user navigates to the championship overview screen.
 
-#### Main flow
+#### Main Flow
 
-1. GUI or Game Loop requests championship data via `DatabaseManager.get_championship(championship_id)`.
-2. System retrieves championship metadata (discipline, year, points system).
-3. System queries calendar entries and aggregates standings from race results.
-4. GUI displays championship overview with standings table and upcoming races.
+- The user requests championship details for a specific championship.
+- The system retrieves the championship metadata including year, discipline, and rules.
+- The system retrieves the current standings by aggregating race results.
+- The system retrieves the schedule of races planned for the season.
+- The GUI displays the championship overview with standings table and upcoming events.
+- **Flow ends** when the championship information is displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Championship has no races yet - display empty calendar with option to schedule events.
-A2: Standings unavailable - calculate standings from existing race results or display zero points.
+- The championship has no races scheduled yet.
+- The system displays the championship information with an empty calendar.
+- The GUI shows an option to add races to the schedule.
+- **Flow continues** with the option for the user to create race events.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database query failure - GUI displays error and offers retry or cached data.
-E2: Invalid championship structure - System logs diagnostic and prompts database verification.
+- The championship has no race results yet (standings are empty).
+- The system displays the championship information and shows zero points for all entries.
+- **Flow continues** with the empty standings displayed.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve championship data.
+- The system displays an error message and offers retry options.
+- If cached championship data is available, it is displayed marked as possibly stale.
+- **Flow continues** with available data or returns to the main menu.
+
+#### Exceptional Flow E2
+
+- The championship structure is invalid or corrupted in storage.
+- The system logs a diagnostic error.
+- The system displays what data could be recovered.
+- The user is notified of the issue and offered recovery options.
+- **Flow returns to** the main menu or menu with recovery options.
 
 #### Termination
 
-GUI displays championship view with standings and calendar; system awaits user interaction.
+Championship overview is displayed with standings and calendar information.
 
-### Use Case Diagram
+---
 
 ## UC-6: Update Championship Standings
 
 ### Scope
 
-Recalculate and persist championship standings after results are recorded.
+Recalculate and persist updated championship standings after a race completes.
 
 ### Description
 
+The system recalculates the championship points and standings following each completed race using discipline-specific point systems.
+
 ### Actors
 
-- `Standings Service` - triggers recalculation and consumes updated standings.
-- `Admin` - may invoke recalculation manually.
+- **System** - triggers recalculation when results are recorded.
+- **User/Admin** - may manually request recalculation.
 
 ### Flow Description
 
 #### Precondition
 
-Championship and results exist.
+A championship exists with completed races and stored results.
 
 #### Activation
 
-Starts when results are created or adjusted.
+Starts when a race is completed and results are persisted, or when explicitly requested.
 
-#### Main flow
+#### Main Flow
 
-1. Gather results for the championship.
-2. Apply points system and compute standings.
-3. Persist updated standings and notify consumers.
+- The system gathers all completed race results for the championship.
+- The system applies the championship's points system to calculate points for each race.
+- The system aggregates the points for each driver across all races.
+- The system computes the final standings with drivers sorted by total points.
+- The system applies tie-breaking rules if needed.
+- The standings are persisted in storage.
+- Subscribers to standings updates are notified of the change.
+- **Flow ends** when standings are persisted and notifications sent.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Partial update requested - return `202 Accepted` with job id for async completion.
-A2: Concurrent updates - return `409 Conflict` with current version.
+- A partial or incremental update is requested instead of full recalculation.
+- The system recalculates only the affected portion of standings.
+- The system persists the updated standings.
+- **Flow continues** with partial standings propagated.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Points rules missing - return `500` and log for admin attention.
-E2: Persistence error - roll back and queue retry.
+- Multiple standings recalculations are requested concurrently.
+- The system queues subsequent requests and processes them after the first completes.
+- **Flow returns to** the caller with status indicating queueing.
+
+#### Exceptional Flow E1
+
+- The points system rules are missing or invalid.
+- The system logs the error and uses default point values.
+- Standings are calculated and marked as using default rules.
+- An alert is raised for administrative review.
+- **Flow continues** with degraded standings.
+
+#### Exceptional Flow E2
+
+- The system fails to persist updated standings.
+- The system logs the error and queues the standings update for retry.
+- The user is notified of the persistence issue.
+- **Flow continues** and retry is scheduled automatically.
 
 #### Termination
 
-Standings persisted.
+Updated standings are computed and persisted; downstream systems are notified.
 
-### Use Case Diagram
+---
 
 ## UC-7: Create Race Event
 
 ### Scope
 
-Add a race event to a championship calendar (track, date, configuration).
+Add a new race event to a championship calendar with date, track, and configuration.
 
 ### Description
 
-An admin or scheduler submits an event; the backend validates and persists the event record.
+The system creates a new race event entry in the championship schedule with validation for date and track conflicts.
 
 ### Actors
 
-- `Admin` - creates and manages race events.
-- `Scheduler` - schedules events programmatically.
+- **User/Admin** - creates a new race event.
+- **System** - validates and records the event.
 
 ### Flow Description
 
 #### Precondition
 
-Championship exists and is editable.
+A championship exists and is open for event creation; tracks are available.
 
 #### Activation
 
-Starts when an admin posts new event details.
+Starts when the user submits a new race event creation.
 
-#### Main flow
+#### Main Flow
 
-1. Validate dates and track availability.
-2. Insert event record into `races`.
-3. Return created resource.
+- The user provides race event details including date, track, and configuration.
+- The system validates that the track exists and is available.
+- The system checks for date conflicts with other scheduled races in the championship.
+- The system assigns a round number based on the current calendar size.
+- The system stores the new race event.
+- The GUI displays confirmation of the new race added to the calendar.
+- **Flow ends** when the race event is created and visible in the calendar.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Date/track conflict - return `409 Conflict` with conflicts and alternatives.
-A2: Validation warning - return `200` with `warnings` and allow override.
+- The selected date conflicts with another scheduled race.
+- The system notifies the user of the conflict and displays other available dates.
+- The user can select an alternative date and resubmit.
+- **Flow returns to** event creation with the conflict resolved or cancelled.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write failure - return `500` and persist request to retry queue.
-E2: External sync failure - create event in draft and return `202 Accepted` with sync pending.
+- The selected track is unavailable or invalid.
+- The system notifies the user and displays available tracks.
+- The user selects another track and resubmits.
+- **Flow returns to** event creation with a valid track selected.
+
+#### Exceptional Flow E1
+
+- The system fails to store the new race event.
+- The system logs the error and displays a message to the user.
+- The system offers to retry the creation.
+- **Flow returns to** the event creation form to retry or cancel.
+
+#### Exceptional Flow E2
+
+- Mandatory event fields are missing or invalid.
+- The system displays validation errors for each invalid field.
+- The user corrects the fields and resubmits.
+- **Flow returns to** event creation with validation feedback.
 
 #### Termination
 
-Calendar updated; notifications may be sent.
+Race event is created and added to the championship calendar.
 
-### Use Case Diagram
+---
 
 ## UC-8: Read Race Schedule
 
 ### Scope
 
-Retrieve championship calendar/schedule for UI display.
+Retrieve and display the ordered calendar of races scheduled for a championship season.
 
 ### Description
 
-Return ordered list of events with dates, tracks and statuses.
+The system provides the season schedule showing all planned races with dates, tracks, and status information.
 
 ### Actors
 
-- `User / UI` - requests the schedule for display.
-- `Calendar Service` - synchronises events externally when configured.
+- **GUI** - requests and displays the race schedule.
+- **User** - navigates to view the schedule.
+- **System** - retrieves and provides schedule data.
 
 ### Flow Description
 
 #### Precondition
 
-Championship or season exists.
+A championship exists; may or may not have races scheduled.
 
 #### Activation
 
-Starts when client opens the calendar screen.
+Starts when the user navigates to view the championship calendar.
 
-#### Main flow
+#### Main Flow
 
-1. Validate championship/season.
-2. Retrieve ordered events and metadata.
-3. Return schedule to caller.
+- The user requests the race schedule for a championship.
+- The system retrieves all races for the championship, ordered by round number.
+- The system assembles the schedule with date, track, round number, and current status for each race.
+- The GUI displays the calendar in chronological order.
+- **Flow ends** when the schedule is displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Championship not found - return `404 Not Found` with guidance to create a championship first.
-A2: Championship exists but has no events - return empty schedule with a message suggesting adding events.
+- The championship does not exist.
+- The system notifies the user and displays a message.
+- The GUI provides guidance on creating a championship.
+- **Flow returns to** the main championship screen or menu.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read error - return `503 Service Unavailable` with diagnostic id; offer cached schedule if available.
-E2: Permission or tenancy error - return `403`.
+- The championship exists but no races are scheduled.
+- The system returns an empty schedule.
+- The GUI displays an empty calendar and offers an option to add races.
+- **Flow continues** with guidance to schedule events.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve schedule data.
+- The system displays an error message and attempts to show cached schedule data if available.
+- **Flow returns to** the menu or retries the request.
+
+#### Exceptional Flow E2
+
+- The schedule data is incomplete or corrupt.
+- The system retrieves and displays the available schedule data.
+- The user is warned that some data may be missing.
+- **Flow continues** with partial schedule displayed.
 
 #### Termination
 
-Client displays schedule.
+Race schedule is displayed to the user for the selected championship.
 
-#### Post condition
-
-System awaits next request.
-
-### Use Case Diagram
+---
 
 ## UC-9: Update Race Status
 
 ### Scope
 
-Change a race event status (scheduled → in-progress → completed → cancelled).
+Change a race event's lifecycle status through stages: scheduled → in-progress → completed (or cancelled).
 
 ### Description
 
-Update event lifecycle state and notify dependent systems.
+The system manages race state transitions with validation of allowed transitions and updates to related data.
 
 ### Actors
 
-- `Simulation/Service` - updates status during simulation.
-- `Admin` - may manually change status.
-- `Notification Service` - receives lifecycle events.
+- **Simulation Engine** - updates status during and after race execution.
+- **User/Admin** - may manually change status for management purposes.
+- **System** - validates and processes status changes.
 
 ### Flow Description
 
 #### Precondition
 
-Event exists and caller has permission.
+A race event exists; the user has permission to change its status.
 
 #### Activation
 
-Starts when a service or admin posts a status update.
+Starts when a status change is requested (e.g., starting a race, completing it, or cancelling).
 
-#### Main flow
+#### Main Flow
 
-1. Validate transition is allowed.
-2. Update `races.status` accordingly.
-3. Emit notifications/events.
+- The user or system requests a race status change with the new target status.
+- The system validates that the transition is allowed (e.g., scheduled → in-progress is allowed; completed → scheduled is not).
+- The system updates the race event status.
+- Dependent systems are notified of the status change.
+- **Flow ends** when status is updated and notifications sent.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Invalid lifecycle transition (e.g., completed → scheduled) - return `400 Bad Request` with allowed transitions and current state.
-A2: Caller requests cancellation during in-progress - return `202 Accepted` and initiate graceful abort procedures (safety checks, rollback attempts).
+- An invalid status transition is attempted (e.g., trying to transition from completed back to in-progress).
+- The system rejects the transition and displays the allowed transitions for the current state.
+- The user can select a valid transition or cancel.
+- **Flow returns to** the race management screen.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write error or optimistic lock fail - return `500` and include current event state; schedule a background reconciliation job.
-E2: Notification subsystem failure - update status but record notification failure for later retry; return `200` with `notificationsPending: true`.
+- The user requests race cancellation while the race is in-progress.
+- The system initiates graceful abort procedures and transitions the race to cancelled.
+- Related data is updated to reflect the cancellation.
+- **Flow returns to** the race management screen with cancellation confirmed.
+
+#### Exceptional Flow E1
+
+- The system fails to update the race status in storage.
+- The system logs the error and displays a message.
+- The system queues the status change for retry.
+- The user is informed of the issue and given retry options.
+- **Flow continues** with automatic retry scheduled.
+
+#### Exceptional Flow E2
+
+- Notification of dependent systems fails during status change.
+- The system completes the status update but records the notification failure.
+- The user is notified that the status was changed but some notifications may be pending.
+- **Flow continues** with notifications retried automatically.
 
 #### Termination
 
-Event status updated and notifications sent.
+Race status is updated and stored; dependent systems are notified of the change.
 
-#### Post condition
-
-System awaits next lifecycle event.
-
-### Use Case Diagram
+---
 
 ## UC-10: Create Championship
 
 ### Scope
 
-Create a new championship/season automatically on season rollover, with base rules and an empty calendar.
+Create a new championship record for a season with initial configuration and empty calendar.
 
 ### Description
 
-On season rollover the Game Loop computes the next season parameters, instantiates a championship record with a ruleset and calendar placeholder, persists it, and notifies downstream systems (scheduling, AI, UI) that a new season is available.
+The system creates a new championship season with discipline, rules, and placeholder for events to be scheduled.
 
 ### Actors
 
-- `Game Loop / Scheduler` - triggers automatic season rollover and championship creation.
-- `Policy Service` - validates or supplies rulesets.
-- `Event Scheduler` - consumes the new championship to populate events.
+- **User/Admin** - initiates championship creation.
+- **System** - validates and creates the championship record.
 
 ### Flow Description
 
 #### Precondition
 
-End-of-season tick reached; ruleset templates and calendar seeding configuration are available.
+The user has permission to create championships; season configuration is available.
 
 #### Activation
 
-Triggered automatically by the `Game Loop` on season rollover (no manual admin intervention required).
+Starts when the user submits a championship creation request.
 
-#### Main flow
+#### Main Flow
 
-1. Game Loop determines season rollover has occurred and computes seed parameters (year, discipline, ruleset template).
-2. System requests/validates the ruleset from `Policy Service`.
-3. System creates the championship record with initial metadata and an empty calendar.
-4. System persists the championship atomically and emits events to `Event Scheduler`, `AI` and `UI`.
+- The user provides championship details including name, discipline, season year, and points system.
+- The system validates the provided information.
+- The system creates the championship record with initial status (empty calendar, no standings).
+- The system stores the championship in persistent storage.
+- The system notifies dependent systems that a new championship is available.
+- The GUI displays confirmation and displays the new championship.
+- **Flow ends** when the championship is created and stored.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Ruleset validation fails - select fallback template and continue, or mark championship as `requiresReview` and emit admin notification.
+- The selected ruleset or points system is invalid or missing.
+- The system uses a default ruleset and continues with championship creation.
+- The championship is marked for review to confirm the default ruleset is acceptable.
+- **Flow continues** with championship created using defaults.
 
-#### Exceptional flow
+#### Exceptional Flow E1
 
-E1: Database write failure - rollback and schedule a retry; emit diagnostic id to monitoring and place a recovery job in the maintenance queue.
+- The system fails to store the championship.
+- The system logs the error and displays a message to the user.
+- The system queues the championship creation for automatic retry.
+- **Flow returns to** the championship creation screen with retry option.
+
+#### Exceptional Flow E2
+
+- Required fields are missing or invalid.
+- The system displays validation errors.
+- The user corrects the fields and resubmits.
+- **Flow returns to** championship creation with feedback.
 
 #### Termination
 
-Championship record created and downstream systems notified.
+Championship is created and stored; downstream systems are notified.
 
-#### Post condition
-
-Event Scheduler and AI begin populating events and participants for the new season.
-
-### Use Case Diagram
+---
 
 ## UC-11: Read Team Details
 
 ### Scope
 
-Retrieve complete team profile including budget (€130M cap for top-tier Single Seater), tier classification, headquarters, discipline specialisation, and assigned drivers.
+Retrieve comprehensive team profile including budget, tier classification, roster, and performance information.
 
 ### Description
 
-The system maintains 1,095 team records across 7 racing disciplines. Each team has budget constraints, tier classification (tier1/tier2/tier3), and performance multipliers that affect simulation outcomes.
+The system provides complete team information to the GUI for display on team management and information screens.
 
 ### Actors
 
-- `GUI` - displays team information on management screens.
-- `Simulation Service` - requests team data to calculate performance multipliers for race simulation.
-- `Database Manager` - queries the `teams` table and joins with driver assignments.
+- **GUI** - requests and displays team information.
+- **User** - navigates to view team details.
+- **System** - retrieves and provides team records.
 
 ### Flow Description
 
 #### Precondition
 
-Team records exist in database with complete attribute sets.
+At least one team exists in the system.
 
 #### Activation
 
-Starts when GUI loads team management screen or simulation engine initialises a race.
+Starts when the user navigates to view team details.
 
-#### Main flow
+#### Main Flow
 
-1. GUI or Simulation Service calls `DatabaseManager.get_team(team_id)` or `get_teams_by_discipline(discipline)`.
-2. Database Manager executes `SELECT` query against `teams` table.
-3. System retrieves team metadata including budget, tier, headquarters, and discipline.
-4. For simulation, engine calculates team performance multiplier (0.55 to 0.95) based on tier and budget.
-5. GUI displays team profile or simulation applies multipliers to driver performance.
+- The user requests details for a specific team.
+- The system retrieves the team record including name, discipline, tier, budget, and headquarters.
+- The system retrieves the current roster (assigned drivers and staff).
+- The system retrieves financial information including budget status and expenditures.
+- The GUI displays the complete team profile.
+- **Flow ends** when team details are displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Invalid `team_id` - return `None` and GUI displays "Team not found" error.
-A2: Team has no assigned drivers - display team info with empty roster.
+- The requested team does not exist.
+- The system notifies the user that the team was not found.
+- **Flow returns to** the team selection or team list screen.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read failure - GUI logs error to `logs/` and displays connection error with retry option.
-E2: Missing team attributes - System uses default values (tier2, €100M budget) and logs warning.
+- The team has no assigned drivers or staff.
+- The system displays the team information with an empty roster.
+- The GUI shows the roster as empty and may offer hiring options.
+- **Flow continues** with empty roster displayed.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve team data.
+- The system displays an error message.
+- If available, cached team data is shown marked as possibly stale.
+- **Flow continues** with available data or returns to team list.
+
+#### Exceptional Flow E2
+
+- Team data is incomplete or corrupt.
+- The system retrieves and displays available data.
+- The user is warned that some team information may be missing.
+- **Flow continues** with partial team profile displayed.
 
 #### Termination
 
-GUI displays team screen or simulation proceeds with team performance calculations.
+Team profile is displayed with complete or partial information.
 
-#### Post condition
+---
 
-System awaits next team query or user action.
-
-### Use Case Diagram
-
-## UC-12: Create New Team
+## UC-12: Create Team
 
 ### Scope
 
-Create a new team record (initial roster, budget, HQ).
+Create a new team record with initial configuration, budget allocation, and optional roster.
 
 ### Description
 
-Player or admin creates a team; the system allocates starting assets or placeholders.
+The system creates a new team entry for a player or as an NPC team with starting resources and configuration.
 
 ### Actors
 
-- `Player/Admin` - initiates team creation.
-- `Provisioning Service` - reserves starting resources.
+- **User/Admin** - creates a new team.
+- **System** - validates and provisions the team.
 
 ### Flow Description
 
 #### Precondition
 
-Requester authorised; required seed data available.
+The user has permission to create teams; resources are available for allocation.
 
 #### Activation
 
-Starts when player/admin submits team creation.
+Starts when the user submits a team creation request.
 
-#### Main flow
+#### Main Flow
 
-1. Validate request and reserve resources.
-2. Insert team record and assign initial roster/placeholders.
-3. Return created team.
+- The user provides team details including name, discipline, headquarters location, and starting tier.
+- The system validates the team information (unique name, valid discipline, etc.).
+- The system allocates starting resources and budget based on team tier.
+- The system creates the team record.
+- The system stores the team in persistent storage.
+- The GUI displays confirmation and the new team.
+- **Flow ends** when the team is created and stored.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Resource conflict (e.g., team name or HQ occupied) - return `409 Conflict` with suggested alternatives and actions to resolve.
-A2: Missing seed data - return `422 Unprocessable Entity` with details on required fields.
+- The team name already exists.
+- The system notifies the user and suggests alternative names.
+- The user provides a new name and resubmits.
+- **Flow returns to** team creation with conflict resolved.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database transaction failure - return `500` and log the full request for replay.
-E2: External provisioning failure (e.g., storage) - create the team in `pending` state and notify admin.
+- The selected discipline is not available or invalid.
+- The system notifies the user and displays available disciplines.
+- The user selects a valid discipline and resubmits.
+- **Flow returns to** team creation with valid discipline selected.
+
+#### Exceptional Flow E1
+
+- The system fails to create or store the team.
+- The system logs the error and displays a message.
+- The system queues the team creation for automatic retry.
+- **Flow returns to** the team creation screen with retry option.
+
+#### Exceptional Flow E2
+
+- Resource allocation fails (insufficient budget available).
+- The system notifies the user and adjusts the team tier or starting resources.
+- The user is prompted to confirm the adjusted allocation.
+- **Flow returns to** team creation with adjusted parameters.
 
 #### Termination
 
-Team visible in lists.
+Team is created with initial budget and configuration; ready for roster management.
 
-#### Post condition
+---
 
-System awaits next management action.
-
-### Use Case Diagram
-
-## UC-13: Read Team Details (player team)
+## UC-13: Read Player Team
 
 ### Scope
 
-Return player's own team with editable flags and affordances.
+Retrieve the player's own team information with editable fields and management options.
 
 ### Description
 
-Provide editable team data for the player's management screen.
+The system provides the player's team data for management purposes, including roster and budget that can be modified.
 
 ### Actors
 
-- `Player` - owner of the team and primary editor.
-- `Auth Service` - validates ownership and permissions.
+- **GUI** - requests and displays the player's team.
+- **Player** - views and manages their team.
+- **System** - retrieves the player's team record.
 
 ### Flow Description
 
 #### Precondition
 
-Player has a team.
+The player has an assigned team; authorization is valid.
 
 #### Activation
 
-Starts when player opens their team management screen.
+Starts when the player navigates to their team management screen.
 
-#### Main flow
+#### Main Flow
 
-1. Validate player's identity and team ownership.
-2. Return team data with editable flags.
+- The system identifies the player's team assignment.
+- The system retrieves the team record with all details including roster and budget.
+- The system marks fields that are editable for the player.
+- The GUI displays the player's team profile with editable controls.
+- **Flow ends** when the team is displayed with edit options available.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Player has no team - return `404 Not Found` with guidance to create or join a team and links to relevant endpoints.
+- The player does not have an assigned team.
+- The system notifies the player and displays guidance on creating or joining a team.
+- The GUI provides options to create a new team or join an existing one.
+- **Flow returns to** the main menu or team creation flow.
 
-#### Exceptional flow
+#### Exceptional Flow E1
 
-E1: Database read error - return `503 Service Unavailable` and include a diagnostic id.
-E2: Authorization check failure - return `403`.
+- The system fails to retrieve the player's team.
+- The system displays an error message.
+- If cached team data is available, it is shown marked as possibly stale.
+- **Flow returns to** the main menu with error handling.
+
+#### Exceptional Flow E2
+
+- Authorization check determines the player does not own the displayed team.
+- The system revokes edit permissions and displays the team in read-only mode.
+- The user is notified of the permission issue.
+- **Flow continues** with read-only team view.
 
 #### Termination
 
-Player views editable team screen.
+Player's team is displayed with appropriate edit permissions and management options available.
 
-#### Post condition
-
-System awaits further edits.
-
-### Use Case Diagram
+---
 
 ## UC-14: Update Team Attributes
 
 ### Scope
 
-Modify team attributes (budget allocation, HQ upgrades, staff assignments).
+Modify team settings including budget allocation, facility upgrades, and strategic configuration.
 
 ### Description
 
-Player or admin updates team settings which are validated and persisted.
+The system allows players and admins to update team properties with validation of budget and resource constraints.
 
 ### Actors
 
-- `Player/Admin` - submits updates.
-- `Finance Service` - validates budget changes.
+- **Player** - updates their team attributes.
+- **Admin** - may update any team attributes.
+- **System** - validates and persists changes.
 
 ### Flow Description
 
 #### Precondition
 
-Requester authorised and has sufficient resources.
+The user has edit permissions for the team; the team exists in storage.
 
 #### Activation
 
-Starts when client submits team updates.
+Starts when the user submits team attribute updates.
 
-#### Main flow
+#### Main Flow
 
-1. Validate changes and budget.
-2. Persist updates.
-3. Return updated resource.
+- The user edits team attributes such as name, headquarters, or budget allocation.
+- The system validates the changes against available budget and constraints.
+- The system checks that new attribute values are acceptable (e.g., name is unique, values are in valid ranges).
+- The system persists the updated team record.
+- The system notifies subscribers of the team update.
+- The GUI displays the updated team information.
+- **Flow ends** when changes are persisted and displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Insufficient funds detected - return `422 Unprocessable Entity` with required amount and suggestions (sponsor, loan, reduce spend).
-A2: Concurrent update to budget - return `409 Conflict` with current balance and retry instructions.
+- The proposed budget allocation exceeds available funds.
+- The system notifies the user of the shortfall and suggests alternatives.
+- The user can adjust the allocation or request additional funding.
+- **Flow returns to** team update with revised budget or cancellation.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write/commit failure - return `500` and enqueue the update for manual reconciliation.
-E2: Audit/logging service failure - persist the change but flag audit missing; return `200` with `auditPending: true`.
+- A facility upgrade is requested.
+- The system validates the upgrade is available and cost is covered by budget.
+- The system deducts the upgrade cost and applies the upgrade.
+- **Flow continues** with upgrade applied and budget deducted.
+
+#### Exceptional Flow E1
+
+- The system fails to persist team updates.
+- The system logs the error and displays a message.
+- The system queues the update for automatic retry.
+- **Flow continues** with retry scheduled.
+
+#### Exceptional Flow E2
+
+- Concurrent updates to team data are detected.
+- The system displays the current team state and informs the user of the conflict.
+- The user can retry or merge their changes with current state.
+- **Flow returns to** team update screen with current data displayed.
 
 #### Termination
 
-Changes reflected on subsequent reads.
+Team attributes are updated and persisted; subscribers are notified of changes.
 
-#### Post condition
-
-System awaits next request.
-
-### Use Case Diagram
+---
 
 ## UC-15: Read Available Drivers
 
 ### Scope
 
-Return list of uncontracted or transfer-available drivers for recruitment.
+Retrieve a list of drivers available for hiring/contract with filtering and pagination.
 
 ### Description
 
-Provide filtered and paginated driver pool for the market UI.
+The system provides a browsable pool of uncontracted drivers for team recruitment, with support for filtering by discipline, rating, and other criteria.
 
 ### Actors
 
-- `Player` - browses and filters available drivers.
-- `Team AI` - automated consumer of driver listings.
+- **GUI** - requests and displays available drivers.
+- **Player** - browses drivers for hiring.
+- **System** - retrieves and filters driver records.
 
 ### Flow Description
 
 #### Precondition
 
-Driver pool exists.
+At least one uncontracted driver exists in the system.
 
 #### Activation
 
-Starts when user opens driver market.
+Starts when the user opens the driver hiring/recruitment screen.
 
-#### Main flow
+#### Main Flow
 
-1. Apply filters/pagination.
-2. Return driver list with availability flags.
+- The user optionally applies filters (discipline, rating range, etc.).
+- The user optionally selects pagination parameters (page number, results per page).
+- The system retrieves uncontracted drivers matching the filters.
+- The system sorts drivers by requested criteria (rating, age, etc.).
+- The system returns the paginated results with availability status and estimated cost.
+- The GUI displays the available driver list.
+- **Flow ends** when driver candidates are displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Filter parameters return no matches - return `200 OK` with empty list and suggestions to relax filters.
-A2: Partial data due to pagination limits - include `hasMore: true` and next-page token.
+- No drivers match the applied filters.
+- The system returns an empty result set.
+- The GUI displays a message indicating no matches and suggests relaxing filters.
+- **Flow returns to** the driver search with filter options visible.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database query failure - return `503 Service Unavailable` with diagnostic id; if cached pool exists return cached results marked `stale: true`.
-E2: Indexing/search service failure - fall back to simple DB query and note reduced fidelity.
+- The results exceed a single page.
+- The system provides pagination information including total count and navigation.
+- The user can browse to other pages of results.
+- **Flow continues** with paginated results displayed.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve driver data.
+- The system displays an error message.
+- If available, cached driver list is shown marked as possibly stale.
+- **Flow returns to** the main screen or offers retry.
+
+#### Exceptional Flow E2
+
+- Search or filter logic fails.
+- The system falls back to a basic driver list without filtering.
+- The user is notified of reduced search capabilities.
+- **Flow continues** with unfiltered driver list displayed.
 
 #### Termination
 
-Client displays candidate drivers.
+List of available drivers is displayed for recruitment.
 
-#### Post condition
-
-System awaits next query.
-
-### Use Case Diagram
+---
 
 ## UC-16: Update Driver Contract
 
 ### Scope
 
-Sign, renew or terminate driver contracts and update team roster and budget.
+Sign, renew, modify, or terminate a driver contract and update team roster and budget accordingly.
 
 ### Description
 
-Persist contract terms and adjust availability and team budgets.
+The system manages driver employment, updating roster assignments, contract terms, and team finances.
 
 ### Actors
 
-- `Team Manager` - negotiates and confirms driver contracts.
-- `Admin` - enforces or modifies contract rules when required.
+- **Player** - initiates driver contract actions.
+- **System** - validates and processes contracts.
 
 ### Flow Description
 
 #### Precondition
 
-Driver and team exist; negotiation outcome determined.
+A driver and team exist; negotiation terms are determined.
 
 #### Activation
 
-Starts when contract terms are finalised and submitted.
+Starts when the player submits a driver contract action (signing, renewal, termination).
 
-#### Main flow
+#### Main Flow
 
-1. Validate budget and contract rules.
-2. Persist contract and update roster/budget.
-3. Return confirmation.
+- The player selects a driver and confirms contract terms (length, salary, etc.).
+- The system validates that the team has sufficient budget for the contract.
+- The system validates contract constraints (duration limits, salary cap rules, etc.).
+- The system creates or updates the contract record.
+- The system updates the driver's team assignment.
+- The system deducts salary from the team budget.
+- The system persists the contract changes.
+- The GUI displays confirmation of the contract action.
+- **Flow ends** when contract is persisted and roster is updated.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Budget shortfall during contract update - return `422` with required funding and options (defer, partial contract, renegotiate).
-A2: Contract already signed by another party - return `409 Conflict` with current contract details.
+- The team has insufficient budget for the proposed contract.
+- The system notifies the player of the budget shortfall.
+- The player can reduce the contract value, seek sponsorship, or cancel.
+- **Flow returns to** contract negotiation with budget options.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write error - rollback, return `500` and include reference id for support.
-E2: Payment gateway or external finance service failure - abort contract update, return `502 Bad Gateway` and queue retry.
+- The driver is already contracted to another team.
+- The system notifies the player that the driver is unavailable.
+- The system provides alternatives or guidance for transfer procedures.
+- **Flow returns to** driver selection with conflict noted.
+
+#### Exceptional Flow E1
+
+- The system fails to persist the contract.
+- The system logs the error and displays a message.
+- The system queues the contract for automatic retry.
+- **Flow continues** with retry scheduled.
+
+#### Exceptional Flow E2
+
+- Contract validation fails due to rule violations.
+- The system displays the validation errors.
+- The player adjusts contract terms and resubmits.
+- **Flow returns to** contract negotiation with feedback.
 
 #### Termination
 
-Driver assigned and availability updated.
+Driver contract is created or updated; roster and budget are adjusted.
 
-#### Post condition
-
-System awaits next contract action.
-
-### Use Case Diagram
+---
 
 ## UC-17: Read Available Staff
 
 ### Scope
 
-Return list of available staff for hiring with roles and modifiers.
+Retrieve a list of available staff for hiring with roles, ratings, and estimated costs.
 
 ### Description
 
-Provide paginated staff pool for recruitment screens.
+The system provides a browsable pool of uncontracted staff members for team recruitment, supporting role-based filtering.
 
 ### Actors
 
-- `Player` - requests staff listings.
-- `HR Service` - provides staff filters and pools.
+- **GUI** - requests and displays available staff.
+- **Player** - browses staff for hiring.
+- **System** - retrieves and filters staff records.
 
 ### Flow Description
 
 #### Precondition
 
-Staff pool exists.
+At least one uncontracted staff member exists in the system.
 
 #### Activation
 
-Starts when player opens staff hiring screen.
+Starts when the player opens the staff hiring screen.
 
-#### Main flow
+#### Main Flow
 
-1. Apply filters and paginate.
-2. Return staff list with core stats and cost.
+- The player optionally applies filters (role, rating range, etc.).
+- The system retrieves uncontracted staff members matching the filters.
+- The system sorts staff by requested criteria (rating, role, etc.).
+- The system returns the results with availability status and salary information.
+- The GUI displays the available staff list.
+- **Flow ends** when staff candidates are displayed.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: No staff matching filters - return `200 OK` with empty list and filter suggestions.
-A2: Partial availability (some staff on contract) - return available subset with `availability: limited` flag.
+- No staff match the applied filters.
+- The system returns an empty result set.
+- The GUI displays a message suggesting different filter criteria.
+- **Flow returns to** the staff search with filter options visible.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database or search index failure - return `503 Service Unavailable` and provide cached results if available.
-E2: Data corruption in staff records detected - return `500` and set a maintenance flag.
+- Some staff are partially available (e.g., contracted part-time).
+- The system returns the staff with availability flags and constraints.
+- The GUI displays the availability status for each candidate.
+- **Flow continues** with full staff list and constraints displayed.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve staff data.
+- The system displays an error message.
+- If available, cached staff list is shown marked as possibly stale.
+- **Flow returns to** the main screen or offers retry.
+
+#### Exceptional Flow E2
+
+- Staff data is corrupt or incomplete.
+- The system retrieves and displays available staff data.
+- The user is notified that some staff information may be missing.
+- **Flow continues** with partial staff list displayed.
 
 #### Termination
 
-Client displays staff candidates.
+List of available staff is displayed for recruitment.
 
-#### Post condition
-
-System awaits next request.
-
-### Use Case Diagram
+---
 
 ## UC-18: Update Staff Contract
 
 ### Scope
 
-Hire, fire or renegotiate staff contracts and persist changes to team resources.
+Hire, release, or modify staff contracts and update team roster and budget accordingly.
 
 ### Description
 
-Assign staff to teams, record salary and update budgets.
+The system manages staff employment, updating team assignments, contract terms, and finances.
 
 ### Actors
 
-- `Player` - initiates hiring/renegotiation.
-- `Team Manager` - manages staff assignments.
+- **Player** - initiates staff contract actions.
+- **System** - validates and processes contracts.
 
 ### Flow Description
 
 #### Precondition
 
-Staff profile exists and is available.
+A staff member and team exist; contract terms are determined.
 
 #### Activation
 
-Starts when hiring/renegotiation action is confirmed.
+Starts when the player submits a staff contract action.
 
-#### Main flow
+#### Main Flow
 
-1. Validate terms and budget.
-2. Persist contract and update team state.
-3. Return confirmation.
+- The player selects staff and confirms contract terms (role, length, salary).
+- The system validates the team has sufficient budget for the salary.
+- The system validates contract constraints (duration, salary cap, staff limits per role).
+- The system creates or updates the contract record.
+- The system updates the staff member's team assignment.
+- The system adjusts the team budget for salary costs.
+- The system persists the contract changes.
+- The GUI displays confirmation of the contract action.
+- **Flow ends** when contract is persisted and roster is updated.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Insufficient funds - return `422 Unprocessable Entity` with required funding detail and rollback any provisional assignments.
-A2: Candidate no longer available at confirmation - return `409 Conflict` and provide alternatives.
+- The team has insufficient budget for the staff salary.
+- The system notifies the player of the budget shortfall.
+- The player can reduce the offer, defer hiring, or cancel.
+- **Flow returns to** contract negotiation with budget guidance.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write failure - rollback and return `500` with support reference.
-E2: Concurrent contract update detected - return `409` with current contract state and instructions to retry.
+- The staff member is no longer available at contract confirmation.
+- The system notifies the player that the staff member was hired elsewhere.
+- The system suggests alternative staff members.
+- **Flow returns to** staff selection.
+
+#### Exceptional Flow E1
+
+- The system fails to persist the contract.
+- The system logs the error and displays a message.
+- The system queues the contract for automatic retry.
+- **Flow continues** with retry scheduled.
+
+#### Exceptional Flow E2
+
+- Contract validation fails due to rule violations (e.g., too many staff of same role).
+- The system displays the validation errors and constraints.
+- The player adjusts contract terms and resubmits.
+- **Flow returns to** contract negotiation with feedback.
 
 #### Termination
 
-Staff assigned and salary deducted from budget.
+Staff contract is created or updated; roster and budget are adjusted.
 
-#### Post condition
+---
 
-System awaits further HR actions.
-
-### Use Case Diagram
-
-## UC-19: Update Driver Skills/Age
+## UC-19: Update Driver Skills and Age
 
 ### Scope
 
-Periodic update of driver attributes (ageing, progression/regression) and handle retirements/recycling.
+Apply periodic end-of-season updates to driver attributes including aging, skill progression, retirement, and recycling.
 
 ### Description
 
-Perform end-of-season or scheduled updates to driver skills and ages; mark retirees and optionally regenerate/recycle entities.
+The system manages driver lifecycle including skill development over time, retirement when age thresholds are reached, and generation of new rookie drivers from retired drivers.
 
 ### Actors
 
-- `Scheduler` (Game Loop) - triggers seasonal maintenance jobs.
-- `Admin` - may invoke manual progression runs.
+- **System** - executes periodic progression updates.
+- **Admin** - may trigger manual progression.
 
 ### Flow Description
 
 #### Precondition
 
-Driver population present.
+At least one driver exists; season end has been reached or progression is manually triggered.
 
 #### Activation
 
-Starts at season end or scheduled tick.
+Starts at the end of each season automatically or when manually requested by admin.
 
-#### Main flow
+#### Main Flow
 
-1. System iterates drivers and adjusts skills and ages.
-2. Flag retired drivers and recycle or replace per policy.
-3. Persist updates.
+- The system iterates through all active drivers.
+- The system applies age increments based on time elapsed.
+- The system applies skill progression formulas based on age, experience, and performance.
+- The system checks retirement eligibility based on age and performance thresholds.
+- Eligible drivers are marked as retired.
+- Retired drivers are recycled: new rookie drivers are generated to replace them.
+- All changes are persisted.
+- Subscribers are notified of progression updates.
+- **Flow ends** when all drivers are processed and changes are stored.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Emergency update due to injury or incident - apply immediate decrement to affected driver(s), mark as `underReview`, and notify teams.
-A2: Player-triggered training boost - apply progression rules and mark a cooldown period.
+- An emergency update is required for a single driver due to injury.
+- The system allows targeted updates to individual drivers outside the normal schedule.
+- The affected driver's attributes are modified and persisted.
+- **Flow returns to** normal operation.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Batch update failure during season tick - return `500`, log affected driver ids and schedule a retry job.
-E2: Constraint violation (e.g., negative attribute) - abort update for affected records and flag for manual review.
+- A player-triggered training session is performed during the season.
+- The system applies a limited skill boost to the selected driver.
+- A cooldown timer is set to prevent abuse.
+- **Flow continues** with training boost applied.
+
+#### Exceptional Flow E1
+
+- The batch progression fails for some drivers.
+- The system logs the error with affected driver IDs.
+- Failed drivers are skipped in this update cycle and retry is scheduled.
+- The system completes with partial updates and notifies admin.
+- **Flow continues** with partial updates persisted and retry queued.
+
+#### Exceptional Flow E2
+
+- Skill values become invalid (e.g., negative or exceeding limits).
+- The system clamps values to valid ranges.
+- The affected records are logged for review.
+- Skill progression completes with clamped values.
+- **Flow continues** with values corrected.
 
 #### Termination
 
-Driver records updated for next season.
+Driver attributes are updated for next season; retiring drivers are recycled with new rookies.
 
-#### Post condition
-
-System awaits next scheduled update.
-
-### Use Case Diagram
+---
 
 ## UC-20: Update Team Budget
 
 ### Scope
 
-Adjust team budget for income/expenses, sponsor payouts and race fees.
+Adjust team budget based on income from race results, expenses, and financial transactions.
 
 ### Description
 
-Apply transactions affecting a team's budget and persist them.
+The system manages team finances including salary payments, race fees, income, and sponsor funds.
 
 ### Actors
 
-- `Finance System` - posts transactions affecting team budgets.
-- `Game Loop` - triggers periodic income/expense events.
+- **System** - applies periodic budget adjustments (income, expenses).
+- **Admin/Player** - may request manual budget adjustments for special circumstances.
 
 ### Flow Description
 
 #### Precondition
 
-Team exists.
+A team exists with a current budget.
 
 #### Activation
 
-Starts when a transaction affecting budget occurs.
+Starts when a financial transaction occurs (race completed, season tick, sponsor payout) or is manually requested.
 
-#### Main flow
+#### Main Flow
 
-1. Validate transaction and atomicity.
-2. Update team budget.
-3. Return updated balance.
+- A financial event triggers a budget transaction (income, expense, or transfer).
+- The system validates the transaction is legitimate and the team can afford it.
+- The system calculates the amount to be added or deducted.
+- The system updates the team's budget balance.
+- The system persists the transaction and new balance.
+- Subscribers are notified of the budget change.
+- **Flow ends** when budget is updated and transaction is logged.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Insufficient funds for debit - reject the transaction with `402 Payment Required` (or `422`) and suggest corrective actions (sponsor, loan, adjust expenses).
-A2: Pending transactions that affect available balance - return `409 Conflict` with pending transaction list.
+- A debit transaction would result in insufficient funds.
+- The system rejects the transaction and displays the shortfall.
+- The player is offered options (defer expense, seek sponsor, reduce spending).
+- **Flow returns to** main team management with options for fund raising.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database write failure - return `500` and enqueue transaction for replay.
+- Multiple concurrent transactions are requested for the same team.
+- The system queues subsequent transactions to process sequentially.
+- Each transaction is processed in order with updated budget state.
+- **Flow returns to** with transaction queue status.
+
+#### Exceptional Flow E1
+
+- The system fails to persist a budget transaction.
+- The system logs the error and queues the transaction for retry.
+- The user is notified of the issue and retry is scheduled.
+- **Flow continues** with transaction persisted on retry.
+
+#### Exceptional Flow E2
+
+- A financial calculation produces invalid results (overflow, precision error).
+- The system logs the error and uses fallback calculation.
+- The transaction completes with logged error for review.
+- **Flow continues** with fallback calculation used.
 
 #### Termination
 
-Team budget updated and awaiting next transaction.
+Team budget is updated and financial transaction is logged.
 
-### Use Case Diagram
+---
 
-## UC-21: Create New Driver
+## UC-21: Create New Driver (Deferred - Future)
 
 ### Scope
 
-Add a driver to the hireable pool by recycling an existing placeholder or generating a new driver profile when pool thresholds require expansion.
+Generate or recycle driver profiles to expand the hireable pool.
 
 ### Description
 
-Maintain and expand the hireable driver pool to support roster growth, replacement of retired drivers, and content variety. The system prefers recycling deactivated driver records when suitable; otherwise the Generator Service creates a new driver profile validated against uniqueness and configured policy constraints.
+The system maintains an adequate pool of available drivers through generation and recycling of retired drivers.
 
 ### Actors
 
-- `Admin` - requests manual creation.
-- `System` - scheduled or policy-driven generator.
-- `Generator Service` - produces seeded attribute payloads for new drivers.
+- **System** - executes driver pool maintenance.
+- **Admin** - may trigger manual generation.
 
 ### Flow Description
 
 #### Precondition
 
-Driver pool is below configured threshold or an explicit admin request to create a driver is received; seeding and generation configuration are available.
+Pool size is below threshold or manual request received.
 
 #### Activation
 
-Triggered by `POST /api/drivers/generate` from an admin or by an automated roster expansion job.
+Starts when pool maintenance is triggered or manually requested.
 
-#### Main flow
+#### Main Flow
 
-1. Validate request and policy constraints (pool thresholds, allowed classes).
-2. Attempt to select a recycle candidate from the deactivated pool; if none available, call `Generator Service` to create attributes.
-3. Validate generated attributes (unique name, valid age, discipline suitability).
-4. Persist the driver record inside a transaction and mark availability.
-5. Return `201 Created` with the driver resource.
+- The system checks if recycling retired drivers is viable.
+- If recycled drivers are insufficient, new drivers are generated with random attributes.
+- Generated drivers are validated for uniqueness and data consistency.
+- New drivers are marked as available in the hireable pool.
+- **Flow ends** when drivers are added to the available pool.
 
-#### Alternate flow
+#### Exceptional Flow E1
 
-A1: Recycle candidate unavailable - generate new attributes and continue.
-A2: Minor validation warnings - persist with a `warnings` field and return `201 Created`.
-A3: Name or identity conflict - mutate the attribute (rename) and retry up to configured attempts; on exhaustion return `409 Conflict` with guidance.
-
-#### Exceptional flow
-
-E1: Database write failure - rollback and return `500` with diagnostic id for support.
-E2: Generator Service unavailable - return `503 Service Unavailable` and schedule a retry job.
-E3: Policy or configuration violation - return `422 Unprocessable Entity` with policy details.
+- Driver generation fails.
+- System logs error and retries or uses cached pool.
+- **Flow continues** with fallback.
 
 #### Termination
 
-Driver record created and visible in the hireable pool.
+Driver pool is expanded; generation completes.
 
-#### Post condition
+---
 
-Driver returned in subsequent listing endpoints and system awaits next generation task.
-
-### Use Case Diagram
-
-## UC-22: Create New Staff Member (staff generation)
+## UC-22: Create New Staff Member (Deferred - Future)
 
 ### Scope
 
-Generate new staff when required (optional).
+Generate or recycle staff to expand the hireable pool.
 
 ### Description
 
-Create or recycle staff records for hireable pool expansion.
+The system maintains an adequate pool of available staff through generation and recycling.
 
 ### Actors
 
-- `Admin/System` - triggers staff generation or pool maintenance.
+- **System** - executes staff pool maintenance.
 
 ### Flow Description
 
 #### Precondition
 
-Staff pool needs expansion.
+Pool size is below threshold.
 
 #### Activation
 
-Triggered by admin or scheduled regeneration.
+Starts when pool maintenance is triggered.
 
-#### Main flow
+#### Main Flow
 
-1. Generate staff attributes and persist.
-2. Return created staff record.
-
-#### Alternate flow
-
-A1: Attribute conflict or duplicate identity - alter generated attributes (name, hometown) and retry generation automatically.
-A2: Pool constraints prevent generation - return `422` with explanation (e.g., max drivers reached).
-
-#### Exceptional flow
-
-E1: Database write failure - return `500` and record the attempted generation for retry.
-E2: Resource exhaustion (temp files, quota) - return `503` and back off generation.
+- New staff members are generated with assigned roles and attributes.
+- Staff are validated for data consistency.
+- Staff are marked as available for hiring.
+- **Flow ends** when staff are added to available pool.
 
 #### Termination
 
-Staff visible in hiring pool.
+Staff pool is expanded.
 
-#### Post condition
-
-System awaits next generation.
-
-### Use Case Diagram
+---
 
 ## UC-23: Delete Championship
 
 ### Scope
 
-Remove or archive a championship (admin only).
+Remove or archive a championship record and related race data (admin only, deferred scope).
 
 ### Description
 
-Delete or archive championship and related resources according to retention policy.
+The system allows deletion or archival of championships with referential integrity checks.
 
 ### Actors
 
-- `Admin` - authorised to delete or archive championships.
+- **Admin** - authorized to delete or archive championships.
+- **System** - validates and performs deletion.
 
 ### Flow Description
 
 #### Precondition
 
-Admin authorised and backup policy confirmed.
+Admin has appropriate authorization; championship exists.
 
 #### Activation
 
-Starts when admin confirms deletion.
+Starts when admin requests championship deletion or archival.
 
-#### Main flow
+#### Main Flow
 
-1. Perform integrity checks.
-2. Delete or archive resources.
-3. Return confirmation.
+- The system checks for dependent records (races, results, standings).
+- If no dependencies or admin confirms cascade delete, the championship is removed.
+- Related records are deleted or archived per retention policy.
+- The operation is persisted.
+- **Flow ends** when championship is removed or archived.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Referential integrity prevents deletion - return `409 Conflict` with list of dependent resources and suggested cleanup steps.
-A2: Admin chooses archive instead of delete - archive resources and return `200 OK` with `archived: true` flag.
+- Dependent records prevent deletion.
+- System displays the dependencies.
+- Admin can choose to archive instead of delete, or proceed with cascade.
+- **Flow returns to** deletion with new option selected.
 
-#### Exceptional flow
+#### Exceptional Flow E1
 
-E1: Database cascade failure - return `500` and halt operation; create a rollback plan and notify admin.
-E2: Backup/restore service failure during deletion - abort and recommend manual intervention.
+- Deletion fails due to database error.
+- System logs error and rolls back any partial deletes.
+- Admin is notified and offered manual intervention options.
+- **Flow returns to** with error handling.
 
 #### Termination
 
-Championship removed or archived.
+Championship is deleted or archived.
 
-#### Post condition
+---
 
-System awaits next admin action.
-
-### Use Case Diagram
-
-## UC-24: Create Custom Track
+## UC-24: Create Custom Track (Deferred - Out of Scope)
 
 ### Scope
 
-Add a custom track with characteristics for use in events.
+Create custom track records for use in championship events (player track configuration deferred).
 
 ### Description
 
-Designer or admin submits track metadata and layout which becomes available for events.
+Add track entries to the system via admin tools or track database import.
 
 ### Actors
 
-- `Designer/Admin` - submits track definitions and layout files.
+- **Admin** - creates track records.
 
 ### Flow Description
 
 #### Precondition
 
-Creator authorised.
+Track data or configuration is available.
 
 #### Activation
 
-Starts when track creation form is submitted.
+Starts when track creation is submitted.
 
-#### Main flow
+#### Main Flow
 
-1. Validate track data.
-2. Insert track record.
-3. Return created track resource.
-
-#### Alternate flow
-
-A1: Invalid or incomplete track layout submitted - return `400 Bad Request` with field-level errors and validation hints.
-A2: Duplicate track name or coordinates - return `409 Conflict` with resolution options.
-
-#### Exceptional flow
-
-E1: Database write failure - return `500` and log the payload for manual replay.
-E2: Geometry parsing failure - return `422 Unprocessable Entity` with parsing error details.
+- Track details are validated.
+- Track record is created and stored.
+- **Flow ends** when track is available for use.
 
 #### Termination
 
-Track available for event creation.
+Track record is created.
 
-#### Post condition
+**Note:** Player-facing track customization is deferred to future design. Current delivery uses pre-seeded tracks.
 
-System awaits next track management action.
+---
 
-### Use Case Diagram
-
-## UC-25: Update Track Characteristics
+## UC-25: Update Track Characteristics (Deferred - Out of Scope)
 
 ### Scope
 
-Modify track parameters (surface, length, grip) for balancing.
+Modify track parameters for balancing (admin/future feature).
 
 ### Description
 
-Admin updates track metadata and future events use revised parameters.
+Update track configuration attributes via admin tools.
 
 ### Actors
 
-- `Admin` - submits track updates.
+- **Admin** - updates track records.
 
 ### Flow Description
 
@@ -1225,228 +1544,200 @@ Track exists and is editable.
 
 #### Activation
 
-Starts when admin submits updates.
+Starts when updates are submitted.
 
-#### Main flow
+#### Main Flow
 
-1. Validate and persist updates.
-2. Return updated resource.
-
-#### Alternate flow
-
-A1: Track is scheduled in upcoming events - return `409 Conflict` and offer `archive` or `force` options with explicit confirmation.
-A2: Minor characteristic change allowed - apply change with `warnings` indicating affected events.
-
-#### Exceptional flow
-
-E1: Database write failure - return `500` and queue the request for admin review.
-E2: Constraint violation due to dependent events - return `409` and detail the blocking events.
+- Track changes are validated.
+- Track record is updated.
+- **Flow ends** when changes are persisted.
 
 #### Termination
 
-Track updated for future events.
+Track record is updated.
 
-#### Post condition
+**Note:** Player-facing track modification is deferred to future design.
 
-System awaits next management action.
+---
 
-### Use Case Diagram
-
-## UC-26: Delete Track
+## UC-26: Delete Track (Deferred - Out of Scope)
 
 ### Scope
 
-Remove custom or unused tracks with checks for scheduled use.
+Remove track records (admin/future feature, not player-editable).
 
 ### Description
 
-Admin removes track or archives it if scheduled in future.
+Delete or archive track records from the system.
 
 ### Actors
 
-- `Admin` - initiates deletion or archiving of tracks.
+- **Admin** - deletes or archives tracks.
 
 ### Flow Description
 
 #### Precondition
 
-Admin confirmed deletion policy.
+Admin authorized; track eligible for deletion.
 
 #### Activation
 
-Starts when deletion requested.
+Starts when deletion is requested.
 
-#### Main flow
+#### Main Flow
 
-1. Check for scheduled events.
-2. If none, delete; else archive or return `409`.
-
-#### Alternate flow
-
-A1: Track has scheduled events - automatically archive and return `200 OK` with `archived: true` when admin confirms, or return `409` if admin cancels.
-
-#### Exceptional flow
-
-E1: DB transaction failure during delete/archive - return `500` and log for manual reconciliation.
-E2: File storage deletion error (assets) - mark record archived and flag cleanup pending.
+- System checks for scheduled races using the track.
+- If none or admin confirms, track is deleted or archived.
+- **Flow ends** when track is removed.
 
 #### Termination
 
-Track removed or archived.
+Track is deleted or archived.
 
-#### Post condition
+**Note:** Track deletion is internal/admin-only (renamed to `_delete_track()` in code). Player track configuration is out of scope.
 
-System awaits further track management.
-
-### Use Case Diagram
+---
 
 ## UC-27: Read Staff Performance Modifiers
 
 ### Scope
 
-Return computed staff modifiers used by the simulation for team performance.
+Retrieve computed staff impact modifiers for use during race simulation.
 
 ### Description
 
-Provide staff-based modifiers (mechanic efficiency, strategist value) to the Simulation Service.
+The system provides staff-based performance modifiers to the simulation engine based on assigned team staff and their ratings.
 
 ### Actors
 
-- `Simulation Service` - requests computed modifiers for a team.
+- **Simulation Engine** - requests staff performance factors.
+- **System** - computes and provides modifiers.
 
 ### Flow Description
 
 #### Precondition
 
-Staff members assigned or available.
+At least one staff member is assigned to the team, or team exists without staff.
 
 #### Activation
 
-Starts when simulation requests modifiers for a team.
+Starts when the simulation engine requests performance modifiers for a team.
 
-#### Main flow
+#### Main Flow
 
-1. Aggregate staff attributes for team.
-2. Return modifier set to simulator.
+- The system retrieves all staff assigned to the team.
+- The system aggregates staff attributes (role, rating, specialisation).
+- The system computes performance modifier values based on staff composition.
+- The modifier set is returned to the simulation engine.
+- The simulation engine applies the modifiers to team performance calculations during the race.
+- **Flow ends** when modifiers are applied during race execution.
 
-#### Alternate flow
+#### Alternate Flow A1
 
-A1: Missing or partial staff assignments - return default modifiers and mark `incomplete: true` in response.
-A2: Requested team has no staff assigned - return `200 OK` with defaults and a recommendation to hire staff for full modifiers.
+- The team has no assigned staff.
+- The system returns default modifier values (neutral factors).
+- The simulation engine uses the defaults for race calculations.
+- **Flow continues** with default modifiers.
 
-#### Exceptional flow
+#### Alternate Flow A2
 
-E1: Database read failure - return `503 Service Unavailable` and include diagnostic id.
-E2: Aggregation error while computing modifiers - return `500` and provide fallback default values.
+- Staff data is incomplete or missing.
+- The system computes modifiers using available data.
+- A flag indicates the modifiers may not reflect full staff impact.
+- **Flow continues** with partial modifiers returned and flagged as incomplete.
+
+#### Exceptional Flow E1
+
+- The system fails to retrieve staff data.
+- The system returns default modifiers and logs an error.
+- The simulation engine continues with defaults and degraded accuracy.
+- **Flow continues** with fallback defaults.
+
+#### Exceptional Flow E2
+
+- Modifier calculation fails due to invalid data.
+- The system logs the error and provides fallback default values.
+- The user/admin is notified of the calculation issue.
+- **Flow continues** with fallback modifiers.
 
 #### Termination
 
-Simulation applies modifiers.
+Staff performance modifiers are provided to and applied by the simulation engine during race execution.
 
-#### Post condition
+---
 
-System awaits next modifier request.
-
-### Use Case Diagram
-
-## UC-28: Update Driver Appearance
+## UC-28: Update Driver Appearance (Deferred - Out of Scope)
 
 ### Scope
 
-Change cosmetic appearance for a driver (helmet, livery) - non-gameplay affecting.
+Modify driver cosmetic appearance (helmets, suits, faces) - deferred to future design.
 
 ### Description
 
-Player edits and saves driver appearance assets which are stored and served to UI.
+Player uploads appearance assets and customizations for cosmetic display.
 
 ### Actors
 
-- `Player` - creates or edits appearance assets.
-- `Storage Service` - stores and serves asset files.
+- **Player** - uploads appearance assets.
 
 ### Flow Description
 
 #### Precondition
 
-Player owns or is authorised to edit driver appearance.
+Player owns driver; appearance system available.
 
 #### Activation
 
-Starts when player submits appearance changes.
+Starts when appearance upload is submitted.
 
-#### Main flow
+#### Main Flow
 
-1. Validate assets.
-2. Persist appearance metadata and files.
-3. Return confirmation.
-
-#### Alternate flow
-
-A1: Invalid asset format or too large - return `400 Bad Request` with accepted formats and size limits.
-A2: Asset conflicts (same filename) - return `409 Conflict` and provide renaming options.
-
-#### Exceptional flow
-
-E1: File storage error (S3/local) - return `500` and queue asset upload for retry; return a reference id to the client.
-E2: Virus/validation rejection - return `422 Unprocessable Entity` with reason.
+- Assets are validated for format and size.
+- Appearance record is updated or created.
+- **Flow ends** when appearance is persisted.
 
 #### Termination
 
-Appearance updated for reads.
+Appearance updated for display.
 
-#### Post condition
+**Note:** Player-facing driver appearance customization (faces, helmets, suits) is deferred to future design. Current delivery focuses on core gameplay mechanics.
 
-System awaits further edits.
+---
 
-### Use Case Diagram
-
-## UC-29: Update Team Branding
+## UC-29: Update Team Branding (Deferred - Out of Scope)
 
 ### Scope
 
-Update team visual branding assets and metadata (logos, colours).
+Modify team visual branding assets (logos, colours) - deferred to future design.
 
 ### Description
 
-Player or admin uploads branding assets and updates team metadata for display in UI.
+Player uploads team branding assets for display in menus and during races.
 
 ### Actors
 
-- `Player/Admin` - uploads branding assets.
-- `Storage/DB` - stores branding files and metadata.
+- **Player** - uploads branding assets.
 
 ### Flow Description
 
 #### Precondition
 
-Requester authorised; assets valid.
+Player owns team; asset storage available.
 
 #### Activation
 
 Starts when branding upload is submitted.
 
-#### Main flow
+#### Main Flow
 
-1. Validate assets and metadata.
-2. Persist files and update team record.
-3. Return confirmation.
-
-#### Alternate flow
-
-A1: Invalid branding assets - return `400 Bad Request` with clear validation errors and accepted file types.
-A2: Asset name conflicts - return `409 Conflict` with suggested renames.
-
-#### Exceptional flow
-
-E1: File store or DB failure - return `500` and persist metadata change to a pending queue.
-E2: Permission or quota error - return `403` or `429` as appropriate with remediation steps.
+- Assets are validated.
+- Branding record is updated.
+- **Flow ends** when branding is persisted.
 
 #### Termination
 
-Branding served to UI.
+Team branding updated for display.
 
-#### Post condition
+**Note:** Player-facing team branding customization (logos, menu colours) is deferred to future design. Current delivery uses system-generated team livery in race visualization only.
 
-System awaits next update.
-
-### Use Case Diagram
+---

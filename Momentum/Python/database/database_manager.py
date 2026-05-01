@@ -1070,8 +1070,12 @@ class DatabaseManager(RaceResultPersistence):
             # Error updating surface, but continue gracefully
             return False
 
-    def delete_track(self, track_id: int) -> bool:
-        """Delete a track and any races/results that depend on it."""
+    def _delete_track(self, track_id: int) -> bool:
+        """Internal/admin-only: Delete a track and any races/results that depend on it.
+        
+        This method is not exposed as a player-facing API endpoint.
+        Track configuration should not be directly editable by players in the current delivery.
+        """
         with self.get_connection() as conn:
             race_rows = conn.execute(
                 "SELECT id FROM races WHERE track_id = ?",
