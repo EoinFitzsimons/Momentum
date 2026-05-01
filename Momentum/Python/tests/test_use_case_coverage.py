@@ -256,7 +256,7 @@ def test_uc26_delete_track_removes_dependent_races_and_results(seeded_championsh
         )
     )
 
-    assert db.delete_track(int(track_id)) is True
+    assert db._delete_track(int(track_id)) is True
     assert db.get_track(int(track_id)) is None
     assert db.get_race(int(race_id)) is None
     assert db.get_race_results(int(race_id)) == []
