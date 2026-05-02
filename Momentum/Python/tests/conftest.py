@@ -44,14 +44,12 @@ def seeded_db(test_db: DatabaseManager):
         team_id = test_db.create_team(
             Team(
                 id=0,
-                name=f"Team {idx + 1}",
-                nationality="GBR",
-                discipline="SINGLE_SEATER",
                 tier="TIER_1",
                 budget=50_000_000 + idx * 1_000_000,
                 headquarters="Silverstone",
                 team_principal=f"Principal {idx + 1}",
             )
+            import os
         )
         team_ids.append(team_id)
 
@@ -59,6 +57,8 @@ def seeded_db(test_db: DatabaseManager):
         ("Alpha Circuit", "SINGLE_SEATER", "asphalt"),
         ("Beta Raceway", "SPRINT_RALLYCROSS", "asphalt"),
         ("Gamma Park", "SINGLE_SEATER", "asphalt"),
+            # Set offscreen rendering for headless environments BEFORE any PyQt6 imports
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     ]
     track_ids = []
     for name, discipline, surface in track_specs:
