@@ -1700,7 +1700,73 @@ P:TEXSIMAX -1 43 43
 
  
 2.38	TESTING
- 
+2.38.1	Testing Strategy and Objectives
+Testing is executed as a layered verification model combining automated and scripted manual checks. The strategy validates functional correctness, persistence integrity, simulation performance, and user-facing non-functional quality. Coverage is aligned to use cases (UC-1 to UC-29) and explicitly extended to user, environmental, and usability requirements documented in Sections 2.32, 2.33, and 2.34.
+
+Primary objectives are:
+1	Maintain stable regression detection for simulation and API behavior.
+2	Demonstrate measurable progress against persona and cross-cutting user requirements.
+3	Provide auditable evidence for environment compatibility and deployment readiness.
+4	Track accessibility and usability conformance with explicit pass/partial/deferred status.
+
+2.38.2	Test Levels and Methods
+2.38.2.1	Automated Testing
+Automated tests are implemented with pytest and organized by markers (`unit`, `integration`, `performance`, `slow`). These tests cover:
+	Simulation logic and deterministic checks.
+	Database integrity, constraints, and persistence workflows.
+	API contract and service interaction behavior.
+	Performance thresholds for key backend operations.
+
+2.38.2.2	Scripted Manual Testing
+Scripted manual checks are used where GUI and accessibility acceptance cannot yet be fully asserted through automation. This includes:
+	Keyboard-only navigation and focus visibility checks.
+	Readability and tooltip clarity checks.
+	UI scaling and layout checks across defined scale levels.
+	Installer and launch path validation from a user perspective.
+
+2.38.3	Executed Test Cycle and Results
+The latest recorded cycle (2026-05-02) executed three automated suites:
+1	`pytest Momentum/Python/tests -m "not slow" -q` -> 104 passed, 1 skipped, 3 deselected.
+2	`pytest Momentum/Python/tests -m performance -q` -> 7 passed, 101 deselected.
+3	`pytest Momentum/Python/tests -m slow -q` -> 3 passed, 105 deselected.
+
+These outcomes confirm that core simulation, persistence, and performance test gates passed for this cycle.
+
+2.38.4	Requirement-Based Testing Coverage
+Testing now includes explicit status tracking for the requirement groups introduced in Sections 2.32 to 2.34:
+
+2.38.4.1	User Requirements (2.32)
+	Local-first operation is verified as pass based on fully offline core execution.
+	Persona flows (casual quick race, career management) are partially verified: core behavior is stable, but some timing and UI-specific acceptance measurements remain open.
+	Modder import/export user flow is currently deferred as a delivered end-user pathway.
+
+2.38.4.2	Environmental Requirements (2.33)
+	Windows + Python 3.13.5 + SQLite environment is verified in this cycle.
+	Cross-platform confirmation (macOS/Linux) is partially complete and requires additional execution evidence.
+	Development deployment is verified; production ASGI and scalability verification remain partially complete pending dedicated load and multi-worker runs.
+
+2.38.4.3	Usability Requirements (2.34)
+	Readability criteria are largely satisfied in current UI copy.
+	Accessibility (contrast, high-contrast mode, colorblind-safe validation) is not fully implemented and remains deferred/partial.
+	Keyboard and scaling support is partially present; full remapping conflict and persistence matrix remains open.
+	Performance responsiveness and FPS targets are partially evidenced through backend performance tests; GUI instrumentation evidence remains pending.
+
+2.38.5	Evidence and Traceability Artifacts
+The testing evidence is captured in:
+	`Planning/Testing/Plan.md` (test strategy and requirement test model).
+	`Planning/Testing/Use_Case_Test_Mapping.md` (UC-to-test traceability).
+	`Planning/Testing/Test_Results_User_Environmental_Usability.md` (detailed results register, status and next actions).
+
+2.38.6	Testing Outcomes and Risk Position
+Current testing confirms strong implementation stability for backend and simulation-critical flows, with high automated pass rates in the latest cycle. The primary remaining quality risks are concentrated in non-functional GUI/accessibility areas where measurable instrumentation and broader manual validation are still required. These open items are formally tracked with status labels and next-action entries in the results register.
+
+2.38.7	Next Testing Iteration
+The next cycle will prioritize:
+1	WCAG-aligned contrast validation and high-contrast mode verification.
+2	Full keyboard-only traversal and remapping conflict/persistence checks.
+3	Cross-platform execution evidence for macOS/Linux.
+4	GUI FPS and input-latency instrumentation to fully satisfy Section 2.34 performance acceptance criteria.
+
 2.39	EVALUATION
  
 3	CONCLUSIONS

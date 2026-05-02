@@ -22,6 +22,10 @@ except Exception as e:
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PyQt6.QtWidgets import QApplication
+from GUI.accessibility_settings import (
+    apply_accessibility_to_app,
+    load_accessibility_settings,
+)
 
 # Ensure a QGuiApplication exists early to avoid QPixmap-before-QApplication errors
 # Some GUI modules may (incorrectly) create QPixmaps at import time; creating a
@@ -38,6 +42,8 @@ class MomentumLauncher:
     def __init__(self):
         self.app = QApplication(sys.argv)
         self.app.setStyle("Fusion")
+        self.accessibility_settings = load_accessibility_settings()
+        apply_accessibility_to_app(self.app, self.accessibility_settings)
 
         # Defer importing GUI modules until after QApplication exists to avoid
         # creating QPixmaps or other Qt GUI objects at module import time.
@@ -118,6 +124,16 @@ class MomentumLauncher:
         # Apply display mode from config
         display_mode = config.get("display_mode", "borderless")
         self.race_window.set_display_mode(display_mode)
+
+        accessibility = config.get("accessibility", getattr(self, "accessibility_settings", None))
+        if accessibility is None:
+            # Lazy-load defaults if launcher was constructed without __init__ (test stubs)
+            try:
+                accessibility = load_accessibility_settings()
+            except Exception:
+                accessibility = None
+        if hasattr(self.race_window, "set_accessibility_profile"):
+            self.race_window.set_accessibility_profile(accessibility)
 
         # Store active game mode on race window for round-to-round routing.
         setattr(self.race_window, "_game_mode", config.get("mode", "single_race"))

@@ -30,6 +30,8 @@ from PyQt6.QtGui import (
     QImage,
     QLinearGradient,
     QPolygonF,
+    QKeySequence,
+    QShortcut,
 )
 
 from PyQt6.QtCore import (
@@ -56,6 +58,8 @@ from PyQt6.QtWidgets import (
     QTreeWidget,
     QTreeWidgetItem,
     QSplitter,
+    QMessageBox,
+    QComboBox,
 )
 import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
@@ -74,6 +78,13 @@ from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
 from .infield_presets import select_preset
 from .props_placer import place_props, draw_props
+from GUI.accessibility_settings import (
+    apply_accessibility_to_app,
+    normalize_accessibility_settings,
+    get_focus_stylesheet,
+    get_theme_stylesheet,
+)
+from GUI.themed_messagebox import information, warning, critical, question, about
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -93,6 +104,30 @@ SUPPRESSED_GUI_EXCEPTION_MSG = "Suppressed non-fatal GUI exception"
 LOGGER = logging.getLogger(__name__)
 
 PlayerOverrideValue = Union[float, bool, str]
+
+DEFAULT_RACE_CONTROL_BINDINGS: Dict[str, str] = {
+    'toggle_pause': 'Space',
+    'increase_push': 'A',
+    'decrease_push': 'Z',
+    'toggle_overtake_mode': 'X',
+    'restart_race': 'R',
+}
+
+RACE_CONTROL_ACTION_LABELS: Dict[str, str] = {
+    'toggle_pause': 'Pause / Resume',
+    'increase_push': 'Increase Push Intensity',
+    'decrease_push': 'Decrease Push Intensity',
+    'toggle_overtake_mode': 'Toggle Overtake Mode',
+    'restart_race': 'Restart Race (while paused)',
+}
+
+RACE_CONTROL_KEY_OPTIONS: List[str] = [
+    'Space',
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'Up', 'Down', 'Left', 'Right',
+    'Enter', 'Tab',
+]
 
 
 def _normalize_tier(value: Any) -> str:
@@ -963,6 +998,16 @@ class TrackWidget(QWidget):
         """Stop animation."""
         self.race_active = False
         self.animation_timer.stop()
+
+    def pause_animation(self) -> None:
+        """Pause visual animation without clearing race state."""
+        if self.animation_timer.isActive():
+            self.animation_timer.stop()
+
+    def resume_animation(self) -> None:
+        """Resume visual animation after a pause."""
+        if self.race_active and not self.animation_timer.isActive():
+            self.animation_timer.start()
 
     def update_car_position(self, driver_id: int, lap: int,
                             position: int, total_time: float):
@@ -2475,6 +2520,11 @@ class RaceWindow(QMainWindow):
                 'pit_tyre_compound': 'medium',
             }  # pace/overtake: 0.0-1.0, come_in: bool trigger for pit/joker routing
             self.tuning_preset: str = 'balanced'  # Simulation tuning preset
+            self._race_paused: bool = False
+
+            # Keyboard control bindings (persisted per user profile)
+            self.control_bindings: Dict[str, str] = self._load_control_bindings()
+            self._control_shortcuts: Dict[str, QShortcut] = {}
 
             # Player telemetry tracking
             self.player_telemetry = {
@@ -2510,6 +2560,8 @@ class RaceWindow(QMainWindow):
             self.appearance_manager = VehicleAppearanceManager()
 
             self._setup_ui()
+            self._init_control_shortcuts()
+            self._refresh_control_hint_label()
             self._load_data()
             # No auto-start: user must click Start Race manually
             print("[INFO] GUI ready - click Start Race when ready")
@@ -2532,12 +2584,254 @@ class RaceWindow(QMainWindow):
         self.setGeometry(available)
         self.showMaximized()
 
+    def set_accessibility_profile(self, profile: Optional[Dict[str, Any]]) -> None:
+        """Accept and apply an accessibility profile (theme/scale) for the race window.
+
+        This will normalize the profile, apply it to the global QApplication and
+        re-apply window-level stylesheet adjustments so changes are visible immediately.
+        """
+        try:
+            settings = normalize_accessibility_settings(profile or None)
+            self._accessibility_profile = settings
+
+            app = QApplication.instance()
+            if app is not None:
+                apply_accessibility_to_app(app, settings)
+
+            # Append or replace focus/theme overrides for this window
+            try:
+                extra = get_focus_stylesheet() + "\n" + get_theme_stylesheet(str(settings.get("theme", "standard")))
+                base = self.styleSheet() or ""
+                # Avoid duplicating appended content by stripping trailing extras
+                if extra.strip() not in base:
+                    self.setStyleSheet(base + "\n" + extra)
+            except Exception:
+                LOGGER.debug("Failed to apply window-level accessibility stylesheet", exc_info=True)
+        except Exception:
+            LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
+
     def _try_reset_window_minimums(self) -> None:
         """Best-effort clear minimum sizes to avoid min>max geometry conflicts."""
         try:
             self.setMinimumSize(0, 0)
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
+
+    def _control_bindings_path(self) -> str:
+        """Return per-user path for persisted control bindings."""
+        settings_dir = os.path.join(os.path.expanduser("~"), ".momentum")
+        os.makedirs(settings_dir, exist_ok=True)
+        return os.path.join(settings_dir, "control_bindings.json")
+
+    def _load_control_bindings(self) -> Dict[str, str]:
+        """Load bindings from disk with defensive fallback to defaults."""
+        path = self._control_bindings_path()
+        try:
+            if not os.path.exists(path):
+                return dict(DEFAULT_RACE_CONTROL_BINDINGS)
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return dict(DEFAULT_RACE_CONTROL_BINDINGS)
+            merged = dict(DEFAULT_RACE_CONTROL_BINDINGS)
+            for action in DEFAULT_RACE_CONTROL_BINDINGS:
+                value = data.get(action)
+                if isinstance(value, str) and value.strip():
+                    merged[action] = value.strip()
+            error = self._validate_control_bindings(merged)
+            if error:
+                print(f"[CONTROLS] Invalid saved bindings, using defaults: {error}")
+                return dict(DEFAULT_RACE_CONTROL_BINDINGS)
+            return merged
+        except Exception as exc:
+            print(f"[CONTROLS] Failed to load control bindings: {exc}")
+            return dict(DEFAULT_RACE_CONTROL_BINDINGS)
+
+    def _save_control_bindings(self) -> None:
+        """Persist current bindings to disk."""
+        path = self._control_bindings_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.control_bindings, f, indent=2)
+        except Exception as exc:
+            print(f"[CONTROLS] Failed to save control bindings: {exc}")
+
+    def _validate_control_bindings(self, bindings: Dict[str, str]) -> str:
+        """Return empty string when valid, else a human-readable error."""
+        seen: Dict[str, str] = {}
+        for action in DEFAULT_RACE_CONTROL_BINDINGS:
+            key_name = str(bindings.get(action, "")).strip()
+            if not key_name:
+                return f"Missing key for action: {RACE_CONTROL_ACTION_LABELS.get(action, action)}"
+            normalized = key_name.upper()
+            if normalized in seen:
+                first = RACE_CONTROL_ACTION_LABELS.get(seen[normalized], seen[normalized])
+                second = RACE_CONTROL_ACTION_LABELS.get(action, action)
+                return f"Conflict: '{key_name}' is assigned to both '{first}' and '{second}'."
+            seen[normalized] = action
+        return ""
+
+    def _init_control_shortcuts(self) -> None:
+        """Create race-control shortcuts and apply persisted bindings."""
+        self._control_shortcuts = {
+            'toggle_pause': QShortcut(QKeySequence(), self),
+            'increase_push': QShortcut(QKeySequence(), self),
+            'decrease_push': QShortcut(QKeySequence(), self),
+            'toggle_overtake_mode': QShortcut(QKeySequence(), self),
+            'restart_race': QShortcut(QKeySequence(), self),
+        }
+
+        self._control_shortcuts['toggle_pause'].activated.connect(self._toggle_pause_resume)
+        self._control_shortcuts['increase_push'].activated.connect(lambda: self._adjust_push_controls(5))
+        self._control_shortcuts['decrease_push'].activated.connect(lambda: self._adjust_push_controls(-5))
+        self._control_shortcuts['toggle_overtake_mode'].activated.connect(self._toggle_overtake_mode)
+        self._control_shortcuts['restart_race'].activated.connect(self._restart_race_with_confirmation)
+
+        for shortcut in self._control_shortcuts.values():
+            shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+
+        self._apply_control_shortcuts()
+
+    def _apply_control_shortcuts(self) -> None:
+        """Apply current bindings to shortcut objects."""
+        for action, default_key in DEFAULT_RACE_CONTROL_BINDINGS.items():
+            shortcut = self._control_shortcuts.get(action)
+            if shortcut is None:
+                continue
+            key_name = self.control_bindings.get(action, default_key)
+            shortcut.setKey(QKeySequence(key_name))
+
+    def _refresh_control_hint_label(self) -> None:
+        """Show currently active keyboard bindings in the HUD sidebar."""
+        hint_label = getattr(self, 'control_hint_label', None)
+        if hint_label is None:
+            return
+        b = self.control_bindings
+        hint_label.setText(
+            " ".join([
+                f"Pause [{b.get('toggle_pause', 'Space')}]",
+                f"Push+ [{b.get('increase_push', 'A')}]",
+                f"Push- [{b.get('decrease_push', 'Z')}]",
+                f"Overtake [{b.get('toggle_overtake_mode', 'X')}]",
+                f"Restart [{b.get('restart_race', 'R')}]",
+            ])
+        )
+
+    def _open_control_bindings_dialog(self) -> None:
+        """Open UI for rebinding race controls with conflict detection."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Race Control Bindings")
+        dialog.setModal(True)
+        layout = QVBoxLayout(dialog)
+
+        combos: Dict[str, QComboBox] = {}
+        for action, label in RACE_CONTROL_ACTION_LABELS.items():
+            row = QHBoxLayout()
+            row.addWidget(QLabel(label))
+            combo = QComboBox(dialog)
+            combo.addItems(RACE_CONTROL_KEY_OPTIONS)
+            current_key = self.control_bindings.get(action, DEFAULT_RACE_CONTROL_BINDINGS[action])
+            idx = combo.findText(current_key, Qt.MatchFlag.MatchFixedString)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+            row.addWidget(combo)
+            layout.addLayout(row)
+            combos[action] = combo
+
+        button_row = QHBoxLayout()
+        reset_btn = QPushButton("Reset Defaults")
+        cancel_btn = QPushButton("Cancel")
+        save_btn = QPushButton("Save")
+        button_row.addWidget(reset_btn)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(save_btn)
+        layout.addLayout(button_row)
+
+        def _reset_defaults() -> None:
+            for action, combo in combos.items():
+                default_key = DEFAULT_RACE_CONTROL_BINDINGS[action]
+                i = combo.findText(default_key, Qt.MatchFlag.MatchFixedString)
+                if i >= 0:
+                    combo.setCurrentIndex(i)
+
+        def _save_and_close() -> None:
+            new_bindings: Dict[str, str] = {
+                action: combo.currentText().strip()
+                for action, combo in combos.items()
+            }
+            error = self._validate_control_bindings(new_bindings)
+            if error:
+                warning(dialog, "Invalid bindings", error)
+                return
+            self.control_bindings = new_bindings
+            self._apply_control_shortcuts()
+            self._save_control_bindings()
+            self._refresh_control_hint_label()
+            self.info_label.setText("Control bindings updated")
+            dialog.accept()
+
+        reset_btn.clicked.connect(_reset_defaults)
+        cancel_btn.clicked.connect(dialog.reject)
+        save_btn.clicked.connect(_save_and_close)
+
+        dialog.exec()
+
+    def _toggle_pause_resume(self) -> None:
+        """Toggle visual pause/resume state for the live race view."""
+        if not self.track_widget or not self.race_thread or not self.race_thread.is_alive():
+            self.info_label.setText("Race is not running")
+            return
+
+        if self._race_paused:
+            self.track_widget.resume_animation()
+            self._race_paused = False
+            self.info_label.setText("Race resumed")
+        else:
+            self.track_widget.pause_animation()
+            self._race_paused = True
+            self.info_label.setText("Race paused")
+
+    def _adjust_push_controls(self, delta: int) -> None:
+        """Increase/decrease both pace and overtake sliders to adjust push."""
+        pace_slider = getattr(self, 'pace_slider', None)
+        overtake_slider = getattr(self, 'overtake_slider', None)
+        if pace_slider is None or overtake_slider is None:
+            return
+        if not pace_slider.isEnabled() or not overtake_slider.isEnabled():
+            return
+
+        pace_slider.setValue(max(0, min(100, int(pace_slider.value()) + delta)))
+        overtake_slider.setValue(max(0, min(100, int(overtake_slider.value()) + delta)))
+
+    def _toggle_overtake_mode(self) -> None:
+        """Toggle overtaking mode between cautious and aggressive presets."""
+        overtake_slider = getattr(self, 'overtake_slider', None)
+        if overtake_slider is None or not overtake_slider.isEnabled():
+            return
+        current = int(overtake_slider.value())
+        if current >= 67:
+            overtake_slider.setValue(35)
+            self.info_label.setText("Overtake mode: Cautious")
+        else:
+            overtake_slider.setValue(85)
+            self.info_label.setText("Overtake mode: Aggressive")
+
+    def _restart_race_with_confirmation(self) -> None:
+        """Restart race after explicit confirmation while paused."""
+        if not self._race_paused:
+            self.info_label.setText("Pause race before restarting")
+            return
+        choice = question(
+            self,
+            "Restart Race",
+            "Restart current race from lap 1?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if choice != QMessageBox.StandardButton.Yes:
+            return
+        self._stop_race()
+        self._start_race()
         try:
             for w in self.findChildren(QWidget):
                 try:
@@ -2621,12 +2915,22 @@ class RaceWindow(QMainWindow):
         self.stop_btn.setMinimumHeight(50)
         controls.addWidget(self.stop_btn)
 
+        self.controls_btn = QPushButton("Control Bindings")
+        self.controls_btn.clicked.connect(self._open_control_bindings_dialog)
+        self.controls_btn.setMinimumHeight(50)
+        controls.addWidget(self.controls_btn)
+
         right_panel.addLayout(controls)
 
         # Race info
         self.info_label = QLabel("Ready to race")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_panel.addWidget(self.info_label)
+
+        self.control_hint_label = QLabel("")
+        self.control_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.control_hint_label.setStyleSheet("font-size: 11px; color: #B9F2FF;")
+        right_panel.addWidget(self.control_hint_label)
 
         # Player controls section
         from PyQt6.QtWidgets import QSlider, QGroupBox, QCheckBox
@@ -4264,6 +4568,7 @@ class RaceWindow(QMainWindow):
         self._driver_push_intensity = {}
         self._last_standings_row_count = 0
         self._finish_sequence_counter = 0
+        self._race_paused = False
         print("[RACE START] Waiting for simulation to send first position data...")
 
         self._launch_race_thread()
@@ -4611,6 +4916,7 @@ class RaceWindow(QMainWindow):
         # Re-enable start button
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
+        self._race_paused = False
         self.info_label.setText("Race stopped")
         print("[STOP RACE] Stop complete")
 
@@ -4768,6 +5074,7 @@ class RaceWindow(QMainWindow):
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
         self._set_player_controls_enabled(True)
+        self._race_paused = False
         if self.track_widget:
             self.track_widget.stop_animation()
 

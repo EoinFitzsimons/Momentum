@@ -19,6 +19,15 @@ from services.driver_attributes import (
     get_display_nationality,
     get_preferred_window_size,
 )
+from GUI.accessibility_settings import (
+    apply_accessibility_to_app,
+    get_focus_stylesheet,
+    get_theme_stylesheet,
+    load_accessibility_settings,
+    normalize_accessibility_settings,
+    save_accessibility_settings,
+)
+from GUI.themed_messagebox import information, warning, critical, question, about
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -247,6 +256,11 @@ class MainMenuWindow(QMainWindow):
         self.resize(window_w, window_h)
         self.setMinimumSize(800, 600)  # Absolute minimum for usability
 
+        self.accessibility_settings = load_accessibility_settings()
+        app = QApplication.instance()
+        if app is not None:
+            apply_accessibility_to_app(app, self.accessibility_settings)
+
         # Apply a dark Momentum palette consistent with existing branding
         self.setStyleSheet("""
             /* Global dark theme */
@@ -283,7 +297,7 @@ class MainMenuWindow(QMainWindow):
 
             /* Headers */
             QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
-        """)
+        """ + get_focus_stylesheet() + get_theme_stylesheet(str(self.accessibility_settings.get("theme", "standard"))))
 
         # Display settings
         self.display_mode = "borderless"  # Default: borderless windowed
@@ -503,6 +517,36 @@ class MainMenuWindow(QMainWindow):
 
         layout.addSpacing(20)
 
+        accessibility_label = QLabel("Accessibility Theme:")
+        accessibility_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(accessibility_label)
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Standard", "standard")
+        self.theme_combo.addItem("High Contrast", "high_contrast")
+        self.theme_combo.addItem("Colorblind Safe", "colorblind_safe")
+        self.theme_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.theme_combo.setAccessibleName("Accessibility Theme")
+        current_theme = str(self.accessibility_settings.get("theme", "standard"))
+        theme_idx = self.theme_combo.findData(current_theme)
+        self.theme_combo.setCurrentIndex(theme_idx if theme_idx >= 0 else 0)
+        layout.addWidget(self.theme_combo)
+
+        scale_label = QLabel("UI Scale:")
+        scale_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(scale_label)
+
+        self.ui_scale_combo = QComboBox()
+        self.ui_scale_combo.addItem("100%", 100)
+        self.ui_scale_combo.addItem("125%", 125)
+        self.ui_scale_combo.addItem("150%", 150)
+        self.ui_scale_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.ui_scale_combo.setAccessibleName("UI Scale")
+        current_scale = int(self.accessibility_settings.get("ui_scale", 100))
+        scale_idx = self.ui_scale_combo.findData(current_scale)
+        self.ui_scale_combo.setCurrentIndex(scale_idx if scale_idx >= 0 else 0)
+        layout.addWidget(self.ui_scale_combo)
+
         # Apply button
         apply_btn = QPushButton("Apply Display Settings")
         apply_btn.setMinimumHeight(50)
@@ -512,6 +556,22 @@ class MainMenuWindow(QMainWindow):
         apply_btn.setAccessibleName("Apply Display Settings")
         apply_btn.clicked.connect(self._apply_display_mode)
         layout.addWidget(apply_btn)
+
+        apply_accessibility_btn = QPushButton("Apply Accessibility Settings")
+        apply_accessibility_btn.setMinimumHeight(50)
+        apply_accessibility_btn.setProperty("primary", True)
+        apply_accessibility_btn.setToolTip("Apply selected accessibility theme and UI scale")
+        apply_accessibility_btn.setAccessibleName("Apply Accessibility Settings")
+        apply_accessibility_btn.clicked.connect(self._apply_accessibility_settings)
+        layout.addWidget(apply_accessibility_btn)
+
+        tutorial_btn = QPushButton("Controls Tutorial")
+        tutorial_btn.setMinimumHeight(50)
+        tutorial_btn.setToolTip("Show quick controls tutorial relevant to current screens")
+        tutorial_btn.setAccessibleName("Controls Tutorial")
+        tutorial_btn.clicked.connect(self._show_controls_tutorial)
+        layout.addWidget(tutorial_btn)
+
         layout.addStretch()
 
         # About button
@@ -536,7 +596,7 @@ class MainMenuWindow(QMainWindow):
         """Show championship selection/management."""
         from GUI.gui_championship import ChampionshipSelectionDialog, ChampionshipWindow
         if self.db is None:
-            QMessageBox.warning(self, "Database Unavailable", "Database is not initialised.")
+            warning(self, "Database Unavailable", "Database is not initialised.")
             return
         
         # Show championship selection
@@ -548,7 +608,7 @@ class MainMenuWindow(QMainWindow):
 
             championship_page = self._set_embedded_window("championship", self.championship_window)
             if championship_page is None or self.view_stack is None:
-                QMessageBox.warning(self, "Navigation Error", "Could not open championship view.")
+                warning(self, "Navigation Error", "Could not open championship view.")
                 return
             self.view_stack.setCurrentWidget(championship_page)
 
@@ -556,7 +616,7 @@ class MainMenuWindow(QMainWindow):
         """Show career selection/management in a dedicated career GUI."""
         from GUI.gui_career import CareerSelectionDialog, CareerWindow
         if self.db is None:
-            QMessageBox.warning(self, "Database Unavailable", "Database is not initialised.")
+            warning(self, "Database Unavailable", "Database is not initialised.")
             return
 
         dialog = CareerSelectionDialog(self.db, self)
@@ -567,7 +627,7 @@ class MainMenuWindow(QMainWindow):
 
             career_page = self._set_embedded_window("career", self.career_window)
             if career_page is None or self.view_stack is None:
-                QMessageBox.warning(self, "Navigation Error", "Could not open career view.")
+                warning(self, "Navigation Error", "Could not open career view.")
                 return
             self.view_stack.setCurrentWidget(career_page)
     
@@ -585,6 +645,7 @@ class MainMenuWindow(QMainWindow):
         """Start a championship race."""
         # Add display mode to config
         config["display_mode"] = self.display_mode
+        config["accessibility"] = dict(self.accessibility_settings)
         self._show_menu_page()
         self.start_race_signal.emit(config)
         self.hide()
@@ -592,6 +653,7 @@ class MainMenuWindow(QMainWindow):
     def _start_career_race(self, config: dict):
         """Start a career race."""
         config["display_mode"] = self.display_mode
+        config["accessibility"] = dict(self.accessibility_settings)
         self._show_menu_page()
         self.start_race_signal.emit(config)
         self.hide()
@@ -640,7 +702,7 @@ class MainMenuWindow(QMainWindow):
 
     def _show_about(self):
         """Show about dialog."""
-        QMessageBox.about(
+        about(
             self,
             "About Momentum",
             "<h2>Momentum Racing Simulator</h2>"
@@ -651,9 +713,81 @@ class MainMenuWindow(QMainWindow):
             "<p><b>Year:</b> 2025-2026</p>"
         )
 
+    def _apply_accessibility_settings(self) -> None:
+        """Apply and persist accessibility settings selected in the options panel."""
+        selected_theme = str(self.theme_combo.currentData() or "standard")
+        selected_scale = int(self.ui_scale_combo.currentData() or 100)
+        new_settings = normalize_accessibility_settings(
+            {"theme": selected_theme, "ui_scale": selected_scale}
+        )
+        self.accessibility_settings = new_settings
+        save_accessibility_settings(new_settings)
+
+        app = QApplication.instance()
+        if app is not None:
+            apply_accessibility_to_app(app, new_settings)
+
+        self.setStyleSheet("""
+            /* Global dark theme */
+            QMainWindow { background-color: #353839; }
+            QWidget { background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }
+
+            /* Group boxes / panels */
+            QGroupBox { background-color: transparent; border: 1px solid rgba(185,242,255,0.08); border-radius: 8px; margin-top: 12px; padding: 12px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #DD2D4A; font-size: 14px; font-weight: 600; }
+
+            /* Labels and typography */
+            QLabel { color: #B9F2FF; }
+            QLabel.h1 { font-size: 36px; font-weight: 700; }
+            QLabel.h2 { font-size: 22px; font-weight: 600; }
+
+            /* Buttons */
+            QPushButton { border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: 10px; font-weight: 700; }
+            QPushButton[primary="true"] { background-color: #B9F2FF; color: #353839; }
+            QPushButton[secondary="true"] { background-color: #DD2D4A; color: #FFFFFF; }
+            QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
+
+            /* ComboBox */
+            QComboBox { background-color: #2E2E2E; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.08); padding: 6px; }
+
+            /* Radio buttons */
+            QRadioButton { color: #B9F2FF; }
+            QRadioButton::indicator { width: 16px; height: 16px; }
+
+            /* List / Driver selector */
+            QListWidget { background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }
+            QListWidget::item { border: none; }
+            QListWidget::item:selected { background-color: transparent; color: #1A1A1A; font-weight: 700; }
+
+            /* Headers */
+            QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
+        """ + get_focus_stylesheet() + get_theme_stylesheet(str(new_settings.get("theme", "standard"))))
+        information(self, "Accessibility", "Accessibility settings applied and saved.")
+
+    def _show_controls_tutorial(self) -> None:
+        """Show a short in-app tutorial for menu and race controls."""
+        information(
+            self,
+            "Controls Tutorial",
+            "Main Menu:\n"
+            "- Ctrl+1: Quick Race\n"
+            "- Ctrl+2: Championship\n"
+            "- Ctrl+3: Career\n"
+            "- Ctrl+Enter: Apply display settings\n"
+            "- F1: About\n\n"
+            "Race Screen (default bindings):\n"
+            "- Space: Pause/Resume\n"
+            "- A/Z: Increase/Decrease push intensity\n"
+            "- X: Toggle overtaking mode\n"
+            "- R: Restart race (while paused, with confirmation)\n"
+            "- ESC: Return to menu\n\n"
+            "You can remap race controls in the race window using Control Bindings."
+        )
+
     def _on_race_start(self, config: dict):
         """Handle race start from setup dialog."""
         print(f"[INFO] Starting race with config: {config}")
+        config["accessibility"] = dict(self.accessibility_settings)
         self.start_race_signal.emit(config)
         self.hide()  # Hide main menu while racing
 
@@ -1018,7 +1152,7 @@ class QuickRaceSetupWindow(QDialog):
         # Get selected driver
         current_item = self.driver_list.currentItem()
         if not current_item:
-            QMessageBox.warning(self, "No Driver", "Please select a driver.")
+            warning(self, "No Driver", "Please select a driver.")
             return
 
         self.selected_driver = current_item.data(Qt.ItemDataRole.UserRole)
@@ -1033,7 +1167,7 @@ class QuickRaceSetupWindow(QDialog):
         # Enforce valid driver-team contract for the chosen discipline.
         selected_team = self._resolve_driver_team(self.selected_driver)
         if selected_team is None:
-            QMessageBox.warning(
+            warning(
                 self,
                 "No Team Contract",
                 "Selected driver is not contracted to a team and cannot start a race."
@@ -1043,7 +1177,7 @@ class QuickRaceSetupWindow(QDialog):
         team_disc = self._normalize_discipline(getattr(selected_team, "discipline", ""))
         wanted_disc = self._normalize_discipline(selected_discipline)
         if team_disc != wanted_disc:
-            QMessageBox.warning(
+            warning(
                 self,
                 "Discipline Mismatch",
                 "Selected driver's contracted team is not in the chosen discipline."
@@ -1053,7 +1187,7 @@ class QuickRaceSetupWindow(QDialog):
         team_tier = self._normalize_tier(getattr(selected_team, "tier", ""))
         wanted_tier = self._normalize_tier(selected_tier)
         if wanted_tier and team_tier != wanted_tier:
-            QMessageBox.warning(
+            warning(
                 self,
                 "Tier Mismatch",
                 "Selected driver's contracted team is not in the chosen tier."

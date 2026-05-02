@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
 )
+from GUI.themed_messagebox import information, warning, critical, question, about
 
 
 class SearchResultsDialog(QDialog):
@@ -170,7 +171,7 @@ class NavigationBar(QWidget):
 
     def _show_results(self, title: str, headers: list[str], rows: list[list[str]]) -> None:
         if not rows:
-            QMessageBox.information(self, title, "No results found.")
+            information(self, title, "No results found.")
             return
 
         dialog = SearchResultsDialog(title=title, headers=headers, rows=rows, parent=self)
@@ -181,7 +182,7 @@ class NavigationBar(QWidget):
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
-            QMessageBox.warning(self, self.SEARCH_TEAMS_TEXT, "Database is unavailable.")
+            warning(self, self.SEARCH_TEAMS_TEXT, "Database is unavailable.")
             return
 
         try:
@@ -222,14 +223,14 @@ class NavigationBar(QWidget):
                 rows=table_rows,
             )
         except Exception as exc:
-            QMessageBox.critical(self, self.SEARCH_TEAMS_TEXT, f"Search failed: {exc}")
+            critical(self, self.SEARCH_TEAMS_TEXT, f"Search failed: {exc}")
 
     def _search_championships(self) -> None:
         discipline, tier, name_query = self._selected_filters()
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
-            QMessageBox.warning(self, self.SEARCH_CHAMPIONSHIPS_TEXT, "Database is unavailable.")
+            warning(self, self.SEARCH_CHAMPIONSHIPS_TEXT, "Database is unavailable.")
             return
 
         try:
@@ -303,7 +304,7 @@ class NavigationBar(QWidget):
                 rows=table_rows,
             )
         except Exception as exc:
-            QMessageBox.critical(self, self.SEARCH_CHAMPIONSHIPS_TEXT, f"Search failed: {exc}")
+            critical(self, self.SEARCH_CHAMPIONSHIPS_TEXT, f"Search failed: {exc}")
 
 
 def _safe(value: object) -> str:
