@@ -4,7 +4,8 @@ import math
 
 import pytest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Skip this entire module gracefully if PyQt6 can't load (e.g. headless CI without libEGL)
+pytest.importorskip("PyQt6.QtWidgets", minversion=None)
 
 from PyQt6.QtWidgets import QApplication
 from GUI.accessibility_settings import (
