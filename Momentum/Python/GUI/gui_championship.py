@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QLabel, QTableWidget, QTableWidgetItem, QComboBox, QGroupBox,
     QDialog, QLineEdit, QSpinBox, QTextEdit, QMessageBox, QHeaderView
 )
+from GUI.themed_messagebox import information, warning, critical, question, about
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor
 from typing import Optional, List, Dict, Any, Tuple
@@ -216,31 +217,31 @@ class ChampionshipSelectionDialog(QDialog):
             row = self.championships_table.currentRow()
             item = self.championships_table.item(row, 0)
             if item is None:
-                QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a valid championship.")
+                warning(self, self.NO_SELECTION_TITLE, "Please select a valid championship.")
                 return
             self.selected_championship = item.data(Qt.ItemDataRole.UserRole)
             self.accept()
         else:
-            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship.")
+            warning(self, self.NO_SELECTION_TITLE, "Please select a championship.")
 
     def delete_championship(self):
         """Delete selected championship and its races/results."""
         row = self.championships_table.currentRow()
         if row < 0:
-            QMessageBox.warning(self, self.NO_SELECTION_TITLE, "Please select a championship to delete.")
+            warning(self, self.NO_SELECTION_TITLE, "Please select a championship to delete.")
             return
 
         item = self.championships_table.item(row, 0)
         if item is None:
-            QMessageBox.warning(self, "Selection Error", "Please select a valid championship.")
+            warning(self, "Selection Error", "Please select a valid championship.")
             return
 
         championship = item.data(Qt.ItemDataRole.UserRole)
         if championship is None:
-            QMessageBox.warning(self, "Selection Error", "Could not resolve selected championship.")
+            warning(self, "Selection Error", "Could not resolve selected championship.")
             return
 
-        confirm = QMessageBox.question(
+        confirm = question(
             self,
             "Delete Championship",
             (
@@ -256,16 +257,16 @@ class ChampionshipSelectionDialog(QDialog):
         try:
             deleted = self.db.delete_championship(championship.id)
             if not deleted:
-                QMessageBox.warning(self, "Delete Failed", "Championship could not be deleted.")
+                warning(self, "Delete Failed", "Championship could not be deleted.")
                 return
 
             if self.selected_championship and getattr(self.selected_championship, 'id', None) == championship.id:
                 self.selected_championship = None
 
             self.load_championships()
-            QMessageBox.information(self, "Deleted", f"Championship '{championship.name}' deleted.")
+            information(self, "Deleted", f"Championship '{championship.name}' deleted.")
         except Exception as e:
-            QMessageBox.critical(self, "Delete Error", f"Failed to delete championship: {str(e)}")
+            critical(self, "Delete Error", f"Failed to delete championship: {str(e)}")
     
     def create_championship(self):
         """Show dialog to create new championship."""
@@ -400,7 +401,7 @@ class CreateChampionshipDialog(QDialog):
         name = self.name_input.text().strip()
         if not name:
             logger.warning("Championship creation attempted with empty name")
-            QMessageBox.warning(self, "Invalid Name", "Please enter a championship name.")
+            warning(self, "Invalid Name", "Please enter a championship name.")
             return
         
         try:
@@ -447,7 +448,7 @@ class CreateChampionshipDialog(QDialog):
             
             if not track_ids:
                 logger.error("No tracks available in database - cannot create championship")
-                QMessageBox.critical(self, "No Tracks", "No tracks available in database. Please add tracks first.")
+                critical(self, "No Tracks", "No tracks available in database. Please add tracks first.")
                 return
             
             logger.info(f"Selected {len(track_ids)} tracks for championship calendar: {track_ids}")
@@ -465,7 +466,7 @@ class CreateChampionshipDialog(QDialog):
             logger.info(f"  Number of races: {len(race_ids)}")
             logger.info(f"  Race IDs: {race_ids}")
             
-            QMessageBox.information(
+            information(
                 self,
                 "Success",
                 f"Championship '{name}' created successfully with {len(race_ids)} races!"
@@ -475,7 +476,7 @@ class CreateChampionshipDialog(QDialog):
             
         except ValueError as e:
             logger.error(f"Validation error while creating championship: {str(e)}", exc_info=True)
-            QMessageBox.critical(
+            critical(
                 self,
                 "Validation Error",
                 f"Invalid input:\n{str(e)}\n\nPlease check your inputs and try again."
@@ -485,7 +486,7 @@ class CreateChampionshipDialog(QDialog):
                 f"Attribute error (likely database schema mismatch): {str(e)}",
                 exc_info=True,
             )
-            QMessageBox.critical(
+            critical(
                 self,
                 "Database Error",
                 "Database structure error:\n"
@@ -499,7 +500,7 @@ class CreateChampionshipDialog(QDialog):
                 f"{type(e).__name__}: {str(e)}",
                 exc_info=True,
             )
-            QMessageBox.critical(
+            critical(
                 self,
                 "Error",
                 f"Failed to create championship:\n\n{type(e).__name__}: {str(e)}\n\nCheck championship_mode.log for detailed error information."
@@ -856,7 +857,7 @@ class ChampionshipWindow(QMainWindow):
         # Get race details
         race = self.db.get_race(self.next_race_id)
         if not race:
-            QMessageBox.warning(self, "Error", "Could not load race details.")
+            warning(self, "Error", "Could not load race details.")
             return
         
         # Get track
@@ -883,7 +884,7 @@ class ChampionshipWindow(QMainWindow):
                 )
                 
                 if not success:
-                    QMessageBox.warning(
+                    warning(
                         self,
                         "Status Update Failed",
                         f"Could not update race status: {error_msg}"
@@ -897,7 +898,7 @@ class ChampionshipWindow(QMainWindow):
                 
             except Exception as e:
                 logger.error(f"Error updating race status: {str(e)}", exc_info=True)
-                QMessageBox.critical(
+                critical(
                     self,
                     "Error",
                     f"Failed to update race status: {str(e)}"

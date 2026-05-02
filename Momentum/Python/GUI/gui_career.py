@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHeaderView,
 )
+from GUI.themed_messagebox import information, warning, critical, question, about
 
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
@@ -133,7 +134,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
     def select_championship(self):
         """Ensure a valid career world exists and return selected career series."""
         if not self._has_profile(PLAYER_ID):
-            QMessageBox.information(
+            information(
                 self,
                 "Career Save Required",
                 "Create a career save first.",
@@ -144,17 +145,17 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
         row = self.championships_table.currentRow()
         if row < 0:
-            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a career series.")
+            warning(self, NO_SELECTION_TITLE, "Please select a career series.")
             return
 
         item = self.championships_table.item(row, 0)
         if item is None:
-            QMessageBox.warning(self, NO_SELECTION_TITLE, "Please select a valid career series.")
+            warning(self, NO_SELECTION_TITLE, "Please select a valid career series.")
             return
 
         selected = item.data(Qt.ItemDataRole.UserRole)
         if not selected:
-            QMessageBox.warning(self, NO_SELECTION_TITLE, "Could not resolve selected career series.")
+            warning(self, NO_SELECTION_TITLE, "Could not resolve selected career series.")
             return
 
         self.selected_championship = SimpleNamespace(
@@ -170,7 +171,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
     def delete_championship(self):
         """Career championships are protected from per-series deletion."""
-        QMessageBox.information(
+        information(
             self,
             "Deletion Disabled",
             "Career championships cannot be deleted individually. Use 'Create New Career Save' to reset career progression.",
@@ -185,7 +186,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self._ensure_career_tables()
         self._upsert_profile(PLAYER_ID, profile)
         self._reset_world_to_start_date(PLAYER_ID, WORLD_START_DATE)
-        QMessageBox.information(
+        information(
             self,
             "Career Save Created",
             "Career world reset to 1 Jan 2026. All championships are active and calendars were rebuilt.",
@@ -448,10 +449,10 @@ class CareerProfileDialog(QDialog):
 
     def _accept_if_valid(self) -> None:
         if not self.name_input.text().strip():
-            QMessageBox.warning(self, "Missing Name", "Please enter a player name.")
+            warning(self, "Missing Name", "Please enter a player name.")
             return
         if not self.nationality_input.text().strip():
-            QMessageBox.warning(self, "Missing Nationality", "Please enter a nationality.")
+            warning(self, "Missing Nationality", "Please enter a nationality.")
             return
         self.accept()
 
@@ -573,17 +574,17 @@ class CareerTeamSelectionDialog(QDialog):
     def _select_team(self):
         row = self.teams_table.currentRow()
         if row < 0:
-            QMessageBox.warning(self, "No Team Selected", "Please select a team.")
+            warning(self, "No Team Selected", "Please select a team.")
             return
 
         team_item = self.teams_table.item(row, 0)
         if team_item is None:
-            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not read selected team.")
+            warning(self, SELECTION_ERROR_TITLE, "Could not read selected team.")
             return
 
         self.selected_team = team_item.data(Qt.ItemDataRole.UserRole)
         if self.selected_team is None:
-            QMessageBox.warning(self, SELECTION_ERROR_TITLE, "Could not resolve selected team.")
+            warning(self, SELECTION_ERROR_TITLE, "Could not resolve selected team.")
             return
         self.accept()
 
@@ -810,7 +811,7 @@ class CareerWindow(QMainWindow):
             self,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.selected_team is None:
-            QMessageBox.warning(
+            warning(
                 self,
                 "Career Team Required",
                 "Career mode requires selecting a team first.",
@@ -1092,7 +1093,7 @@ class CareerWindow(QMainWindow):
 
                 promoted = int(len(result.get("promoted", [])))
                 relegated = int(len(result.get("relegated", [])))
-                QMessageBox.information(
+                information(
                     self,
                     SEASON_COMPLETE_TEXT,
                     (
@@ -1101,11 +1102,11 @@ class CareerWindow(QMainWindow):
                     ),
                 )
             else:
-                QMessageBox.information(self, SEASON_COMPLETE_TEXT, "No scheduled races remain.")
+                information(self, SEASON_COMPLETE_TEXT, "No scheduled races remain.")
             return
 
         if not self.selected_driver:
-            QMessageBox.warning(self, "No Driver", "Select a contracted team driver first.")
+            warning(self, "No Driver", "Select a contracted team driver first.")
             return
 
         race_id = int(self.next_race['race_id'])
@@ -1115,7 +1116,7 @@ class CareerWindow(QMainWindow):
                 (race_id,),
             ).fetchone()
             if not row:
-                QMessageBox.warning(self, "Race Error", "Could not load next race details.")
+                warning(self, "Race Error", "Could not load next race details.")
                 return
             conn.execute("UPDATE career_races SET status = 'in-progress' WHERE id = ?", (race_id,))
             conn.commit()
@@ -1266,7 +1267,7 @@ class CareerWindow(QMainWindow):
             "Marketing campaign spend",
         )
         if not applied:
-            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for marketing campaign.")
+            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for marketing campaign.")
             return
 
         quality_score, _ = self._compute_team_scores()
@@ -1287,7 +1288,7 @@ class CareerWindow(QMainWindow):
             return
 
         if not self.selected_driver:
-            QMessageBox.warning(self, "No Driver", "Select a race driver before running development.")
+            warning(self, "No Driver", "Select a race driver before running development.")
             return
 
         cost = 180000
@@ -1297,7 +1298,7 @@ class CareerWindow(QMainWindow):
             f"Driver development for {self.selected_driver.name}",
         )
         if not applied:
-            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for driver development.")
+            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for driver development.")
             return
 
         speed_gain = random.uniform(0.6, 1.8)
@@ -1333,7 +1334,7 @@ class CareerWindow(QMainWindow):
             "Staff development program",
         )
         if not applied:
-            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for staff development.")
+            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for staff development.")
             return
 
         try:
@@ -1375,7 +1376,7 @@ class CareerWindow(QMainWindow):
             f"Facility upgrade: {facility_label}",
         )
         if not applied:
-            QMessageBox.warning(self, BUDGET_WARNING_TITLE, "Not enough budget for facility upgrade.")
+            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for facility upgrade.")
             return
 
         self.db.upsert_facility_upgrade(self.owned_team.id, facility_name, float(cost))
