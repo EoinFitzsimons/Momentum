@@ -48,6 +48,9 @@ def seeded_db(test_db: DatabaseManager):
         team_id = test_db.create_team(
             Team(
                 id=0,
+                name=f"Team {idx + 1}",
+                nationality="UK",
+                discipline="SINGLE_SEATER",
                 tier="TIER_1",
                 budget=50_000_000 + idx * 1_000_000,
                 headquarters="Silverstone",
