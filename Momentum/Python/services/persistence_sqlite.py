@@ -5,6 +5,7 @@ tests and the simulation services for demo/demo-data persistence. It is a
 local copy adapted from the repository archive so the `services` package
 contains a runnable persistence implementation.
 """
+
 import sqlite3
 import dataclasses
 from typing import List, Optional, Any, Sequence
@@ -15,11 +16,11 @@ import logging
 # Ensure repository root is on sys.path so imports like `database.models`
 # resolve when running tests from `Momentum/Python`.
 _this_dir = os.path.dirname(__file__)
-_momentum_python_dir = os.path.normpath(os.path.join(_this_dir, '..'))
+_momentum_python_dir = os.path.normpath(os.path.join(_this_dir, ".."))
 if _momentum_python_dir not in sys.path:
     sys.path.insert(0, _momentum_python_dir)
 
-_repo_root = os.path.normpath(os.path.join(_this_dir, '..', '..', '..'))
+_repo_root = os.path.normpath(os.path.join(_this_dir, "..", "..", ".."))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
@@ -47,9 +48,11 @@ class PersistenceSQLite(RaceResultPersistence):
         """Add current_team_id column if missing."""
         cur.execute("PRAGMA table_info(drivers)")
         existing = [r[1] for r in cur.fetchall()]
-        if 'current_team_id' not in existing:
+        if "current_team_id" not in existing:
             cur.execute("ALTER TABLE drivers ADD COLUMN current_team_id INTEGER;")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_drivers_team ON drivers(current_team_id);"
+            )
             self.conn.commit()
 
     def _verify_and_recreate_drivers_table(self, cur) -> None:
@@ -57,7 +60,7 @@ class PersistenceSQLite(RaceResultPersistence):
         try:
             cur.execute("PRAGMA table_info(drivers)")
             cols = [r[1] for r in cur.fetchall()]
-            required = {'name', 'nationality', 'birth_date', 'raw_speed'}
+            required = {"name", "nationality", "birth_date", "raw_speed"}
             if not required.issubset(set(cols)):
                 cur.execute("DROP TABLE IF EXISTS race_results")
                 cur.execute("DROP TABLE IF EXISTS drivers")
@@ -66,18 +69,24 @@ class PersistenceSQLite(RaceResultPersistence):
                 cur.executescript(SCHEMA_SQL)
                 self.conn.commit()
         except Exception:
-            LOGGER.warning("Failed to verify/recreate drivers table schema", exc_info=True)
+            LOGGER.warning(
+                "Failed to verify/recreate drivers table schema", exc_info=True
+            )
 
     def _ensure_time_seconds_column(self, cur) -> None:
         """Ensure race_results has time_seconds column."""
         try:
             cur.execute(self._PRAGMA_RACE_RESULTS_TABLE_INFO)
             rcols = [r[1] for r in cur.fetchall()]
-            if 'time_seconds' not in rcols:
-                cur.execute("ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;")
+            if "time_seconds" not in rcols:
+                cur.execute(
+                    "ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT 0.0;"
+                )
                 self.conn.commit()
         except Exception:
-            LOGGER.warning("Failed to ensure race_results.time_seconds column", exc_info=True)
+            LOGGER.warning(
+                "Failed to ensure race_results.time_seconds column", exc_info=True
+            )
 
     def _ensure_race_result_columns(self, cur) -> None:
         """Ensure race_results contains the expanded set of columns.
@@ -88,18 +97,18 @@ class PersistenceSQLite(RaceResultPersistence):
             cur.execute(self._PRAGMA_RACE_RESULTS_TABLE_INFO)
             existing = {r[1] for r in cur.fetchall()}
             extras = {
-                'time_seconds': "ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT NULL;",
-                'grid_position': "ALTER TABLE race_results ADD COLUMN grid_position INTEGER DEFAULT NULL;",
-                'laps_completed': "ALTER TABLE race_results ADD COLUMN laps_completed INTEGER DEFAULT 0;",
-                'best_lap_time': "ALTER TABLE race_results ADD COLUMN best_lap_time REAL DEFAULT NULL;",
-                'average_lap_time': "ALTER TABLE race_results ADD COLUMN average_lap_time REAL DEFAULT NULL;",
-                'pitstops': "ALTER TABLE race_results ADD COLUMN pitstops INTEGER DEFAULT 0;",
-                'tyre_strategy': "ALTER TABLE race_results ADD COLUMN tyre_strategy TEXT DEFAULT NULL;",
-                'penalties_seconds': "ALTER TABLE race_results ADD COLUMN penalties_seconds REAL DEFAULT 0.0;",
-                'penalty_reason': "ALTER TABLE race_results ADD COLUMN penalty_reason TEXT DEFAULT NULL;",
-                'gap_to_winner_seconds': "ALTER TABLE race_results ADD COLUMN gap_to_winner_seconds REAL DEFAULT NULL;",
-                'status': "ALTER TABLE race_results ADD COLUMN status TEXT DEFAULT 'FINISHED';",
-                'recorded_at': "ALTER TABLE race_results ADD COLUMN recorded_at TEXT DEFAULT NULL;",
+                "time_seconds": "ALTER TABLE race_results ADD COLUMN time_seconds REAL DEFAULT NULL;",
+                "grid_position": "ALTER TABLE race_results ADD COLUMN grid_position INTEGER DEFAULT NULL;",
+                "laps_completed": "ALTER TABLE race_results ADD COLUMN laps_completed INTEGER DEFAULT 0;",
+                "best_lap_time": "ALTER TABLE race_results ADD COLUMN best_lap_time REAL DEFAULT NULL;",
+                "average_lap_time": "ALTER TABLE race_results ADD COLUMN average_lap_time REAL DEFAULT NULL;",
+                "pitstops": "ALTER TABLE race_results ADD COLUMN pitstops INTEGER DEFAULT 0;",
+                "tyre_strategy": "ALTER TABLE race_results ADD COLUMN tyre_strategy TEXT DEFAULT NULL;",
+                "penalties_seconds": "ALTER TABLE race_results ADD COLUMN penalties_seconds REAL DEFAULT 0.0;",
+                "penalty_reason": "ALTER TABLE race_results ADD COLUMN penalty_reason TEXT DEFAULT NULL;",
+                "gap_to_winner_seconds": "ALTER TABLE race_results ADD COLUMN gap_to_winner_seconds REAL DEFAULT NULL;",
+                "status": "ALTER TABLE race_results ADD COLUMN status TEXT DEFAULT 'FINISHED';",
+                "recorded_at": "ALTER TABLE race_results ADD COLUMN recorded_at TEXT DEFAULT NULL;",
             }
             for col, sql in extras.items():
                 if col not in existing:
@@ -107,9 +116,13 @@ class PersistenceSQLite(RaceResultPersistence):
                         cur.execute(sql)
                         self.conn.commit()
                     except Exception:
-                        LOGGER.debug("Could not add race_results column '%s'", col, exc_info=True)
+                        LOGGER.debug(
+                            "Could not add race_results column '%s'", col, exc_info=True
+                        )
         except Exception:
-            LOGGER.warning("Failed to ensure expanded race_results columns", exc_info=True)
+            LOGGER.warning(
+                "Failed to ensure expanded race_results columns", exc_info=True
+            )
 
     def ensure_schema(self) -> None:
         cur = self.conn.cursor()
@@ -118,13 +131,16 @@ class PersistenceSQLite(RaceResultPersistence):
             self.conn.commit()
         except sqlite3.OperationalError as oe:
             msg = str(oe).lower()
-            if 'current_team_id' in msg or 'no such column: current_team_id' in msg:
+            if "current_team_id" in msg or "no such column: current_team_id" in msg:
                 try:
                     self._migrate_team_id_column(cur)
                     cur.executescript(SCHEMA_SQL)
                     self.conn.commit()
                 except Exception:
-                    LOGGER.warning("Automatic schema migration for current_team_id failed", exc_info=True)
+                    LOGGER.warning(
+                        "Automatic schema migration for current_team_id failed",
+                        exc_info=True,
+                    )
 
         self._verify_and_recreate_drivers_table(cur)
         self._ensure_time_seconds_column(cur)
@@ -136,7 +152,9 @@ class PersistenceSQLite(RaceResultPersistence):
         try:
             existing = cur.fetchone()[0]
         except Exception:
-            LOGGER.debug("Could not read existing driver count; treating as empty", exc_info=True)
+            LOGGER.debug(
+                "Could not read existing driver count; treating as empty", exc_info=True
+            )
             existing = 0
         if existing > 0 and not force:
             return
@@ -152,11 +170,11 @@ class PersistenceSQLite(RaceResultPersistence):
             fitness = 50.0 + ((i * 2) % 20)
             reactions = 50.0 + (i % 10)
             if i % 3 == 0:
-                nationality = 'GBR'
+                nationality = "GBR"
             elif i % 3 == 1:
-                nationality = 'USA'
+                nationality = "USA"
             else:
-                nationality = 'IRL'
+                nationality = "IRL"
             birth = f"{1990 + (i % 20)}-01-01"
             cur.execute(
                 "INSERT INTO drivers (id, name, nationality, birth_date, speed, racecraft, consistency, fitness, reactions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -178,9 +196,9 @@ class PersistenceSQLite(RaceResultPersistence):
             "INSERT INTO tracks (id, name, country, primary_discipline, is_point_to_point, joker_enabled, instructions_json, geometry_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 1,
-                'Short Circuit',
-                'GBR',
-                'SINGLE_SEATER',
+                "Short Circuit",
+                "GBR",
+                "SINGLE_SEATER",
                 0,
                 0,
                 None,
@@ -229,7 +247,7 @@ class PersistenceSQLite(RaceResultPersistence):
             return default
 
     def _parse_team_id(self, res) -> int:
-        team_id = self._extract_result_field(res, 'team_id', 0)
+        team_id = self._extract_result_field(res, "team_id", 0)
         if team_id is None:
             return 0
         try:
@@ -238,14 +256,25 @@ class PersistenceSQLite(RaceResultPersistence):
             return 0
 
     def _try_direct_total_time(self, res_obj) -> Optional[float]:
-        direct_names = ['time_seconds', 'total_time', 'total_seconds', 'race_time', 'time']
+        direct_names = [
+            "time_seconds",
+            "total_time",
+            "total_seconds",
+            "race_time",
+            "time",
+        ]
         for name in direct_names:
             t = self._extract_result_field(res_obj, name, None)
             if t is not None:
                 try:
                     return float(t)
                 except Exception:
-                    LOGGER.debug("Ignoring non-numeric direct total-time field '%s': %r", name, t, exc_info=True)
+                    LOGGER.debug(
+                        "Ignoring non-numeric direct total-time field '%s': %r",
+                        name,
+                        t,
+                        exc_info=True,
+                    )
         return None
 
     def _safe_float(self, value) -> Optional[float]:
@@ -261,24 +290,40 @@ class PersistenceSQLite(RaceResultPersistence):
             return None
 
     def _is_total_time_key(self, lk: str) -> bool:
-        return ('total' in lk or 'race_time' in lk or 'time_seconds' in lk) and ('time' in lk or 'seconds' in lk)
+        return ("total" in lk or "race_time" in lk or "time_seconds" in lk) and (
+            "time" in lk or "seconds" in lk
+        )
 
     def _is_avg_lap_key(self, lk: str) -> bool:
-        return ('average' in lk or 'avg' in lk) and 'lap' in lk
+        return ("average" in lk or "avg" in lk) and "lap" in lk
 
     def _is_best_lap_key(self, lk: str) -> bool:
-        return ('best' in lk or 'fastest' in lk) and 'lap' in lk
+        return ("best" in lk or "fastest" in lk) and "lap" in lk
 
     def _is_laps_key(self, lk: str) -> bool:
-        return lk in ('laps', 'laps_completed', 'lap_count', 'completed_laps', 'num_laps')
+        return lk in (
+            "laps",
+            "laps_completed",
+            "lap_count",
+            "completed_laps",
+            "num_laps",
+        )
 
     def _extract_known_time_fields(self, res_obj) -> tuple:
-        avg = self._safe_float(self._extract_result_field(res_obj, 'average_lap_time', None))
-        best = self._safe_float(self._extract_result_field(res_obj, 'best_lap_time', None))
-        laps_val = self._safe_int(self._extract_result_field(res_obj, 'laps_completed', None))
+        avg = self._safe_float(
+            self._extract_result_field(res_obj, "average_lap_time", None)
+        )
+        best = self._safe_float(
+            self._extract_result_field(res_obj, "best_lap_time", None)
+        )
+        laps_val = self._safe_int(
+            self._extract_result_field(res_obj, "laps_completed", None)
+        )
         return avg, best, laps_val
 
-    def _estimate_total_from_laps(self, avg: Optional[float], best: Optional[float], laps_val: Optional[int]) -> Optional[float]:
+    def _estimate_total_from_laps(
+        self, avg: Optional[float], best: Optional[float], laps_val: Optional[int]
+    ) -> Optional[float]:
         candidate_lap = avg if avg is not None else best
         if candidate_lap is None:
             return None
@@ -286,7 +331,9 @@ class PersistenceSQLite(RaceResultPersistence):
             return candidate_lap * float(laps_val)
         return candidate_lap
 
-    def _update_time_components(self, lk: str, v, avg, best, laps_val, total_time) -> tuple:
+    def _update_time_components(
+        self, lk: str, v, avg, best, laps_val, total_time
+    ) -> tuple:
         if total_time is None and self._is_total_time_key(lk):
             total_time = self._safe_float(v)
             if total_time is not None:
@@ -311,7 +358,9 @@ class PersistenceSQLite(RaceResultPersistence):
 
         for k, v in res_obj.items():
             lk = str(k).lower()
-            avg, best, laps_val, total_time = self._update_time_components(lk, v, avg, best, laps_val, total_time)
+            avg, best, laps_val, total_time = self._update_time_components(
+                lk, v, avg, best, laps_val, total_time
+            )
 
         return avg, best, laps_val, total_time
 
@@ -343,39 +392,56 @@ class PersistenceSQLite(RaceResultPersistence):
 
     def _build_result_insert_statement(self, existing_cols: List[str]) -> tuple:
         preferred_cols = [
-            'race_id', 'driver_id', 'team_id', 'position', 'fastest_lap', 'points', 'dnf_reason',
-            'time_seconds', 'grid_position', 'laps_completed', 'best_lap_time', 'average_lap_time',
-            'pitstops', 'tyre_strategy', 'penalties_seconds', 'penalty_reason', 'gap_to_winner_seconds',
-            'status', 'recorded_at'
+            "race_id",
+            "driver_id",
+            "team_id",
+            "position",
+            "fastest_lap",
+            "points",
+            "dnf_reason",
+            "time_seconds",
+            "grid_position",
+            "laps_completed",
+            "best_lap_time",
+            "average_lap_time",
+            "pitstops",
+            "tyre_strategy",
+            "penalties_seconds",
+            "penalty_reason",
+            "gap_to_winner_seconds",
+            "status",
+            "recorded_at",
         ]
         insert_cols = [c for c in preferred_cols if c in existing_cols]
         insert_sql = f"INSERT INTO race_results ({', '.join(insert_cols)}) VALUES ({', '.join(['?'] * len(insert_cols))})"
         return insert_cols, insert_sql
 
     def _fallback_missing_column_value(self, res, col: str):
-        if col == 'time_seconds':
+        if col == "time_seconds":
             return self._compute_total_time(res)
-        if col == 'best_lap_time':
-            return self._extract_result_field(res, 'best_lap_time', None)
-        if col == 'average_lap_time':
-            return self._extract_result_field(res, 'average_lap_time', None)
-        if col == 'grid_position':
-            return self._extract_result_field(res, 'grid_position', None)
-        if col == 'laps_completed':
-            return self._extract_result_field(res, 'laps_completed', None)
+        if col == "best_lap_time":
+            return self._extract_result_field(res, "best_lap_time", None)
+        if col == "average_lap_time":
+            return self._extract_result_field(res, "average_lap_time", None)
+        if col == "grid_position":
+            return self._extract_result_field(res, "grid_position", None)
+        if col == "laps_completed":
+            return self._extract_result_field(res, "laps_completed", None)
         return None
 
-    def _build_result_values(self, res, insert_cols: List[str], race_id: int) -> List[Any]:
+    def _build_result_values(
+        self, res, insert_cols: List[str], race_id: int
+    ) -> List[Any]:
         vals: List[Any] = []
         for col in insert_cols:
-            if col == 'race_id':
+            if col == "race_id":
                 vals.append(race_id)
                 continue
-            if col == 'team_id':
+            if col == "team_id":
                 vals.append(self._parse_team_id(res))
                 continue
-            if col == 'fastest_lap':
-                v = self._extract_result_field(res, 'fastest_lap', False)
+            if col == "fastest_lap":
+                v = self._extract_result_field(res, "fastest_lap", False)
                 vals.append(1 if v else 0)
                 continue
 
@@ -385,7 +451,9 @@ class PersistenceSQLite(RaceResultPersistence):
             vals.append(v)
         return vals
 
-    def _insert_result_row(self, cur, insert_sql: str, vals: List[Any], race_id: int, res) -> None:
+    def _insert_result_row(
+        self, cur, insert_sql: str, vals: List[Any], race_id: int, res
+    ) -> None:
         try:
             cur.execute(insert_sql, tuple(vals))
         except sqlite3.IntegrityError as ie:
@@ -394,9 +462,9 @@ class PersistenceSQLite(RaceResultPersistence):
             ) from ie
         except sqlite3.OperationalError as oe:
             try:
-                driver_id = self._extract_result_field(res, 'driver_id')
-                position = self._extract_result_field(res, 'position')
-                time_sec = self._extract_result_field(res, 'time_seconds', 0.0)
+                driver_id = self._extract_result_field(res, "driver_id")
+                position = self._extract_result_field(res, "position")
+                time_sec = self._extract_result_field(res, "time_seconds", 0.0)
                 cur.execute(
                     "INSERT INTO race_results (race_id, driver_id, team_id, position, time_seconds) VALUES (?, ?, ?, ?, ?)",
                     (race_id, driver_id, self._parse_team_id(res), position, time_sec),
@@ -409,7 +477,7 @@ class PersistenceSQLite(RaceResultPersistence):
             return
 
         cur = self.conn.cursor()
-        grouped_results = {}
+        grouped_results: dict[int, list[Any]] = {}
         for res in race_result_batch:
             race_id = int(getattr(res, "race_id", 0) or 0)
             grouped_results.setdefault(race_id, []).append(res)
@@ -429,4 +497,5 @@ class PersistenceSQLite(RaceResultPersistence):
         self.save_race_results([result])
         return getattr(result, "id", None)
 
-__all__ = ['PersistenceSQLite']
+
+__all__ = ["PersistenceSQLite"]

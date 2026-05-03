@@ -156,7 +156,6 @@ QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selec
 """
 
 
-
 def _resolve_readable_font_family() -> str:
     """Return a UI font family that is likely to render text in headless Qt."""
     for font_path in PREFERRED_FONT_FILES:
@@ -177,7 +176,10 @@ def _resolve_readable_font_family() -> str:
     # Try to load DejaVu Sans from matplotlib as a reliable bundled fallback
     try:
         import matplotlib
-        dv_path = os.path.join(matplotlib.get_data_path(), 'fonts', 'ttf', 'DejaVuSans.ttf')
+
+        dv_path = os.path.join(
+            matplotlib.get_data_path(), "fonts", "ttf", "DejaVuSans.ttf"
+        )
         if os.path.exists(dv_path):
             font_id = QFontDatabase.addApplicationFont(dv_path)
             if font_id != -1:
@@ -212,4 +214,6 @@ def apply_accessibility_to_app(app: QApplication, settings: Dict[str, Any]) -> N
     font.setPointSizeF(scaled_size)
     app.setFont(font)
 
-    app.setStyleSheet(get_focus_stylesheet() + "\n" + get_theme_stylesheet(str(normalized["theme"])))
+    app.setStyleSheet(
+        get_focus_stylesheet() + "\n" + get_theme_stylesheet(str(normalized["theme"]))
+    )

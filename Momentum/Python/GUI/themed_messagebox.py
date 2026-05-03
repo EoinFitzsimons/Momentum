@@ -4,6 +4,7 @@ These mirror the common `QMessageBox` static helpers but ensure the
 dialog receives the application's stylesheet so captures show the
 intended theme.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,6 +13,7 @@ from typing import Any
 def _apply_theme(widget) -> None:
     try:
         from PyQt6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app is None:
             return
@@ -27,6 +29,7 @@ def _apply_theme(widget) -> None:
 
 def information(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int:
     from PyQt6.QtWidgets import QMessageBox
+
     m = QMessageBox(parent)
     m.setIcon(QMessageBox.Icon.Information)
     m.setWindowTitle(title)
@@ -43,6 +46,7 @@ def information(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int
 
 def warning(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int:
     from PyQt6.QtWidgets import QMessageBox
+
     m = QMessageBox(parent)
     m.setIcon(QMessageBox.Icon.Warning)
     m.setWindowTitle(title)
@@ -58,6 +62,7 @@ def warning(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int:
 
 def critical(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int:
     from PyQt6.QtWidgets import QMessageBox
+
     m = QMessageBox(parent)
     m.setIcon(QMessageBox.Icon.Critical)
     m.setWindowTitle(title)
@@ -73,6 +78,7 @@ def critical(parent, title: str, text: str, *args: Any, **kwargs: Any) -> int:
 
 def question(parent, title: str, text: str, buttons=None, default=None) -> Any:
     from PyQt6.QtWidgets import QMessageBox
+
     m = QMessageBox(parent)
     m.setIcon(QMessageBox.Icon.Question)
     m.setWindowTitle(title)
@@ -94,6 +100,7 @@ def question(parent, title: str, text: str, buttons=None, default=None) -> Any:
 def about(parent, title: str, text: str) -> None:
     # Use a themed dialog instance to mimic QMessageBox.about behaviour
     from PyQt6.QtWidgets import QMessageBox
+
     m = QMessageBox(parent)
     m.setIcon(QMessageBox.Icon.Information)
     m.setWindowTitle(title)

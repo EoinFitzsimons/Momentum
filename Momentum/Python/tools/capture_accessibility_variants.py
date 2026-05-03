@@ -4,6 +4,7 @@ This wrapper writes the accessibility settings to the user's .momentum settings
 file, runs the existing capture_all_screens.py (offscreen), and moves the
 generated images into a per-variant folder under saves/accessibility_screenshots/.
 """
+
 import json
 import os
 import shutil
@@ -11,10 +12,10 @@ import subprocess
 import sys
 import time
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-CAPTURE_SCRIPT = os.path.join(ROOT, 'tools', 'capture_all_screens.py')
-OUT_ROOT = os.path.join(os.path.dirname(ROOT), 'saves', 'accessibility_screenshots')
-ALL_SCREENS_DIR = os.path.join(OUT_ROOT, 'all_screens')
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CAPTURE_SCRIPT = os.path.join(ROOT, "tools", "capture_all_screens.py")
+OUT_ROOT = os.path.join(os.path.dirname(ROOT), "saves", "accessibility_screenshots")
+ALL_SCREENS_DIR = os.path.join(OUT_ROOT, "all_screens")
 
 VARIANTS = [
     ("standard", 100),
@@ -30,11 +31,11 @@ VARIANTS = [
 
 
 def _write_settings(theme: str, ui_scale: int) -> str:
-    cfg_dir = os.path.join(os.path.expanduser('~'), '.momentum')
+    cfg_dir = os.path.join(os.path.expanduser("~"), ".momentum")
     os.makedirs(cfg_dir, exist_ok=True)
-    path = os.path.join(cfg_dir, 'accessibility_settings.json')
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump({'theme': theme, 'ui_scale': ui_scale}, f, indent=2)
+    path = os.path.join(cfg_dir, "accessibility_settings.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"theme": theme, "ui_scale": ui_scale}, f, indent=2)
     return path
 
 
@@ -59,8 +60,8 @@ def main():
         print(f"\n--- Capturing variant: theme={theme}, ui_scale={scale} ---")
         _write_settings(theme, scale)
         env = os.environ.copy()
-        env['QT_QPA_PLATFORM'] = 'offscreen'
-        env['PYTHONPATH'] = ROOT
+        env["QT_QPA_PLATFORM"] = "offscreen"
+        env["PYTHONPATH"] = ROOT
         # Run capture script in a fresh process to ensure a new QApplication
         cmd = [sys.executable, CAPTURE_SCRIPT]
         try:
@@ -74,5 +75,5 @@ def main():
         time.sleep(0.2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

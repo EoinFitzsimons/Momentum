@@ -22,11 +22,15 @@ def _print_schema(cur) -> bool:
 
 def _print_summary(cur, race_id: int | None, max_rows: int) -> None:
     total = cur.execute("SELECT COUNT(1) FROM race_results").fetchone()[0]
-    distinct = cur.execute("SELECT COUNT(DISTINCT race_id) FROM race_results").fetchone()[0]
+    distinct = cur.execute(
+        "SELECT COUNT(DISTINCT race_id) FROM race_results"
+    ).fetchone()[0]
     latest_race_id = cur.execute("SELECT MAX(race_id) FROM race_results").fetchone()[0]
     selected_race_id = race_id if race_id is not None else latest_race_id
 
-    print(f"total_rows={total}, distinct_race_ids={distinct}, latest_race_id={latest_race_id}")
+    print(
+        f"total_rows={total}, distinct_race_ids={distinct}, latest_race_id={latest_race_id}"
+    )
     if selected_race_id is None:
         print("No race_results rows found")
         return
@@ -41,11 +45,30 @@ def _print_summary(cur, race_id: int | None, max_rows: int) -> None:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Inspect race_results schema and row samples.")
-    parser.add_argument("--db", default=str(_default_db()), help="SQLite DB path (default: Momentum/Python/database/momentum.db)")
-    parser.add_argument("--schema-only", action="store_true", help="Only print race_results schema columns.")
-    parser.add_argument("--race-id", type=int, help="Race ID to print rows for (defaults to latest race_id).")
-    parser.add_argument("--max-rows", type=int, default=40, help="Maximum rows to print for selected race (default: 40).")
+    parser = argparse.ArgumentParser(
+        description="Inspect race_results schema and row samples."
+    )
+    parser.add_argument(
+        "--db",
+        default=str(_default_db()),
+        help="SQLite DB path (default: Momentum/Python/database/momentum.db)",
+    )
+    parser.add_argument(
+        "--schema-only",
+        action="store_true",
+        help="Only print race_results schema columns.",
+    )
+    parser.add_argument(
+        "--race-id",
+        type=int,
+        help="Race ID to print rows for (defaults to latest race_id).",
+    )
+    parser.add_argument(
+        "--max-rows",
+        type=int,
+        default=40,
+        help="Maximum rows to print for selected race (default: 40).",
+    )
     args = parser.parse_args(argv)
 
     db_path = Path(args.db)

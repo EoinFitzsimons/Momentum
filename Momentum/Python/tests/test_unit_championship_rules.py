@@ -9,8 +9,12 @@ from services.championship_service import ChampionshipService
 def test_calculate_points_single_seater_includes_fastest_lap_bonus(test_db):
     service = ChampionshipService(test_db)
 
-    no_bonus = service.calculate_points(position=1, discipline="SINGLE_SEATER", fastest_lap=False)
-    with_bonus = service.calculate_points(position=1, discipline="SINGLE_SEATER", fastest_lap=True)
+    no_bonus = service.calculate_points(
+        position=1, discipline="SINGLE_SEATER", fastest_lap=False
+    )
+    with_bonus = service.calculate_points(
+        position=1, discipline="SINGLE_SEATER", fastest_lap=True
+    )
 
     assert no_bonus == 25
     assert with_bonus == 26
@@ -20,7 +24,9 @@ def test_calculate_points_single_seater_includes_fastest_lap_bonus(test_db):
 def test_calculate_points_fastest_lap_bonus_not_awarded_outside_top_ten(test_db):
     service = ChampionshipService(test_db)
 
-    points = service.calculate_points(position=11, discipline="SINGLE_SEATER", fastest_lap=True)
+    points = service.calculate_points(
+        position=11, discipline="SINGLE_SEATER", fastest_lap=True
+    )
     assert points == 0
 
 

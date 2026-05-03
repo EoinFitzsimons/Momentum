@@ -1,4 +1,4 @@
-""" models used for lightweight database views and minimal persistence.
+"""models used for lightweight database views and minimal persistence.
 
 This module contains the small 7-table dataclasses (Driver, Team, Track, Championship,
 Race, RaceResult, StaffMember) and a  `SCHEMA_SQL` string used for
@@ -69,7 +69,7 @@ class Driver:
     contract_end_season: Optional[int] = None
     performance_bonus: float = 0.0
     name_locale: Optional[str] = None
-    
+
     # Legacy/extra data
     # legacy attributes_extra removed
 
@@ -80,7 +80,9 @@ class Driver:
         try:
             bd = datetime.strptime(self.birth_date, "%Y-%m-%d").date()
             today = datetime.now(timezone.utc).date()
-            years = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            years = (
+                today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            )
             return int(years)
         except Exception:
             return 0
@@ -131,7 +133,9 @@ class Track:
     right_turns: int = 6
     drs_zones: int = 1
     surface: str = "asphalt"  # Primary surface type: asphalt, gravel, grass, mixed
-    surface_type: str = "asphalt"  # Legacy surface type field (kept for database compatibility)
+    surface_type: str = (
+        "asphalt"  # Legacy surface type field (kept for database compatibility)
+    )
     surface_grip: float = 1.0  # Grip level for visualisation and simulation (0-1 scale)
     surface_abrasiveness: float = 8.0  # Abrasiveness for tyre wear
     climate: str = "temperate"  # Climate type for track conditions
@@ -163,8 +167,6 @@ class Race:
     laps: int
     status: str = "scheduled"
     race_duration_minutes: int = 90
-    
-
 
 
 @dataclass

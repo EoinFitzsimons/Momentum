@@ -6,6 +6,7 @@ insert new rows by matching `name` + `country`.
 Usage:
     python import_circuits.py [--db /path/to/db] [--mode upsert|insert]
 """
+
 import argparse
 import hashlib
 import json
@@ -57,7 +58,11 @@ def _seeded_rng(rec: dict) -> random.Random:
             str(rec.get("circuit_id", "")),
             str(rec.get("name", "")),
             str(rec.get("country", "")),
-            str(rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER"),
+            str(
+                rec.get("primary_discipline")
+                or rec.get("discipline")
+                or "SINGLE_SEATER"
+            ),
         ]
     )
     digest = hashlib.sha256(seed_key.encode("utf-8")).digest()
@@ -93,7 +98,9 @@ def _synthesise_flowing_instructions(rec: dict) -> list:
     The generated profile intentionally varies corner angles/radii/straight lengths
     so circuits do not collapse into near-regular polygons.
     """
-    discipline = str(rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER").upper()
+    discipline = str(
+        rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER"
+    ).upper()
     length_m = max(800.0, _parse_float(rec.get("length_km"), 3.2) * 1000.0)
 
     if discipline == "DRAG_ACCELERATION" or bool(rec.get("is_point_to_point", False)):
@@ -106,7 +113,9 @@ def _synthesise_flowing_instructions(rec: dict) -> list:
     tightest = max(15.0, _parse_float(rec.get("tightest_corner_radius_m"), 30.0))
     avg_from_speed = max(28.0, _parse_float(rec.get("avg_speed_kmh"), 170.0) * 0.28)
     base_radius = max(tightest * 1.15, min(155.0, avg_from_speed))
-    longest_straight = max(120.0, _parse_float(rec.get("longest_straight_m"), length_m * 0.16))
+    longest_straight = max(
+        120.0, _parse_float(rec.get("longest_straight_m"), length_m * 0.16)
+    )
 
     # Build corner-angle weights and normalize to one full loop (360 degrees).
     angle_weights = [0.78 + rng.random() * 0.60 for _ in range(turns)]
@@ -117,13 +126,17 @@ def _synthesise_flowing_instructions(rec: dict) -> list:
 
     corner_radii = []
     for i in range(turns):
-        wave = 0.82 + 0.32 * math.sin((2.0 * math.pi * i / turns) + (rng.random() * 0.35))
+        wave = 0.82 + 0.32 * math.sin(
+            (2.0 * math.pi * i / turns) + (rng.random() * 0.35)
+        )
         jitter = 0.88 + rng.random() * 0.28
         radius = base_radius * wave * jitter
         radius = max(tightest, min(170.0, radius))
         corner_radii.append(radius)
 
-    corner_arcs = [max(7.0, r * math.radians(a)) for r, a in zip(corner_radii, corner_angles)]
+    corner_arcs = [
+        max(7.0, r * math.radians(a)) for r, a in zip(corner_radii, corner_angles)
+    ]
     total_corner_len = sum(corner_arcs)
 
     straight_budget = max(length_m * 0.22, length_m - total_corner_len)
@@ -149,7 +162,9 @@ def _synthesise_flowing_instructions(rec: dict) -> list:
         straight_len = int(round(max(30.0, straight_lengths[i])))
         angle_deg = float(max(8.0, min(56.0, corner_angles[i])))
         radius_m = float(max(tightest, min(170.0, corner_radii[i])))
-        clothoid_len = float(max(8.0, min(46.0, radius_m * (0.20 + 0.10 * rng.random()))))
+        clothoid_len = float(
+            max(8.0, min(46.0, radius_m * (0.20 + 0.10 * rng.random())))
+        )
         k = float(0.00008 + rng.random() * 0.00005)
 
         instructions.append({"type": "S", "length_m": straight_len})
@@ -168,7 +183,9 @@ def _synthesise_flowing_instructions(rec: dict) -> list:
 
 def _build_track_payload(rec: dict) -> dict:
     surface = _normalise_surface(str(rec.get("surface", "asphalt")))
-    discipline = rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER"
+    discipline = (
+        rec.get("primary_discipline") or rec.get("discipline") or "SINGLE_SEATER"
+    )
     raw_instructions = rec.get("instructions")
     instructions_json = None
     if isinstance(raw_instructions, list):
@@ -196,13 +213,17 @@ def _build_track_payload(rec: dict) -> dict:
         "turns": _parse_int(rec.get("turns"), 12),
         "avg_speed_kmh": _parse_float(rec.get("avg_speed_kmh"), 160.0),
         "longest_straight_m": _parse_float(rec.get("longest_straight_m"), 700.0),
-        "tightest_corner_radius_m": _parse_float(rec.get("tightest_corner_radius_m"), 30.0),
+        "tightest_corner_radius_m": _parse_float(
+            rec.get("tightest_corner_radius_m"), 30.0
+        ),
         "left_turns": _parse_int(rec.get("left_turns"), 6),
         "right_turns": _parse_int(rec.get("right_turns"), 6),
         "drs_zones": _parse_int(rec.get("drs_zones"), 1),
         "surface": surface,
         "surface_type": surface,
-        "surface_grip": _parse_float(rec.get("surface_grip"), _SURFACE_GRIP_DEFAULTS.get(surface, 0.9)),
+        "surface_grip": _parse_float(
+            rec.get("surface_grip"), _SURFACE_GRIP_DEFAULTS.get(surface, 0.9)
+        ),
         "climate": rec.get("climate") or "temperate",
     }
 
@@ -213,13 +234,21 @@ def _sanitize_payload(payload: dict) -> dict:
     payload["country"] = str(payload.get("country") or "").strip()
     payload["length_km"] = max(0.1, _parse_float(payload.get("length_km"), 3.2))
     payload["turns"] = max(1, _parse_int(payload.get("turns"), 12))
-    payload["avg_speed_kmh"] = max(1.0, _parse_float(payload.get("avg_speed_kmh"), 160.0))
-    payload["longest_straight_m"] = max(1.0, _parse_float(payload.get("longest_straight_m"), 700.0))
-    payload["tightest_corner_radius_m"] = max(1.0, _parse_float(payload.get("tightest_corner_radius_m"), 30.0))
+    payload["avg_speed_kmh"] = max(
+        1.0, _parse_float(payload.get("avg_speed_kmh"), 160.0)
+    )
+    payload["longest_straight_m"] = max(
+        1.0, _parse_float(payload.get("longest_straight_m"), 700.0)
+    )
+    payload["tightest_corner_radius_m"] = max(
+        1.0, _parse_float(payload.get("tightest_corner_radius_m"), 30.0)
+    )
     payload["left_turns"] = max(0, _parse_int(payload.get("left_turns"), 6))
     payload["right_turns"] = max(0, _parse_int(payload.get("right_turns"), 6))
     payload["drs_zones"] = max(0, _parse_int(payload.get("drs_zones"), 1))
-    payload["surface_grip"] = min(1.5, max(0.0, _parse_float(payload.get("surface_grip"), 1.0)))
+    payload["surface_grip"] = min(
+        1.5, max(0.0, _parse_float(payload.get("surface_grip"), 1.0))
+    )
     return payload
 
 
@@ -313,7 +342,9 @@ def _insert_tracks(conn, circuits) -> tuple:
                 skipped += 1
                 continue
             country = c.get("country") or ""
-            primary = c.get("primary_discipline") or c.get("discipline") or "SINGLE_SEATER"
+            primary = (
+                c.get("primary_discipline") or c.get("discipline") or "SINGLE_SEATER"
+            )
             geometry = json.dumps(c)
             conn.execute(
                 "INSERT INTO tracks (name, country, primary_discipline, geometry_json) VALUES (?, ?, ?, ?)",
@@ -327,7 +358,10 @@ def _insert_tracks(conn, circuits) -> tuple:
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", help="Path to SQLite DB file. If omitted uses config.DATABASE_PATH from package.")
+    parser.add_argument(
+        "--db",
+        help="Path to SQLite DB file. If omitted uses config.DATABASE_PATH from package.",
+    )
     parser.add_argument(
         "--mode",
         choices=["upsert", "insert"],

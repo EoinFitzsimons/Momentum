@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Dict, Optional
 from database.models import Driver, Team
+from PyQt6.QtGui import QPainter
 from vehicles.vehicle_appearance import (
     QColor,
     VehicleRenderer,
@@ -29,7 +30,9 @@ class VehicleAppearanceManager:
         self.driver_liveries: Dict[int, Livery] = {}
         self.driver_vehicle_types: Dict[int, VehicleType] = {}
 
-    def create_vehicle_for_driver(self, driver: Driver, team: Team) -> VehicleConfiguration:
+    def create_vehicle_for_driver(
+        self, driver: Driver, team: Team
+    ) -> VehicleConfiguration:
         """
         Create vehicle configuration for a driver.
 
@@ -43,8 +46,12 @@ class VehicleAppearanceManager:
         # Use driver.id as the racing number (unique identifier)
         livery = create_team_livery(driver.id, f"Driver {driver.id}", driver.id)
         self.driver_liveries[driver.id] = livery
-        team_discipline = getattr(team, "discipline", None) if team is not None else None
-        vehicle_type = get_vehicle_type_for_discipline(str(team_discipline or "SINGLE_SEATER"))
+        team_discipline = (
+            getattr(team, "discipline", None) if team is not None else None
+        )
+        vehicle_type = get_vehicle_type_for_discipline(
+            str(team_discipline or "SINGLE_SEATER")
+        )
         self.driver_vehicle_types[driver.id] = vehicle_type
 
         config = VehicleConfiguration(
@@ -53,7 +60,7 @@ class VehicleAppearanceManager:
             team_id=team.id if team is not None else 0,
             fuel_load_kg=105.0,  # Single seater spec fuel
             tyre_compound="medium",
-            aerodynamic_setup="balanced"
+            aerodynamic_setup="balanced",
         )
 
         self.vehicle_configs[driver.id] = config
@@ -67,9 +74,15 @@ class VehicleAppearanceManager:
         """Retrieve livery for a driver"""
         return self.driver_liveries.get(driver_id)
 
-    def render_car_on_track(self, painter: QPainter, driver_id: int,
-                           x: float, y: float, rotation: float = 0.0,
-                           scale: float = 1.0) -> bool:
+    def render_car_on_track(
+        self,
+        painter: QPainter,
+        driver_id: int,
+        x: float,
+        y: float,
+        rotation: float = 0.0,
+        scale: float = 1.0,
+    ) -> bool:
         """
         Render a car at track position.
 
@@ -108,15 +121,25 @@ class VehicleAppearanceManager:
 
     def set_vehicle_type(self, driver_id: int, discipline: str) -> None:
         """Persist resolved vehicle type for a driver."""
-        self.driver_vehicle_types[driver_id] = get_vehicle_type_for_discipline(discipline)
+        self.driver_vehicle_types[driver_id] = get_vehicle_type_for_discipline(
+            discipline
+        )
 
-    def get_vehicle_type(self, driver_id: int, default_discipline: str = "SINGLE_SEATER") -> VehicleType:
+    def get_vehicle_type(
+        self, driver_id: int, default_discipline: str = "SINGLE_SEATER"
+    ) -> VehicleType:
         """Return cached driver vehicle type, falling back to discipline mapping."""
-        return self.driver_vehicle_types.get(driver_id, get_vehicle_type_for_discipline(default_discipline))
+        return self.driver_vehicle_types.get(
+            driver_id, get_vehicle_type_for_discipline(default_discipline)
+        )
 
-    def set_vehicle_setup(self, driver_id: int, fuel_load: Optional[float] = None,
-                         tyre_compound: Optional[str] = None,
-                         aero_setup: Optional[str] = None) -> bool:
+    def set_vehicle_setup(
+        self,
+        driver_id: int,
+        fuel_load: Optional[float] = None,
+        tyre_compound: Optional[str] = None,
+        aero_setup: Optional[str] = None,
+    ) -> bool:
         """
         Update vehicle setup parameters during race weekend.
 
@@ -154,7 +177,9 @@ def get_vehicle_type_for_discipline(discipline: str) -> VehicleType:
     Returns:
         VehicleType matching the discipline
     """
-    normalized = re.sub(r"[^a-z0-9]+", "_", str(discipline or "").strip().lower()).strip("_")
+    normalized = re.sub(
+        r"[^a-z0-9]+", "_", str(discipline or "").strip().lower()
+    ).strip("_")
     mapping = {
         "single_seater": VehicleType.SINGLE_SEATER,
         "production_touring": VehicleType.PRODUCTION_TOURING,

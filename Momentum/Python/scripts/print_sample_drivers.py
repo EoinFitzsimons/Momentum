@@ -1,4 +1,5 @@
 """Print 20 sample drivers from the DB (most-recent first)."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -14,8 +15,10 @@ def main() -> None:
     )
     rows = cur.fetchall()
     for r in rows:
-        print(f"[{r['id']}] {r['name']} ({r['nationality']}) locale={r['name_locale']} dob={r['birth_date']} speed={r['speed']} racecraft={r['racecraft']} consistency={r['consistency']}")
+        print(
+            f"[{r['id']}] {r['name']} ({r['nationality']}) locale={r['name_locale']} dob={r['birth_date']} speed={r['speed']} racecraft={r['racecraft']} consistency={r['consistency']}"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

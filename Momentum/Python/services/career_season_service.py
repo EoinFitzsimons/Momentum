@@ -31,18 +31,24 @@ class CareerSeasonService:
     def __init__(self, db: DatabaseManager):
         self.db = db
 
-    def advance_season(self, player_id: str, completed_season: int, discipline: str) -> dict[str, Any]:
+    def advance_season(
+        self, player_id: str, completed_season: int, discipline: str
+    ) -> dict[str, Any]:
         """Advance a completed season and apply tier movement for one discipline."""
         self._ensure_career_tables()
 
-        headless = self._resolve_non_player_races_headless(player_id=player_id, season=completed_season)
+        headless = self._resolve_non_player_races_headless(
+            player_id=player_id, season=completed_season
+        )
 
         movements = self._apply_promotion_relegation(
             player_id=player_id,
             discipline=discipline,
             season=completed_season,
         )
-        rolled = self._rollover_world(player_id=player_id, completed_season=completed_season)
+        rolled = self._rollover_world(
+            player_id=player_id, completed_season=completed_season
+        )
 
         return {
             "rolled_over": rolled,
@@ -52,11 +58,15 @@ class CareerSeasonService:
             "headless_persisted_results": headless["persisted_results"],
         }
 
-    def _resolve_non_player_races_headless(self, player_id: str, season: int) -> dict[str, int]:
+    def _resolve_non_player_races_headless(
+        self, player_id: str, season: int
+    ) -> dict[str, int]:
         owned_team_id = self.db.get_player_team_id(player_id)
         owned_team = self.db.get_team(owned_team_id) if owned_team_id else None
         owned_discipline = str(getattr(owned_team, "discipline", "") or "").upper()
-        owned_tier = _normalize_tier(getattr(owned_team, "tier", None)) if owned_team else None
+        owned_tier = (
+            _normalize_tier(getattr(owned_team, "tier", None)) if owned_team else None
+        )
 
         resolved_races = 0
         persisted_results = 0
@@ -85,15 +95,24 @@ class CareerSeasonService:
             tier_key = _normalize_tier(row["tier"])
 
             # Only auto-resolve championships outside the player's owned series.
-            if owned_team and discipline_key == owned_discipline and tier_key == owned_tier:
+            if (
+                owned_team
+                and discipline_key == owned_discipline
+                and tier_key == owned_tier
+            ):
                 continue
 
-            entrants = self._build_headless_grid(discipline=discipline_key, tier=tier_key)
+            entrants = self._build_headless_grid(
+                discipline=discipline_key, tier=tier_key
+            )
             if not entrants:
                 continue
 
             with self.db.get_connection() as conn:
-                conn.execute("DELETE FROM career_race_results WHERE career_race_id = ?", (race_id,))
+                conn.execute(
+                    "DELETE FROM career_race_results WHERE career_race_id = ?",
+                    (race_id,),
+                )
                 conn.commit()
 
             fastest_lap_index = random.randint(0, len(entrants) - 1)
@@ -120,7 +139,10 @@ class CareerSeasonService:
                 persisted_results += 1
 
             with self.db.get_connection() as conn:
-                conn.execute("UPDATE career_races SET status = 'completed' WHERE id = ?", (race_id,))
+                conn.execute(
+                    "UPDATE career_races SET status = 'completed' WHERE id = ?",
+                    (race_id,),
+                )
                 conn.commit()
             resolved_races += 1
 
@@ -129,9 +151,12 @@ class CareerSeasonService:
             "persisted_results": persisted_results,
         }
 
-    def _build_headless_grid(self, discipline: str, tier: str) -> list[dict[str, int | float]]:
+    def _build_headless_grid(
+        self, discipline: str, tier: str
+    ) -> list[dict[str, int | float]]:
         teams = [
-            team for team in self.db.get_teams_by_discipline(discipline)
+            team
+            for team in self.db.get_teams_by_discipline(discipline)
             if _normalize_tier(getattr(team, "tier", None)) == tier
         ]
         if not teams:
@@ -153,9 +178,11 @@ class CareerSeasonService:
                 reverse=True,
             )[:2]
 
-            team_rating = (
-                float(getattr(team, "operations_rating", 50.0) or 50.0) * 0.65
-                + min(35.0, (float(getattr(team, "budget", 0.0) or 0.0) / 100_000_000.0) * 35.0)
+            team_rating = float(
+                getattr(team, "operations_rating", 50.0) or 50.0
+            ) * 0.65 + min(
+                35.0,
+                (float(getattr(team, "budget", 0.0) or 0.0) / 100_000_000.0) * 35.0,
             )
 
             for driver in top_drivers:
@@ -164,7 +191,11 @@ class CareerSeasonService:
                     + float(getattr(driver, "racecraft", 50.0) or 50.0) * 0.33
                     + float(getattr(driver, "consistency", 50.0) or 50.0) * 0.25
                 )
-                total = (driver_rating * 0.62) + (team_rating * 0.33) + random.uniform(-4.0, 4.0)
+                total = (
+                    (driver_rating * 0.62)
+                    + (team_rating * 0.33)
+                    + random.uniform(-4.0, 4.0)
+                )
                 entries.append(
                     {
                         "driver_id": int(driver.id),
@@ -176,7 +207,9 @@ class CareerSeasonService:
         entries.sort(key=lambda item: float(item["score"]), reverse=True)
         return entries
 
-    def _apply_promotion_relegation(self, player_id: str, discipline: str, season: int) -> dict[str, list[int]]:
+    def _apply_promotion_relegation(
+        self, player_id: str, discipline: str, season: int
+    ) -> dict[str, list[int]]:
         by_tier: dict[str, list[dict[str, Any]]] = {
             "TIER_1": [],
             "TIER_2": [],
@@ -197,7 +230,9 @@ class CareerSeasonService:
 
             for row in team_rows:
                 tier = _normalize_tier(row["tier"])
-                by_tier.setdefault(tier, []).append({"team_id": int(row["id"]), "points": 0})
+                by_tier.setdefault(tier, []).append(
+                    {"team_id": int(row["id"]), "points": 0}
+                )
 
             points_rows = conn.execute(
                 """
@@ -230,11 +265,19 @@ class CareerSeasonService:
 
             for high_tier, low_tier in [("TIER_1", "TIER_2"), ("TIER_2", "TIER_3")]:
                 upper = sorted(
-                    [item for item in by_tier.get(high_tier, []) if int(item["team_id"]) not in moved_teams],
+                    [
+                        item
+                        for item in by_tier.get(high_tier, [])
+                        if int(item["team_id"]) not in moved_teams
+                    ],
                     key=lambda item: (item["points"], -item["team_id"]),
                 )
                 lower = sorted(
-                    [item for item in by_tier.get(low_tier, []) if int(item["team_id"]) not in moved_teams],
+                    [
+                        item
+                        for item in by_tier.get(low_tier, [])
+                        if int(item["team_id"]) not in moved_teams
+                    ],
                     key=lambda item: (-item["points"], item["team_id"]),
                 )
 
@@ -345,8 +388,12 @@ class CareerSeasonService:
         if int(existing_next[0] or 0) > 0:
             return
 
-        track_ids = self._resolve_track_ids_for_championship(conn, discipline, season_length)
-        start_date = self._season_start_date(conn, player_id, championship_id, current_season, next_season)
+        track_ids = self._resolve_track_ids_for_championship(
+            conn, discipline, season_length
+        )
+        start_date = self._season_start_date(
+            conn, player_id, championship_id, current_season, next_season
+        )
 
         for round_number, track_id in enumerate(track_ids, start=1):
             conn.execute(
@@ -369,7 +416,14 @@ class CareerSeasonService:
             )
             start_date += timedelta(days=14)
 
-    def _season_start_date(self, conn, player_id: str, championship_id: int, current_season: int, next_season: int) -> datetime:
+    def _season_start_date(
+        self,
+        conn,
+        player_id: str,
+        championship_id: int,
+        current_season: int,
+        next_season: int,
+    ) -> datetime:
         row = conn.execute(
             """
             SELECT MAX(race_date) AS max_date
@@ -379,10 +433,14 @@ class CareerSeasonService:
             (player_id, championship_id, current_season),
         ).fetchone()
         if row and row["max_date"]:
-            return datetime.strptime(str(row["max_date"]), "%Y-%m-%d") + timedelta(days=14)
+            return datetime.strptime(str(row["max_date"]), "%Y-%m-%d") + timedelta(
+                days=14
+            )
         return datetime(2026, 1, 1) + timedelta(days=((next_season - 1) * 365))
 
-    def _resolve_track_ids_for_championship(self, conn, discipline: str, season_length: int) -> list[int]:
+    def _resolve_track_ids_for_championship(
+        self, conn, discipline: str, season_length: int
+    ) -> list[int]:
         rows = conn.execute(
             "SELECT id FROM tracks WHERE UPPER(primary_discipline) = ? ORDER BY id",
             (str(discipline or "").upper(),),

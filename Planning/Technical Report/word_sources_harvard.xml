@@ -259,6 +259,36 @@
   </b:Source>
 
   <b:Source>
+    <b:Tag>JsonSchemaDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>jsonschema Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>jsonschema Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://python-jsonschema.readthedocs.io/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>27</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>HttpxDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>HTTPX Contributors</b:Corporate></b:Author></b:Author>
+    <b:Title>httpx Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://www.python-httpx.org/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>27</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
+    <b:Tag>PyYAMLDocs2026</b:Tag>
+    <b:SourceType>DocumentFromInternetSite</b:SourceType>
+    <b:Author><b:Author><b:Corporate>PyYAML Team</b:Corporate></b:Author></b:Author>
+    <b:Title>PyYAML Documentation</b:Title>
+    <b:Year>2026</b:Year>
+    <b:URL>https://pyyaml.org/</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>4</b:MonthAccessed><b:DayAccessed>27</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
     <b:Tag>ISO2911932021</b:Tag>
     <b:SourceType>Report</b:SourceType>
     <b:Author><b:Author><b:Corporate>ISO/IEC/IEEE</b:Corporate></b:Author></b:Author>

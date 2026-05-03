@@ -2,33 +2,36 @@
 
 Saves PNGs under `saves/accessibility_screenshots/`.
 """
+
 import os
 import sys
 import time
 
 # Ensure Momentum/Python is on path so we can import GUI package
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QPixmap
 
 from GUI.gui_main_menu import MainMenuWindow
-from GUI.accessibility_settings import apply_accessibility_to_app, normalize_accessibility_settings
+from GUI.accessibility_settings import (
+    apply_accessibility_to_app,
+    normalize_accessibility_settings,
+)
 
-OUT_DIR = os.path.join(os.path.dirname(ROOT), 'saves', 'accessibility_screenshots')
+OUT_DIR = os.path.join(os.path.dirname(ROOT), "saves", "accessibility_screenshots")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-THEMES = ['standard', 'high_contrast', 'colorblind_safe']
+THEMES = ["standard", "high_contrast", "colorblind_safe"]
 SCALES = [100, 125, 150]
 
 
 def capture_one(app, theme, scale, filename):
-    settings = normalize_accessibility_settings({'theme': theme, 'ui_scale': scale})
+    settings = normalize_accessibility_settings({"theme": theme, "ui_scale": scale})
     apply_accessibility_to_app(app, settings)
 
     win = MainMenuWindow()
@@ -56,10 +59,10 @@ def main():
             path = capture_one(app, theme, scale, name)
             generated.append(path)
             print("Saved:", path)
-    print('\nAll screenshots saved:')
+    print("\nAll screenshots saved:")
     for p in generated:
-        print(' -', p)
+        print(" -", p)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

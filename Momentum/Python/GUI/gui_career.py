@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
-    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
@@ -32,7 +31,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QHeaderView,
 )
-from GUI.themed_messagebox import information, warning, critical, question, about
+from GUI.themed_messagebox import information, warning
 
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
@@ -111,11 +110,21 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             self.championships_table.setRowCount(len(rows))
             for i, row in enumerate(rows):
                 rowd = dict(row)
-                self.championships_table.setItem(i, 0, QTableWidgetItem(str(rowd["name"])))
-                self.championships_table.setItem(i, 1, QTableWidgetItem(_player_label(rowd["discipline"])))
-                self.championships_table.setItem(i, 2, QTableWidgetItem(str(rowd["current_season"])))
-                self.championships_table.setItem(i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} races"))
-                status = "Active" if int(rowd.get("is_active", 1) or 1) == 1 else "Inactive"
+                self.championships_table.setItem(
+                    i, 0, QTableWidgetItem(str(rowd["name"]))
+                )
+                self.championships_table.setItem(
+                    i, 1, QTableWidgetItem(_player_label(rowd["discipline"]))
+                )
+                self.championships_table.setItem(
+                    i, 2, QTableWidgetItem(str(rowd["current_season"]))
+                )
+                self.championships_table.setItem(
+                    i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} races")
+                )
+                status = (
+                    "Active" if int(rowd.get("is_active", 1) or 1) == 1 else "Inactive"
+                )
                 self.championships_table.setItem(i, 4, QTableWidgetItem(status))
 
                 item = self.championships_table.item(i, 0)
@@ -129,7 +138,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 button.setToolTip("Reset to 1 Jan 2026 and create a new career profile")
             elif button.text().strip().lower() == "delete championship":
                 button.setEnabled(False)
-                button.setToolTip("Career championships cannot be deleted individually.")
+                button.setToolTip(
+                    "Career championships cannot be deleted individually."
+                )
 
     def select_championship(self):
         """Ensure a valid career world exists and return selected career series."""
@@ -155,7 +166,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
         selected = item.data(Qt.ItemDataRole.UserRole)
         if not selected:
-            warning(self, NO_SELECTION_TITLE, "Could not resolve selected career series.")
+            warning(
+                self, NO_SELECTION_TITLE, "Could not resolve selected career series."
+            )
             return
 
         self.selected_championship = SimpleNamespace(
@@ -302,23 +315,37 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
         teams = self.db.get_all_teams()
         if not teams:
-            raise ValueError("No teams available. Seed team data before starting career mode.")
+            raise ValueError(
+                "No teams available. Seed team data before starting career mode."
+            )
 
         # Build all active discipline+tier series from team universe.
-        series_keys = sorted({
-            (str(getattr(team, "discipline", "") or "").upper(), _normalize_tier(getattr(team, "tier", "TIER_2")))
-            for team in teams
-            if str(getattr(team, "discipline", "") or "").strip()
-        })
+        series_keys = sorted(
+            {
+                (
+                    str(getattr(team, "discipline", "") or "").upper(),
+                    _normalize_tier(getattr(team, "tier", "TIER_2")),
+                )
+                for team in teams
+                if str(getattr(team, "discipline", "") or "").strip()
+            }
+        )
 
         if not series_keys:
             raise ValueError("Could not derive any discipline/tier series from teams.")
 
         with self.db.get_connection() as conn:
-            conn.execute("DELETE FROM career_race_results WHERE player_id = ?", (player_id,))
+            conn.execute(
+                "DELETE FROM career_race_results WHERE player_id = ?", (player_id,)
+            )
             conn.execute("DELETE FROM career_races WHERE player_id = ?", (player_id,))
-            conn.execute("DELETE FROM career_championships WHERE player_id = ?", (player_id,))
-            conn.execute("UPDATE team_ownership SET is_active = 0 WHERE player_id = ?", (player_id,))
+            conn.execute(
+                "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
+            )
+            conn.execute(
+                "UPDATE team_ownership SET is_active = 0 WHERE player_id = ?",
+                (player_id,),
+            )
             conn.execute(
                 """
                 INSERT INTO career_world_state (player_id, world_start_date, initialized_at)
@@ -332,7 +359,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
             for discipline, tier in series_keys:
                 season_length = int(CAREER_DISCIPLINE_RACE_COUNTS.get(discipline, 10))
-                series_name = f"{_player_label(discipline)} {_player_label(tier)} Championship"
+                series_name = (
+                    f"{_player_label(discipline)} {_player_label(tier)} Championship"
+                )
                 cursor = conn.execute(
                     """
                     INSERT INTO career_championships (player_id, name, discipline, tier, season_length, current_season, is_active)
@@ -342,7 +371,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 )
                 career_championship_id = int(cursor.lastrowid)
 
-                track_ids = self._resolve_track_ids_for_championship(discipline, season_length)
+                track_ids = self._resolve_track_ids_for_championship(
+                    discipline, season_length
+                )
                 race_date = start_dt
                 for round_number, track_id in enumerate(track_ids, start=1):
                     conn.execute(
@@ -366,7 +397,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
             conn.commit()
 
-    def _resolve_track_ids_for_championship(self, discipline: str, season_length: int) -> list[int]:
+    def _resolve_track_ids_for_championship(
+        self, discipline: str, season_length: int
+    ) -> list[int]:
         tracks = self.db.get_tracks_by_discipline(discipline)
         if not tracks:
             tracks = self.db.get_all_tracks()
@@ -377,7 +410,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         if len(base_ids) >= season_length:
             return base_ids[:season_length]
 
-        expanded = []
+        expanded: list[int] = []
         while len(expanded) < season_length:
             expanded.extend(base_ids)
         return expanded[:season_length]
@@ -476,7 +509,13 @@ class CareerProfileDialog(QDialog):
 class CareerTeamSelectionDialog(QDialog):
     """Select the player-owned team for this career save."""
 
-    def __init__(self, db: DatabaseManager, discipline: str | None, tier: str | None = None, parent=None):
+    def __init__(
+        self,
+        db: DatabaseManager,
+        discipline: str | None,
+        tier: str | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.db = db
         self.discipline = discipline
@@ -510,15 +549,17 @@ class CareerTeamSelectionDialog(QDialog):
 
         self.teams_table = QTableWidget()
         self.teams_table.setColumnCount(7)
-        self.teams_table.setHorizontalHeaderLabels([
-            "Team",
-            "Discipline",
-            "Tier",
-            "Budget",
-            "Drivers",
-            "Staff",
-            "HQ",
-        ])
+        self.teams_table.setHorizontalHeaderLabels(
+            [
+                "Team",
+                "Discipline",
+                "Tier",
+                "Budget",
+                "Drivers",
+                "Staff",
+                "HQ",
+            ]
+        )
         self.teams_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.teams_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.teams_table.doubleClicked.connect(self._select_team)
@@ -546,7 +587,8 @@ class CareerTeamSelectionDialog(QDialog):
 
         if self.tier:
             teams = [
-                team for team in teams
+                team
+                for team in teams
                 if _normalize_tier(getattr(team, "tier", "TIER_2")) == self.tier
             ]
         self.teams_table.setRowCount(len(teams))
@@ -561,9 +603,13 @@ class CareerTeamSelectionDialog(QDialog):
             team_item = QTableWidgetItem(team.name)
             team_item.setData(Qt.ItemDataRole.UserRole, team)
             self.teams_table.setItem(row, 0, team_item)
-            self.teams_table.setItem(row, 1, QTableWidgetItem(_player_label(team.discipline)))
+            self.teams_table.setItem(
+                row, 1, QTableWidgetItem(_player_label(team.discipline))
+            )
             self.teams_table.setItem(row, 2, QTableWidgetItem(_player_label(team.tier)))
-            self.teams_table.setItem(row, 3, QTableWidgetItem(f"EUR {team.budget:,.0f}"))
+            self.teams_table.setItem(
+                row, 3, QTableWidgetItem(f"EUR {team.budget:,.0f}")
+            )
             self.teams_table.setItem(row, 4, QTableWidgetItem(str(len(drivers))))
             self.teams_table.setItem(row, 5, QTableWidgetItem(str(len(staff))))
             self.teams_table.setItem(row, 6, QTableWidgetItem(team.headquarters or "-"))
@@ -627,18 +673,24 @@ class CareerWindow(QMainWindow):
         logo.setStyleSheet(LOGO_STYLE)
         layout.addWidget(logo)
 
-        self.navbar = NavigationBar(self, db_provider=lambda: self.db, title="Career HQ")
+        self.navbar = NavigationBar(
+            self, db_provider=lambda: self.db, title="Career HQ"
+        )
         layout.addWidget(self.navbar)
 
         self.header_label = QLabel()
-        self.header_label.setStyleSheet("font-size: 24px; font-weight: 700; color: #B9F2FF;")
+        self.header_label.setStyleSheet(
+            "font-size: 24px; font-weight: 700; color: #B9F2FF;"
+        )
         layout.addWidget(self.header_label)
 
         self.subheader_label = QLabel()
         self.subheader_label.setStyleSheet("color: #DD2D4A; font-size: 13px;")
         layout.addWidget(self.subheader_label)
 
-        self.kpi_banner_label = QLabel("Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -")
+        self.kpi_banner_label = QLabel(
+            "Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -"
+        )
         self.kpi_banner_label.setWordWrap(True)
         layout.addWidget(self.kpi_banner_label)
 
@@ -737,7 +789,9 @@ class CareerWindow(QMainWindow):
         group = QGroupBox("HQ Management")
         v = QVBoxLayout(group)
 
-        self.hq_state_label = QLabel("Run actions to grow quality, attractiveness, and budget.")
+        self.hq_state_label = QLabel(
+            "Run actions to grow quality, attractiveness, and budget."
+        )
         self.hq_state_label.setWordWrap(True)
         v.addWidget(self.hq_state_label)
 
@@ -775,7 +829,9 @@ class CareerWindow(QMainWindow):
         v = QVBoxLayout(group)
         self.schedule_table = QTableWidget()
         self.schedule_table.setColumnCount(4)
-        self.schedule_table.setHorizontalHeaderLabels(["Round", "Track", "Date", "Status"])
+        self.schedule_table.setHorizontalHeaderLabels(
+            ["Round", "Track", "Date", "Status"]
+        )
         sh = self.schedule_table.horizontalHeader()
         if sh is not None:
             sh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -871,7 +927,9 @@ class CareerWindow(QMainWindow):
 
     def _update_kpi_banner(self):
         if not self.owned_team:
-            self.kpi_banner_label.setText("Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -")
+            self.kpi_banner_label.setText(
+                "Budget: - | Team Quality: - | Next Race: - | Drivers: - | Staff: -"
+            )
             return
 
         quality_score, _ = self._compute_team_scores()
@@ -883,7 +941,7 @@ class CareerWindow(QMainWindow):
 
         next_race_text = SEASON_COMPLETE_TEXT
         if self.next_race:
-            next_race_text = f"R{self.next_race.get('round_number', '?')} {self.next_race.get('track_name', '-') }"
+            next_race_text = f"R{self.next_race.get('round_number', '?')} {self.next_race.get('track_name', '-')}"
 
         self.kpi_banner_label.setText(
             f"Budget: EUR {float(self.owned_team.budget or 0.0):,.0f} | "
@@ -961,7 +1019,9 @@ class CareerWindow(QMainWindow):
                 1,
                 QTableWidgetItem(_player_label(member.role)),
             )
-            self.staff_table.setItem(row, 2, QTableWidgetItem(f"{float(member.rating):.1f}"))
+            self.staff_table.setItem(
+                row, 2, QTableWidgetItem(f"{float(member.rating):.1f}")
+            )
 
     def _load_car_panel(self):
         if not self.owned_team:
@@ -970,8 +1030,7 @@ class CareerWindow(QMainWindow):
             f"Operations Rating: {self.owned_team.operations_rating:.1f}"
         )
         self.car_strategy_label.setText(
-            "Strategy Profile: "
-            f"{_player_label(self.owned_team.strategy_profile)}"
+            "Strategy Profile: " f"{_player_label(self.owned_team.strategy_profile)}"
         )
 
         facilities = self.db.get_facility_upgrades(self.owned_team.id)
@@ -993,7 +1052,11 @@ class CareerWindow(QMainWindow):
                 WHERE cr.player_id = ? AND cr.career_championship_id = ? AND cr.season = ?
                 ORDER BY cr.round_number
                 """,
-                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+                (
+                    self.player_id,
+                    int(self.championship.id),
+                    int(self.championship.current_season),
+                ),
             ).fetchall()
         calendar = [dict(r) for r in rows]
 
@@ -1001,12 +1064,20 @@ class CareerWindow(QMainWindow):
         self.next_race = None
 
         for row, race in enumerate(calendar):
-            self.schedule_table.setItem(row, 0, QTableWidgetItem(f"R{race['round_number']}"))
-            self.schedule_table.setItem(row, 1, QTableWidgetItem(str(race['track_name'])))
-            self.schedule_table.setItem(row, 2, QTableWidgetItem(str(race['race_date'])))
-            self.schedule_table.setItem(row, 3, QTableWidgetItem(_player_label(race['status'])))
+            self.schedule_table.setItem(
+                row, 0, QTableWidgetItem(f"R{race['round_number']}")
+            )
+            self.schedule_table.setItem(
+                row, 1, QTableWidgetItem(str(race["track_name"]))
+            )
+            self.schedule_table.setItem(
+                row, 2, QTableWidgetItem(str(race["race_date"]))
+            )
+            self.schedule_table.setItem(
+                row, 3, QTableWidgetItem(_player_label(race["status"]))
+            )
 
-            if self.next_race is None and race['status'] == 'scheduled':
+            if self.next_race is None and race["status"] == "scheduled":
                 self.next_race = race
 
         self.start_next_btn.setEnabled(
@@ -1069,22 +1140,34 @@ class CareerWindow(QMainWindow):
                 LEFT JOIN teams t ON t.id = lt.team_id
                 ORDER BY dp.total_points DESC, driver_name ASC
                 """,
-                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+                (
+                    self.player_id,
+                    int(self.championship.id),
+                    int(self.championship.current_season),
+                ),
             ).fetchall()
         standings = [dict(r) for r in rows]
 
         self.standings_table.setRowCount(len(standings))
         for row, entry in enumerate(standings):
             self.standings_table.setItem(row, 0, QTableWidgetItem(str(row + 1)))
-            self.standings_table.setItem(row, 1, QTableWidgetItem(str(entry["driver_name"])))
-            self.standings_table.setItem(row, 2, QTableWidgetItem(str(entry["team_name"])))
-            self.standings_table.setItem(row, 3, QTableWidgetItem(str(entry["total_points"])))
+            self.standings_table.setItem(
+                row, 1, QTableWidgetItem(str(entry["driver_name"]))
+            )
+            self.standings_table.setItem(
+                row, 2, QTableWidgetItem(str(entry["team_name"]))
+            )
+            self.standings_table.setItem(
+                row, 3, QTableWidgetItem(str(entry["total_points"]))
+            )
 
     def start_next_race(self):
         if not self.next_race:
             result = self.career_season_service.advance_season(
                 player_id=self.player_id,
-                completed_season=int(getattr(self.championship, "current_season", 1) or 1),
+                completed_season=int(
+                    getattr(self.championship, "current_season", 1) or 1
+                ),
                 discipline=str(getattr(self.championship, "discipline", "") or ""),
             )
             if result.get("rolled_over"):
@@ -1109,7 +1192,7 @@ class CareerWindow(QMainWindow):
             warning(self, "No Driver", "Select a contracted team driver first.")
             return
 
-        race_id = int(self.next_race['race_id'])
+        race_id = int(self.next_race["race_id"])
         with self.db.get_connection() as conn:
             row = conn.execute(
                 "SELECT track_id, weather_conditions, laps FROM career_races WHERE id = ?",
@@ -1118,7 +1201,10 @@ class CareerWindow(QMainWindow):
             if not row:
                 warning(self, "Race Error", "Could not load next race details.")
                 return
-            conn.execute("UPDATE career_races SET status = 'in-progress' WHERE id = ?", (race_id,))
+            conn.execute(
+                "UPDATE career_races SET status = 'in-progress' WHERE id = ?",
+                (race_id,),
+            )
             conn.commit()
 
         race_data = dict(row)
@@ -1160,7 +1246,9 @@ class CareerWindow(QMainWindow):
             staff = self.db.get_staff_by_team(self.owned_team.id)
         except Exception:
             staff = []
-        staff_avg = (sum(float(s.rating) for s in staff) / len(staff)) if staff else 50.0
+        staff_avg = (
+            (sum(float(s.rating) for s in staff) / len(staff)) if staff else 50.0
+        )
         staff_score = min(18.0, max(0.0, (staff_avg - 50.0) * 0.6))
 
         ops = float(getattr(self.owned_team, "operations_rating", 50.0) or 50.0)
@@ -1176,10 +1264,14 @@ class CareerWindow(QMainWindow):
         )
         brand_score = min(10.0, marketing_levels * 2.0)
 
-        attractiveness_score = self._clamp((quality_score * 0.65) + budget_score + brand_score)
+        attractiveness_score = self._clamp(
+            (quality_score * 0.65) + budget_score + brand_score
+        )
         return quality_score, attractiveness_score
 
-    def _apply_budget_delta(self, amount: float, category: str, description: str) -> bool:
+    def _apply_budget_delta(
+        self, amount: float, category: str, description: str
+    ) -> bool:
         if not self.owned_team:
             return False
 
@@ -1194,7 +1286,9 @@ class CareerWindow(QMainWindow):
             return False
 
         try:
-            self.db.add_budget_transaction(self.owned_team.id, category, float(amount), description)
+            self.db.add_budget_transaction(
+                self.owned_team.id, category, float(amount), description
+            )
         except Exception:
             pass
 
@@ -1215,7 +1309,11 @@ class CareerWindow(QMainWindow):
                 WHERE player_id = ? AND career_championship_id = ? AND season = ?
                 ORDER BY round_number
                 """,
-                (self.player_id, int(self.championship.id), int(self.championship.current_season)),
+                (
+                    self.player_id,
+                    int(self.championship.id),
+                    int(self.championship.current_season),
+                ),
             ).fetchall()
         calendar = [dict(r) for r in rows]
         transactions = self.db.get_budget_transactions(self.owned_team.id)
@@ -1267,7 +1365,9 @@ class CareerWindow(QMainWindow):
             "Marketing campaign spend",
         )
         if not applied:
-            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for marketing campaign.")
+            warning(
+                self, BUDGET_WARNING_TITLE, "Not enough budget for marketing campaign."
+            )
             return
 
         quality_score, _ = self._compute_team_scores()
@@ -1288,7 +1388,9 @@ class CareerWindow(QMainWindow):
             return
 
         if not self.selected_driver:
-            warning(self, "No Driver", "Select a race driver before running development.")
+            warning(
+                self, "No Driver", "Select a race driver before running development."
+            )
             return
 
         cost = 180000
@@ -1298,7 +1400,9 @@ class CareerWindow(QMainWindow):
             f"Driver development for {self.selected_driver.name}",
         )
         if not applied:
-            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for driver development.")
+            warning(
+                self, BUDGET_WARNING_TITLE, "Not enough budget for driver development."
+            )
             return
 
         speed_gain = random.uniform(0.6, 1.8)
@@ -1314,7 +1418,7 @@ class CareerWindow(QMainWindow):
                     consistency = MIN(100, consistency + ?)
                 WHERE id = ?
                 """,
-                (speed_gain, racecraft_gain, consistency_gain, self.selected_driver.id)
+                (speed_gain, racecraft_gain, consistency_gain, self.selected_driver.id),
             )
 
         self.hq_action_result_label.setText(
@@ -1334,7 +1438,9 @@ class CareerWindow(QMainWindow):
             "Staff development program",
         )
         if not applied:
-            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for staff development.")
+            warning(
+                self, BUDGET_WARNING_TITLE, "Not enough budget for staff development."
+            )
             return
 
         try:
@@ -1343,7 +1449,9 @@ class CareerWindow(QMainWindow):
             staff = []
 
         if not staff:
-            self.hq_action_result_label.setText("No staff found. Program completed with no effect.")
+            self.hq_action_result_label.setText(
+                "No staff found. Program completed with no effect."
+            )
             self.load_data()
             return
 
@@ -1376,12 +1484,15 @@ class CareerWindow(QMainWindow):
             f"Facility upgrade: {facility_label}",
         )
         if not applied:
-            warning(self, BUDGET_WARNING_TITLE, "Not enough budget for facility upgrade.")
+            warning(
+                self, BUDGET_WARNING_TITLE, "Not enough budget for facility upgrade."
+            )
             return
 
         self.db.upsert_facility_upgrade(self.owned_team.id, facility_name, float(cost))
         self.owned_team.operations_rating = self._clamp(
-            float(getattr(self.owned_team, "operations_rating", 50.0) or 50.0) + random.uniform(0.8, 2.0)
+            float(getattr(self.owned_team, "operations_rating", 50.0) or 50.0)
+            + random.uniform(0.8, 2.0)
         )
         self.db.update_team(self.owned_team.id, self.owned_team)
 

@@ -7,14 +7,13 @@ suite.
 
 from __future__ import annotations
 
-from datetime import datetime
 
 import pytest
 from faker import Faker
 
 import database.database_extensions  # noqa: F401  # patches DatabaseManager
 from database.database_manager import DatabaseManager
-from database.models import Championship, Driver, Race, RaceResult, Team, Track
+from database.models import Driver, Race, RaceResult, Track
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from scripts.seed_career_mode import generate_driver, generate_staff_member
 from services.hiring_service import HiringService

@@ -24,11 +24,11 @@ class DatabaseFactory:
         elif db_type == "mysql":
             # Future MySQL implementation
             # return MySQLDatabaseManager(**kwargs)
-            raise NotImplementedError(
-                "MySQL support planned for multiplayer phase")
+            raise NotImplementedError("MySQL support planned for multiplayer phase")
 
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
+
 
 # Usage in your simulation.py:
 # db_manager = DatabaseFactory.create_database_manager("sqlite")  # Current

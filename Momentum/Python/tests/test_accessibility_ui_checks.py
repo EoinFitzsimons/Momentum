@@ -1,6 +1,4 @@
-import os
 import re
-import math
 
 import pytest
 
@@ -11,7 +9,6 @@ from PyQt6.QtWidgets import QApplication
 from GUI.accessibility_settings import (
     get_theme_stylesheet,
     apply_accessibility_to_app,
-    normalize_accessibility_settings,
 )
 
 
@@ -40,10 +37,12 @@ def _hex_to_linear_luminance(hexcol: str) -> float:
     r = int(h[0:2], 16) / 255.0
     g = int(h[2:4], 16) / 255.0
     b = int(h[4:6], 16) / 255.0
+
     def to_lin(c):
         if c <= 0.03928:
             return c / 12.92
         return ((c + 0.055) / 1.055) ** 2.4
+
     R = to_lin(r)
     G = to_lin(g)
     B = to_lin(b)
@@ -99,7 +98,10 @@ def test_high_contrast_theme_meets_wcag():
 def test_colorblind_safe_theme_has_readable_selection():
     css = get_theme_stylesheet("colorblind_safe")
     # Ensure theme provides a selection color we can parse
-    selection = re.search(r"QTableWidget::item:selected[^{]*\{[^}]*background-color:\s*#([0-9A-Fa-f]{6})", css)
+    selection = re.search(
+        r"QTableWidget::item:selected[^{]*\{[^}]*background-color:\s*#([0-9A-Fa-f]{6})",
+        css,
+    )
     if selection:
         sel = f"#{selection.group(1)}"
         # Assume overall background from earlier

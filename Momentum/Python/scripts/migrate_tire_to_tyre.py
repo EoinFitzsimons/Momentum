@@ -17,11 +17,11 @@ import sqlite3
 import re
 
 REPLACE_PATTERNS = [
-    (re.compile(r"\btire_", re.IGNORECASE), 'tyre_'),
-    (re.compile(r"\bTIRE_"), 'TYRE_'),
+    (re.compile(r"\btire_", re.IGNORECASE), "tyre_"),
+    (re.compile(r"\bTIRE_"), "TYRE_"),
 ]
 
-AFFECTED_TABLES = ['drivers']  # Primary table to migrate; extend if needed
+AFFECTED_TABLES = ["drivers"]  # Primary table to migrate; extend if needed
 
 
 def transform_create_sql(create_sql: str) -> str:
@@ -35,7 +35,7 @@ def transform_create_sql(create_sql: str) -> str:
 def run_migration(db_path: str):
     if not os.path.exists(db_path):
         raise FileNotFoundError(db_path)
-    backup = db_path + '.backup'
+    backup = db_path + ".backup"
     print(f"Backing up DB to {backup}")
     shutil.copyfile(db_path, backup)
 
@@ -45,12 +45,15 @@ def run_migration(db_path: str):
 
     try:
         for table in AFFECTED_TABLES:
-            cur.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            cur.execute(
+                "SELECT name, sql FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
             row = cur.fetchone()
             if not row:
                 print(f"Table {table} not found, skipping")
                 continue
-            orig_sql = row['sql']
+            orig_sql = row["sql"]
             print(f"Original CREATE for {table}:\n{orig_sql}\n")
             new_sql = transform_create_sql(orig_sql)
             if new_sql == orig_sql:
@@ -66,7 +69,7 @@ def run_migration(db_path: str):
 
             # Determine column lists
             cur.execute(f"PRAGMA table_info({temp_old})")
-            old_cols = [r['name'] for r in cur.fetchall()]
+            old_cols = [r["name"] for r in cur.fetchall()]
             new_cols = []
             for c in old_cols:
                 new_c = c
@@ -76,7 +79,7 @@ def run_migration(db_path: str):
 
             # Intersect new table columns to handle any differences
             cur.execute(f"PRAGMA table_info({table})")
-            created_cols = [r['name'] for r in cur.fetchall()]
+            created_cols = [r["name"] for r in cur.fetchall()]
 
             # Build copy column lists where new column exists in created table
             copy_map_old = []
@@ -87,13 +90,17 @@ def run_migration(db_path: str):
                     copy_map_new.append(new_c)
 
             if not copy_map_old:
-                print(f"No matching columns found to copy for {table}; manual migration required.")
+                print(
+                    f"No matching columns found to copy for {table}; manual migration required."
+                )
                 raise RuntimeError("No columns to copy")
 
             cols_src = ", ".join([f'"{c}"' for c in copy_map_old])
             cols_dst = ", ".join([f'"{c}"' for c in copy_map_new])
 
-            copy_sql = f"INSERT INTO {table} ({cols_dst}) SELECT {cols_src} FROM {temp_old}"
+            copy_sql = (
+                f"INSERT INTO {table} ({cols_dst}) SELECT {cols_src} FROM {temp_old}"
+            )
             print(f"Copying data using:\n{copy_sql}\n")
             cur.execute(copy_sql)
 
@@ -109,8 +116,8 @@ def run_migration(db_path: str):
         conn.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument('--db', required=True, help='Path to sqlite database file')
+    p.add_argument("--db", required=True, help="Path to sqlite database file")
     args = p.parse_args()
     run_migration(args.db)
