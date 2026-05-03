@@ -21,11 +21,14 @@ Authors: Eoin Fitzsimons
 Date: January 2026
 """
 
-import random
 import time
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
-from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
+from RaceLogic.base_race_engine import (
+    BaseDisciplineEngine,
+    RaceContext,
+    RacingDiscipline,
+)
 from database.models import Driver, Team, RaceResult
 
 UNKNOWN_DRIVER_LABEL = "Unknown Driver"
@@ -34,6 +37,7 @@ UNKNOWN_DRIVER_LABEL = "Unknown Driver"
 @dataclass
 class DragRaceResult:
     """Result from single drag race run"""
+
     driver_id: int
     position: int
     elapsed_time_ms: float  # Total elapsed time in milliseconds
@@ -83,22 +87,19 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         """
         return {
             # Core acceleration attributes (57% combined)
-            "raw_speed": 0.25,              # Most critical for top speed
-            "reaction_time": 0.20,          # Launch reflexes
-            "race_start_skill": 0.15,       # Launch precision / wheel spin control
-
+            "raw_speed": 0.25,  # Most critical for top speed
+            "reaction_time": 0.20,  # Launch reflexes
+            "race_start_skill": 0.15,  # Launch precision / wheel spin control
             # Acceleration control & consistency (22% combined)
             "acceleration_control": 0.12,  # Throttle management
-            "consistency": 0.10,            # Repeatable launches
-
+            "consistency": 0.10,  # Repeatable launches
             # Mental & Physical (22% combined)
-            "concentration": 0.08,          # Launch focus
-            "pressure_handling": 0.06,      # Mental toughness at line
-            "g_force_tolerance": 0.08,      # Physical endurance (high G forces)
-
+            "concentration": 0.08,  # Launch focus
+            "pressure_handling": 0.06,  # Mental toughness at line
+            "g_force_tolerance": 0.08,  # Physical endurance (high G forces)
             # Secondary factors
-            "physical_fitness": 0.02,       # Stamina for bracket racing
-            "risk_appetite": 0.02,          # Calculated risk on launch
+            "physical_fitness": 0.02,  # Stamina for bracket racing
+            "risk_appetite": 0.02,  # Calculated risk on launch
         }
 
     def simulate_race(self, context: RaceContext) -> List[RaceResult]:
@@ -146,10 +147,16 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             realtime_speed,
             stop_event,
         )
-        ranking_entries, final_results = self._build_drag_ranking_and_results(qualified, competitors, eliminated)
+        ranking_entries, final_results = self._build_drag_ranking_and_results(
+            qualified, competitors, eliminated
+        )
 
         final_race_time = max(
-            (float(r.get('time_seconds', 0.0)) for r in final_results if r.get('time_seconds') not in (None, float('inf'))),
+            (
+                float(r.get("time_seconds", 0.0))
+                for r in final_results
+                if r.get("time_seconds") not in (None, float("inf"))
+            ),
             default=0.0,
         )
         self._emit_drag_position_update(
@@ -161,16 +168,28 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             running=False,
             active_ids=[],
         )
-        self._emit_drag_race_finished(context, final_results, max(race_time, final_race_time))
+        self._emit_drag_race_finished(
+            context, final_results, max(race_time, final_race_time)
+        )
         return final_results
 
-    def _run_drag_qualifying(self, entrants: List[Dict[str, Any]], context: RaceContext) -> List[Dict[str, Any]]:
+    def _run_drag_qualifying(
+        self, entrants: List[Dict[str, Any]], context: RaceContext
+    ) -> List[Dict[str, Any]]:
         """Run one qualifying pass per entrant and return seeded order."""
         qualified = []
         for entrant in entrants:
-            run_result = self._simulate_single_run(entrant['driver'], entrant['team'], context)
-            qualified.append({'driver': entrant['driver'], 'team': entrant['team'], 'result': run_result})
-        qualified.sort(key=lambda e: e['result'].get('time_seconds', float('inf')))
+            run_result = self._simulate_single_run(
+                entrant["driver"], entrant["team"], context
+            )
+            qualified.append(
+                {
+                    "driver": entrant["driver"],
+                    "team": entrant["team"],
+                    "result": run_result,
+                }
+            )
+        qualified.sort(key=lambda e: e["result"].get("time_seconds", float("inf")))
         return qualified
 
     def _run_knockout_bracket(
@@ -258,16 +277,18 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             race_time += heat_time
 
             # Reconstruct lane-ordered result payloads from winner/loser entries.
-            winner_id = int(getattr(winner.get('driver'), 'id', 0) or 0)
-            left_id = int(getattr(left.get('driver'), 'id', 0) or 0)
+            winner_id = int(getattr(winner.get("driver"), "id", 0) or 0)
+            left_id = int(getattr(left.get("driver"), "id", 0) or 0)
             if winner_id == left_id:
                 left_entry, right_entry = winner, loser
             else:
                 left_entry, right_entry = loser, winner
 
-            self._emit_drag_heat_result(context, round_idx, heat_idx, left_entry, right_entry, winner, race_time)
+            self._emit_drag_heat_result(
+                context, round_idx, heat_idx, left_entry, right_entry, winner, race_time
+            )
             next_round.append(winner)
-            loser['eliminated_round'] = round_idx
+            loser["eliminated_round"] = round_idx
             eliminated.append(loser)
             i += 2
 
@@ -287,29 +308,29 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         ranking_entries = [champion]
         eliminated.sort(
             key=lambda e: (
-                -int(e.get('eliminated_round', 0)),
-                float(e.get('result', {}).get('time_seconds', float('inf'))),
+                -int(e.get("eliminated_round", 0)),
+                float(e.get("result", {}).get("time_seconds", float("inf"))),
             )
         )
         ranking_entries.extend(eliminated)
 
         final_results: List[RaceResult] = []
         for pos, entry in enumerate(ranking_entries, 1):
-            result = dict(entry['result'])
-            result['position'] = pos
+            result = dict(entry["result"])
+            result["position"] = pos
             if pos == 1:
-                result['status'] = 'WINNER'
-            elif result.get('dnf_reason'):
-                result['status'] = 'DNF'
+                result["status"] = "WINNER"
+            elif result.get("dnf_reason"):
+                result["status"] = "DNF"
             else:
-                result['status'] = 'ELIMINATED'
+                result["status"] = "ELIMINATED"
             final_results.append(result)
         return ranking_entries, final_results
 
     def _extract_realtime_speed(self, context: RaceContext) -> float:
         """Read realtime speed from track conditions and clamp for watchability."""
-        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
-        raw = tc.get('realtime_speed', 1.0) if isinstance(tc, dict) else 1.0
+        tc = getattr(context, "track_conditions", {}) if context is not None else {}
+        raw = tc.get("realtime_speed", 1.0) if isinstance(tc, dict) else 1.0
         try:
             speed = float(raw)
         except Exception:
@@ -319,35 +340,43 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
     def _extract_stop_event(self, context: RaceContext):
         """Read optional stop event from track conditions."""
-        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        tc = getattr(context, "track_conditions", {}) if context is not None else {}
         if isinstance(tc, dict):
-            return tc.get('stop_event')
+            return tc.get("stop_event")
         return None
 
     def _extract_player_driver_id(self, context: RaceContext) -> Optional[int]:
         """Read selected player driver id from context track conditions."""
-        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        tc = getattr(context, "track_conditions", {}) if context is not None else {}
         if not isinstance(tc, dict):
             return None
-        raw = tc.get('player_driver_id')
+        raw = tc.get("player_driver_id")
         try:
             return int(raw) if raw is not None else None
         except Exception:
             return None
 
-    def _select_team_representatives(self, context: RaceContext) -> List[Dict[str, Any]]:
+    def _select_team_representatives(
+        self, context: RaceContext
+    ) -> List[Dict[str, Any]]:
         """Pick one best driver per team for drag knockout brackets."""
         best_by_team = self._best_driver_by_team(context.drivers)
         self._override_with_selected_player(best_by_team, context)
         entrants = self._build_drag_entrants(best_by_team, context)
-        entrants.sort(key=lambda e: float(getattr(e['driver'], 'raw_speed', getattr(e['driver'], 'speed', 50.0)) or 50.0), reverse=True)
+        entrants.sort(
+            key=lambda e: float(
+                getattr(e["driver"], "raw_speed", getattr(e["driver"], "speed", 50.0))
+                or 50.0
+            ),
+            reverse=True,
+        )
         return entrants[:16]
 
     def _best_driver_by_team(self, drivers: List[Driver]) -> Dict[int, Driver]:
         """Select highest-speed driver for each team."""
         best_by_team: Dict[int, Driver] = {}
         for driver in drivers:
-            team_id = int(getattr(driver, 'current_team_id', 0) or 0)
+            team_id = int(getattr(driver, "current_team_id", 0) or 0)
             if team_id <= 0:
                 continue
             prev = best_by_team.get(team_id)
@@ -357,21 +386,34 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
     def _driver_speed(self, driver: Driver) -> float:
         """Return comparable speed score for bracket seeding."""
-        return float(getattr(driver, 'raw_speed', getattr(driver, 'speed', 50.0)) or 50.0)
+        return float(
+            getattr(driver, "raw_speed", getattr(driver, "speed", 50.0)) or 50.0
+        )
 
-    def _override_with_selected_player(self, best_by_team: Dict[int, Driver], context: RaceContext) -> None:
+    def _override_with_selected_player(
+        self, best_by_team: Dict[int, Driver], context: RaceContext
+    ) -> None:
         """Force selected player to represent their team when available."""
         player_driver_id = self._extract_player_driver_id(context)
         if player_driver_id is None:
             return
-        selected = next((d for d in context.drivers if int(getattr(d, 'id', 0) or 0) == player_driver_id), None)
+        selected = next(
+            (
+                d
+                for d in context.drivers
+                if int(getattr(d, "id", 0) or 0) == player_driver_id
+            ),
+            None,
+        )
         if selected is None:
             return
-        selected_team_id = int(getattr(selected, 'current_team_id', 0) or 0)
+        selected_team_id = int(getattr(selected, "current_team_id", 0) or 0)
         if selected_team_id > 0:
             best_by_team[selected_team_id] = selected
 
-    def _build_drag_entrants(self, best_by_team: Dict[int, Driver], context: RaceContext) -> List[Dict[str, Any]]:
+    def _build_drag_entrants(
+        self, best_by_team: Dict[int, Driver], context: RaceContext
+    ) -> List[Dict[str, Any]]:
         """Build entrant payload with driver-team pairs for simulation."""
         entrants: List[Dict[str, Any]] = []
         for team_id, driver in best_by_team.items():
@@ -387,29 +429,35 @@ class DragAccelerationEngine(BaseDisciplineEngine):
                     founded_year=2020,
                     team_principal="Unknown",
                 )
-            entrants.append({'driver': driver, 'team': team})
+            entrants.append({"driver": driver, "team": team})
         return entrants
 
-    def _emit_drag_bracket_seeded(self, context: RaceContext, qualified: List[Dict[str, Any]]) -> None:
+    def _emit_drag_bracket_seeded(
+        self, context: RaceContext, qualified: List[Dict[str, Any]]
+    ) -> None:
         """Emit initial bracket seed order for GUI knockout tree rendering."""
-        cb = getattr(context, 'event_callback', None)
+        cb = getattr(context, "event_callback", None)
         if not callable(cb):
             return
         seeds: List[Dict[str, Any]] = []
         for idx, entry in enumerate(qualified, 1):
-            driver = entry.get('driver')
+            driver = entry.get("driver")
             if driver is None:
                 continue
-            seeds.append({
-                'seed': idx,
-                'driver_id': int(getattr(driver, 'id', 0) or 0),
-                'driver_name': str(getattr(driver, 'name', f"Driver {idx}")),
-            })
-        cb({
-            'type': 'drag_bracket_seeded',
-            'seeds': seeds,
-            'entrant_count': len(seeds),
-        })
+            seeds.append(
+                {
+                    "seed": idx,
+                    "driver_id": int(getattr(driver, "id", 0) or 0),
+                    "driver_name": str(getattr(driver, "name", f"Driver {idx}")),
+                }
+            )
+        cb(
+            {
+                "type": "drag_bracket_seeded",
+                "seeds": seeds,
+                "entrant_count": len(seeds),
+            }
+        )
 
     def _emit_drag_heat_result(
         self,
@@ -422,46 +470,62 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         race_time: float,
     ) -> None:
         """Emit one completed heat result for GUI bracket updates."""
-        cb = getattr(context, 'event_callback', None)
+        cb = getattr(context, "event_callback", None)
         if not callable(cb):
             return
-        left_driver = left_entry.get('driver')
-        right_driver = right_entry.get('driver')
-        winner_driver = winner.get('driver')
-        left_result = left_entry.get('result', {})
-        right_result = right_entry.get('result', {})
-        cb({
-            'type': 'drag_heat_result',
-            'round_index': int(round_idx),
-            'heat_index': int(heat_idx),
-            'left_id': int(getattr(left_driver, 'id', 0) or 0),
-            'left_name': str(getattr(left_driver, 'name', UNKNOWN_DRIVER_LABEL)),
-            'left_time_s': left_result.get('time_seconds'),
-            'left_reaction_ms': left_result.get('reaction_time_ms'),
-            'left_trap_kmh': left_result.get('trap_speed_kmh'),
-            'right_id': int(getattr(right_driver, 'id', 0) or 0),
-            'right_name': str(getattr(right_driver, 'name', UNKNOWN_DRIVER_LABEL)),
-            'right_time_s': right_result.get('time_seconds'),
-            'right_reaction_ms': right_result.get('reaction_time_ms'),
-            'right_trap_kmh': right_result.get('trap_speed_kmh'),
-            'winner_id': int(getattr(winner_driver, 'id', 0) or 0),
-            'winner_name': str(getattr(winner_driver, 'name', UNKNOWN_DRIVER_LABEL)),
-            'race_time': float(race_time),
-        })
+        left_driver = left_entry.get("driver")
+        right_driver = right_entry.get("driver")
+        winner_driver = winner.get("driver")
+        left_result = left_entry.get("result", {})
+        right_result = right_entry.get("result", {})
+        cb(
+            {
+                "type": "drag_heat_result",
+                "round_index": int(round_idx),
+                "heat_index": int(heat_idx),
+                "left_id": int(getattr(left_driver, "id", 0) or 0),
+                "left_name": str(getattr(left_driver, "name", UNKNOWN_DRIVER_LABEL)),
+                "left_time_s": left_result.get("time_seconds"),
+                "left_reaction_ms": left_result.get("reaction_time_ms"),
+                "left_trap_kmh": left_result.get("trap_speed_kmh"),
+                "right_id": int(getattr(right_driver, "id", 0) or 0),
+                "right_name": str(getattr(right_driver, "name", UNKNOWN_DRIVER_LABEL)),
+                "right_time_s": right_result.get("time_seconds"),
+                "right_reaction_ms": right_result.get("reaction_time_ms"),
+                "right_trap_kmh": right_result.get("trap_speed_kmh"),
+                "winner_id": int(getattr(winner_driver, "id", 0) or 0),
+                "winner_name": str(
+                    getattr(winner_driver, "name", UNKNOWN_DRIVER_LABEL)
+                ),
+                "race_time": float(race_time),
+            }
+        )
 
     def _is_dnf_result(self, result: Dict[str, Any]) -> bool:
         """Return whether a run result represents a failed pass."""
-        if result.get('dnf_reason'):
+        if result.get("dnf_reason"):
             return True
-        t = result.get('time_seconds')
-        return t is None or t == float('inf')
+        t = result.get("time_seconds")
+        return t is None or t == float("inf")
 
-    def _run_head_to_head(self, left: Dict[str, Any], right: Dict[str, Any], context: RaceContext):
+    def _run_head_to_head(
+        self, left: Dict[str, Any], right: Dict[str, Any], context: RaceContext
+    ):
         """Simulate one elimination pairing and return winner/loser entries."""
-        left_result = self._simulate_single_run(left['driver'], left['team'], context)
-        right_result = self._simulate_single_run(right['driver'], right['team'], context)
-        left_entry = {'driver': left['driver'], 'team': left['team'], 'result': left_result}
-        right_entry = {'driver': right['driver'], 'team': right['team'], 'result': right_result}
+        left_result = self._simulate_single_run(left["driver"], left["team"], context)
+        right_result = self._simulate_single_run(
+            right["driver"], right["team"], context
+        )
+        left_entry = {
+            "driver": left["driver"],
+            "team": left["team"],
+            "result": left_result,
+        }
+        right_entry = {
+            "driver": right["driver"],
+            "team": right["team"],
+            "result": right_result,
+        }
 
         left_dnf = self._is_dnf_result(left_result)
         right_dnf = self._is_dnf_result(right_result)
@@ -470,11 +534,15 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         if right_dnf and not left_dnf:
             return left_entry, right_entry
         if left_dnf and right_dnf:
-            if float(left_result.get('reaction_time_ms', 9999.0)) <= float(right_result.get('reaction_time_ms', 9999.0)):
+            if float(left_result.get("reaction_time_ms", 9999.0)) <= float(
+                right_result.get("reaction_time_ms", 9999.0)
+            ):
                 return left_entry, right_entry
             return right_entry, left_entry
 
-        if float(left_result.get('time_seconds', float('inf'))) <= float(right_result.get('time_seconds', float('inf'))):
+        if float(left_result.get("time_seconds", float("inf"))) <= float(
+            right_result.get("time_seconds", float("inf"))
+        ):
             return left_entry, right_entry
         return right_entry, left_entry
 
@@ -490,15 +558,15 @@ class DragAccelerationEngine(BaseDisciplineEngine):
     ):
         """Animate and resolve a single 1v1 drag heat."""
         winner, loser = self._run_head_to_head(left, right, context)
-        left_id = int(left['driver'].id)
-        right_id = int(right['driver'].id)
+        left_id = int(left["driver"].id)
+        right_id = int(right["driver"].id)
         heat_entries = [left, right]
 
-        left_time = float(left['result'].get('time_seconds', 6.5))
-        right_time = float(right['result'].get('time_seconds', 6.5))
-        if left_time == float('inf'):
+        left_time = float(left["result"].get("time_seconds", 6.5))
+        right_time = float(right["result"].get("time_seconds", 6.5))
+        if left_time == float("inf"):
             left_time = 7.5
-        if right_time == float('inf'):
+        if right_time == float("inf"):
             right_time = 7.5
         heat_duration = max(left_time, right_time, 5.5)
         heat_frames = max(90, int(heat_duration * 30))
@@ -541,7 +609,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         active_ids: List[int],
     ) -> None:
         """Emit synthetic realtime packets so GUI can animate drag races."""
-        cb = getattr(context, 'event_callback', None)
+        cb = getattr(context, "event_callback", None)
         if not callable(cb):
             return
 
@@ -550,45 +618,51 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         strip_distance_m = self._resolve_visual_drag_distance(context)
         positions = []
         for idx, entry in enumerate(entries, 1):
-            driver = entry['driver']
-            result = entry.get('result', {})
+            driver = entry["driver"]
+            result = entry.get("result", {})
             driver_id = int(driver.id)
             is_active = driver_id in active_set
             distance = strip_distance_m * progress
             velocity_mps = 0.0
             if running and is_active:
                 velocity_mps = 70.0 * progress
-            positions.append({
-                'driver_id': driver_id,
-                'driver_name': driver.name,
-                'position': idx,
-                'lap': 1,
-                'position_m': distance,
-                'velocity_mps': velocity_mps,
-                'racing_mode': 'attack',
-                'push_intensity': 0.95,
-                'push_fatigue': min(1.0, progress * 0.5),
-                'tyre_condition': 0.98,
-                'fuel_load': 0.98,
-                'gap_ahead': 0.0 if idx == 1 else float(idx - 1) * 0.12,
-                'gap_behind': 0.0,
-                'running': running and is_active and not self._is_dnf_result(result),
-                'in_pit_lane': False,
-                'pit_time_remaining_s': 0.0,
-                'pit_stops_completed': 0,
-            })
+            positions.append(
+                {
+                    "driver_id": driver_id,
+                    "driver_name": driver.name,
+                    "position": idx,
+                    "lap": 1,
+                    "position_m": distance,
+                    "velocity_mps": velocity_mps,
+                    "racing_mode": "attack",
+                    "push_intensity": 0.95,
+                    "push_fatigue": min(1.0, progress * 0.5),
+                    "tyre_condition": 0.98,
+                    "fuel_load": 0.98,
+                    "gap_ahead": 0.0 if idx == 1 else float(idx - 1) * 0.12,
+                    "gap_behind": 0.0,
+                    "running": running
+                    and is_active
+                    and not self._is_dnf_result(result),
+                    "in_pit_lane": False,
+                    "pit_time_remaining_s": 0.0,
+                    "pit_stops_completed": 0,
+                }
+            )
 
-        cb({
-            'type': 'position_update',
-            'frame': int(frame),
-            'time': float(race_time),
-            'positions': positions,
-        })
+        cb(
+            {
+                "type": "position_update",
+                "frame": int(frame),
+                "time": float(race_time),
+                "positions": positions,
+            }
+        )
 
     def _resolve_visual_drag_distance(self, context: RaceContext) -> float:
         """Return strip distance used by GUI position packets."""
-        track = getattr(context, 'track', None)
-        length_km = getattr(track, 'length_km', None)
+        track = getattr(context, "track", None)
+        length_km = getattr(track, "length_km", None)
         if length_km is not None:
             try:
                 length_m = float(length_km) * 1000.0
@@ -598,20 +672,26 @@ class DragAccelerationEngine(BaseDisciplineEngine):
                 pass
         return float(self.DRAG_DISTANCE_M)
 
-    def _emit_drag_race_finished(self, context: RaceContext, results: List[RaceResult], race_time: float) -> None:
+    def _emit_drag_race_finished(
+        self, context: RaceContext, results: List[RaceResult], race_time: float
+    ) -> None:
         """Emit race_finished payload for GUI handlers."""
-        cb = getattr(context, 'event_callback', None)
+        cb = getattr(context, "event_callback", None)
         if not callable(cb):
             return
-        cb({
-            'type': 'race_finished',
-            'total_laps': 1,
-            'race_time': float(race_time),
-            'results': results,
-            'collision_log': [],
-        })
+        cb(
+            {
+                "type": "race_finished",
+                "total_laps": 1,
+                "race_time": float(race_time),
+                "results": results,
+                "collision_log": [],
+            }
+        )
 
-    def _simulate_single_run(self, driver: Driver, team: Team, context: RaceContext) -> RaceResult:
+    def _simulate_single_run(
+        self, driver: Driver, team: Team, context: RaceContext
+    ) -> RaceResult:
         """
         Simulate single 402m drag racing run
 
@@ -639,12 +719,12 @@ class DragAccelerationEngine(BaseDisciplineEngine):
                 "driver_name": driver.name,
                 "team_id": team.id,
                 "position": 999,  # Will be re-ranked
-                "time_seconds": float('inf'),
+                "time_seconds": float("inf"),
                 "laps_completed": 0,
                 "dnf_reason": "red_light",
                 "status": "DNF",
                 "reaction_time_ms": reaction_time_ms,
-                "trap_speed_kmh": 0.0
+                "trap_speed_kmh": 0.0,
             }
 
         # Calculate acceleration phases
@@ -656,7 +736,9 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Total elapsed time (in milliseconds for precision)
         total_elapsed_ms = reaction_time_ms + accel_0_100_ms + accel_100_trap_ms
-        total_elapsed_ms *= self._player_time_multiplier(context, int(getattr(driver, 'id', 0) or 0))
+        total_elapsed_ms *= self._player_time_multiplier(
+            context, int(getattr(driver, "id", 0) or 0)
+        )
 
         # Convert to seconds for RaceResult
         total_elapsed_s = total_elapsed_ms / 1000.0
@@ -672,24 +754,24 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             "status": "FINISHED",
             "best_lap_time": total_elapsed_s,
             "reaction_time_ms": reaction_time_ms,
-            "trap_speed_kmh": trap_speed_kmh
+            "trap_speed_kmh": trap_speed_kmh,
         }
 
     def _player_time_multiplier(self, context: RaceContext, driver_id: int) -> float:
         """Convert UI pace/overtake overrides to a drag elapsed-time multiplier."""
-        tc = getattr(context, 'track_conditions', {}) if context is not None else {}
+        tc = getattr(context, "track_conditions", {}) if context is not None else {}
         if not isinstance(tc, dict):
             return 1.0
 
         controlled_ids = set()
-        player_driver_id = tc.get('player_driver_id')
+        player_driver_id = tc.get("player_driver_id")
         try:
             if player_driver_id is not None:
                 controlled_ids.add(int(player_driver_id))
         except Exception:
             pass
 
-        for item in tc.get('player_team_driver_ids', []) or []:
+        for item in tc.get("player_team_driver_ids", []) or []:
             try:
                 controlled_ids.add(int(item))
             except Exception:
@@ -698,12 +780,12 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         if driver_id not in controlled_ids:
             return 1.0
 
-        overrides = tc.get('player_overrides', {})
+        overrides = tc.get("player_overrides", {})
         if not isinstance(overrides, dict):
             return 1.0
 
-        pace = float(overrides.get('pace', 0.7) or 0.7)
-        overtake = float(overrides.get('overtake', 0.5) or 0.5)
+        pace = float(overrides.get("pace", 0.7) or 0.7)
+        overtake = float(overrides.get("overtake", 0.5) or 0.5)
         pace = max(0.0, min(1.0, pace))
         overtake = max(0.0, min(1.0, overtake))
         push = max(0.0, min(1.0, 0.55 * pace + 0.45 * overtake))
@@ -736,18 +818,18 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Reaction time attribute modifier (0-100 scale)
         # Higher reaction_time = faster reflexes
-        reaction_attr = getattr(driver, 'reaction_time', None)
+        reaction_attr = getattr(driver, "reaction_time", None)
         if reaction_attr is None:
-            reaction_attr = getattr(driver, 'reactions', 50.0)
+            reaction_attr = getattr(driver, "reactions", 50.0)
         reaction_factor = (reaction_attr / 50.0) - 1.0  # -1.0 to +1.0 range
         reaction_delta = reaction_factor * 80.0  # ±80ms from baseline
 
         # Race start skill bonus (smoother launch)
-        start_skill = getattr(driver, 'race_start_skill', 50.0)
+        start_skill = getattr(driver, "race_start_skill", 50.0)
         start_bonus = (start_skill / 50.0 - 1.0) * 60.0  # ±60ms bonus
 
         # Pressure handling (clutch control under stress)
-        pressure = getattr(driver, 'pressure_handling', 50.0)
+        pressure = getattr(driver, "pressure_handling", 50.0)
         pressure_bonus = (pressure / 50.0 - 1.0) * 40.0  # ±40ms bonus
 
         # Random variance (nervousness, weather, track conditions)
@@ -755,13 +837,17 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         variance = self.rng.normal(0, 20)
 
         # Calculate final reaction time
-        reaction_time = baseline_ms + reaction_delta + start_bonus + pressure_bonus + variance
+        reaction_time = (
+            baseline_ms + reaction_delta + start_bonus + pressure_bonus + variance
+        )
 
         # Red light probability (false start)
         # More aggressive drivers have higher red light risk
-        risk_appetite = getattr(driver, 'risk_appetite', 50.0)
-        concentration = getattr(driver, 'concentration', 50.0)
-        red_light_prob = 0.08 * (risk_appetite / 100.0) * ((100.0 - concentration) / 100.0)
+        risk_appetite = getattr(driver, "risk_appetite", 50.0)
+        concentration = getattr(driver, "concentration", 50.0)
+        red_light_prob = (
+            0.08 * (risk_appetite / 100.0) * ((100.0 - concentration) / 100.0)
+        )
 
         if self.rng.random() < red_light_prob:
             return 500.0  # Red light = disqualification
@@ -794,22 +880,28 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         baseline_s = 4.0
 
         # Raw speed attribute (0-100)
-        raw_speed = getattr(driver, 'raw_speed', 50.0)
+        raw_speed = getattr(driver, "raw_speed", 50.0)
         speed_factor = raw_speed / 50.0  # 0.0-2.0 multiplier
 
         # Acceleration control attribute (0-100)
-        accel_control = getattr(driver, 'acceleration_control', 50.0)
+        accel_control = getattr(driver, "acceleration_control", 50.0)
         control_factor = 1.0 - (accel_control / 100.0) * 0.3  # 0.7-1.0 range
 
         # Team performance (budget affects vehicle power)
-        team_budget = getattr(team, 'budget', 50.0)  # in millions
+        team_budget = getattr(team, "budget", 50.0)  # in millions
         team_factor = 1.0 - (team_budget / 200.0) * 0.4  # Better budget = faster
 
         # Weather impact (grip level)
         weather_factor = self._get_weather_grip_factor(context.weather_conditions)
 
         # Final acceleration time
-        accel_time = baseline_s * (2.0 / speed_factor) * control_factor * team_factor * weather_factor
+        accel_time = (
+            baseline_s
+            * (2.0 / speed_factor)
+            * control_factor
+            * team_factor
+            * weather_factor
+        )
 
         # Add randomness (inconsistency in launch, track conditions)
         variance = self.rng.normal(0, 0.15)
@@ -853,10 +945,10 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             return 4000.0
 
         # Calculate acceleration
-        accel_required = (trap_speed_mps ** 2 - start_speed_mps ** 2) / (2 * distance_m)
+        accel_required = (trap_speed_mps**2 - start_speed_mps**2) / (2 * distance_m)
 
         # Adjust acceleration based on consistency attribute
-        consistency = getattr(driver, 'consistency', 50.0)
+        consistency = getattr(driver, "consistency", 50.0)
         consistency_factor = 1.0 - ((50.0 - consistency) / 100.0) * 0.2
 
         final_acceleration = accel_required * consistency_factor
@@ -872,7 +964,9 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         return max(0.5, time_s + variance) * 1000.0  # Convert to ms
 
-    def _calculate_trap_speed(self, driver: Driver, team: Team, context: RaceContext) -> float:
+    def _calculate_trap_speed(
+        self, driver: Driver, team: Team, context: RaceContext
+    ) -> float:
         """
         Calculate trap speed (speed at 402m finish line)
 
@@ -898,26 +992,26 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         baseline_kmh = 180.0
 
         # Raw speed attribute (0-100)
-        raw_speed = getattr(driver, 'raw_speed', 50.0)
+        raw_speed = getattr(driver, "raw_speed", 50.0)
         speed_factor = raw_speed / 50.0  # 0.0-2.0 range
 
         # Drag-specific aptitude (if available)
-        drag_aptitude = getattr(driver, 'drag_aptitude', 50.0)
+        drag_aptitude = getattr(driver, "drag_aptitude", 50.0)
         drag_factor = drag_aptitude / 50.0  # 0.0-2.0 range
 
         # Team performance (budget and tier affect vehicle)
-        team_budget = getattr(team, 'budget', 50.0)
+        team_budget = getattr(team, "budget", 50.0)
         team_factor = 0.7 + (team_budget / 200.0) * 0.6  # 0.7-1.3 range
 
         # Team tier bonus (TOP_TIER teams have better aerodynamics)
-        tier = getattr(team, 'tier', 'tier2').upper()
+        tier = getattr(team, "tier", "tier2").upper()
         tier_multiplier = {
-            'TOP_TIER': 1.2,
-            'TIER_1': 1.2,
-            'TIER_2': 1.0,
-            'TIER_3': 0.85,
-            'TIER2': 1.0,
-            'TIER3': 0.85
+            "TOP_TIER": 1.2,
+            "TIER_1": 1.2,
+            "TIER_2": 1.0,
+            "TIER_3": 0.85,
+            "TIER2": 1.0,
+            "TIER3": 0.85,
         }.get(tier, 1.0)
 
         # Environmental factors
@@ -925,7 +1019,12 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         # Calculate final trap speed
         trap_speed = (
-            baseline_kmh * speed_factor * drag_factor * team_factor * tier_multiplier * weather_factor
+            baseline_kmh
+            * speed_factor
+            * drag_factor
+            * team_factor
+            * tier_multiplier
+            * weather_factor
         )
 
         # Add randomness (variance in aerodynamic drag, fuel burn)
@@ -951,7 +1050,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             Grip factor (0.6-1.0 range, 1.0 = optimal)
         """
         # Rain impact (significant in drag racing)
-        precipitation = weather.get('precipitation', 0.0)
+        precipitation = weather.get("precipitation", 0.0)
         if precipitation > 0:
             # Wet conditions: 0.7-0.85x grip
             rain_factor = 0.70 + (1.0 - min(precipitation / 10.0, 1.0)) * 0.15
@@ -959,11 +1058,11 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             rain_factor = 1.0
 
         # Wind impact (headwind/tailwind affects trap speed)
-        wind_speed = weather.get('wind_speed', 0.0)
+        wind_speed = weather.get("wind_speed", 0.0)
         wind_factor = 1.0 - (abs(wind_speed) / 50.0) * 0.1  # ±10% for strong wind
 
         # Humidity/temperature (affects air density)
-        temp = weather.get('temperature', 20.0)
+        temp = weather.get("temperature", 20.0)
 
         # Hot, dry conditions = better (thinner air density = less drag at top speed)
         # But this is complex; simplified to temperature only
@@ -978,7 +1077,12 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         return max(0.6, min(1.2, combined))
 
     def calculate_lap_time(
-        self, driver: Driver, team: Team, context: RaceContext, lap_number: int, current_position: int
+        self,
+        driver: Driver,
+        team: Team,
+        context: RaceContext,
+        lap_number: int,
+        current_position: int,
     ) -> float:
         """
         Calculate lap time for driver (not used in drag racing)
@@ -990,7 +1094,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         """
         # Drag does not use lap loops; return a representative single-run elapsed time.
         run = self._simulate_single_run(driver, team, context)
-        elapsed = run.get('time_seconds')
-        if isinstance(elapsed, (int, float)) and elapsed != float('inf'):
+        elapsed = run.get("time_seconds")
+        if isinstance(elapsed, (int, float)) and elapsed != float("inf"):
             return float(elapsed)
-        return float('inf')
+        return float("inf")

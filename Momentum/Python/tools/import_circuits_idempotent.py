@@ -3,6 +3,7 @@
 This file is a thin pass-through so older commands still work.
 The real implementation is in `scripts/import_circuits.py`.
 """
+
 import sys
 from pathlib import Path
 

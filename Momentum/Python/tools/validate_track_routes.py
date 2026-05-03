@@ -27,7 +27,9 @@ sys.path.insert(0, str(repo_root))
 from database.database_manager import DatabaseManager
 
 
-def _build_field_based_circuit_instructions(length_m: float, turns_raw: int, tightest_radius_m: float):
+def _build_field_based_circuit_instructions(
+    length_m: float, turns_raw: int, tightest_radius_m: float
+):
     turns = max(4, min(16, int(turns_raw or 10)))
     radius = max(22.0, min(120.0, float(tightest_radius_m or 30.0) * 1.6))
     angle_deg = 360.0 / float(turns)
@@ -123,19 +125,27 @@ def _best_closed_routes(circuit_generator, instr_list):
     return best or {"main": []}
 
 
-def _generate_route_points(row: dict, circuit_generator, length_m: float, is_ptp: bool, instructions):
+def _generate_route_points(
+    row: dict, circuit_generator, length_m: float, is_ptp: bool, instructions
+):
     with redirect_stdout(io.StringIO()):
         if instructions:
             if is_ptp:
                 wrapper = {"instructions": instructions}
-                routes = circuit_generator.generate_with_routes(wrapper, options={"is_point_to_point": True})
+                routes = circuit_generator.generate_with_routes(
+                    wrapper, options={"is_point_to_point": True}
+                )
             else:
                 routes = _best_closed_routes(circuit_generator, instructions)
             return (routes or {}).get("main") or []
 
         if is_ptp:
             routes = circuit_generator.generate_with_routes(
-                {"instructions": [{"type": "S", "length_m": int(max(350.0, length_m))}]},
+                {
+                    "instructions": [
+                        {"type": "S", "length_m": int(max(350.0, length_m))}
+                    ]
+                },
                 options={"is_point_to_point": True},
             )
             return (routes or {}).get("main") or []
@@ -184,7 +194,8 @@ def _route_errors(row: dict, circuit_generator) -> list:
 
 
 def main() -> int:
-    _app = QApplication.instance() or QApplication([])
+    if not QApplication.instance():
+        QApplication([])
     from GUI.gui_race_visual import CircuitGenerator
 
     db = DatabaseManager()

@@ -7,7 +7,11 @@ behaviour through the shared realtime engine.
 
 from typing import Any, Dict, List, Optional
 
-from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
+from RaceLogic.base_race_engine import (
+    BaseDisciplineEngine,
+    RaceContext,
+    RacingDiscipline,
+)
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from database.models import Driver, Team
 from services.race_engine_factory import create_realtime_engine
@@ -62,7 +66,11 @@ class SprintRallycrossEngine(BaseDisciplineEngine):
         engine.OVERTAKE_INCIDENT_MULTIPLIER = 2.8
 
     def _track_conditions(self, context: RaceContext) -> Dict[str, Any]:
-        return context.track_conditions if isinstance(context.track_conditions, dict) else {}
+        return (
+            context.track_conditions
+            if isinstance(context.track_conditions, dict)
+            else {}
+        )
 
     def _as_int(self, value: Any) -> Optional[int]:
         if isinstance(value, int):
@@ -95,11 +103,11 @@ class SprintRallycrossEngine(BaseDisciplineEngine):
 
     def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
         engine = None
-        engine_cls = globals().get('RealtimeRaceEngine')
+        engine_cls = globals().get("RealtimeRaceEngine")
         if engine_cls is not None:
-            engine = engine_cls(seed=getattr(self, 'seed', None))
+            engine = engine_cls(seed=getattr(self, "seed", None))
         else:
-            engine = create_realtime_engine(seed=getattr(self, 'seed', None))
+            engine = create_realtime_engine(seed=getattr(self, "seed", None))
         self._apply_tuning(engine)
 
         tc = self._track_conditions(context)

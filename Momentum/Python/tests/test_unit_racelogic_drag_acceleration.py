@@ -11,7 +11,9 @@ from RaceLogic.disciplines.drag_acceleration.drag_acceleration_discipline import
 from database.models import Driver, Team, Track
 
 
-def _build_context(drivers: list[Driver], teams: dict[int, Team], track_conditions=None) -> RaceContext:
+def _build_context(
+    drivers: list[Driver], teams: dict[int, Team], track_conditions=None
+) -> RaceContext:
     track = Track(
         id=1,
         name="Drag Strip",
@@ -33,13 +35,55 @@ def _build_context(drivers: list[Driver], teams: dict[int, Team], track_conditio
 def test_drag_select_representatives_picks_fastest_per_team_and_player_override():
     engine = DragAccelerationEngine(seed=11)
 
-    team_1 = Team(id=1, name="Team 1", nationality="US", discipline="DRAG_ACCELERATION", tier="TIER_1", budget=80.0)
-    team_2 = Team(id=2, name="Team 2", nationality="US", discipline="DRAG_ACCELERATION", tier="TIER_1", budget=80.0)
+    team_1 = Team(
+        id=1,
+        name="Team 1",
+        nationality="US",
+        discipline="DRAG_ACCELERATION",
+        tier="TIER_1",
+        budget=80.0,
+    )
+    team_2 = Team(
+        id=2,
+        name="Team 2",
+        nationality="US",
+        discipline="DRAG_ACCELERATION",
+        tier="TIER_1",
+        budget=80.0,
+    )
 
-    d1 = Driver(id=1, name="Team1 Slow", nationality="US", birth_date="2000-01-01", current_team_id=1, speed=70)
-    d2 = Driver(id=2, name="Team1 Fast", nationality="US", birth_date="2000-01-01", current_team_id=1, speed=92)
-    d3 = Driver(id=3, name="Team2 Fast", nationality="US", birth_date="2000-01-01", current_team_id=2, speed=90)
-    d4 = Driver(id=4, name="Team2 Player", nationality="US", birth_date="2000-01-01", current_team_id=2, speed=60)
+    d1 = Driver(
+        id=1,
+        name="Team1 Slow",
+        nationality="US",
+        birth_date="2000-01-01",
+        current_team_id=1,
+        speed=70,
+    )
+    d2 = Driver(
+        id=2,
+        name="Team1 Fast",
+        nationality="US",
+        birth_date="2000-01-01",
+        current_team_id=1,
+        speed=92,
+    )
+    d3 = Driver(
+        id=3,
+        name="Team2 Fast",
+        nationality="US",
+        birth_date="2000-01-01",
+        current_team_id=2,
+        speed=90,
+    )
+    d4 = Driver(
+        id=4,
+        name="Team2 Player",
+        nationality="US",
+        birth_date="2000-01-01",
+        current_team_id=2,
+        speed=60,
+    )
 
     context = _build_context(
         drivers=[d1, d2, d3, d4],
@@ -61,15 +105,44 @@ def test_drag_head_to_head_prefers_valid_time_over_dnf():
     engine = DragAccelerationEngine(seed=11)
 
     left = {
-        "driver": Driver(id=1, name="Left", nationality="US", birth_date="2000-01-01", current_team_id=1),
-        "team": Team(id=1, name="Left Team", nationality="US", discipline="DRAG_ACCELERATION", tier="TIER_1", budget=80.0),
+        "driver": Driver(
+            id=1,
+            name="Left",
+            nationality="US",
+            birth_date="2000-01-01",
+            current_team_id=1,
+        ),
+        "team": Team(
+            id=1,
+            name="Left Team",
+            nationality="US",
+            discipline="DRAG_ACCELERATION",
+            tier="TIER_1",
+            budget=80.0,
+        ),
     }
     right = {
-        "driver": Driver(id=2, name="Right", nationality="US", birth_date="2000-01-01", current_team_id=2),
-        "team": Team(id=2, name="Right Team", nationality="US", discipline="DRAG_ACCELERATION", tier="TIER_1", budget=80.0),
+        "driver": Driver(
+            id=2,
+            name="Right",
+            nationality="US",
+            birth_date="2000-01-01",
+            current_team_id=2,
+        ),
+        "team": Team(
+            id=2,
+            name="Right Team",
+            nationality="US",
+            discipline="DRAG_ACCELERATION",
+            tier="TIER_1",
+            budget=80.0,
+        ),
     }
 
-    context = _build_context(drivers=[left["driver"], right["driver"]], teams={1: left["team"], 2: right["team"]})
+    context = _build_context(
+        drivers=[left["driver"], right["driver"]],
+        teams={1: left["team"], 2: right["team"]},
+    )
 
     # Left DNF, right finishes.
     left_result = {
@@ -100,8 +173,21 @@ def test_drag_head_to_head_prefers_valid_time_over_dnf():
 def test_drag_simulate_single_run_applies_player_override_time_multiplier():
     engine = DragAccelerationEngine(seed=11)
 
-    driver = Driver(id=1, name="Player", nationality="US", birth_date="2000-01-01", current_team_id=1)
-    team = Team(id=1, name="Team 1", nationality="US", discipline="DRAG_ACCELERATION", tier="TIER_1", budget=80.0)
+    driver = Driver(
+        id=1,
+        name="Player",
+        nationality="US",
+        birth_date="2000-01-01",
+        current_team_id=1,
+    )
+    team = Team(
+        id=1,
+        name="Team 1",
+        nationality="US",
+        discipline="DRAG_ACCELERATION",
+        tier="TIER_1",
+        budget=80.0,
+    )
 
     context = _build_context(
         drivers=[driver],

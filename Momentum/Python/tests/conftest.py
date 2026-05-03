@@ -12,6 +12,7 @@ import sys
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
+import os
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +21,9 @@ from fastapi.testclient import TestClient
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+# Ensure offscreen Qt rendering for headless CI/test environments before any PyQt6 imports
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from database.database_manager import DatabaseManager
 from database.models import Championship, Driver, Team, Track
@@ -49,7 +53,6 @@ def seeded_db(test_db: DatabaseManager):
                 headquarters="Silverstone",
                 team_principal=f"Principal {idx + 1}",
             )
-            import os
         )
         team_ids.append(team_id)
 
@@ -57,8 +60,6 @@ def seeded_db(test_db: DatabaseManager):
         ("Alpha Circuit", "SINGLE_SEATER", "asphalt"),
         ("Beta Raceway", "SPRINT_RALLYCROSS", "asphalt"),
         ("Gamma Park", "SINGLE_SEATER", "asphalt"),
-            # Set offscreen rendering for headless environments BEFORE any PyQt6 imports
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     ]
     track_ids = []
     for name, discipline, surface in track_specs:

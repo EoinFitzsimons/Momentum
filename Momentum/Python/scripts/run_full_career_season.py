@@ -11,7 +11,7 @@ import argparse
 from datetime import datetime
 import os
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 
 _THIS_DIR = os.path.dirname(__file__)
@@ -29,19 +29,28 @@ def _select_grid(db: DatabaseManager, discipline: str, grid_size: int):
     drivers = [
         driver
         for driver in db.get_all_drivers()
-        if getattr(driver, "preferred_discipline", None) == discipline and getattr(driver, "current_team_id", None)
+        if getattr(driver, "preferred_discipline", None) == discipline
+        and getattr(driver, "current_team_id", None)
     ]
     if len(drivers) < grid_size:
-        drivers = [driver for driver in db.get_all_drivers() if getattr(driver, "current_team_id", None)]
+        drivers = [
+            driver
+            for driver in db.get_all_drivers()
+            if getattr(driver, "current_team_id", None)
+        ]
     if len(drivers) < grid_size:
-        raise ValueError(f"Not enough drivers with team assignments: have {len(drivers)}, need {grid_size}")
+        raise ValueError(
+            f"Not enough drivers with team assignments: have {len(drivers)}, need {grid_size}"
+        )
     return drivers[:grid_size]
 
 
 def _select_tracks(db: DatabaseManager, discipline: str, race_count: int) -> List[int]:
     tracks = db.get_tracks_by_discipline(discipline) or db.get_all_tracks()
     if len(tracks) < race_count:
-        raise ValueError(f"Not enough tracks for a season: have {len(tracks)}, need {race_count}")
+        raise ValueError(
+            f"Not enough tracks for a season: have {len(tracks)}, need {race_count}"
+        )
     return [track.id for track in tracks[:race_count]]
 
 
@@ -134,12 +143,35 @@ def run_season(
 
 
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run a full career-mode season simulation.")
-    parser.add_argument("--discipline", default="SINGLE_SEATER", help="Discipline to run (default: SINGLE_SEATER)")
-    parser.add_argument("--races", type=int, default=10, help="Number of races in the season (default: 10)")
-    parser.add_argument("--grid-size", type=int, default=20, help="Number of cars on the grid (default: 20)")
-    parser.add_argument("--laps", type=int, default=1, help="Laps per race (default: 1)")
-    parser.add_argument("--season-year", type=int, default=2026, help="Start year for the season (default: 2026)")
+    parser = argparse.ArgumentParser(
+        description="Run a full career-mode season simulation."
+    )
+    parser.add_argument(
+        "--discipline",
+        default="SINGLE_SEATER",
+        help="Discipline to run (default: SINGLE_SEATER)",
+    )
+    parser.add_argument(
+        "--races",
+        type=int,
+        default=10,
+        help="Number of races in the season (default: 10)",
+    )
+    parser.add_argument(
+        "--grid-size",
+        type=int,
+        default=20,
+        help="Number of cars on the grid (default: 20)",
+    )
+    parser.add_argument(
+        "--laps", type=int, default=1, help="Laps per race (default: 1)"
+    )
+    parser.add_argument(
+        "--season-year",
+        type=int,
+        default=2026,
+        help="Start year for the season (default: 2026)",
+    )
     args = parser.parse_args(argv)
 
     outcome = run_season(
@@ -158,7 +190,9 @@ def main(argv: List[str] | None = None) -> int:
     print(f"discipline {outcome['discipline']}")
     print("top5:")
     for entry in outcome["standings"][:5]:
-        print(f"P{entry.position} driver_id={entry.driver_id} points={entry.total_points} wins={entry.wins} podiums={entry.podiums}")
+        print(
+            f"P{entry.position} driver_id={entry.driver_id} points={entry.total_points} wins={entry.wins} podiums={entry.podiums}"
+        )
 
     return 0
 

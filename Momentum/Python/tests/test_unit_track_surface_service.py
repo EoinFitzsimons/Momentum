@@ -18,8 +18,12 @@ from services.track_surface_service import TrackSurfaceService
         ("ENDURANCE", "asphalt"),
     ],
 )
-def test_get_surface_for_discipline_returns_expected_primary(discipline, expected_surface):
-    assert TrackSurfaceService.get_surface_for_discipline(discipline) == expected_surface
+def test_get_surface_for_discipline_returns_expected_primary(
+    discipline, expected_surface
+):
+    assert (
+        TrackSurfaceService.get_surface_for_discipline(discipline) == expected_surface
+    )
 
 
 @pytest.mark.unit

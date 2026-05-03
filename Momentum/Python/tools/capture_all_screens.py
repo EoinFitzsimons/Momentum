@@ -1,23 +1,26 @@
 """Capture screenshots of all major UI screens/dialogs for review.
 Saves PNGs under `saves/accessibility_screenshots/all_screens/`.
 """
+
 import os
 import sys
 import time
 from types import SimpleNamespace
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from database.database_manager import DatabaseManager
 
 
-OUT_DIR = os.path.join(os.path.dirname(ROOT), 'saves', 'accessibility_screenshots', 'all_screens')
+OUT_DIR = os.path.join(
+    os.path.dirname(ROOT), "saves", "accessibility_screenshots", "all_screens"
+)
 os.makedirs(OUT_DIR, exist_ok=True)
 
 CAPTURE_PRESETS = (
@@ -56,7 +59,9 @@ def prepare_capture_window(widget, width: int, height: int):
         ws = widget.styleSheet() or ""
         if app_ss and not ws:
             widget.setStyleSheet(app_ss)
-            print(f"[DEBUG] Applied app-level stylesheet to widget {type(widget).__name__}")
+            print(
+                f"[DEBUG] Applied app-level stylesheet to widget {type(widget).__name__}"
+            )
     except Exception:
         pass
 
@@ -67,7 +72,7 @@ def capture_main_menu(app, width: int, height: int, suffix: str):
 
     win = MainMenuWindow()
     try:
-        win.display_mode = 'windowed'
+        win.display_mode = "windowed"
         win._apply_display_mode()
     except Exception:
         pass
@@ -79,11 +84,11 @@ def capture_main_menu(app, width: int, height: int, suffix: str):
         print(f"[DEBUG] main_menu.styleSheet len={len(ws)} snippet={ws[:200]!r}")
     except Exception:
         pass
-    path = save_pix(win, f'main_menu_{suffix}.png')
+    path = save_pix(win, f"main_menu_{suffix}.png")
     # Try opening About as a separate capture
     about = QMessageBox()
-    about.setWindowTitle('About Momentum')
-    about.setText('<h2>Momentum Racing Simulator</h2>\n<p>About snapshot</p>')
+    about.setWindowTitle("About Momentum")
+    about.setText("<h2>Momentum Racing Simulator</h2>\n<p>About snapshot</p>")
     about.setStandardButtons(QMessageBox.StandardButton.Ok)
     prepare_capture_window(about, max(900, width // 2), max(500, height // 3))
     about.show()
@@ -94,7 +99,7 @@ def capture_main_menu(app, width: int, height: int, suffix: str):
         print(f"[DEBUG] about_dialog.styleSheet len={len(aws)} snippet={aws[:200]!r}")
     except Exception:
         pass
-    about_path = save_pix(about, f'about_dialog_{suffix}.png')
+    about_path = save_pix(about, f"about_dialog_{suffix}.png")
     about.close()
     return win, path, about_path
 
@@ -103,11 +108,13 @@ def capture_quick_race(app, parent_win, width: int, height: int, suffix: str):
     # Use parent drivers for realistic dialog
     from GUI.gui_main_menu import QuickRaceSetupWindow
 
-    drivers = getattr(parent_win, 'drivers', [])
-    dialog = QuickRaceSetupWindow(parent_win, drivers, getattr(parent_win, 'display_mode', 'borderless'))
+    drivers = getattr(parent_win, "drivers", [])
+    dialog = QuickRaceSetupWindow(
+        parent_win, drivers, getattr(parent_win, "display_mode", "borderless")
+    )
     prepare_capture_window(dialog, width, height)
     dialog.show()
-    path = save_pix(dialog, f'quick_race_setup_{suffix}.png')
+    path = save_pix(dialog, f"quick_race_setup_{suffix}.png")
     dialog.close()
     return path
 
@@ -118,19 +125,24 @@ def capture_race_window(app, width: int, height: int, suffix: str):
 
     rw = RaceWindow()
     try:
-        rw.set_display_mode('windowed')
+        rw.set_display_mode("windowed")
     except Exception:
         prepare_capture_window(rw, width, height)
     else:
         prepare_capture_window(rw, width, height)
     rw.show()
-    path = save_pix(rw, f'race_window_{suffix}.png')
+    path = save_pix(rw, f"race_window_{suffix}.png")
     return rw, path
 
 
 def _seed_career_world() -> tuple[SimpleNamespace, int, str]:
     """Create a small career save so the career HQ window has real content."""
-    from GUI.gui_career import CareerSelectionDialog, PLAYER_ID, WORLD_START_DATE, _normalize_tier
+    from GUI.gui_career import (
+        CareerSelectionDialog,
+        PLAYER_ID,
+        WORLD_START_DATE,
+        _normalize_tier,
+    )
 
     db = DatabaseManager()
     seed_dialog = CareerSelectionDialog(db)
@@ -182,7 +194,12 @@ def _seed_career_world() -> tuple[SimpleNamespace, int, str]:
 
 
 def capture_career_windows(app, width: int, height: int, suffix: str):
-    from GUI.gui_career import CareerProfileDialog, CareerSelectionDialog, CareerTeamSelectionDialog, CareerWindow
+    from GUI.gui_career import (
+        CareerProfileDialog,
+        CareerSelectionDialog,
+        CareerTeamSelectionDialog,
+        CareerWindow,
+    )
 
     championship, team_id, discipline = _seed_career_world()
     generated = []
@@ -191,25 +208,27 @@ def capture_career_windows(app, width: int, height: int, suffix: str):
     selection_dialog = CareerSelectionDialog(selection_db)
     prepare_capture_window(selection_dialog, width, height)
     selection_dialog.show()
-    generated.append(save_pix(selection_dialog, f'career_selection_{suffix}.png'))
+    generated.append(save_pix(selection_dialog, f"career_selection_{suffix}.png"))
     selection_dialog.close()
 
     profile_dialog = CareerProfileDialog()
     prepare_capture_window(profile_dialog, width, height)
     profile_dialog.show()
-    generated.append(save_pix(profile_dialog, f'career_profile_{suffix}.png'))
+    generated.append(save_pix(profile_dialog, f"career_profile_{suffix}.png"))
     profile_dialog.close()
 
-    team_dialog = CareerTeamSelectionDialog(selection_db, discipline, getattr(championship, 'tier', None))
+    team_dialog = CareerTeamSelectionDialog(
+        selection_db, discipline, getattr(championship, "tier", None)
+    )
     prepare_capture_window(team_dialog, width, height)
     team_dialog.show()
-    generated.append(save_pix(team_dialog, f'career_team_selection_{suffix}.png'))
+    generated.append(save_pix(team_dialog, f"career_team_selection_{suffix}.png"))
     team_dialog.close()
 
     career_window = CareerWindow(championship)
     prepare_capture_window(career_window, width, height)
     career_window.show()
-    generated.append(save_pix(career_window, f'career_hq_{suffix}.png'))
+    generated.append(save_pix(career_window, f"career_hq_{suffix}.png"))
     career_window.close()
 
     return generated
@@ -223,10 +242,16 @@ def main():
     except Exception:
         pass
     try:
-        from GUI.accessibility_settings import load_accessibility_settings, apply_accessibility_to_app
+        from GUI.accessibility_settings import (
+            load_accessibility_settings,
+            apply_accessibility_to_app,
+        )
+
         settings = load_accessibility_settings()
         apply_accessibility_to_app(app, settings)
-        print(f"[DEBUG] Applied accessibility settings: theme={settings.get('theme')}, ui_scale={settings.get('ui_scale')}")
+        print(
+            f"[DEBUG] Applied accessibility settings: theme={settings.get('theme')}, ui_scale={settings.get('ui_scale')}"
+        )
         ss = app.styleSheet() or ""
         print(f"[DEBUG] app.styleSheet len={len(ss)} snippet={ss[:200]!r}")
     except Exception as e:
@@ -245,9 +270,9 @@ def main():
 
         generated.extend(capture_career_windows(app, width, height, suffix))
 
-    print('\nCaptured:')
+    print("\nCaptured:")
     for p in generated:
-        print(' -', p)
+        print(" -", p)
 
     # Close windows
     try:
@@ -259,5 +284,6 @@ def main():
     except Exception:
         pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

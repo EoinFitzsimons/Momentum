@@ -1,10 +1,11 @@
 """Small CLI to print contrast ratios for accessibility themes."""
+
 import os
 import sys
 import re
 
 # Ensure Momentum/Python is on sys.path when run as a script
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -24,10 +25,12 @@ def _hex_to_linear_luminance(hexcol: str) -> float:
     r = int(h[0:2], 16) / 255.0
     g = int(h[2:4], 16) / 255.0
     b = int(h[4:6], 16) / 255.0
+
     def to_lin(c):
         if c <= 0.03928:
             return c / 12.92
         return ((c + 0.055) / 1.055) ** 2.4
+
     R = to_lin(r)
     G = to_lin(g)
     B = to_lin(b)
@@ -53,5 +56,6 @@ def main():
         else:
             print("  Could not parse bg/fg for this theme")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

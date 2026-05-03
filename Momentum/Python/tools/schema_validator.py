@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 import os
 from typing import Dict, Any, List, Optional, Tuple
-from jsonschema import validate, ValidationError, Draft7Validator
+from jsonschema import validate, ValidationError
 
 
 class SchemaValidator:
@@ -44,7 +44,9 @@ class SchemaValidator:
                     fpath = os.path.join(schema_path, fname)
                     try:
                         with open(fpath, "r") as f:
-                            self.schemas[fname.replace(".schema.json", "")] = json.load(f)
+                            self.schemas[fname.replace(".schema.json", "")] = json.load(
+                                f
+                            )
                     except Exception as e:
                         print(f"Warning: Failed to load schema {fname}: {e}")
 
@@ -88,7 +90,9 @@ class SchemaValidator:
         except ValidationError as e:
             return False, str(e)
 
-    def validate_event(self, event: Dict[str, Any], event_type: str) -> Tuple[bool, Optional[str]]:
+    def validate_event(
+        self, event: Dict[str, Any], event_type: str
+    ) -> Tuple[bool, Optional[str]]:
         """Validate event object against its specific schema (e.g., lap_complete, overtake, incident)"""
         schema_key = event_type.replace("event_", "")
         if schema_key not in self.schemas:
@@ -99,7 +103,9 @@ class SchemaValidator:
         except ValidationError as e:
             return False, str(e)
 
-    def validate_batch(self, objects: List[Dict[str, Any]], object_type: str) -> Tuple[bool, List[str]]:
+    def validate_batch(
+        self, objects: List[Dict[str, Any]], object_type: str
+    ) -> Tuple[bool, List[str]]:
         """Validate a batch of objects; return (all_valid, list_of_errors)"""
         errors = []
         validator = getattr(self, f"validate_{object_type}", None)

@@ -11,7 +11,26 @@ py_pkg = repo_root / "Momentum" / "Python"
 sys.path.insert(0, str(py_pkg))
 sys.path.insert(0, str(repo_root))
 
-FAILED_IDS = [151, 152, 156, 157, 159, 160, 161, 163, 164, 166, 167, 168, 169, 170, 171, 172, 173, 175]
+FAILED_IDS = [
+    151,
+    152,
+    156,
+    157,
+    159,
+    160,
+    161,
+    163,
+    164,
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    175,
+]
 
 
 def mk_instr(length_m: float, turns: int, radius: float):
@@ -65,7 +84,9 @@ def main():
     db.row_factory = sqlite3.Row
 
     for tid in FAILED_IDS:
-        r = db.execute("SELECT id, name, length_km FROM tracks WHERE id = ?", (tid,)).fetchone()
+        r = db.execute(
+            "SELECT id, name, length_km FROM tracks WHERE id = ?", (tid,)
+        ).fetchone()
         if not r:
             continue
         length_m = float(r["length_km"] or 1.0) * 1000.0

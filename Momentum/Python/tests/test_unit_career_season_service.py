@@ -19,15 +19,96 @@ def test_advance_season_rolls_over_and_applies_tier_movement(seeded_db):
     service = CareerSeasonService(db)
 
     teams = {
-        "t1_a": db.create_team(Team(id=0, name="T1 A", nationality="GBR", discipline="ENDURANCE", tier="TIER_1", budget=50_000_000)),
-        "t1_b": db.create_team(Team(id=0, name="T1 B", nationality="GBR", discipline="ENDURANCE", tier="TIER_1", budget=50_000_000)),
-        "t1_c": db.create_team(Team(id=0, name="T1 C", nationality="GBR", discipline="ENDURANCE", tier="TIER_1", budget=50_000_000)),
-        "t2_a": db.create_team(Team(id=0, name="T2 A", nationality="GBR", discipline="ENDURANCE", tier="TIER_2", budget=35_000_000)),
-        "t2_b": db.create_team(Team(id=0, name="T2 B", nationality="GBR", discipline="ENDURANCE", tier="TIER_2", budget=35_000_000)),
-        "t2_c": db.create_team(Team(id=0, name="T2 C", nationality="GBR", discipline="ENDURANCE", tier="TIER_2", budget=35_000_000)),
-        "t3_a": db.create_team(Team(id=0, name="T3 A", nationality="GBR", discipline="ENDURANCE", tier="TIER_3", budget=20_000_000)),
-        "t3_b": db.create_team(Team(id=0, name="T3 B", nationality="GBR", discipline="ENDURANCE", tier="TIER_3", budget=20_000_000)),
-        "t3_c": db.create_team(Team(id=0, name="T3 C", nationality="GBR", discipline="ENDURANCE", tier="TIER_3", budget=20_000_000)),
+        "t1_a": db.create_team(
+            Team(
+                id=0,
+                name="T1 A",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_1",
+                budget=50_000_000,
+            )
+        ),
+        "t1_b": db.create_team(
+            Team(
+                id=0,
+                name="T1 B",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_1",
+                budget=50_000_000,
+            )
+        ),
+        "t1_c": db.create_team(
+            Team(
+                id=0,
+                name="T1 C",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_1",
+                budget=50_000_000,
+            )
+        ),
+        "t2_a": db.create_team(
+            Team(
+                id=0,
+                name="T2 A",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_2",
+                budget=35_000_000,
+            )
+        ),
+        "t2_b": db.create_team(
+            Team(
+                id=0,
+                name="T2 B",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_2",
+                budget=35_000_000,
+            )
+        ),
+        "t2_c": db.create_team(
+            Team(
+                id=0,
+                name="T2 C",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_2",
+                budget=35_000_000,
+            )
+        ),
+        "t3_a": db.create_team(
+            Team(
+                id=0,
+                name="T3 A",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_3",
+                budget=20_000_000,
+            )
+        ),
+        "t3_b": db.create_team(
+            Team(
+                id=0,
+                name="T3 B",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_3",
+                budget=20_000_000,
+            )
+        ),
+        "t3_c": db.create_team(
+            Team(
+                id=0,
+                name="T3 C",
+                nationality="GBR",
+                discipline="ENDURANCE",
+                tier="TIER_3",
+                budget=20_000_000,
+            )
+        ),
     }
 
     with db.get_connection() as conn:
@@ -105,7 +186,11 @@ def test_advance_season_rolls_over_and_applies_tier_movement(seeded_db):
         t3_points = [(teams["t3_a"], 35), (teams["t3_b"], 15), (teams["t3_c"], 4)]
 
         driver_seed = 1
-        for tier, point_rows in [("TIER_1", t1_points), ("TIER_2", t2_points), ("TIER_3", t3_points)]:
+        for tier, point_rows in [
+            ("TIER_1", t1_points),
+            ("TIER_2", t2_points),
+            ("TIER_3", t3_points),
+        ]:
             for team_id, points in point_rows:
                 conn.execute(
                     """
@@ -113,13 +198,23 @@ def test_advance_season_rolls_over_and_applies_tier_movement(seeded_db):
                         (player_id, career_race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
                     VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?)
                     """,
-                    (PLAYER_ID, race_ids[tier], driver_seed, int(team_id), driver_seed, int(points), driver_seed),
+                    (
+                        PLAYER_ID,
+                        race_ids[tier],
+                        driver_seed,
+                        int(team_id),
+                        driver_seed,
+                        int(points),
+                        driver_seed,
+                    ),
                 )
                 driver_seed += 1
 
         conn.commit()
 
-    result = service.advance_season(player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE")
+    result = service.advance_season(
+        player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE"
+    )
 
     assert result["rolled_over"] is True
     assert len(result["promoted"]) == 3
@@ -127,9 +222,15 @@ def test_advance_season_rolls_over_and_applies_tier_movement(seeded_db):
 
     # Boundaries respected: no tier outside known bands.
     for team_id in [
-        teams["t1_a"], teams["t1_b"], teams["t1_c"],
-        teams["t2_a"], teams["t2_b"], teams["t2_c"],
-        teams["t3_a"], teams["t3_b"], teams["t3_c"],
+        teams["t1_a"],
+        teams["t1_b"],
+        teams["t1_c"],
+        teams["t2_a"],
+        teams["t2_b"],
+        teams["t2_c"],
+        teams["t3_a"],
+        teams["t3_b"],
+        teams["t3_c"],
     ]:
         tier = db.get_team(team_id).tier
         assert tier in {"TIER_1", "TIER_2", "TIER_3", "TOP_TIER"}
@@ -204,7 +305,9 @@ def test_advance_season_blocked_when_races_incomplete(seeded_db):
         )
         conn.commit()
 
-    result = service.advance_season(player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE")
+    result = service.advance_season(
+        player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE"
+    )
     assert result["rolled_over"] is False
 
 
@@ -215,16 +318,37 @@ def test_headless_simulates_non_player_championships(seeded_db):
 
     # Player-owned series team (ENDURANCE TIER_2)
     player_team_id = db.create_team(
-        Team(id=0, name="Player Endurance", nationality="GBR", discipline="ENDURANCE", tier="TIER_2", budget=40_000_000)
+        Team(
+            id=0,
+            name="Player Endurance",
+            nationality="GBR",
+            discipline="ENDURANCE",
+            tier="TIER_2",
+            budget=40_000_000,
+        )
     )
     db.assign_team_owner(int(player_team_id), PLAYER_ID)
 
     # Non-player series teams (ENDURANCE TIER_1)
     ai_team_a = db.create_team(
-        Team(id=0, name="AI Endurance A", nationality="GBR", discipline="ENDURANCE", tier="TIER_1", budget=55_000_000)
+        Team(
+            id=0,
+            name="AI Endurance A",
+            nationality="GBR",
+            discipline="ENDURANCE",
+            tier="TIER_1",
+            budget=55_000_000,
+        )
     )
     ai_team_b = db.create_team(
-        Team(id=0, name="AI Endurance B", nationality="GBR", discipline="ENDURANCE", tier="TIER_1", budget=53_000_000)
+        Team(
+            id=0,
+            name="AI Endurance B",
+            nationality="GBR",
+            discipline="ENDURANCE",
+            tier="TIER_1",
+            budget=53_000_000,
+        )
     )
 
     # Provide drivers so headless simulation can build a grid.
@@ -283,10 +407,22 @@ def test_headless_simulates_non_player_championships(seeded_db):
 
     # Compact driver insert fallback may omit current_team_id, so enforce it.
     with db.get_connection() as conn:
-        conn.execute("UPDATE drivers SET current_team_id = ? WHERE id = ?", (int(ai_team_a), int(ai_driver_1)))
-        conn.execute("UPDATE drivers SET current_team_id = ? WHERE id = ?", (int(ai_team_a), int(ai_driver_2)))
-        conn.execute("UPDATE drivers SET current_team_id = ? WHERE id = ?", (int(ai_team_b), int(ai_driver_3)))
-        conn.execute("UPDATE drivers SET current_team_id = ? WHERE id = ?", (int(ai_team_b), int(ai_driver_4)))
+        conn.execute(
+            "UPDATE drivers SET current_team_id = ? WHERE id = ?",
+            (int(ai_team_a), int(ai_driver_1)),
+        )
+        conn.execute(
+            "UPDATE drivers SET current_team_id = ? WHERE id = ?",
+            (int(ai_team_a), int(ai_driver_2)),
+        )
+        conn.execute(
+            "UPDATE drivers SET current_team_id = ? WHERE id = ?",
+            (int(ai_team_b), int(ai_driver_3)),
+        )
+        conn.execute(
+            "UPDATE drivers SET current_team_id = ? WHERE id = ?",
+            (int(ai_team_b), int(ai_driver_4)),
+        )
         conn.commit()
 
     with db.get_connection() as conn:
@@ -371,14 +507,18 @@ def test_headless_simulates_non_player_championships(seeded_db):
         ai_race_id = int(ai_race_cursor.lastrowid)
         conn.commit()
 
-    result = service.advance_season(player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE")
+    result = service.advance_season(
+        player_id=PLAYER_ID, completed_season=1, discipline="ENDURANCE"
+    )
 
     assert result["headless_resolved_races"] == 1
     assert result["headless_persisted_results"] >= 2
     assert result["rolled_over"] is True
 
     with db.get_connection() as conn:
-        ai_race_row = conn.execute("SELECT status FROM career_races WHERE id = ?", (ai_race_id,)).fetchone()
+        ai_race_row = conn.execute(
+            "SELECT status FROM career_races WHERE id = ?", (ai_race_id,)
+        ).fetchone()
         assert ai_race_row is not None
         assert str(ai_race_row["status"]) == "completed"
 
