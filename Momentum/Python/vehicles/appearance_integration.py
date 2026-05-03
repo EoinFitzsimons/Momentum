@@ -8,9 +8,8 @@ including discipline-specific vehicle model selection.
 from __future__ import annotations
 
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 from database.models import Driver, Team
-from PyQt6.QtGui import QPainter
 from vehicles.vehicle_appearance import (
     QColor,
     VehicleRenderer,
@@ -19,6 +18,9 @@ from vehicles.vehicle_appearance import (
     VehicleConfiguration,
     create_team_livery,
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QPainter
 
 
 class VehicleAppearanceManager:
