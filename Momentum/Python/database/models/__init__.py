@@ -20,10 +20,11 @@ if str(parent_dir) not in sys.path:
 # Now we can import from the models.py file in the parent database directory
 # We need to be careful here - we're in database/models/__init__.py
 # and we want to import from database/models.py
-models_file = _Path(__file__).parent.parent / 'models.py'
-spec = importlib.util.spec_from_file_location(
-    "database_models_main", models_file)
-assert spec is not None and spec.loader is not None, f"Failed to load spec for {models_file}"
+models_file = _Path(__file__).parent.parent / "models.py"
+spec = importlib.util.spec_from_file_location("database_models_main", models_file)
+assert (
+    spec is not None and spec.loader is not None
+), f"Failed to load spec for {models_file}"
 models_main = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(models_main)
 
@@ -41,5 +42,12 @@ SCHEMA_SQL = models_main.SCHEMA_SQL
 
 __all__ = [
     # Main models (from models.py)
-    'Driver', 'Team', 'Track', 'Championship', 'Race', 'RaceResult', 'StaffMember', 'SCHEMA_SQL',
+    "Driver",
+    "Team",
+    "Track",
+    "Championship",
+    "Race",
+    "RaceResult",
+    "StaffMember",
+    "SCHEMA_SQL",
 ]

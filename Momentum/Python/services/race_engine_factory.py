@@ -9,7 +9,11 @@ from __future__ import annotations
 import importlib
 from typing import Any, Dict, Optional, Tuple, Type
 
-from RaceLogic.base_race_engine import BaseDisciplineEngine, RaceContext, RacingDiscipline
+from RaceLogic.base_race_engine import (
+    BaseDisciplineEngine,
+    RaceContext,
+    RacingDiscipline,
+)
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 
 
@@ -50,7 +54,9 @@ CANONICAL_DISCIPLINE_REGISTRY: Dict[RacingDiscipline, DiscRegistryEntry] = {
 }
 
 
-def create_realtime_engine(seed: Optional[int] = None, db: Optional[Any] = None, debug_logging: bool = False) -> RealtimeRaceEngine:
+def create_realtime_engine(
+    seed: Optional[int] = None, db: Optional[Any] = None, debug_logging: bool = False
+) -> RealtimeRaceEngine:
     """Build the shared realtime engine through the canonical factory."""
     engine = RealtimeRaceEngine(seed=seed)
     engine.debug_logging = bool(debug_logging)
@@ -59,7 +65,9 @@ def create_realtime_engine(seed: Optional[int] = None, db: Optional[Any] = None,
     return engine
 
 
-def _resolve_discipline_engine_class(context: RaceContext) -> Optional[Type[BaseDisciplineEngine]]:
+def _resolve_discipline_engine_class(
+    context: RaceContext,
+) -> Optional[Type[BaseDisciplineEngine]]:
     if not context or not getattr(context, "discipline", None):
         return None
 
@@ -70,12 +78,16 @@ def _resolve_discipline_engine_class(context: RaceContext) -> Optional[Type[Base
     module_path, class_name, _ = registry_entry
     module = importlib.import_module(module_path)
     engine_class = getattr(module, class_name, None)
-    if isinstance(engine_class, type) and issubclass(engine_class, BaseDisciplineEngine):
+    if isinstance(engine_class, type) and issubclass(
+        engine_class, BaseDisciplineEngine
+    ):
         return engine_class
     return None
 
 
-def create_discipline_engine(context: RaceContext, seed: Optional[int] = None) -> Optional[BaseDisciplineEngine]:
+def create_discipline_engine(
+    context: RaceContext, seed: Optional[int] = None
+) -> Optional[BaseDisciplineEngine]:
     """Create the canonical engine adapter for a race context."""
     engine_class = _resolve_discipline_engine_class(context)
     if engine_class is None:

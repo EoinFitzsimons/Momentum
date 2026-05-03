@@ -5,12 +5,14 @@ This document lists the technologies used in the project with rationale, advanta
 Source evidence used:
 
 - [Momentum/Python/requirements.txt](Momentum/Python/requirements.txt)
+- [Momentum/Python/requirements-dev.txt](Momentum/Python/requirements-dev.txt)
 - [Momentum/Python/simulation.py](Momentum/Python/simulation.py)
 - [Momentum/Python/GUI/launcher.py](Momentum/Python/GUI/launcher.py)
 - [Momentum/Python/config.py](Momentum/Python/config.py)
 - [Momentum/Python/RaceLogic/closure_solver.py](Momentum/Python/RaceLogic/closure_solver.py)
 - [Momentum/Python/tools/team_name_generator.py](Momentum/Python/tools/team_name_generator.py)
 - [Momentum/Python/docs/MATHEMATICS_AND_FUNCTION_SOURCES.md](Momentum/Python/docs/MATHEMATICS_AND_FUNCTION_SOURCES.md)
+- [Planning/Technical Report/diagrams/export_diagrams.py](Planning/Technical%20Report/diagrams/export_diagrams.py)
 - https://www.statology.org/the-concise-guide-to-weibull-distribution/
 - https://www.cs.umd.edu/users/oleary/reprints/j51.pdf
 
@@ -37,6 +39,10 @@ Source evidence used:
 | Pillow (PIL)  | Image generation tooling           | Asset/helper scripts for placeholder sprites and tiles     | Simple API for 2D image generation                   | Not intended for advanced realtime graphics                     | Active (tool scripts) | `PillowDocs2026`    |
 | unidecode     | Text normalisation/transliteration | Normalise generated names across locales                   | Improves compatibility for ASCII-safe output         | Transliteration can lose language-specific nuance               | Active                | `UnidecodePyPI2026` |
 | Shapely       | Geometry operations                | Track and geometry-related operations                      | Powerful geometry primitives                         | Additional binary dependency and version compatibility concerns | Declared/planned      | `ShapelyDocs2026`   |
+| Requests      | HTTP client library for external API calls | Simple, widely-used HTTP client | Synchronous and easy to use; good ecosystem | Can block in sync code; use `httpx` for async code | Active (scripts) | `RequestsDocs2026` |
+| jsonschema    | JSON schema validation             | Validate JSON payloads and config                         | Standard schema validation, portable                 | Can be verbose to write complex schemas                         | Active (dev)          | `JsonSchemaDocs2026` |
+| httpx         | Async-capable HTTP client          | Async HTTP requests for tooling                           | Modern API, async support                            | Newer than requests, smaller ecosystem                           | Active (dev)          | `HttpxDocs2026`     |
+| PyYAML        | YAML parsing and serialization     | Read/write YAML config and docs                            | Well-known YAML support                              | Safe loaders needed to avoid code execution                      | Active (dev)          | `PyYAMLDocs2026`    |
 
 ## Data and ML Dependencies Declared
 

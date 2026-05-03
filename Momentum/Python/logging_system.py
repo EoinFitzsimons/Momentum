@@ -59,24 +59,22 @@ class MomentumLogger:
 
         # Create formatters
         detailed_formatter = logging.Formatter(
-            fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
         simple_formatter = logging.Formatter(
-            fmt='%(asctime)s | %(levelname)-8s | %(message)s',
-            datefmt='%H:%M:%S'
+            fmt="%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S"
         )
 
         # File handler - detailed logs
-        file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
+        file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(detailed_formatter)
         self.logger.addHandler(file_handler)
 
         # Error file handler - errors only
-        error_handler = logging.FileHandler(
-            self.error_log_file, encoding='utf-8')
+        error_handler = logging.FileHandler(self.error_log_file, encoding="utf-8")
         error_handler.setLevel(logging.ERROR)
         error_handler.setFormatter(detailed_formatter)
         self.logger.addHandler(error_handler)
@@ -112,8 +110,7 @@ class MomentumLogger:
         """Log warning message"""
         self.logger.warning(message, extra=kwargs)
 
-    def error(self, message: str,
-              exception: Optional[Exception] = None, **kwargs):
+    def error(self, message: str, exception: Optional[Exception] = None, **kwargs):
         """
         Log error message with optional exception details
 
@@ -137,18 +134,17 @@ class MomentumLogger:
 
         # Store error for crash report
         error_data = {
-            'error_number': self.error_count,
-            'timestamp': datetime.now().isoformat(),
-            'message': message,
-            'exception_type': type(exception).__name__ if exception else None,
-            'exception_message': str(exception) if exception else None,
-            'traceback': traceback.format_exc() if exception else None,
-            'context': kwargs
+            "error_number": self.error_count,
+            "timestamp": datetime.now().isoformat(),
+            "message": message,
+            "exception_type": type(exception).__name__ if exception else None,
+            "exception_message": str(exception) if exception else None,
+            "traceback": traceback.format_exc() if exception else None,
+            "context": kwargs,
         }
         self.errors.append(error_data)
 
-    def critical(self, message: str,
-                 exception: Optional[Exception] = None, **kwargs):
+    def critical(self, message: str, exception: Optional[Exception] = None, **kwargs):
         """
         Log critical error (system-threatening)
 
@@ -168,15 +164,17 @@ class MomentumLogger:
         self.logger.critical(critical_msg, extra=kwargs)
 
         # Store in errors list
-        self.errors.append({
-            'level': 'CRITICAL',
-            'timestamp': datetime.now().isoformat(),
-            'message': message,
-            'exception_type': type(exception).__name__ if exception else None,
-            'exception_message': str(exception) if exception else None,
-            'traceback': traceback.format_exc() if exception else None,
-            'context': kwargs
-        })
+        self.errors.append(
+            {
+                "level": "CRITICAL",
+                "timestamp": datetime.now().isoformat(),
+                "message": message,
+                "exception_type": type(exception).__name__ if exception else None,
+                "exception_message": str(exception) if exception else None,
+                "traceback": traceback.format_exc() if exception else None,
+                "context": kwargs,
+            }
+        )
 
     def exception(self, message: str, **kwargs):
         """
@@ -195,14 +193,16 @@ class MomentumLogger:
         self.logger.exception(error_msg, extra=kwargs)
 
         # Store detailed exception info
-        self.errors.append({
-            'timestamp': datetime.now().isoformat(),
-            'message': message,
-            'exception_type': exc_type.__name__ if exc_type else None,
-            'exception_value': str(exc_value) if exc_value else None,
-            'traceback': traceback.format_exc(),
-            'context': kwargs
-        })
+        self.errors.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "message": message,
+                "exception_type": exc_type.__name__ if exc_type else None,
+                "exception_value": str(exc_value) if exc_value else None,
+                "traceback": traceback.format_exc(),
+                "context": kwargs,
+            }
+        )
 
     def log_function_call(self, func_name: str, args=None, kwargs=None):
         """
@@ -224,8 +224,7 @@ class MomentumLogger:
 
         self.debug(msg)
 
-    def log_database_operation(
-            self, operation: str, table: str, details: str = ""):
+    def log_database_operation(self, operation: str, table: str, details: str = ""):
         """Log database operations"""
         msg = f"DB Operation: {operation} on {table}"
         if details:
@@ -234,10 +233,7 @@ class MomentumLogger:
 
     def log_game_state(self, state_name: str, state_data: dict):
         """Log game state changes"""
-        self.debug(
-            f"Game State Change: {state_name}",
-            extra={
-                'state': state_data})
+        self.debug(f"Game State Change: {state_name}", extra={"state": state_data})
 
     def log_performance(self, operation: str, duration: float):
         """Log performance metrics"""
@@ -257,34 +253,34 @@ class MomentumLogger:
         import psutil
 
         crash_report = {
-            'crash_time': datetime.now().isoformat(),
-            'system_info': {
-                'platform': platform.platform(),
-                'python_version': sys.version,
-                'machine': platform.machine(),
-                'processor': platform.processor(),
+            "crash_time": datetime.now().isoformat(),
+            "system_info": {
+                "platform": platform.platform(),
+                "python_version": sys.version,
+                "machine": platform.machine(),
+                "processor": platform.processor(),
             },
-            'memory_info': {
-                'available_mb': psutil.virtual_memory().available / (1024 * 1024),
-                'total_mb': psutil.virtual_memory().total / (1024 * 1024),
-                'percent_used': psutil.virtual_memory().percent,
+            "memory_info": {
+                "available_mb": psutil.virtual_memory().available / (1024 * 1024),
+                "total_mb": psutil.virtual_memory().total / (1024 * 1024),
+                "percent_used": psutil.virtual_memory().percent,
             },
-            'error_count': self.error_count,
-            'errors': self.errors,
-            'crash_context': crash_info or {},
+            "error_count": self.error_count,
+            "errors": self.errors,
+            "crash_context": crash_info or {},
         }
 
         # Add current exception if available
         if sys.exc_info()[0] is not None:
             exc_type, exc_value, _ = sys.exc_info()
-            crash_report['exception'] = {
-                'type': exc_type.__name__ if exc_type else None,
-                'message': str(exc_value) if exc_value else None,
-                'traceback': traceback.format_exc(),
+            crash_report["exception"] = {
+                "type": exc_type.__name__ if exc_type else None,
+                "message": str(exc_value) if exc_value else None,
+                "traceback": traceback.format_exc(),
             }
 
         # Write crash report to JSON
-        with open(self.crash_log_file, 'w', encoding='utf-8') as f:
+        with open(self.crash_log_file, "w", encoding="utf-8") as f:
             json.dump(crash_report, f, indent=2)
 
         self.critical(f"Crash report generated: {self.crash_log_file}")
@@ -302,11 +298,10 @@ class MomentumLogger:
             String containing recent log entries
         """
         try:
-            with open(self.log_file, 'r', encoding='utf-8') as f:
+            with open(self.log_file, "r", encoding="utf-8") as f:
                 all_lines = f.readlines()
-                recent = all_lines[-lines:] if len(
-                    all_lines) > lines else all_lines
-                return ''.join(recent)
+                recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                return "".join(recent)
         except Exception as e:
             return f"Error reading logs: {str(e)}"
 
@@ -348,6 +343,7 @@ def setup_exception_handler():
     """
     Setup global exception handler to catch uncaught exceptions
     """
+
     def handle_exception(exc_type, exc_value, exc_traceback):
         """Handle uncaught exceptions"""
         if issubclass(exc_type, KeyboardInterrupt):
@@ -355,17 +351,16 @@ def setup_exception_handler():
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
 
-        logger.critical(
-            "UNCAUGHT EXCEPTION - APPLICATION CRASH",
-            exception=exc_value
-        )
+        logger.critical("UNCAUGHT EXCEPTION - APPLICATION CRASH", exception=exc_value)
 
         # Generate crash report
-        crash_report_path = logger.generate_crash_report({
-            'type': 'uncaught_exception',
-            'exception_type': exc_type.__name__,
-            'exception_message': str(exc_value),
-        })
+        crash_report_path = logger.generate_crash_report(
+            {
+                "type": "uncaught_exception",
+                "exception_type": exc_type.__name__,
+                "exception_message": str(exc_value),
+            }
+        )
 
         print("\n" + "=" * 80)
         print("FATAL ERROR - Application Crashed")
@@ -396,6 +391,7 @@ def log_function(func):
         def my_function(arg1, arg2):
             # function code
     """
+
     def wrapper(*args, **kwargs):
         func_name = func.__name__
         logger.log_function_call(func_name, args, kwargs)
@@ -410,7 +406,7 @@ def log_function(func):
                 f"Exception in function {func_name}",
                 exception=e,
                 args=args,
-                kwargs=kwargs
+                kwargs=kwargs,
             )
             raise
 
@@ -444,8 +440,7 @@ class LoggedOperation:
             logger.info(f"Completed: {self.operation_name} ({duration:.3f}s)")
         else:
             logger.error(
-                f"Failed: {self.operation_name} ({duration:.3f}s)",
-                exception=exc_val
+                f"Failed: {self.operation_name} ({duration:.3f}s)", exception=exc_val
             )
 
         return False  # Don't suppress exceptions
@@ -475,10 +470,11 @@ if __name__ == "__main__":
     # Test timed operation
     with LoggedOperation("Test Operation"):
         import time
+
         time.sleep(0.1)
 
     # Test crash report generation
-    logger.generate_crash_report({'test': 'crash report'})
+    logger.generate_crash_report({"test": "crash report"})
 
     print(f"\nLog files created in: {logger.logs_dir}")
     print(f"Main log: {logger.log_file}")

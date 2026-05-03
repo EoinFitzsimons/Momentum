@@ -35,6 +35,7 @@ from config import RANDOM_SEED, DRIVER_ATTRIBUTE_DEFAULT
 
 class RacingDiscipline(Enum):
     """Racing discipline categories - MVP focuses on SINGLE_SEATER"""
+
     SINGLE_SEATER = "SINGLE_SEATER"
     PRODUCTION_TOURING = "PRODUCTION_TOURING"
     URBAN_STREET = "URBAN_STREET"
@@ -47,10 +48,11 @@ class RacingDiscipline(Enum):
 class RaceContext:
     """
     Complete race context for simulation
-    
+
     Contains all necessary data for simulating races with comprehensive
     driver attributes, team performance, and environmental conditions.
     """
+
     # Core race data
     discipline: RacingDiscipline
     track: Track
@@ -59,20 +61,24 @@ class RaceContext:
     total_laps: int
 
     # Environmental conditions (default to optimal/dry)
-    weather_conditions: Dict[str, float] = field(default_factory=lambda: {
-        "temperature": 20.0,      # Celsius
-        "humidity": 50.0,         # Percentage
-        "wind_speed": 5.0,        # km/h
-        "precipitation": 0.0,     # mm/h (0 = dry)
-        "visibility": 100.0       # Percentage
-    })
+    weather_conditions: Dict[str, float] = field(
+        default_factory=lambda: {
+            "temperature": 20.0,  # Celsius
+            "humidity": 50.0,  # Percentage
+            "wind_speed": 5.0,  # km/h
+            "precipitation": 0.0,  # mm/h (0 = dry)
+            "visibility": 100.0,  # Percentage
+        }
+    )
 
-    track_conditions: Dict[str, Any] = field(default_factory=lambda: {
-        "grip_level": 1.0,        # 1.0 = optimal grip
-        "surface_temp": 25.0,     # Celsius
-        "rubbering": 0.5,         # Track rubber buildup (0-1)
-        "surface_wear": 0.1       # Track degradation (0-1)
-    })
+    track_conditions: Dict[str, Any] = field(
+        default_factory=lambda: {
+            "grip_level": 1.0,  # 1.0 = optimal grip
+            "surface_temp": 25.0,  # Celsius
+            "rubbering": 0.5,  # Track rubber buildup (0-1)
+            "surface_wear": 0.1,  # Track degradation (0-1)
+        }
+    )
 
     # Optional callback for event emission (for GUI integration)
     event_callback: Optional[Callable[[Dict[str, Any]], None]] = None
@@ -133,7 +139,6 @@ class BaseDisciplineEngine(ABC):
         Returns:
             List of result dictionaries with driver_id, position, time, etc.
         """
-        pass
 
     @abstractmethod
     def get_attribute_weights(self) -> Dict[str, float]:
@@ -163,12 +168,16 @@ class BaseDisciplineEngine(ABC):
           g_force_tolerance, etc.
         - Environmental: wet_weather_skill, night_racing_skill, etc.
         """
-        pass
 
     @abstractmethod
-    def calculate_lap_time(self, driver: Driver, team: Team,
-                          context: RaceContext,
-                          lap_number: int, current_position: int) -> float:
+    def calculate_lap_time(
+        self,
+        driver: Driver,
+        team: Team,
+        context: RaceContext,
+        lap_number: int,
+        current_position: int,
+    ) -> float:
         """
         Calculate lap time for a driver considering all factors
 
@@ -185,20 +194,20 @@ class BaseDisciplineEngine(ABC):
         Returns:
             Lap time in seconds
         """
-        pass
 
     # ====================================================================
     # Common Methods - Available to all disciplines
     # ====================================================================
 
-    def calculate_base_performance(self, driver: Driver, team: Team,
-                                  context: RaceContext) -> float:
+    def calculate_base_performance(
+        self, driver: Driver, team: Team, context: RaceContext
+    ) -> float:
         """Calculate base driver and team performance score.
-        
+
         Uses the full 50+ attribute driver model with discipline-specific
         weighting applied through get_attribute_weights(). This is the
         foundation of all performance calculations.
-        
+
         Performance Weighting:
         - 50% driver skill (weighted by discipline-specific attributes)
         - 30% team performance (budget, tier, capabilities)
@@ -229,7 +238,11 @@ class BaseDisciplineEngine(ABC):
             try:
                 attr_value = get_attribute_value(driver, attr_name)
             except Exception:
-                attr_value = DRIVER_ATTRIBUTE_DEFAULT if 'DRIVER_ATTRIBUTE_DEFAULT' in globals() else 50.0
+                attr_value = (
+                    DRIVER_ATTRIBUTE_DEFAULT
+                    if "DRIVER_ATTRIBUTE_DEFAULT" in globals()
+                    else 50.0
+                )
 
             if attr_value is not None:
                 # Normalise attribute (0-100 scale) to 0-1 scale
@@ -252,11 +265,13 @@ class BaseDisciplineEngine(ABC):
 
         # Combine with default weighting:
         # 50% driver, 30% team, 10% weather, 10% track
-        return (driver_score * 0.5 +
-                team_performance * 0.3 +
-                weather_impact * 0.1 +
-                track_impact * 0.1)
-    
+        return (
+            driver_score * 0.5
+            + team_performance * 0.3
+            + weather_impact * 0.1
+            + track_impact * 0.1
+        )
+
     def _calculate_team_performance(self, team: Team) -> float:
         """
         Calculate team performance factor based on tier and budget
@@ -271,7 +286,7 @@ class BaseDisciplineEngine(ABC):
         tier_multipliers = {
             "tier1": 0.9,  # Top tier teams
             "tier2": 0.7,  # Mid tier teams
-            "tier3": 0.5   # Lower tier teams
+            "tier3": 0.5,  # Lower tier teams
         }
         base_performance = tier_multipliers.get(team.tier.lower(), 0.5)
 
@@ -280,9 +295,8 @@ class BaseDisciplineEngine(ABC):
         budget_factor = min(team.budget / 200.0, 1.0) * 0.3
 
         return min(base_performance + budget_factor, 1.0)
-    
-    def _calculate_weather_impact(self, driver: Driver,
-                                  context: RaceContext) -> float:
+
+    def _calculate_weather_impact(self, driver: Driver, context: RaceContext) -> float:
         """
         Calculate weather impact on performance
 
@@ -302,11 +316,9 @@ class BaseDisciplineEngine(ABC):
         precipitation = conditions["precipitation"]
         if precipitation > 0.5:  # Wet conditions (>0.5mm/h)
             # Use wet_weather_skill if available, otherwise adaptability
-            wet_skill = getattr(driver, 'wet_weather_skill',
-                              driver.adaptability)
+            wet_skill = getattr(driver, "wet_weather_skill", driver.adaptability)
             rain_factor = 1.0 - (precipitation / 20.0)
-            rain_adaptation = ((wet_skill / 100.0) *
-                             (1.0 - rain_factor) + rain_factor)
+            rain_adaptation = (wet_skill / 100.0) * (1.0 - rain_factor) + rain_factor
         else:
             rain_adaptation = 1.0
 
@@ -319,20 +331,18 @@ class BaseDisciplineEngine(ABC):
         temp_impact = self._calculate_temperature_impact(temperature)
 
         # Combine factors (weights: 50% rain, 25% wind, 25% temperature)
-        return (rain_adaptation * 0.5 + wind_impact * 0.25 +
-                temp_impact * 0.25)
-    
-    def _calculate_temperature_impact(self,
-                                     temperature: float) -> float:
+        return rain_adaptation * 0.5 + wind_impact * 0.25 + temp_impact * 0.25
+
+    def _calculate_temperature_impact(self, temperature: float) -> float:
         """Calculate temperature impact on performance.
-        
+
         Optimal temperature range is typically 15 to 25 degrees Celsius.
         Extreme temperatures reduce performance unless driver has heat
         or cold tolerance.
-        
+
         Args:
             temperature: Temperature in Celsius
-        
+
         Returns:
             Temperature impact factor (0.7 to 1.0)
         """
@@ -340,9 +350,8 @@ class BaseDisciplineEngine(ABC):
         temp_deviation = abs(temperature - optimal_temp)
         # Max 30% penalty for extreme temperatures (+40C or -10C)
         return max(0.7, 1.0 - (temp_deviation / 30.0))
-    
-    def _calculate_track_impact(self, driver: Driver,
-                               track: Track) -> float:
+
+    def _calculate_track_impact(self, driver: Driver, track: Track) -> float:
         """
         Calculate track suitability impact on performance
 
@@ -358,21 +367,19 @@ class BaseDisciplineEngine(ABC):
             Track impact factor (0.0 to 1.0)
         """
         # Track difficulty affects adaptability requirement
-        difficulty = getattr(track, 'difficulty', 5) / 10.0
+        difficulty = getattr(track, "difficulty", 5) / 10.0
         adaptability = driver.adaptability / 100.0
-        difficulty_impact = 1.0 - (difficulty *
-                                  (1.0 - adaptability) * 0.3)
+        difficulty_impact = 1.0 - (difficulty * (1.0 - adaptability) * 0.3)
 
         # Track learning ability
-        track_learning = getattr(driver, 'track_learning',
-                                driver.adaptability) / 100.0
+        track_learning = getattr(driver, "track_learning", driver.adaptability) / 100.0
         learning_impact = 0.9 + (track_learning * 0.1)
 
         return difficulty_impact * learning_impact
-    
-    def check_mechanical_failure(self, team: Team,
-                                context: RaceContext,
-                                lap_number: int) -> Optional[str]:
+
+    def check_mechanical_failure(
+        self, team: Team, context: RaceContext, lap_number: int
+    ) -> Optional[str]:
         """
         Check if mechanical failure occurs on this lap
 
@@ -392,10 +399,9 @@ class BaseDisciplineEngine(ABC):
         tier_failure_rates = {
             "tier1": 0.0003,  # 0.03% per lap (~2% over 60 laps)
             "tier2": 0.0008,  # 0.08% per lap (~5% over 60 laps)
-            "tier3": 0.0015   # 0.15% per lap (~9% over 60 laps)
+            "tier3": 0.0015,  # 0.15% per lap (~9% over 60 laps)
         }
-        base_failure_rate = tier_failure_rates.get(team.tier.lower(),
-                                                   0.001)
+        base_failure_rate = tier_failure_rates.get(team.tier.lower(), 0.001)
 
         # Weather increases failure rate
         precipitation = context.weather_conditions["precipitation"]
@@ -408,34 +414,41 @@ class BaseDisciplineEngine(ABC):
         else:
             temp_stress = 0.0
 
-        total_failure_rate = (base_failure_rate + weather_stress +
-                             temp_stress)
+        total_failure_rate = base_failure_rate + weather_stress + temp_stress
 
         # Random failure check
         if self.rng.random() < total_failure_rate:
             # Determine failure type
-            failure_types = ["mechanical", "engine", "gearbox",
-                           "suspension", "electrical"]
+            failure_types = [
+                "mechanical",
+                "engine",
+                "gearbox",
+                "suspension",
+                "electrical",
+            ]
             return random.choice(failure_types)
 
         return None
-    
-    def check_race_incident(self, driver: Driver,
-                          context: RaceContext,
-                          lap_number: int,
-                          current_position: int) -> Optional[str]:
+
+    def check_race_incident(
+        self,
+        driver: Driver,
+        context: RaceContext,
+        lap_number: int,
+        current_position: int,
+    ) -> Optional[str]:
         """Check if driver is involved in race incident.
-        
+
         Incidents (crashes, spins, contact) are more likely for aggressive
         drivers, in poor conditions, and early in the race when traffic is
         dense.
-        
+
         Args:
             driver: Driver with consistency and aggression attributes
             context: Race context with conditions
             lap_number: Current lap number
             current_position: Driver current position
-        
+
         Returns:
             DNF reason string if incident occurs, None otherwise
         """
@@ -463,21 +476,23 @@ class BaseDisciplineEngine(ABC):
         else:
             traffic_factor = 1.0
 
-        total_incident_rate = (base_incident_rate * consistency_factor *
-                              aggression_factor * weather_factor *
-                              traffic_factor)
+        total_incident_rate = (
+            base_incident_rate
+            * consistency_factor
+            * aggression_factor
+            * weather_factor
+            * traffic_factor
+        )
 
         # Random incident check
         if self.rng.random() < total_incident_rate:
             # Determine incident type
-            incident_types = ["accident", "collision", "spin",
-                            "off_track"]
+            incident_types = ["accident", "collision", "spin", "off_track"]
             return random.choice(incident_types)
 
         return None
-    
-    def emit_event(self, event_type: str, data: Dict[str, Any],
-                  context: RaceContext):
+
+    def emit_event(self, event_type: str, data: Dict[str, Any], context: RaceContext):
         """
         Emit race event to callback (for GUI integration)
 
@@ -496,8 +511,4 @@ class BaseDisciplineEngine(ABC):
 
 
 # Export the base classes and enums
-__all__ = [
-    'BaseDisciplineEngine',
-    'RaceContext',
-    'RacingDiscipline'
-]
+__all__ = ["BaseDisciplineEngine", "RaceContext", "RacingDiscipline"]

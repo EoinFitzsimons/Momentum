@@ -72,7 +72,9 @@ def test_launcher_start_race_wires_race_window(monkeypatch):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     launcher_module = pytest.importorskip("GUI.launcher")
 
-    launcher = launcher_module.MomentumLauncher.__new__(launcher_module.MomentumLauncher)
+    launcher = launcher_module.MomentumLauncher.__new__(
+        launcher_module.MomentumLauncher
+    )
     launcher.race_window_class = _RaceWindowStub
     launcher.main_menu_class = object
     launcher.championship_window_class = object
@@ -117,7 +119,9 @@ def test_launcher_return_to_menu_closes_race_and_shows_menu():
     """Returning to menu should close race window and show menu window."""
     launcher_module = pytest.importorskip("GUI.launcher")
 
-    launcher = launcher_module.MomentumLauncher.__new__(launcher_module.MomentumLauncher)
+    launcher = launcher_module.MomentumLauncher.__new__(
+        launcher_module.MomentumLauncher
+    )
     launcher.race_window = _RaceWindowStub()
     launcher.main_menu = _MainMenuStub()
 
@@ -133,7 +137,9 @@ def test_launcher_menu_signal_can_automate_start_race_flow():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     launcher_module = pytest.importorskip("GUI.launcher")
 
-    launcher = launcher_module.MomentumLauncher.__new__(launcher_module.MomentumLauncher)
+    launcher = launcher_module.MomentumLauncher.__new__(
+        launcher_module.MomentumLauncher
+    )
     launcher.race_window_class = _RaceWindowStub
     launcher.main_menu_class = _MainMenuWithSignalStub
     launcher.championship_window_class = object

@@ -9,11 +9,11 @@ This script is safe to run in a test environment. It provides the following mode
 Always back up your DB before running in `apply` mode. Use `--db-path`
 to point to your database file.
 """
+
 import argparse
 import shutil
 import sqlite3
 import os
-import json
 from datetime import datetime, timezone
 
 
@@ -32,7 +32,7 @@ def run_sql(conn: sqlite3.Connection, sql: str):
     conn.commit()
 
 
-CREATE_DRIVER_CAREER_STATS_SQL = '''
+CREATE_DRIVER_CAREER_STATS_SQL = """
 CREATE TABLE IF NOT EXISTS driver_career_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     driver_id INTEGER UNIQUE NOT NULL,
@@ -44,13 +44,12 @@ CREATE TABLE IF NOT EXISTS driver_career_stats (
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (driver_id) REFERENCES drivers (id)
 );
-'''
+"""
 
 
 # attributes_extra column is deprecated and removed from codebase; migration
 # to drop the column should be performed manually if desired. The scaffold no
 # longer attempts to add this column.
-
 
 
 def create_career_stats(conn: sqlite3.Connection):
@@ -60,10 +59,12 @@ def create_career_stats(conn: sqlite3.Connection):
 def simple_backfill_career_stats(conn: sqlite3.Connection):
     cur = conn.cursor()
     # If race_results exists, aggregate simple counts. Otherwise initialise rows.
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='race_results'")
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='race_results'"
+    )
     if cur.fetchone():
         # Aggregate from race_results
-        agg_sql = '''
+        agg_sql = """
         INSERT OR IGNORE INTO driver_career_stats (driver_id, career_starts, career_wins, career_podiums, career_points, career_dnf)
         SELECT driver_id,
             COUNT(*) as starts,
@@ -73,50 +74,57 @@ def simple_backfill_career_stats(conn: sqlite3.Connection):
             SUM(CASE WHEN position IS NULL THEN 1 ELSE 0 END) as dnfs
         FROM race_results
         GROUP BY driver_id;
-        '''
+        """
         run_sql(conn, agg_sql)
     else:
         # Initialise empty stats for existing drivers
-        run_sql(conn, "INSERT OR IGNORE INTO driver_career_stats (driver_id, career_wins, career_podiums, career_points, career_starts, career_dnf) SELECT id,0,0,0,0,0 FROM drivers;")
+        run_sql(
+            conn,
+            "INSERT OR IGNORE INTO driver_career_stats (driver_id, career_wins, career_podiums, career_points, career_starts, career_dnf) SELECT id,0,0,0,0,0 FROM drivers;",
+        )
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Migration scaffold for Momentum DB')
-    parser.add_argument('--db-path', required=True, help='Path to SQLite DB file')
-    parser.add_argument('--mode', choices=['dry-run', 'apply'], default='dry-run')
-    parser.add_argument('--backfill', action='store_true', help='Backfill simple career stats from race_results')
+    parser = argparse.ArgumentParser(description="Migration scaffold for Momentum DB")
+    parser.add_argument("--db-path", required=True, help="Path to SQLite DB file")
+    parser.add_argument("--mode", choices=["dry-run", "apply"], default="dry-run")
+    parser.add_argument(
+        "--backfill",
+        action="store_true",
+        help="Backfill simple career stats from race_results",
+    )
     args = parser.parse_args()
 
     db = args.db_path
     actions = []
 
-    actions.append(('Create driver_career_stats table', CREATE_DRIVER_CAREER_STATS_SQL))
+    actions.append(("Create driver_career_stats table", CREATE_DRIVER_CAREER_STATS_SQL))
 
     print(f"Planned actions for DB: {db}")
     for title, sql in actions:
         print(f"- {title}")
 
-    if args.mode == 'dry-run':
-        print('Dry-run mode; not applying changes.')
+    if args.mode == "dry-run":
+        print("Dry-run mode; not applying changes.")
         return
 
     # apply mode
-    print('Applying migration - creating backup')
+    print("Applying migration - creating backup")
     backup = backup_db(db)
-    print(f'Backup created at: {backup}')
+    print(f"Backup created at: {backup}")
 
     conn = sqlite3.connect(db)
     try:
         create_career_stats(conn)
         if args.backfill:
-            print('Backfilling simple career stats...')
+            print("Backfilling simple career stats...")
             simple_backfill_career_stats(conn)
-            print('Backfill complete')
+            print("Backfill complete")
     finally:
         conn.close()
 
-    print('Migration apply complete. Verify results.')
+    print("Migration apply complete. Verify results.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

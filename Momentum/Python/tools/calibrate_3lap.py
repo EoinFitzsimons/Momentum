@@ -39,10 +39,16 @@ if PYTHON_ROOT not in sys.path:
 
 from database.database_manager import DatabaseManager
 from services.race_engine_factory import create_realtime_engine
-from RaceLogic.disciplines.single_seater.single_seater_discipline import SingleSeaterEngine
-from RaceLogic.disciplines.production_touring.production_touring_discipline import ProductionTouringEngine
+from RaceLogic.disciplines.single_seater.single_seater_discipline import (
+    SingleSeaterEngine,
+)
+from RaceLogic.disciplines.production_touring.production_touring_discipline import (
+    ProductionTouringEngine,
+)
 from RaceLogic.disciplines.urban_street.urban_street_discipline import UrbanStreetEngine
-from RaceLogic.disciplines.sprint_rallycross.sprint_rallycross_discipline import SprintRallycrossEngine
+from RaceLogic.disciplines.sprint_rallycross.sprint_rallycross_discipline import (
+    SprintRallycrossEngine,
+)
 from RaceLogic.disciplines.endurance.endurance_discipline import EnduranceEngine
 
 DISCIPLINES = [
@@ -76,12 +82,48 @@ HAZARD_CANDIDATES: List[Tuple[float, float, float, float]] = [
 ]
 
 QUALITY_RULES: Dict[str, Dict[str, float]] = {
-    "SINGLE_SEATER": {"push_min": 0.74, "overspeed_min": 1.8, "gap_min": 0.5, "gap_max": 18.0, "success_min": 0.40},
-    "PRODUCTION_TOURING": {"push_min": 0.70, "overspeed_min": 1.2, "gap_min": 0.5, "gap_max": 20.0, "success_min": 0.38},
-    "URBAN_STREET": {"push_min": 0.72, "overspeed_min": 1.0, "gap_min": 0.5, "gap_max": 16.0, "success_min": 0.36},
-    "DRAG_ACCELERATION": {"push_min": 0.78, "overspeed_min": 2.5, "gap_min": 0.3, "gap_max": 24.0, "success_min": 0.45},
-    "SPRINT_RALLYCROSS": {"push_min": 0.68, "overspeed_min": 0.9, "gap_min": 0.3, "gap_max": 14.0, "success_min": 0.34},
-    "ENDURANCE": {"push_min": 0.62, "overspeed_min": 0.7, "gap_min": 0.5, "gap_max": 26.0, "success_min": 0.32},
+    "SINGLE_SEATER": {
+        "push_min": 0.74,
+        "overspeed_min": 1.8,
+        "gap_min": 0.5,
+        "gap_max": 18.0,
+        "success_min": 0.40,
+    },
+    "PRODUCTION_TOURING": {
+        "push_min": 0.70,
+        "overspeed_min": 1.2,
+        "gap_min": 0.5,
+        "gap_max": 20.0,
+        "success_min": 0.38,
+    },
+    "URBAN_STREET": {
+        "push_min": 0.72,
+        "overspeed_min": 1.0,
+        "gap_min": 0.5,
+        "gap_max": 16.0,
+        "success_min": 0.36,
+    },
+    "DRAG_ACCELERATION": {
+        "push_min": 0.78,
+        "overspeed_min": 2.5,
+        "gap_min": 0.3,
+        "gap_max": 24.0,
+        "success_min": 0.45,
+    },
+    "SPRINT_RALLYCROSS": {
+        "push_min": 0.68,
+        "overspeed_min": 0.9,
+        "gap_min": 0.3,
+        "gap_max": 14.0,
+        "success_min": 0.34,
+    },
+    "ENDURANCE": {
+        "push_min": 0.62,
+        "overspeed_min": 0.7,
+        "gap_min": 0.5,
+        "gap_max": 26.0,
+        "success_min": 0.32,
+    },
 }
 
 NON_TUNABLE_DISCIPLINES = {"DRAG_ACCELERATION"}
@@ -130,7 +172,12 @@ def _is_quality_attempt(event: Dict[str, object], discipline: str) -> bool:
     success_prob = _coerce_float(event.get("success_probability"), 0.0)
     section = str(event.get("section") or "").lower()
 
-    in_overtake_section = section in {"straight", "braking_zone", "fast_corner", "medium_corner"}
+    in_overtake_section = section in {
+        "straight",
+        "braking_zone",
+        "fast_corner",
+        "medium_corner",
+    }
     return (
         in_overtake_section
         and push >= rules["push_min"]
@@ -140,7 +187,9 @@ def _is_quality_attempt(event: Dict[str, object], discipline: str) -> bool:
     )
 
 
-def _collect_drivers(db: DatabaseManager, discipline: str, max_cars: int) -> Tuple[list, dict, object]:
+def _collect_drivers(
+    db: DatabaseManager, discipline: str, max_cars: int
+) -> Tuple[list, dict, object]:
     tracks = db.get_tracks_by_discipline(discipline)
     teams = db.get_teams_by_discipline(discipline)
     if not tracks or not teams:
@@ -153,7 +202,9 @@ def _collect_drivers(db: DatabaseManager, discipline: str, max_cars: int) -> Tup
             break
     drivers = drivers[:max_cars]
     team_map = {t.id: t for t in teams}
-    selected_track = min(tracks, key=lambda t: float(getattr(t, "length_km", 9999.0) or 9999.0))
+    selected_track = min(
+        tracks, key=lambda t: float(getattr(t, "length_km", 9999.0) or 9999.0)
+    )
     return drivers, team_map, selected_track
 
 
@@ -164,7 +215,9 @@ def _laps_for_discipline(discipline: str) -> int:
     return DEFAULT_LAPS
 
 
-def _apply_discipline_method_tuning(engine: RealtimeRaceEngine, discipline: str) -> None:
+def _apply_discipline_method_tuning(
+    engine: Any, discipline: str
+) -> None:
     """Apply baseline tuning from each discipline adapter implementation."""
     if discipline == "SINGLE_SEATER":
         SingleSeaterEngine()._apply_base_tuning(engine)
@@ -182,7 +235,13 @@ def _apply_discipline_method_tuning(engine: RealtimeRaceEngine, discipline: str)
         EnduranceEngine()._apply_tuning(engine)
 
 
-def _run_profile(db: DatabaseManager, discipline: str, profile: Dict[str, float], iterations: int, seed_start: int) -> Metrics:
+def _run_profile(
+    db: DatabaseManager,
+    discipline: str,
+    profile: Dict[str, float],
+    iterations: int,
+    seed_start: int,
+) -> Metrics:
     cars = 0
     dnf = 0
     overtakes = 0
@@ -194,7 +253,7 @@ def _run_profile(db: DatabaseManager, discipline: str, profile: Dict[str, float]
         if len(drivers) < 8 or track is None:
             continue
 
-        events = []
+        events: list[dict[str, object]] = []
 
         def cb(evt, sink=events):
             sink.append(evt)
@@ -224,11 +283,15 @@ def _run_profile(db: DatabaseManager, discipline: str, profile: Dict[str, float]
         if event_overtakes > 0:
             overtakes += event_overtakes
         else:
-            race_finished_events = [e for e in events if e.get("type") == "race_finished"]
+            race_finished_events = [
+                e for e in events if e.get("type") == "race_finished"
+            ]
             if race_finished_events:
                 final_payload = race_finished_events[-1]
                 collision_log = final_payload.get("collision_log") or []
-                overtakes += sum(1 for item in collision_log if item.get("type") == "overtake")
+                overtakes += sum(
+                    1 for item in collision_log if item.get("type") == "overtake"
+                )
 
         quality_attempts += sum(1 for e in events if _is_quality_attempt(e, discipline))
 
@@ -254,9 +317,13 @@ def _score(metrics: Metrics, target: Dict[str, float]) -> float:
     """
     dnf_err = abs(metrics.dnf_rate - target["dnf_rate"])
     # Weighted signal: realized overtakes + capped quality attempts as forward signal.
-    capped_quality = min(metrics.quality_attempts_per_race, target["overtakes_per_race"] * 1.25)
+    capped_quality = min(
+        metrics.quality_attempts_per_race, target["overtakes_per_race"] * 1.25
+    )
     effective_overtake_signal = metrics.overtakes_per_race + (0.30 * capped_quality)
-    ov_err = abs(effective_overtake_signal - target["overtakes_per_race"]) / max(1.0, target["overtakes_per_race"])
+    ov_err = abs(effective_overtake_signal - target["overtakes_per_race"]) / max(
+        1.0, target["overtakes_per_race"]
+    )
     return (dnf_err * 100.0) + (ov_err * 10.0)
 
 
@@ -273,7 +340,10 @@ def calibrate(
         target = TARGETS[discipline]
         base_seed = BASE_SEED + (idx * 100)
         laps = _laps_for_discipline(discipline)
-        print(f"[CAL] {discipline}: stage1 slope search ({stage1_iters} iters/candidate)", flush=True)
+        print(
+            f"[CAL] {discipline}: stage1 slope search ({stage1_iters} iters/candidate)",
+            flush=True,
+        )
         print(f"[CAL] {discipline}: race format laps={laps}", flush=True)
 
         # Stage 1: tune logistic slopes with default hazards.
@@ -284,16 +354,27 @@ def calibrate(
             "switch_slope": 3.0,
             "risk_slope": 3.4,
             "tyre_eta": 28.0,
-                "tyre_beta": 2.6,
+            "tyre_beta": 2.6,
             "mech_eta": 95.0,
             "mech_beta": 2.1,
         }
-        baseline_metrics = _run_profile(db, discipline, best_profile, iterations=stage1_iters, seed_start=base_seed)
+        baseline_metrics = _run_profile(
+            db, discipline, best_profile, iterations=stage1_iters, seed_start=base_seed
+        )
         best_score = _score(baseline_metrics, target)
 
         if discipline in NON_TUNABLE_DISCIPLINES:
-            print(f"[CAL] {discipline}: skipping slope/hazard search (non-lap sprint format)", flush=True)
-            final_metrics = _run_profile(db, discipline, best_profile, iterations=final_iters, seed_start=base_seed + 60)
+            print(
+                f"[CAL] {discipline}: skipping slope/hazard search (non-lap sprint format)",
+                flush=True,
+            )
+            final_metrics = _run_profile(
+                db,
+                discipline,
+                best_profile,
+                iterations=final_iters,
+                seed_start=base_seed + 60,
+            )
             tuned[discipline] = dict(best_profile)
             print(
                 f"{discipline}: "
@@ -306,30 +387,49 @@ def calibrate(
 
         for scale in SLOPE_CANDIDATES:
             candidate = dict(best_profile)
-            candidate.update({
-                "straight_slope": 3.8 * scale,
-                "braking_slope": 3.4 * scale,
-                "outside_slope": 3.2 * scale,
-                "switch_slope": 3.0 * scale,
-                "risk_slope": 3.4 * scale,
-            })
-            metrics = _run_profile(db, discipline, candidate, iterations=stage1_iters, seed_start=base_seed + 20)
+            candidate.update(
+                {
+                    "straight_slope": 3.8 * scale,
+                    "braking_slope": 3.4 * scale,
+                    "outside_slope": 3.2 * scale,
+                    "switch_slope": 3.0 * scale,
+                    "risk_slope": 3.4 * scale,
+                }
+            )
+            metrics = _run_profile(
+                db,
+                discipline,
+                candidate,
+                iterations=stage1_iters,
+                seed_start=base_seed + 20,
+            )
             score = _score(metrics, target)
             if score < best_score:
                 best_score = score
                 best_profile = candidate
 
         # Stage 2: tune Weibull eta/beta.
-        print(f"[CAL] {discipline}: stage2 hazard search ({stage2_iters} iters/candidate)", flush=True)
+        print(
+            f"[CAL] {discipline}: stage2 hazard search ({stage2_iters} iters/candidate)",
+            flush=True,
+        )
         for tyre_eta, tyre_beta, mech_eta, mech_beta in HAZARD_CANDIDATES:
             candidate = dict(best_profile)
-            candidate.update({
-                "tyre_eta": tyre_eta,
-                "tyre_beta": tyre_beta,
-                "mech_eta": mech_eta,
-                "mech_beta": mech_beta,
-            })
-            metrics = _run_profile(db, discipline, candidate, iterations=stage2_iters, seed_start=base_seed + 40)
+            candidate.update(
+                {
+                    "tyre_eta": tyre_eta,
+                    "tyre_beta": tyre_beta,
+                    "mech_eta": mech_eta,
+                    "mech_beta": mech_beta,
+                }
+            )
+            metrics = _run_profile(
+                db,
+                discipline,
+                candidate,
+                iterations=stage2_iters,
+                seed_start=base_seed + 40,
+            )
             score = _score(metrics, target)
             if score < best_score:
                 best_score = score
@@ -337,7 +437,13 @@ def calibrate(
 
         # Final validation pass.
         print(f"[CAL] {discipline}: final validation ({final_iters} iters)", flush=True)
-        final_metrics = _run_profile(db, discipline, best_profile, iterations=final_iters, seed_start=base_seed + 60)
+        final_metrics = _run_profile(
+            db,
+            discipline,
+            best_profile,
+            iterations=final_iters,
+            seed_start=base_seed + 60,
+        )
 
         tuned[discipline] = dict(best_profile)
         print(
@@ -365,9 +471,13 @@ if __name__ == "__main__":
     selected_disciplines = [args.discipline] if args.discipline else DISCIPLINES
 
     print("CALIBRATION_3LAP_START")
-    print(f"MODE={args.mode} stage1={stage1_iters} stage2={stage2_iters} final={final_iters}")
+    print(
+        f"MODE={args.mode} stage1={stage1_iters} stage2={stage2_iters} final={final_iters}"
+    )
     print(f"DISCIPLINES={','.join(selected_disciplines)}")
-    tuned_profiles = calibrate(stage1_iters, stage2_iters, final_iters, selected_disciplines)
+    tuned_profiles = calibrate(
+        stage1_iters, stage2_iters, final_iters, selected_disciplines
+    )
     print("CALIBRATION_3LAP_DONE")
     for disc, profile in tuned_profiles.items():
         print(disc, profile)
