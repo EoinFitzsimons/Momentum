@@ -14,17 +14,23 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QLineEdit,
     QPushButton,
-    QMessageBox,
     QHeaderView,
     QTableWidget,
     QTableWidgetItem,
 )
+from GUI.themed_messagebox import information, warning, critical
 
 
 class SearchResultsDialog(QDialog):
     """Display search results in a sortable table popup."""
 
-    def __init__(self, title: str, headers: list[str], rows: list[list[str]], parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        title: str,
+        headers: list[str],
+        rows: list[list[str]],
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(980, 560)
@@ -52,7 +58,9 @@ class SearchResultsDialog(QDialog):
                 if idx == 0:
                     header.setSectionResizeMode(idx, QHeaderView.ResizeMode.Stretch)
                 else:
-                    header.setSectionResizeMode(idx, QHeaderView.ResizeMode.ResizeToContents)
+                    header.setSectionResizeMode(
+                        idx, QHeaderView.ResizeMode.ResizeToContents
+                    )
 
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(0, Qt.SortOrder.AscendingOrder)
@@ -168,12 +176,16 @@ class NavigationBar(QWidget):
         name_query = str(self.search_input.text() or "").strip()
         return discipline, tier, name_query
 
-    def _show_results(self, title: str, headers: list[str], rows: list[list[str]]) -> None:
+    def _show_results(
+        self, title: str, headers: list[str], rows: list[list[str]]
+    ) -> None:
         if not rows:
-            QMessageBox.information(self, title, "No results found.")
+            information(self, title, "No results found.")
             return
 
-        dialog = SearchResultsDialog(title=title, headers=headers, rows=rows, parent=self)
+        dialog = SearchResultsDialog(
+            title=title, headers=headers, rows=rows, parent=self
+        )
         dialog.exec()
 
     def _search_teams(self) -> None:
@@ -181,7 +193,7 @@ class NavigationBar(QWidget):
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
-            QMessageBox.warning(self, self.SEARCH_TEAMS_TEXT, "Database is unavailable.")
+            warning(self, self.SEARCH_TEAMS_TEXT, "Database is unavailable.")
             return
 
         try:
@@ -222,14 +234,14 @@ class NavigationBar(QWidget):
                 rows=table_rows,
             )
         except Exception as exc:
-            QMessageBox.critical(self, self.SEARCH_TEAMS_TEXT, f"Search failed: {exc}")
+            critical(self, self.SEARCH_TEAMS_TEXT, f"Search failed: {exc}")
 
     def _search_championships(self) -> None:
         discipline, tier, name_query = self._selected_filters()
 
         db = self._get_db()
         if db is None or not hasattr(db, "get_connection"):
-            QMessageBox.warning(self, self.SEARCH_CHAMPIONSHIPS_TEXT, "Database is unavailable.")
+            warning(self, self.SEARCH_CHAMPIONSHIPS_TEXT, "Database is unavailable.")
             return
 
         try:
@@ -250,8 +262,16 @@ class NavigationBar(QWidget):
                 career_where_parts.append(self.SQL_NAME_FILTER)
                 params.append(f"%{name_query.lower()}%")
 
-            std_where_clause = (self.SQL_WHERE_PREFIX + self.SQL_AND.join(std_where_parts)) if std_where_parts else ""
-            career_where_clause = (self.SQL_WHERE_PREFIX + self.SQL_AND.join(career_where_parts)) if career_where_parts else ""
+            std_where_clause = (
+                (self.SQL_WHERE_PREFIX + self.SQL_AND.join(std_where_parts))
+                if std_where_parts
+                else ""
+            )
+            career_where_clause = (
+                (self.SQL_WHERE_PREFIX + self.SQL_AND.join(career_where_parts))
+                if career_where_parts
+                else ""
+            )
 
             with db.get_connection() as conn:
                 rows = []
@@ -299,11 +319,18 @@ class NavigationBar(QWidget):
             ]
             self._show_results(
                 title="Championship Search Results",
-                headers=["Championship", "Discipline", "Tier", "Season", "Status", "Source"],
+                headers=[
+                    "Championship",
+                    "Discipline",
+                    "Tier",
+                    "Season",
+                    "Status",
+                    "Source",
+                ],
                 rows=table_rows,
             )
         except Exception as exc:
-            QMessageBox.critical(self, self.SEARCH_CHAMPIONSHIPS_TEXT, f"Search failed: {exc}")
+            critical(self, self.SEARCH_CHAMPIONSHIPS_TEXT, f"Search failed: {exc}")
 
 
 def _safe(value: object) -> str:

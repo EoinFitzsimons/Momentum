@@ -16,6 +16,8 @@ if __name__ == "__main__":
 
     db = DatabaseManager()
     with db.get_connection() as conn:
-        row = conn.execute("SELECT id, name, primary_discipline, is_point_to_point, instructions_json, length_km, turns, longest_straight_m, tightest_corner_radius_m, surface_grip FROM tracks WHERE id = 2").fetchone()
+        row = conn.execute(
+            "SELECT id, name, primary_discipline, is_point_to_point, instructions_json, length_km, turns, longest_straight_m, tightest_corner_radius_m, surface_grip FROM tracks WHERE id = 2"
+        ).fetchone()
     r = dict(row)
     print(_route_errors(r, CircuitGenerator))

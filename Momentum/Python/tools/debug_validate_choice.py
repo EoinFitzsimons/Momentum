@@ -31,10 +31,16 @@ if __name__ == "__main__":
         ).fetchone()
     r = dict(row)
     length_m = float(r["length_km"] or 3.2) * 1000.0
-    instr = _build_field_based_circuit_instructions(length_m, int(r["turns"] or 10), float(r["tightest_corner_radius_m"] or 30.0))
+    instr = _build_field_based_circuit_instructions(
+        length_m, int(r["turns"] or 10), float(r["tightest_corner_radius_m"] or 30.0)
+    )
 
-    solved = CircuitGenerator.generate_with_routes({"solve_closure": True, "instructions": instr}, options={})
-    unsolved = CircuitGenerator.generate_with_routes({"solve_closure": False, "instructions": instr}, options={})
+    solved = CircuitGenerator.generate_with_routes(
+        {"solve_closure": True, "instructions": instr}, options={}
+    )
+    unsolved = CircuitGenerator.generate_with_routes(
+        {"solve_closure": False, "instructions": instr}, options={}
+    )
 
     print("id", r["id"], r["name"])
     print("solved_gap", gap(solved))

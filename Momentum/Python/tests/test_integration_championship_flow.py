@@ -67,7 +67,9 @@ def test_recalculate_standings_orders_by_points_then_tiebreakers(seeded_champion
             driver_id=driver_id,
             team_id=team_ids[(position - 1) % len(team_ids)],
             position=position,
-            points=service.calculate_points(position=position, discipline="SPRINT_RALLYCROSS"),
+            points=service.calculate_points(
+                position=position, discipline="SPRINT_RALLYCROSS"
+            ),
             fastest_lap=(position == 1),
         )
         for position, driver_id in enumerate(driver_ids, start=1)
@@ -80,4 +82,8 @@ def test_recalculate_standings_orders_by_points_then_tiebreakers(seeded_champion
 
     assert len(standings) == 3
     assert standings[0].driver_id == driver_ids[0]
-    assert standings[0].total_points > standings[1].total_points > standings[2].total_points
+    assert (
+        standings[0].total_points
+        > standings[1].total_points
+        > standings[2].total_points
+    )

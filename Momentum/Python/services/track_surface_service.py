@@ -13,23 +13,22 @@ Surface Types:
 - grassy: Grass/grass-trap surface (low grip)
 """
 
-from typing import Dict, List
 from database.models import Track
 
 
 class TrackSurfaceService:
     """Manages surface types for tracks by racing discipline"""
-    
+
     # Surface grip values (0.0-1.0 scale, 1.0 = perfect grip)
     SURFACE_GRIP_MAP = {
-        'asphalt': 1.0,      # High grip
-        'concrete': 0.95,    # Slightly lower
-        'gravel': 0.6,       # Low grip, rough
-        'mixed': 0.75,       # Mix of surfaces (typically gravel + asphalt)
-        'dirt': 0.55,        # Off-road, very low grip
-        'grassy': 0.65,      # Grass traps
+        "asphalt": 1.0,  # High grip
+        "concrete": 0.95,  # Slightly lower
+        "gravel": 0.6,  # Low grip, rough
+        "mixed": 0.75,  # Mix of surfaces (typically gravel + asphalt)
+        "dirt": 0.55,  # Off-road, very low grip
+        "grassy": 0.65,  # Grass traps
     }
-    
+
     # Discipline-specific surface distributions
     DISCIPLINE_SURFACES = {
         "SINGLE_SEATER": {
@@ -68,71 +67,70 @@ class TrackSurfaceService:
             "primary_percentage": 90,
         },
     }
-    
+
     @classmethod
     def get_surface_for_discipline(cls, discipline: str) -> str:
         """
         Get primary surface type for a discipline
-        
+
         Args:
             discipline: Racing discipline (e.g., "SINGLE_SEATER")
-            
+
         Returns:
             Surface type name
         """
         if discipline not in cls.DISCIPLINE_SURFACES:
             return "asphalt"  # Default to asphalt
-        
+
         return cls.DISCIPLINE_SURFACES[discipline]["primary"]
-    
+
     @classmethod
     def get_grip_level(cls, surface: str) -> float:
         """
         Get grip level for a surface type
-        
+
         Args:
             surface: Surface type name
-            
+
         Returns:
             Grip level (0.0-1.0)
         """
         return cls.SURFACE_GRIP_MAP.get(surface.lower(), 0.9)
-    
+
     @classmethod
     def assign_surface_to_track(cls, track: Track, discipline: str) -> Track:
         """
         Assign appropriate surface type to track based on discipline
-        
+
         Args:
             track: Track object to update
             discipline: Racing discipline
-            
+
         Returns:
             Track with surface assigned
         """
         if not track.surface or track.surface == "asphalt":
             # Assign discipline-appropriate surface
             track.surface = cls.get_surface_for_discipline(discipline)
-        
+
         return track
-    
+
     @classmethod
     def get_discipline_surface_description(cls, discipline: str) -> str:
         """
         Get human-readable description of surface for discipline
-        
+
         Args:
             discipline: Racing discipline
-            
+
         Returns:
             Description string
         """
         if discipline not in cls.DISCIPLINE_SURFACES:
             return "asphalt racing circuit"
-        
-        config = cls.DISCIPLINE_SURFACES[discipline]
-        primary = config["primary"]
-        
+
+        # discipline config not required for current description mapping
+
         descriptions = {
             "SINGLE_SEATER": "High-grip asphalt circuit with grass run-off areas",
             "PRODUCTION_TOURING": "Road course with asphalt surface and concrete sections",
@@ -141,5 +139,5 @@ class TrackSurfaceService:
             "SPRINT_RALLYCROSS": "Mixed-surface circuit with gravel and asphalt sections",
             "ENDURANCE": "Full-length endurance circuit with high-grip asphalt surface",
         }
-        
+
         return descriptions.get(discipline, "asphalt racing circuit")

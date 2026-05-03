@@ -189,17 +189,17 @@ Expected cadence:
 
 ### 5.7 Non-Functional Testing
 
-**Status:** ⚠ DEFERRED (out of scope for this phase)
+**Status:** IN PROGRESS (staged delivery)
 
-Out of scope items (for future phases):
-- Accessibility: Contrast checks, keyboard navigation, screen-reader compatibility
-- Usability: Task completion tests for user personas
-- Reliability: Long-run stability (memory leaks, repeated simulation stress)
+Current non-functional scope:
+- Accessibility: contrast, colorblind support, keyboard accessibility, focus visibility
+- Usability: persona-driven task completion and timing checks
+- Reliability: long-run stability, save/load integrity, and offline-first behavior
 
-Rationale:
-- Core functionality and backend stability take priority in this phase.
-- Non-functional testing will be prioritized after MVP validation.
-- GUI accessibility and UX research are separate work streams.
+Approach:
+- Validate requirements with a hybrid strategy: automated tests where available plus scripted manual checks for GUI and accessibility.
+- Record measurable acceptance outcomes in a dedicated results register.
+- Track unmet criteria explicitly as partial/deferred with next action.
 
 
 ## 6. Test and Result Tracking
@@ -382,3 +382,40 @@ Test Coverage Summary:
 - **Total:** 95+ automated tests organized by pytest marker
 
 All planned test categories from Plan v1 are now IMPLEMENTED and VERIFIED.
+
+
+## 11. User, Environmental, and Usability Requirement Testing
+
+### 11.1 Objective
+
+This section adds explicit tests for:
+- User requirements (personas and cross-cutting constraints)
+- Environmental requirements (hardware/software/deployment/scalability)
+- Usability requirements (accessibility, performance, readability)
+
+### 11.2 Test Method
+
+- Automated evidence: pytest suites, marker-based runs, API/integration/performance checks.
+- Scripted manual checks: GUI interaction, keyboard-only navigation, readability and accessibility checks.
+- Documentation checks: installation/deployment/offline instructions and packaging evidence.
+
+### 11.3 Requirement Test Matrix (Summary)
+
+| Group | Requirement Focus | Test Type | Acceptance Basis |
+|---|---|---|---|
+| User Personas | Quick race, career flows, modding import/export | Mixed (auto + manual) | Time to complete, correctness, and visibility criteria |
+| Cross-cutting | Offline-first, telemetry/replay, install/run friction | Mixed (auto + manual) | Offline execution, artifact generation, launch/install time |
+| Environmental | Hardware/software/deployment/scalability | Manual + config verification | Runtime viability and documented environment compliance |
+| Usability Accessibility | Contrast, colorblind-safe cues, keyboard/focus, scaling | Manual (scripted) | WCAG and keyboard-operability acceptance criteria |
+| Usability Performance | FPS targets, UI responsiveness, low-memory behavior | Auto + manual observation | Target thresholds for frame rate and response time |
+| Usability Readability | Plain language, tooltips/tutorial, localisation readiness | Manual review | Clarity and translatability checks |
+
+### 11.4 Execution Evidence
+
+Detailed execution outcomes are tracked in:
+- `Planning/Testing/Test_Results_User_Environmental_Usability.md`
+
+This results file is the single source of truth for:
+- Pass/Partial/Deferred status per requirement
+- Test date, tester, environment, and evidence
+- Gap notes and immediate next actions

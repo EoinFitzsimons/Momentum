@@ -11,12 +11,13 @@ Run:
 Output:
     Momentum/Python/tools/gui_track_{track_id}.png
 """
+
 import sys
 from pathlib import Path
 import re
 
 repo_root = Path(__file__).resolve().parents[3]
-py_pkg = repo_root / 'Momentum' / 'Python'
+py_pkg = repo_root / "Momentum" / "Python"
 sys.path.insert(0, str(py_pkg))
 sys.path.insert(0, str(repo_root))
 
@@ -48,9 +49,13 @@ def render_all(output_dir: Path):
         track_points = CircuitGenerator.generate(st.length_km)
         track_length = st.length_km * 1000
 
-        widget = TrackWidget(track_points, track_length, appearance,
-                             track_surface=getattr(st, 'surface', 'asphalt'),
-                             surface_grip=getattr(st, 'surface_grip', None))
+        widget = TrackWidget(
+            track_points,
+            track_length,
+            appearance,
+            track_surface=getattr(st, "surface", "asphalt"),
+            surface_grip=getattr(st, "surface_grip", None),
+        )
         # ensure proper sizing
         widget.resize(widget.minimumSize())
         w = widget.width()
@@ -62,18 +67,18 @@ def render_all(output_dir: Path):
         widget.render(painter)
         painter.end()
         # build racetrack-style filename: {id:03d}-{Country}-{Name}-{LengthKm}km.png
-        country = getattr(st, 'country', '') or ''
-        length = getattr(st, 'length_km', None)
+        country = getattr(st, "country", "") or ""
+        length = getattr(st, "length_km", None)
         length_str = f"{length:.2f}km" if isinstance(length, (int, float)) else ""
         parts = [f"{track_id:03d}"]
         if country:
             parts.append(country)
-        parts.append(getattr(st, 'name', f"track_{track_id}"))
+        parts.append(getattr(st, "name", f"track_{track_id}"))
         if length_str:
             parts.append(length_str)
-        raw = '-'.join(parts)
-        safe = re.sub(r'[^A-Za-z0-9 _\-]', '', raw).strip()
-        safe = safe.replace(' ', '_')
+        raw = "-".join(parts)
+        safe = re.sub(r"[^A-Za-z0-9 _\-]", "", raw).strip()
+        safe = safe.replace(" ", "_")
         if not safe:
             safe = f"{track_id:03d}"
         safe = safe[:140]
@@ -84,6 +89,6 @@ def render_all(output_dir: Path):
     app.quit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     outdir = Path(__file__).parent
     render_all(outdir)

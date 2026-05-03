@@ -9,9 +9,8 @@ import json
 import hashlib
 import pytest
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 import sys
-import os
 
 pytestmark = pytest.mark.integration
 
@@ -105,7 +104,9 @@ def _load_fixture_teams(fixture: dict) -> Dict[int, Team]:
     return teams_dict
 
 
-def _seed_teams_from_drivers(teams_dict: Dict[int, Team], drivers: List[Driver]) -> Dict[int, Team]:
+def _seed_teams_from_drivers(
+    teams_dict: Dict[int, Team], drivers: List[Driver]
+) -> Dict[int, Team]:
     for d in drivers:
         team_id = d.current_team_id or 1
         if team_id not in teams_dict:
@@ -146,20 +147,34 @@ def _serialize_results(results: List[RaceResult]) -> str:
     """Serialize RaceResult objects to stable JSON for comparison."""
     out = []
     for r in results:
-        best_lap_time = None if getattr(r, "best_lap_time", None) is None else round(float(r.best_lap_time), 6)
-        average_lap_time = None if getattr(r, "average_lap_time", None) is None else round(float(r.average_lap_time), 6)
-        time_seconds = None if getattr(r, "time_seconds", None) is None else round(float(r.time_seconds), 6)
-        out.append({
-            "driver_id": r.driver_id,
-            "position": r.position,
-            "points": r.points,
-            "fastest_lap": r.fastest_lap,
-            "dnf_reason": r.dnf_reason,
-            "status": getattr(r, "status", "FINISHED"),
-            "time_seconds": time_seconds,
-            "best_lap_time": best_lap_time,
-            "average_lap_time": average_lap_time,
-        })
+        best_lap_time = (
+            None
+            if getattr(r, "best_lap_time", None) is None
+            else round(float(r.best_lap_time), 6)
+        )
+        average_lap_time = (
+            None
+            if getattr(r, "average_lap_time", None) is None
+            else round(float(r.average_lap_time), 6)
+        )
+        time_seconds = (
+            None
+            if getattr(r, "time_seconds", None) is None
+            else round(float(r.time_seconds), 6)
+        )
+        out.append(
+            {
+                "driver_id": r.driver_id,
+                "position": r.position,
+                "points": r.points,
+                "fastest_lap": r.fastest_lap,
+                "dnf_reason": r.dnf_reason,
+                "status": getattr(r, "status", "FINISHED"),
+                "time_seconds": time_seconds,
+                "best_lap_time": best_lap_time,
+                "average_lap_time": average_lap_time,
+            }
+        )
     return json.dumps(out, sort_keys=True)
 
 
@@ -179,13 +194,15 @@ def test_reproducibility_with_seed(tmp_path):
             track=context.track,
             seed=s,
             laps=context.total_laps,
-            verbose=False
+            verbose=False,
         )
         serials.add(_serialize_results(res))
 
     # Expect at least two distinct outputs across multiple seeds; if not, skip as low-entropy
     if len(serials) == 1:
-        pytest.skip("Different seeds produced identical results across sample seeds; skipping flakey uniqueness assertion")
+        pytest.skip(
+            "Different seeds produced identical results across sample seeds; skipping flakey uniqueness assertion"
+        )
     assert len(serials) > 1
 
 
@@ -203,7 +220,7 @@ def test_determinism_across_multiple_runs(tmp_path):
             track=context.track,
             seed=seed,
             laps=context.total_laps,
-            verbose=False
+            verbose=False,
         )
         serialized = _serialize_results(results)
         results_list.append(results)
@@ -225,7 +242,7 @@ def test_different_seeds_produce_different_results(tmp_path):
         track=context.track,
         seed=42,
         laps=context.total_laps,
-        verbose=False
+        verbose=False,
     )
 
     results_seed_99 = simulate_race(
@@ -233,12 +250,12 @@ def test_different_seeds_produce_different_results(tmp_path):
         track=context.track,
         seed=99,
         laps=context.total_laps,
-        verbose=False
+        verbose=False,
     )
 
     serialized_42 = _serialize_results(results_seed_42)
     serialized_99 = _serialize_results(results_seed_99)
 
-    assert serialized_42 != serialized_99, (
-        "Different seeds unexpectedly produced identical results. "
-    )
+    assert (
+        serialized_42 != serialized_99
+    ), "Different seeds unexpectedly produced identical results. "

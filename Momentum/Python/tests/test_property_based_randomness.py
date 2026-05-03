@@ -1,4 +1,5 @@
 """Property-based tests using Hypothesis for core performance functions."""
+
 import pytest
 from hypothesis import given, strategies as st  # pyright: ignore[reportMissingImports]
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
@@ -14,13 +15,22 @@ from services.race_engine_factory import create_discipline_engine
 )
 def test_base_performance_property(speed, racecraft, consistency):
     # Construct a minimal discipline adapter (single seater) and driver
-    driver = Driver(id=1, name='P', nationality='GBR', birth_date='1990-01-01')
+    driver = Driver(id=1, name="P", nationality="GBR", birth_date="1990-01-01")
     driver.speed = speed
     driver.racecraft = racecraft
     driver.consistency = consistency
 
-    team = Team(id=1, name='T', nationality='GBR', discipline='SINGLE_SEATER', tier='TIER_1', budget=1e7)
-    track = Track(id=1, name='T', country='UK', primary_discipline='SINGLE_SEATER', length_km=5.0)
+    team = Team(
+        id=1,
+        name="T",
+        nationality="GBR",
+        discipline="SINGLE_SEATER",
+        tier="TIER_1",
+        budget=1e7,
+    )
+    track = Track(
+        id=1, name="T", country="UK", primary_discipline="SINGLE_SEATER", length_km=5.0
+    )
 
     context = RaceContext(
         discipline=RacingDiscipline.SINGLE_SEATER,

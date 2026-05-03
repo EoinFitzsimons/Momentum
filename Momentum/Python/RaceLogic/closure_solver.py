@@ -10,31 +10,35 @@ keeps radii and clothoid lengths fixed and only scales straight lengths
 and corner angles (preserving primitive character while achieving
 closure in one pass).
 """
+
 from typing import List, Tuple, Any
 import math
 import numpy as np
+
 try:
     from scipy.optimize import least_squares
     from scipy import integrate
     from scipy.optimize import minimize
 except Exception as e:
-    raise ImportError("scipy is required for closure_solver. Install scipy in the environment.") from e
+    raise ImportError(
+        "scipy is required for closure_solver. Install scipy in the environment."
+    ) from e
 
 
 CLOSURE_PARAM_MIN = 0.2
 CLOSURE_PARAM_MAX = 5.0
 CLOSURE_REGULARIZATION_WEIGHT = 0.1
-CLOSURE_PRIMARY_MINIMIZE_METHOD = 'Powell'
-CLOSURE_FALLBACK_MINIMIZE_METHOD = 'Nelder-Mead'
+CLOSURE_PRIMARY_MINIMIZE_METHOD = "Powell"
+CLOSURE_FALLBACK_MINIMIZE_METHOD = "Nelder-Mead"
 CLOSURE_PRIMARY_MINIMIZE_OPTIONS = {
-    'maxiter': 5000,
-    'xtol': 1e-4,
-    'ftol': 1e-4,
+    "maxiter": 5000,
+    "xtol": 1e-4,
+    "ftol": 1e-4,
 }
 CLOSURE_FALLBACK_MINIMIZE_OPTIONS = {
-    'maxiter': 5000,
-    'xatol': 1e-4,
-    'fatol': 1e-4,
+    "maxiter": 5000,
+    "xatol": 1e-4,
+    "fatol": 1e-4,
 }
 CLOSURE_POSITION_TOLERANCE_M = 1e-2
 CLOSURE_ANGLE_TOLERANCE_RAD = 0.6
@@ -68,7 +72,9 @@ def _wrap_angle(a: float) -> float:
     return a
 
 
-def _simulate_primitives(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+def _simulate_primitives(
+    instructions: List[Any], multipliers: List[float]
+) -> Tuple[float, float, float]:
     """Simulate forward kinematics matching CircuitGenerator semantics.
 
     This uses the same discrete-step integration as the GUI generator:
@@ -80,7 +86,9 @@ def _simulate_primitives(instructions: List[Any], multipliers: List[float]) -> T
     return _simulate_primitives_impl(instructions, multipliers)
 
 
-def _integrate_clothoid_discrete(length: int, k_clothoid: float, sign: int, theta0: float, reverse: bool = False) -> Tuple[float, float, float]:
+def _integrate_clothoid_discrete(
+    length: int, k_clothoid: float, sign: int, theta0: float, reverse: bool = False
+) -> Tuple[float, float, float]:
     """Discrete-step clothoid integration matching generator semantics."""
     x_loc = 0.0
     y_loc = 0.0
@@ -94,30 +102,46 @@ def _integrate_clothoid_discrete(length: int, k_clothoid: float, sign: int, thet
     return x_loc, y_loc, dtheta
 
 
-def _integrate_clothoid_continuous(length: float, k_clothoid: float, sign: int, theta0: float) -> Tuple[float, float, float]:
+def _integrate_clothoid_continuous(
+    length: float, k_clothoid: float, sign: int, theta0: float
+) -> Tuple[float, float, float]:
     """Continuous clothoid integration using quadrature."""
     a = k_clothoid * sign
-    fx = lambda t: math.cos(theta0 + 0.5 * a * t * t)
-    fy = lambda t: math.sin(theta0 + 0.5 * a * t * t)
+
+    def fx(t: float) -> float:
+        return math.cos(theta0 + 0.5 * a * t * t)
+
+    def fy(t: float) -> float:
+        return math.sin(theta0 + 0.5 * a * t * t)
+
     ix = integrate.quad(fx, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
     iy = integrate.quad(fy, 0.0, length, epsabs=1e-6, epsrel=1e-6)[0]
     dtheta = 0.5 * a * length * length
     return ix, iy, dtheta
 
 
-def _apply_tuple_instruction_discrete(instr: Any, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+def _apply_tuple_instruction_discrete(
+    instr: Any,
+    multipliers: List[float],
+    param_idx: int,
+    x: float,
+    y: float,
+    theta: float,
+) -> Tuple[float, float, float, int]:
     typ = instr[0]
-    if typ == 'S':
+    if typ == "S":
         L = float(instr[1]) * multipliers[param_idx]
         return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
-    if typ != 'C':
+    if typ != "C":
         return x, y, theta, param_idx
 
     angle_deg, radius, clothoid_len, k = instr[1:5]
     angle = math.radians(float(angle_deg)) * multipliers[param_idx]
     sign = 1 if angle > 0 else -1
     entry_start = theta
-    ix, iy, dtheta1 = _integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=False)
+    ix, iy, dtheta1 = _integrate_clothoid_discrete(
+        int(clothoid_len), float(k), sign, theta, reverse=False
+    )
     x += ix
     y += iy
     theta += dtheta1
@@ -130,25 +154,34 @@ def _apply_tuple_instruction_discrete(instr: Any, multipliers: List[float], para
         x += math.cos(theta)
         y += math.sin(theta)
 
-    ix2, iy2, dtheta2 = _integrate_clothoid_discrete(int(clothoid_len), float(k), sign, theta, reverse=True)
+    ix2, iy2, dtheta2 = _integrate_clothoid_discrete(
+        int(clothoid_len), float(k), sign, theta, reverse=True
+    )
     x += ix2
     y += iy2
     theta += dtheta2
     return x, y, theta, param_idx + 1
 
 
-def _apply_dict_instruction_discrete(instr: dict, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
-    typ = instr.get('type', '').upper()
-    if typ == 'S':
-        L = float(instr.get('length_m', 50)) * multipliers[param_idx]
+def _apply_dict_instruction_discrete(
+    instr: dict,
+    multipliers: List[float],
+    param_idx: int,
+    x: float,
+    y: float,
+    theta: float,
+) -> Tuple[float, float, float, int]:
+    typ = instr.get("type", "").upper()
+    if typ == "S":
+        L = float(instr.get("length_m", 50)) * multipliers[param_idx]
         return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
-    if typ != 'C':
+    if typ != "C":
         return x, y, theta, param_idx
 
-    angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
-    radius = float(instr.get('radius_m', 80))
-    clothoid = float(instr.get('clothoid_len', 50))
-    k = float(instr.get('k', 0.00009))
+    angle = math.radians(float(instr.get("angle_deg", 45))) * multipliers[param_idx]
+    radius = float(instr.get("radius_m", 80))
+    clothoid = float(instr.get("clothoid_len", 50))
+    k = float(instr.get("k", 0.00009))
     sign = 1 if angle > 0 else -1
     ix, iy, dtheta1 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
     x += ix
@@ -164,43 +197,61 @@ def _apply_dict_instruction_discrete(instr: dict, multipliers: List[float], para
     return x, y, theta, param_idx + 1
 
 
-def _apply_tuple_instruction_continuous(instr: Any, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
+def _apply_tuple_instruction_continuous(
+    instr: Any,
+    multipliers: List[float],
+    param_idx: int,
+    x: float,
+    y: float,
+    theta: float,
+) -> Tuple[float, float, float, int]:
     typ = instr[0]
-    if typ == 'S':
+    if typ == "S":
         L = float(instr[1]) * multipliers[param_idx]
         return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
-    if typ != 'C':
+    if typ != "C":
         return x, y, theta, param_idx
 
     angle_deg, radius, clothoid_len, k = instr[1:5]
     angle = math.radians(float(angle_deg)) * multipliers[param_idx]
     sign = 1 if angle > 0 else -1
-    ix, iy, dtheta1 = _integrate_clothoid_continuous(float(clothoid_len), float(k), sign, theta)
+    ix, iy, dtheta1 = _integrate_clothoid_continuous(
+        float(clothoid_len), float(k), sign, theta
+    )
     x += ix
     y += iy
     theta += dtheta1
     x += float(radius) * (math.sin(theta + angle) - math.sin(theta))
     y += -float(radius) * (math.cos(theta + angle) - math.cos(theta))
     theta += angle
-    ix2, iy2, dtheta2 = _integrate_clothoid_continuous(float(clothoid_len), float(k), sign, theta)
+    ix2, iy2, dtheta2 = _integrate_clothoid_continuous(
+        float(clothoid_len), float(k), sign, theta
+    )
     x += ix2
     y += iy2
     theta += dtheta2
     return x, y, theta, param_idx + 1
 
 
-def _apply_dict_instruction_continuous(instr: dict, multipliers: List[float], param_idx: int, x: float, y: float, theta: float) -> Tuple[float, float, float, int]:
-    typ = instr.get('type', '').upper()
-    if typ == 'S':
-        L = float(instr.get('length_m', 50)) * multipliers[param_idx]
+def _apply_dict_instruction_continuous(
+    instr: dict,
+    multipliers: List[float],
+    param_idx: int,
+    x: float,
+    y: float,
+    theta: float,
+) -> Tuple[float, float, float, int]:
+    typ = instr.get("type", "").upper()
+    if typ == "S":
+        L = float(instr.get("length_m", 50)) * multipliers[param_idx]
         return x + L * math.cos(theta), y + L * math.sin(theta), theta, param_idx + 1
-    if typ != 'C':
+    if typ != "C":
         return x, y, theta, param_idx
 
-    angle = math.radians(float(instr.get('angle_deg', 45))) * multipliers[param_idx]
-    radius = float(instr.get('radius_m', 80))
-    clothoid = float(instr.get('clothoid_len', 50))
-    k = float(instr.get('k', 0.00009))
+    angle = math.radians(float(instr.get("angle_deg", 45))) * multipliers[param_idx]
+    radius = float(instr.get("radius_m", 80))
+    clothoid = float(instr.get("clothoid_len", 50))
+    k = float(instr.get("k", 0.00009))
     sign = 1 if angle > 0 else -1
     ix, iy, dtheta1 = _integrate_clothoid_continuous(clothoid, k, sign, theta)
     x += ix
@@ -216,7 +267,9 @@ def _apply_dict_instruction_continuous(instr: dict, multipliers: List[float], pa
     return x, y, theta, param_idx + 1
 
 
-def _simulate_primitives_impl(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+def _simulate_primitives_impl(
+    instructions: List[Any], multipliers: List[float]
+) -> Tuple[float, float, float]:
     """Implementation body extracted for lower cognitive complexity at entrypoint."""
     x = 0.0
     y = 0.0
@@ -225,9 +278,13 @@ def _simulate_primitives_impl(instructions: List[Any], multipliers: List[float])
 
     for instr in instructions:
         if isinstance(instr, (list, tuple)):
-            x, y, theta, param_idx = _apply_tuple_instruction_discrete(instr, multipliers, param_idx, x, y, theta)
+            x, y, theta, param_idx = _apply_tuple_instruction_discrete(
+                instr, multipliers, param_idx, x, y, theta
+            )
         elif isinstance(instr, dict):
-            x, y, theta, param_idx = _apply_dict_instruction_discrete(instr, multipliers, param_idx, x, y, theta)
+            x, y, theta, param_idx = _apply_dict_instruction_discrete(
+                instr, multipliers, param_idx, x, y, theta
+            )
         else:
             continue
 
@@ -235,12 +292,16 @@ def _simulate_primitives_impl(instructions: List[Any], multipliers: List[float])
     return x, y, theta
 
 
-def _simulate_primitives_continuous(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+def _simulate_primitives_continuous(
+    instructions: List[Any], multipliers: List[float]
+) -> Tuple[float, float, float]:
     """Continuous integral simulation for initial solve (uses quad)."""
     return _simulate_primitives_continuous_impl(instructions, multipliers)
 
 
-def _simulate_primitives_continuous_impl(instructions: List[Any], multipliers: List[float]) -> Tuple[float, float, float]:
+def _simulate_primitives_continuous_impl(
+    instructions: List[Any], multipliers: List[float]
+) -> Tuple[float, float, float]:
     """Implementation body extracted for lower cognitive complexity at entrypoint."""
     x = 0.0
     y = 0.0
@@ -249,9 +310,13 @@ def _simulate_primitives_continuous_impl(instructions: List[Any], multipliers: L
 
     for instr in instructions:
         if isinstance(instr, (list, tuple)):
-            x, y, theta, param_idx = _apply_tuple_instruction_continuous(instr, multipliers, param_idx, x, y, theta)
+            x, y, theta, param_idx = _apply_tuple_instruction_continuous(
+                instr, multipliers, param_idx, x, y, theta
+            )
         elif isinstance(instr, dict):
-            x, y, theta, param_idx = _apply_dict_instruction_continuous(instr, multipliers, param_idx, x, y, theta)
+            x, y, theta, param_idx = _apply_dict_instruction_continuous(
+                instr, multipliers, param_idx, x, y, theta
+            )
         else:
             continue
 
@@ -269,18 +334,20 @@ def _build_param_list(instructions: List[Any]) -> Tuple[List[int], List[float]]:
     for i, instr in enumerate(instructions):
         if isinstance(instr, (list, tuple)):
             typ = instr[0]
-            if typ in ('S', 'C'):
+            if typ in ("S", "C"):
                 indices.append(i)
                 inits.append(1.0)
         elif isinstance(instr, dict):
-            typ = instr.get('type', '').upper()
-            if typ in ('S', 'C'):
+            typ = instr.get("type", "").upper()
+            if typ in ("S", "C"):
                 indices.append(i)
                 inits.append(1.0)
     return indices, inits
 
 
-def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, List[float], dict]:
+def solve_closure(
+    instructions: List[Any], max_nfev: int = 500
+) -> Tuple[bool, List[float], dict]:
     """Solve for multipliers that close the instruction sequence.
 
     Returns success flag, multipliers list (same length as number of adjustable
@@ -288,7 +355,7 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
     """
     indices, inits = _build_param_list(instructions)
     if not indices:
-        return False, [], {'reason': 'no adjustable primitives'}
+        return False, [], {"reason": "no adjustable primitives"}
 
     def residuals_discrete(p):
         muls = list(p)
@@ -313,7 +380,9 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
         return [r1, r2, r3] + reg
 
     try:
-        res_cont = least_squares(residuals_continuous, p0, bounds=(lower, upper), max_nfev=max_nfev)
+        res_cont = least_squares(
+            residuals_continuous, p0, bounds=(lower, upper), max_nfev=max_nfev
+        )
     except Exception:
         res_cont = None
 
@@ -331,49 +400,53 @@ def solve_closure(instructions: List[Any], max_nfev: int = 500) -> Tuple[bool, L
     try:
         res2, method_used = _minimize_discrete_with_fallback(obj_discrete, p_init)
     except Exception as e:
-        diagnostics = {'reason': 'minimize failed', 'error': str(e)}
-        return False, list(p_init), diagnostics
+        error_diag: dict[str, bool | str | int | float] = {"reason": "minimize failed", "error": str(e)}
+        return False, list(p_init), error_diag
 
     final_params = np.clip(res2.x, CLOSURE_PARAM_MIN, CLOSURE_PARAM_MAX)
     x, y, theta = _simulate_primitives(instructions, list(final_params))
     pos_norm = float(np.linalg.norm([x, y]))
     ang_err = abs(_wrap_angle(theta - 2 * math.pi))
     # Success if position is closed tightly and heading error is reasonable
-    success = (pos_norm < CLOSURE_POSITION_TOLERANCE_M) and (ang_err < CLOSURE_ANGLE_TOLERANCE_RAD)
-    diagnostics = {
-        'cont_success': bool(res_cont.success) if res_cont is not None else False,
-        'minimize_success': res2.success,
-        'minimize_method': method_used,
-        'minimize_nit': int(getattr(res2, 'nit', 0)),
-        'minimize_fun': float(res2.fun),
-        'pos_norm': pos_norm,
-        'ang_err_rad': ang_err
+    success = (pos_norm < CLOSURE_POSITION_TOLERANCE_M) and (
+        ang_err < CLOSURE_ANGLE_TOLERANCE_RAD
+    )
+    diagnostics: dict[str, bool | str | int | float] = {
+        "cont_success": bool(res_cont.success) if res_cont is not None else False,
+        "minimize_success": res2.success,
+        "minimize_method": method_used,
+        "minimize_nit": int(getattr(res2, "nit", 0)),
+        "minimize_fun": float(res2.fun),
+        "pos_norm": pos_norm,
+        "ang_err_rad": ang_err,
     }
     return success, list(final_params), diagnostics
 
 
-def apply_multipliers_to_instructions(instructions: List[Any], multipliers: List[float]) -> None:
+def apply_multipliers_to_instructions(
+    instructions: List[Any], multipliers: List[float]
+) -> None:
     """Mutate instructions in place applying multipliers to S lengths and C angles."""
     param_idx = 0
     for i, instr in enumerate(instructions):
         if isinstance(instr, (list, tuple)):
             typ = instr[0]
-            if typ == 'S':
+            if typ == "S":
                 L = int(float(instr[1]) * multipliers[param_idx])
-                instructions[i] = ('S', L)
+                instructions[i] = ("S", L)
                 param_idx += 1
-            elif typ == 'C':
+            elif typ == "C":
                 angle_deg, radius, clothoid_len, k = instr[1:5]
                 new_angle = float(angle_deg) * multipliers[param_idx]
-                instructions[i] = ('C', new_angle, radius, clothoid_len, k)
+                instructions[i] = ("C", new_angle, radius, clothoid_len, k)
                 param_idx += 1
         elif isinstance(instr, dict):
-            typ = instr.get('type', '').upper()
-            if typ == 'S':
-                L = float(instr.get('length_m', 50)) * multipliers[param_idx]
-                instr['length_m'] = float(L)
+            typ = instr.get("type", "").upper()
+            if typ == "S":
+                L = float(instr.get("length_m", 50)) * multipliers[param_idx]
+                instr["length_m"] = float(L)  # type: ignore[assignment]
                 param_idx += 1
-            elif typ == 'C':
-                ang = float(instr.get('angle_deg', 45)) * multipliers[param_idx]
-                instr['angle_deg'] = float(ang)
+            elif typ == "C":
+                ang = float(instr.get("angle_deg", 45)) * multipliers[param_idx]
+                instr["angle_deg"] = float(ang)
                 param_idx += 1
