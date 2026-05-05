@@ -64,7 +64,7 @@ def gap_of(points):
 
 
 def best_gap(length_m: float, circuit_generator):
-    best = (float("inf"), None, None)
+    best: tuple[float, int | None, int | None] = (float("inf"), None, None)
     for turns in range(4, 11):
         for radius in (18, 22, 26, 30, 36, 44, 56):
             ins = mk_instr(length_m, turns, radius)

@@ -271,7 +271,7 @@ class TeamNameGenerator:
         if not s:
             return s
 
-        if _unidecode:
+        if _unidecode is not None:
             out = _unidecode(s)
         else:
             out = unicodedata.normalize("NFKD", s)

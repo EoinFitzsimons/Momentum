@@ -9,26 +9,29 @@ avoids stray top-level statements so it imports cleanly for pytest.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from enum import Enum
 
 try:
     from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
     from PyQt6.QtCore import Qt, QPointF
 except Exception:
+    if TYPE_CHECKING:
+        from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QPolygonF
+        from PyQt6.QtCore import Qt, QPointF
+    else:
+        @dataclass(frozen=True)
+        class QColor:
+            red: int
+            green: int
+            blue: int
+            alpha: int = 255
 
-    @dataclass(frozen=True)
-    class QColor:
-        red: int
-        green: int
-        blue: int
-        alpha: int = 255
+            def getRgb(self):
+                return self.red, self.green, self.blue, self.alpha
 
-        def getRgb(self):
-            return self.red, self.green, self.blue, self.alpha
-
-        def __iter__(self):
-            yield from (self.red, self.green, self.blue, self.alpha)
+            def __iter__(self):
+                yield from (self.red, self.green, self.blue, self.alpha)
 
 
 class VehicleType(Enum):

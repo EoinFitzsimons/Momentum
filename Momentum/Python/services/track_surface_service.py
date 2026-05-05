@@ -82,7 +82,8 @@ class TrackSurfaceService:
         if discipline not in cls.DISCIPLINE_SURFACES:
             return "asphalt"  # Default to asphalt
 
-        return cls.DISCIPLINE_SURFACES[discipline]["primary"]
+        primary = cls.DISCIPLINE_SURFACES[discipline]["primary"]
+        return str(primary)
 
     @classmethod
     def get_grip_level(cls, surface: str) -> float:

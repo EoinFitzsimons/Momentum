@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from types import SimpleNamespace
+from typing import cast
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
@@ -55,13 +56,15 @@ def prepare_capture_window(widget, width: int, height: int):
     QApplication.processEvents()
     # Ensure the widget has a stylesheet; if not, inherit the app-level stylesheet
     try:
-        app_ss = QApplication.instance().styleSheet() or ""
-        ws = widget.styleSheet() or ""
-        if app_ss and not ws:
-            widget.setStyleSheet(app_ss)
-            print(
-                f"[DEBUG] Applied app-level stylesheet to widget {type(widget).__name__}"
-            )
+        app = QApplication.instance()
+        if app is not None:
+            app_ss = cast(QApplication, app).styleSheet() or ""  # type: ignore[call-overload]
+            ws = widget.styleSheet() or ""
+            if app_ss and not ws:
+                widget.setStyleSheet(app_ss)
+                print(
+                    f"[DEBUG] Applied app-level stylesheet to widget {type(widget).__name__}"
+                )
     except Exception:
         pass
 
