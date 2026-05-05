@@ -92,8 +92,8 @@ try:
 
     MATPLOTLIB_AVAILABLE = True
 except Exception:
-    FigureCanvas = None  # type: ignore[misc]
-    Figure = None  # type: ignore[misc]
+    FigureCanvas: Optional[type] = None  # type: ignore[assignment,no-redef]
+    Figure: Optional[type] = None  # type: ignore[assignment,no-redef]
     MATPLOTLIB_AVAILABLE = False
 
 # Add parent directory to path for imports
@@ -886,7 +886,7 @@ class TrackWidget(QWidget):
         self._cached_track_bounds = None
         self._cached_track_zoom = 1.0
         self._cached_forest_pixmap = None
-        self._cached_inner_infield_polygon = None
+        self._cached_inner_infield_polygon: Optional[QPolygonF] = None
         self._cached_assets_dir = os.path.join(os.path.dirname(__file__), "assets")
         self._cached_forest_tile_path = os.path.join(
             self._cached_assets_dir, "forest_tile.png"

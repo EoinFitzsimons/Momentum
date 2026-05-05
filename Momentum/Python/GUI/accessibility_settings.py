@@ -168,8 +168,7 @@ def _resolve_readable_font_family() -> str:
         if families:
             return families[0]
 
-    database = QFontDatabase()
-    available = set(database.families())
+    available = set(QFontDatabase.families())
     for family in PREFERRED_FONT_FAMILIES:
         if family in available:
             return family
@@ -191,7 +190,7 @@ def _resolve_readable_font_family() -> str:
 
     # Final fallback: return first available family or empty string
     try:
-        fams = list(set(QFontDatabase().families()))
+        fams = list(set(QFontDatabase.families()))
         return fams[0] if fams else ""
     except Exception:
         return ""

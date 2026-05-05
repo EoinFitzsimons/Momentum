@@ -821,6 +821,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         reaction_attr = getattr(driver, "reaction_time", None)
         if reaction_attr is None:
             reaction_attr = getattr(driver, "reactions", 50.0)
+        reaction_attr = float(reaction_attr or 50.0)  # Ensure float type
         reaction_factor = (reaction_attr / 50.0) - 1.0  # -1.0 to +1.0 range
         reaction_delta = reaction_factor * 80.0  # ±80ms from baseline
 

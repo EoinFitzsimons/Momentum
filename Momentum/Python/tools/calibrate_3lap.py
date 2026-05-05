@@ -289,9 +289,10 @@ def _run_profile(
             if race_finished_events:
                 final_payload = race_finished_events[-1]
                 collision_log = final_payload.get("collision_log") or []
-                overtakes += sum(
-                    1 for item in collision_log if item.get("type") == "overtake"
-                )
+                if isinstance(collision_log, list):
+                    overtakes += sum(
+                        1 for item in collision_log if item.get("type") == "overtake"
+                    )
 
         quality_attempts += sum(1 for e in events if _is_quality_attempt(e, discipline))
 

@@ -7,7 +7,7 @@ intended theme.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
 def _apply_theme(widget) -> None:
@@ -17,7 +17,7 @@ def _apply_theme(widget) -> None:
         app = QApplication.instance()
         if app is None:
             return
-        ss = app.styleSheet() or ""
+        ss = cast(QApplication, app).styleSheet() or ""  # type: ignore[call-overload]
         if ss:
             try:
                 widget.setStyleSheet(ss)

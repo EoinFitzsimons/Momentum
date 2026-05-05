@@ -13,7 +13,7 @@ def main() -> int:
     py_pkg = repo_root / "Momentum" / "Python"
     sys.path.insert(0, str(py_pkg))
 
-    from scripts import import_circuits as importer
+    from scripts import import_circuits as importer  # type: ignore[attr-defined]
 
     return int(importer.main(["--mode", "upsert"]))
 
