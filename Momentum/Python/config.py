@@ -27,7 +27,18 @@ PARANAMES_DB_PATH = os.getenv("PARANAMES_DB_PATH", "data/paranames.db")
 # DATABASE CONFIGURATION
 # ============================================================================
 
+DATABASE_FILENAME = "momentum.db"
+
 # Database Configuration
+if getattr(sys, "frozen", False):
+    _bundled_database_path = (
+        Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        / "database"
+        / DATABASE_FILENAME
+    )
+else:
+    _bundled_database_path = Path(__file__).resolve().parent / "database" / DATABASE_FILENAME
+
 if getattr(sys, "frozen", False):
     _default_database_path = (
         Path(
@@ -39,14 +50,15 @@ if getattr(sys, "frozen", False):
                 ),
             )
         )
-        / "momentum.db"
+        / DATABASE_FILENAME
     )
 else:
     _default_database_path = (
-        Path(__file__).resolve().parent / "database" / "momentum.db"
+        Path(__file__).resolve().parent / "database" / DATABASE_FILENAME
     )
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(_default_database_path))
+BUNDLED_DATABASE_PATH = _bundled_database_path
 
 # Ensure DATABASE_PATH is absolute and anchored to this package directory.
 # This prevents a relative path from .env (e.g. "database/momentum.db") resolving

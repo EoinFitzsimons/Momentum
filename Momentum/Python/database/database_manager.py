@@ -33,6 +33,7 @@ Authors: Eoin Fitzsimons
 
 import sqlite3
 import json
+import shutil
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Sequence
 from pathlib import Path
@@ -46,7 +47,7 @@ from database.models import (
     SCHEMA_SQL,
 )
 from database.race_result_persistence import RaceResultPersistence
-from config import DATABASE_PATH
+from config import BUNDLED_DATABASE_PATH, DATABASE_PATH
 
 
 INTEGER_DEFAULT_NULL = "INTEGER DEFAULT NULL"
@@ -147,7 +148,14 @@ class DatabaseManager(RaceResultPersistence):
         """
         # Ensure database directory exists (create parent directories as
         # needed)
-        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        db_path = Path(self.db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # First run in a packaged build should clone the bundled starter DB into
+        # the writable app-data location so the exe sees the seeded game world.
+        if not db_path.exists() and BUNDLED_DATABASE_PATH.exists():
+            if BUNDLED_DATABASE_PATH.resolve() != db_path.resolve():
+                shutil.copy2(BUNDLED_DATABASE_PATH, db_path)
 
         # Execute complete schema creation script
         # Uses transaction to ensure atomicity of schema operations
