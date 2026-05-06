@@ -209,6 +209,28 @@
   </b:Source>
 
   <b:Source>
+    <b:Tag>VanOortCruzLoniVanDeursen2022</b:Tag>
+    <b:SourceType>ConferenceProceedings</b:SourceType>
+    <b:Author>
+      <b:Author>
+        <b:NameList>
+          <b:Person><b:First>Bart</b:First><b:Last>van Oort</b:Last></b:Person>
+          <b:Person><b:First>Luís</b:First><b:Last>Cruz</b:Last></b:Person>
+          <b:Person><b:First>Babak</b:First><b:Last>Loni</b:Last></b:Person>
+          <b:Person><b:First>Arie</b:First><b:Last>van Deursen</b:Last></b:Person>
+        </b:NameList>
+      </b:Author>
+    </b:Author>
+    <b:Title>"Project smells": experiences in analysing the software quality of ML projects with mllint</b:Title>
+    <b:ConferenceName>ICSE-SEIP '22: Proceedings of the 44th International Conference on Software Engineering: Software Engineering in Practice</b:ConferenceName>
+    <b:Year>2022</b:Year>
+    <b:StartPage>211</b:StartPage>
+    <b:EndPage>220</b:EndPage>
+    <b:URL>https://doi.org/10.1145/3510457.3513041</b:URL>
+    <b:YearAccessed>2026</b:YearAccessed><b:MonthAccessed>5</b:MonthAccessed><b:DayAccessed>5</b:DayAccessed>
+  </b:Source>
+
+  <b:Source>
     <b:Tag>IPythonDocs2026</b:Tag>
     <b:SourceType>DocumentFromInternetSite</b:SourceType>
     <b:Author><b:Author><b:Corporate>IPython Development Team</b:Corporate></b:Author></b:Author>
