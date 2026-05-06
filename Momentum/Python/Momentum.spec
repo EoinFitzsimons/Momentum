@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('GUI/assets', 'GUI/assets')]
+datas = [('GUI/assets', 'GUI/assets'), ('database/momentum.db', 'database')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('PyQt6')

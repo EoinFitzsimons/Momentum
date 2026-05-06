@@ -44,6 +44,7 @@ $args = @(
     '--workpath', 'build'
     '--specpath', '.'
     '--add-data', 'GUI/assets;GUI/assets'
+    '--add-data', 'database/momentum.db;database'
     '--collect-all', 'PyQt6'
     '--exclude-module', 'PySide6'
     '--collect-all', 'matplotlib'
