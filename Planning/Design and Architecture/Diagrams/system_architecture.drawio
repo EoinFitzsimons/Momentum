@@ -1,94 +1,193 @@
-<mxfile host="app.diagrams.net" modified="2026-04-25T14:05:00.000Z" agent="5.0" version="24.0.0" type="device">
+<mxfile host="Electron" agent="5.0">
   <diagram id="system-architecture" name="System Architecture">
-    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1500" math="0" shadow="0">
+    <mxGraphModel dx="2162" dy="1264" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1500" math="0" shadow="0">
       <root>
-        <mxCell id="0"/>
-        <mxCell id="1" parent="0"/>
-
-        <mxCell id="title" value="Momentum Runtime System Architecture" style="text;fontSize=34;fontStyle=1;fontFamily=Arial;fillColor=none;strokeColor=none;fontColor=#353839" vertex="1" parent="1">
-          <mxGeometry x="560" y="20" width="980" height="54" as="geometry"/>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;fontSize=34;fontStyle=1;fontFamily=Arial;fillColor=none;strokeColor=none;fontColor=#353839;align=center;" value="Momentum Layered Modular Architecture" vertex="1">
+          <mxGeometry height="54" width="980" x="560" y="20" as="geometry" />
         </mxCell>
-
-        <mxCell id="layer-gui" value="GUI Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1F5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
-          <mxGeometry x="80" y="110" width="480" height="560" as="geometry"/>
+        <mxCell id="external" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;strokeWidth=2;fontSize=16;fontFamily=Arial;align=center;verticalAlign=middle;spacing=8" value="External Client&#xa;(Headless / Automation)" vertex="1">
+          <mxGeometry height="88" width="280" x="80" y="700" as="geometry" />
         </mxCell>
-        <mxCell id="launcher" value="Launcher" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" vertex="1" parent="1">
-          <mxGeometry x="120" y="190" width="400" height="74" as="geometry"/>
+        <mxCell id="layer-gui" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1F5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="GUI Layer" vertex="1">
+          <mxGeometry height="560" width="480" x="80" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="mainmenu" value="Main Menu" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" vertex="1" parent="1">
-          <mxGeometry x="120" y="290" width="400" height="74" as="geometry"/>
+        <mxCell id="launcher" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" value="Launcher" vertex="1">
+          <mxGeometry height="74" width="400" x="120" y="190" as="geometry" />
         </mxCell>
-        <mxCell id="racewindow" value="Race Window" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" vertex="1" parent="1">
-          <mxGeometry x="120" y="390" width="400" height="74" as="geometry"/>
+        <mxCell id="mainmenu" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" value="Main Menu" vertex="1">
+          <mxGeometry height="74" width="400" x="120" y="290" as="geometry" />
         </mxCell>
-        <mxCell id="renderer" value="Vehicle Renderer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" vertex="1" parent="1">
-          <mxGeometry x="120" y="490" width="400" height="74" as="geometry"/>
+        <mxCell id="racewindow" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" value="Race Window" vertex="1">
+          <mxGeometry height="74" width="400" x="120" y="390" as="geometry" />
         </mxCell>
-
-        <mxCell id="layer-services" value="Service Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFE1E1;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
-          <mxGeometry x="610" y="110" width="620" height="560" as="geometry"/>
+        <mxCell id="renderer" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=18;spacing=8;align=center;verticalAlign=middle" value="Vehicle Renderer" vertex="1">
+          <mxGeometry height="74" width="400" x="120" y="490" as="geometry" />
         </mxCell>
-        <mxCell id="raceapi" value="Race Simulation API&#xa;simulate_race + persist_race_results" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="650" y="190" width="540" height="92" as="geometry"/>
+        <mxCell id="layer-api" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="API Layer" vertex="1">
+          <mxGeometry height="180" width="620" x="610" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="factory" value="Race Engine Factory&#xa;Canonical Discipline Registry" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="650" y="308" width="540" height="92" as="geometry"/>
+        <mxCell id="apiapp" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="FastAPI Interface&#xa;Request Validation + Routing" vertex="1">
+          <mxGeometry height="78" width="540" x="650" y="182" as="geometry" />
         </mxCell>
-        <mxCell id="career" value="Career Result Service" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="650" y="426" width="540" height="76" as="geometry"/>
+        <mxCell id="layer-services" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFE1E1;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Service Layer" vertex="1">
+          <mxGeometry height="480" width="620" x="610" y="310" as="geometry" />
         </mxCell>
-        <mxCell id="port" value="RaceResultPersistence Port&#xa;save_race_results(batch)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="650" y="528" width="540" height="92" as="geometry"/>
+        <mxCell id="raceapi" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="Service Gateway&#xa;race_simulation_api.py" vertex="1">
+          <mxGeometry height="86" width="540" x="650" y="372" as="geometry" />
         </mxCell>
-
-        <mxCell id="layer-sim" value="Simulation Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
-          <mxGeometry x="1280" y="110" width="420" height="380" as="geometry"/>
+        <mxCell id="factory" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="Race Engine Factory&#xa;Canonical Discipline Registry" vertex="1">
+          <mxGeometry height="84" width="540" x="650" y="478" as="geometry" />
         </mxCell>
-        <mxCell id="adapter" value="Discipline Adapters&#xa;(6 Active Disciplines)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1320" y="190" width="340" height="84" as="geometry"/>
+        <mxCell id="career" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="Career Result Service" vertex="1">
+          <mxGeometry height="70" width="540" x="650" y="582" as="geometry" />
         </mxCell>
-        <mxCell id="rtengine" value="RealtimeRaceEngine (5)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1320" y="302" width="340" height="72" as="geometry"/>
+        <mxCell id="port" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="RaceResultPersistence Port&#xa;save_race_results(batch)" vertex="1">
+          <mxGeometry height="84" width="540" x="650" y="672" as="geometry" />
         </mxCell>
-        <mxCell id="dragengine" value="DragAccelerationEngine (1)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1320" y="396" width="340" height="72" as="geometry"/>
+        <mxCell id="layer-sim" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Simulation Layer" vertex="1">
+          <mxGeometry height="430" width="420" x="1280" y="110" as="geometry" />
         </mxCell>
-
-        <mxCell id="layer-persist" value="Persistence Implementations" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3E5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
-          <mxGeometry x="1280" y="530" width="420" height="260" as="geometry"/>
+        <mxCell id="adapter" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="Discipline Adapters&#xa;(6 Active Disciplines)" vertex="1">
+          <mxGeometry height="84" width="340" x="1320" y="190" as="geometry" />
         </mxCell>
-        <mxCell id="dbm" value="DatabaseManager" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1320" y="602" width="340" height="72" as="geometry"/>
+        <mxCell id="rtengine" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="RealtimeRaceEngine (5)" vertex="1">
+          <mxGeometry height="72" width="340" x="1320" y="302" as="geometry" />
         </mxCell>
-        <mxCell id="sqliteadapter" value="PersistenceSQLite" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1320" y="694" width="340" height="72" as="geometry"/>
+        <mxCell id="dragengine" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="DragAccelerationEngine (1)" vertex="1">
+          <mxGeometry height="72" width="340" x="1320" y="396" as="geometry" />
         </mxCell>
-
-        <mxCell id="layer-storage" value="Storage Layer" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1FFE1;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" vertex="1" parent="1">
-          <mxGeometry x="1760" y="530" width="380" height="260" as="geometry"/>
+        <mxCell id="layer-config" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFF9E6;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Configuration &amp; Environment" vertex="1">
+          <mxGeometry height="220" width="380" x="1760" y="110" as="geometry" />
         </mxCell>
-        <mxCell id="sqlite" value="SQLite Database&#xa;Drivers, Teams, Tracks, Championships, Results" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" vertex="1" parent="1">
-          <mxGeometry x="1805" y="608" width="290" height="120" as="geometry"/>
+        <mxCell id="configbox" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="config.py + .env&#xa;Seeds, Flags, Runtime Parameters" vertex="1">
+          <mxGeometry height="98" width="290" x="1805" y="186" as="geometry" />
         </mxCell>
-
-        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" edge="1" parent="1" source="launcher" target="mainmenu"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e2" value="start_race_signal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="mainmenu" target="racewindow"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e3" value="visual updates" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="racewindow" target="renderer"><mxGeometry relative="1" as="geometry"/></mxCell>
-
-        <mxCell id="e4" value="simulate_race" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="racewindow" target="raceapi"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e5" value="resolve engine" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="raceapi" target="factory"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e6" value="create adapter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="factory" target="adapter"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e7" value="5 disciplines" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="adapter" target="rtengine"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e8" value="drag discipline" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="adapter" target="dragengine"><mxGeometry relative="1" as="geometry"/></mxCell>
-
-        <mxCell id="e9" value="persist_race_results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="racewindow" target="port"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e10" value="career writes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="racewindow" target="career"><mxGeometry relative="1" as="geometry"/></mxCell>
-
-        <mxCell id="e11" value="implementation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="port" target="dbm"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e12" value="implementation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="port" target="sqliteadapter"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e13" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="dbm" target="sqlite"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e14" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="sqliteadapter" target="sqlite"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e15" value="career_race_results" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" edge="1" parent="1" source="career" target="sqlite"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="layer-cross" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#EAF7EA;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Cross-Cutting Systems" vertex="1">
+          <mxGeometry height="180" width="1620" x="80" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="cjKKhr9_YWUzJB6QFDOj-1" edge="1" parent="1" source="cross1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="cross2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="cross1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="Logging &amp; Error Handling" vertex="1">
+          <mxGeometry height="76" width="360" x="120" y="994" as="geometry" />
+        </mxCell>
+        <mxCell id="cross2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="Data &amp; Asset Management" vertex="1">
+          <mxGeometry height="76" width="360" x="520" y="994" as="geometry" />
+        </mxCell>
+        <mxCell id="cross3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="Testing Infrastructure" vertex="1">
+          <mxGeometry height="76" width="360" x="920" y="994" as="geometry" />
+        </mxCell>
+        <mxCell id="cross4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="Utility &amp; Task Systems" vertex="1">
+          <mxGeometry height="76" width="340" x="1320" y="994" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-persist" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3E5FF;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Persistence Implementations" vertex="1">
+          <mxGeometry height="260" width="420" x="1280" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="dbm" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="DatabaseManager" vertex="1">
+          <mxGeometry height="72" width="340" x="1320" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="sqliteadapter" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=17;align=center;verticalAlign=middle;spacing=8" value="PersistenceSQLite" vertex="1">
+          <mxGeometry height="72" width="340" x="1320" y="772" as="geometry" />
+        </mxCell>
+        <mxCell id="layer-storage" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E1FFE1;strokeColor=#353839;strokeWidth=2;fontSize=22;fontStyle=1;fontFamily=Arial;align=left;verticalAlign=top;spacing=12" value="Storage Layer" vertex="1">
+          <mxGeometry height="260" width="380" x="1760" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="sqlite" parent="1" style="shape=cylinder;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#FFFFFF;strokeColor=#353839;fontFamily=Arial;fontSize=16;align=center;verticalAlign=middle;spacing=8" value="SQLite Database&#xa;Drivers, Teams, Tracks, Championships, Results" vertex="1">
+          <mxGeometry height="120" width="290" x="1805" y="608" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="launcher" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;" target="mainmenu" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="mainmenu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="racewindow" value="start_race_signal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="racewindow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="renderer" value="visual updates">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="racewindow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;exitX=0.998;exitY=0.124;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="raceapi" value="in-process invocation">
+          <mxGeometry relative="1" x="-0.035" y="-17" as="geometry">
+            <mxPoint x="-12" y="16" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4a" edge="1" parent="1" source="external" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="apiapp" value="headless request">
+          <mxGeometry relative="1" x="0.732" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="590" y="744" />
+              <mxPoint x="590" y="221" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4b" edge="1" parent="1" source="apiapp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="raceapi" value="route to services">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="raceapi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="factory" value="resolve engine">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="factory" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="adapter" value="create adapter">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="adapter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="rtengine" value="5 disciplines">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="adapter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" target="dragengine" value="drag discipline">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="raceapi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="port" value="persist_race_results">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1200" y="414.9999999999998" />
+              <mxPoint x="1200" y="714" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="raceapi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" target="career" value="career writes">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="640" y="414.9999999999998" />
+              <mxPoint x="640" y="617" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="port" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" target="dbm" value="implementation">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="port" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#00A152;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="sqliteadapter" value="implementation">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="920" y="820" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="dbm" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="sqlite" value="SQL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="sqliteadapter" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;fontFamily=Arial;fontSize=14;" target="sqlite" value="SQL">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="career" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#353839;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" target="sqlite" value="career_race_results">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1730" y="590" />
+              <mxPoint x="1730" y="490" />
+              <mxPoint x="1950" y="490" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="configbox" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#B07D00;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" target="raceapi" value="runtime config">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1950" y="90" />
+              <mxPoint x="1250" y="90" />
+              <mxPoint x="1250" y="415" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="configbox" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#B07D00;strokeWidth=2;endArrow=block;dashed=1;fontFamily=Arial;fontSize=14;" target="adapter" value="seed + flags">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

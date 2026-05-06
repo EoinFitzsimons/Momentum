@@ -15,6 +15,7 @@ Source evidence used:
 - [Planning/Technical Report/diagrams/export_diagrams.py](Planning/Technical%20Report/diagrams/export_diagrams.py)
 - https://www.statology.org/the-concise-guide-to-weibull-distribution/
 - https://www.cs.umd.edu/users/oleary/reprints/j51.pdf
+- https://doi.org/10.1145/3510457.3513041
 
 ## Core Runtime Stack
 
@@ -57,11 +58,13 @@ Source evidence used:
 | ---------- | ---------------------------- | ----------------------------------------- | -------------------------------------- | -------------------------------------------------------------- | -------------------- | ------------------- |
 | pytest     | Unit/integration test runner | Simple, scalable test authoring           | Fixtures, markers, readable tests      | Plugin/config sprawl possible on large suites                  | Active               | `PytestDocs2026`  |
 | pytest-cov | Coverage reporting           | Quantify tested code paths                | Straightforward coverage metrics       | Coverage percentage can be gamed without meaningful assertions | Active               | `PytestCov2026`   |
-| black      | Formatting                   | Enforce consistent code formatting        | Removes style debates, fast formatting | Opinionated formatting choices                                 | Active               | `BlackDocs2026`   |
-| flake8     | Linting                      | Catch style and simple quality issues     | Lightweight and familiar               | Needs configuration to avoid noisy warnings                    | Active               | `Flake8Docs2026`  |
-| mypy       | Static type checking         | Improve correctness in typed Python code  | Catches interface/type errors early    | Requires disciplined annotations and stubs                     | Active               | `MypyDocs2026`    |
+| black      | Formatting                   | Keep formatting deterministic and review diffs small | Removes style debates, fast formatting | Opinionated formatting choices                                 | Active               | `BlackDocs2026`   |
+| flake8     | Linting                      | Catch style and simple quality issues without heavy setup | Lightweight and familiar               | Needs configuration to avoid noisy warnings                    | Active               | `Flake8Docs2026`  |
+| mypy       | Static type checking         | Catch interface and type errors earlier than runtime tests | Catches interface/type errors early    | Requires disciplined annotations and stubs                     | Active               | `MypyDocs2026`    |
 | hypothesis | Property-based testing       | Generate extensive test cases from specifications | Finds edge cases automatically, improves coverage | Requires rethinking test design around properties           | Active               | `HypothesisDocs2026` |
 | ipython    | Developer shell tooling      | Interactive debugging and experimentation | Fast exploratory workflow              | Not part of runtime deliverable                                | Active (development) | `IPythonDocs2026` |
+
+These three tools are used as a layered quality stack rather than a single monolithic checker. Black removes formatting noise, Flake8 catches lightweight style and code-quality issues, and mypy adds static type guarantees that runtime tests do not cover. Van Oort et al. (2022) argue that static-analysis tools are most effective when they fit the project context and require minimal configuration effort, which is why this project prefers a small set of focused tools over heavier all-in-one alternatives.
 
 ## Mathematical Formulae and Method References
 
