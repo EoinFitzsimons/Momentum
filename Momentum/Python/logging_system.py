@@ -372,6 +372,22 @@ def setup_exception_handler():
             print(f"  - {error.get('message', 'Unknown error')}")
         print("\n" + "=" * 80)
 
+        try:
+            from PyQt6.QtWidgets import QApplication, QMessageBox
+
+            app = QApplication.instance()
+            if app is not None:
+                QMessageBox.critical(
+                    None,
+                    "Momentum crashed",
+                    (
+                        f"{exc_type.__name__}: {exc_value}\n\n"
+                        f"Crash report saved to:\n{crash_report_path}"
+                    ),
+                )
+        except Exception:
+            pass
+
         # Call original exception handler
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
 

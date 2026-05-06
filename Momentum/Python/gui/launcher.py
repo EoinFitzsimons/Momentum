@@ -29,6 +29,7 @@ from GUI.accessibility_settings import (
     apply_accessibility_to_app,
     load_accessibility_settings,
 )
+from logging_system import setup_exception_handler
 
 # Ensure a QGuiApplication exists early to avoid QPixmap-before-QApplication errors
 # Some GUI modules may (incorrectly) create QPixmaps at import time; creating a
@@ -463,6 +464,7 @@ class MomentumLauncher:
 
 def main():
     """Main entry point."""
+    setup_exception_handler()
     launcher = MomentumLauncher()
     sys.exit(launcher.run())
 
