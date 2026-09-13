@@ -76,6 +76,7 @@ from typing import Any, List, Dict, Optional, Tuple, Union, cast
 from dataclasses import dataclass
 from config import RACE_GRID_SIZE, RENDER_FPS
 from services.driver_attributes import get_preferred_window_size
+from race_settings import load_race_settings, normalize_race_settings
 from .infield_presets import select_preset
 from .props_placer import place_props, draw_props
 from GUI.accessibility_settings import (
@@ -250,6 +251,7 @@ class EventEmitter(QObject):
     """Signal emitter for race events."""
 
     position_update = pyqtSignal(dict)  # {driver_id: {lap, position, total_time}}
+    realtime_position_update = pyqtSignal(dict)
     race_finished = pyqtSignal(list)
     event_signal = pyqtSignal(str)
     generic_event = pyqtSignal(dict)
@@ -918,12 +920,16 @@ class TrackWidget(QWidget):
             self._grass_tile_mtime = None
 
     def _init_animation_timer(self) -> None:
-        """Create animation timer with capped render frequency."""
+        """Create a presentation timer independent of simulation frequency."""
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self._animate_cars)
         try:
-            effective_fps = max(1, min(RENDER_FPS, 60))
-            interval_ms = max(1, int(1000 / effective_fps))
+            configured_fps = int(getattr(self, "render_fps", RENDER_FPS))
+            if configured_fps <= 0:
+                interval_ms = 0
+            else:
+                effective_fps = max(1, min(configured_fps, 1000))
+                interval_ms = max(1, int(1000 / effective_fps))
         except Exception:
             LOGGER.debug(
                 "Invalid render FPS configuration; falling back to 16ms interval",
@@ -1410,6 +1416,17 @@ class TrackWidget(QWidget):
             t = self._compute_interpolation_factor(car, now)
             prev = car.prev_s if car.prev_s is not None else car.s
             target = car.target_s if car.target_s is not None else car.s
+            if now > car.target_update_time:
+                # Extrapolate briefly when a worker packet arrives late. This
+                # prevents visible stalls without allowing the display to run
+                # away from the authoritative simulation state.
+                extra_seconds = min(0.20, now - car.target_update_time)
+                extra_distance = max(0.0, float(car.velocity_mps)) * extra_seconds
+                if self.track_length and not self.is_drag_track:
+                    target = (target + extra_distance) % self.track_length
+                else:
+                    target = min(self.track_length, target + extra_distance)
+                t = 1.0
             if self.track_length and self.track_length > 0 and not self.is_drag_track:
                 return self._interpolate_circular(prev, target, t)
             return prev + (target - prev) * t
@@ -1505,7 +1522,9 @@ class TrackWidget(QWidget):
                 )
             return False
         try:
-            normalized_s = float(followed_car.s) % float(self.track_length)
+            normalized_s = float(
+                getattr(followed_car, "display_s", followed_car.s)
+            ) % float(self.track_length)
             pt = self._point_at_s(normalized_s) or self.track_points[0]
             painter.translate(center_x, center_y)
             painter.rotate(math.degrees(pt.theta))
@@ -2875,6 +2894,7 @@ class RaceWindow(QMainWindow):
         tier: Optional[str] = None,
         championship_id: Optional[int] = None,
         race_id: Optional[int] = None,
+        race_settings: Optional[Dict[str, Any]] = None,
     ):
         try:
             super().__init__()
@@ -2892,6 +2912,10 @@ class RaceWindow(QMainWindow):
             self._race_total_laps = self._discipline_total_laps()
             self._championship_id = championship_id  # Championship this race belongs to
             self._race_id = race_id  # Current race ID in championship
+            self.race_settings = normalize_race_settings(
+                race_settings if race_settings is not None else load_race_settings()
+            )
+            self.render_fps = int(self.race_settings["render_fps"])
             self.race_thread: Optional[threading.Thread] = None
             self.stop_event: Optional[threading.Event] = None
             # Track last lap time per driver
@@ -2940,9 +2964,24 @@ class RaceWindow(QMainWindow):
             # Event emitter
             self.emitter = EventEmitter()
             self.emitter.position_update.connect(self._on_position_update)
+            self.emitter.realtime_position_update.connect(
+                self._queue_realtime_position_update
+            )
             self.emitter.race_finished.connect(self._on_race_finished)
             self.emitter.event_signal.connect(self._on_event)
             self.emitter.generic_event.connect(self._on_generic_event)
+
+            # The simulation may emit hundreds of snapshots per second when
+            # race speed is increased. Keep only the newest packet and apply
+            # it on a steady GUI cadence instead of draining a stale queue.
+            self._latest_realtime_event: Optional[dict] = None
+            self._position_flush_timer = QTimer(self)
+            self._position_flush_timer.setTimerType(Qt.TimerType.PreciseTimer)
+            self._position_flush_timer.setInterval(8)
+            self._position_flush_timer.timeout.connect(
+                self._flush_realtime_position_update
+            )
+            self._position_flush_timer.start()
 
             # Drag knockout tree state
             self._drag_round_nodes: Dict[int, QTreeWidgetItem] = {}
@@ -2988,7 +3027,7 @@ class RaceWindow(QMainWindow):
             self._accessibility_profile = settings
 
             app = QApplication.instance()
-            if app is not None:
+            if isinstance(app, QApplication):
                 apply_accessibility_to_app(app, settings)
 
             # Append or replace focus/theme overrides for this window
@@ -5296,9 +5335,11 @@ class RaceWindow(QMainWindow):
     ) -> RaceContext:
         """Construct race context and populate adapter-specific conditions."""
         race_laps = max(1, int(getattr(self, "_race_total_laps", 3) or 3))
+        if self.track is None:
+            raise RuntimeError("Cannot build a race context without a track")
         context = RaceContext(
             discipline=RacingDiscipline[self._initial_discipline],
-            track=self.track,
+            track=cast(Any, self.track),
             drivers=self.drivers,
             teams=teams,
             total_laps=race_laps,
@@ -5309,7 +5350,8 @@ class RaceWindow(QMainWindow):
         tc["player_team_driver_ids"] = list(self.player_team_driver_ids)
         tc["player_overrides"] = self.player_overrides
         tc["track_points"] = track_pts
-        tc["realtime_speed"] = 5.0
+        tc["realtime_speed"] = float(self.race_settings["simulation_speed"])
+        tc["render_fps"] = int(self.race_settings["render_fps"])
         tc["stop_event"] = self.stop_event
         tc["tuning_preset"] = self.tuning_preset
         tc["discipline"] = str(
@@ -5324,7 +5366,7 @@ class RaceWindow(QMainWindow):
         try:
             event_type = event.get("type")
             if event_type == "position_update":
-                self._handle_thread_position_update_event(event)
+                self.emitter.realtime_position_update.emit(event)
                 return
             if event_type == "dnf":
                 self._handle_thread_dnf_event(event)
@@ -5355,6 +5397,18 @@ class RaceWindow(QMainWindow):
         self._log_position_frame_snapshot(frame, race_time, positions)
         for pos_data in positions:
             self._process_single_thread_position_update(pos_data, frame, race_time)
+
+    def _queue_realtime_position_update(self, event: dict) -> None:
+        """Store only the newest worker snapshot for the GUI render clock."""
+        if isinstance(event, dict):
+            self._latest_realtime_event = event
+
+    def _flush_realtime_position_update(self) -> None:
+        """Apply one newest snapshot per render tick, dropping stale packets."""
+        event = self._latest_realtime_event
+        self._latest_realtime_event = None
+        if event is not None:
+            self._handle_thread_position_update_event(event)
 
     def _maybe_start_animation_from_thread(self) -> None:
         """Request animation start once, when first position packet arrives."""
@@ -5848,75 +5902,94 @@ class RaceWindow(QMainWindow):
 
     def _save_single_race_result(self, result: dict) -> bool:
         """Save one race result record; return True on success."""
-        from database.models import RaceResult
-        from services.championship_service import ChampionshipService
+        driver_id, team_id = self._resolve_result_driver_and_team(result)
+        if driver_id is None or team_id is None:
+            return False
+        try:
+            return self._persist_single_race_result(result, driver_id, team_id)
+        except Exception as e:
+            print(f"WARNING: Could not save result for driver {driver_id}: {e}")
+        return False
 
+    def _persist_single_race_result(
+        self, result: dict, driver_id: int, team_id: int
+    ) -> bool:
+        if self.db is None:
+            return False
+        position = int(result.get("position", 0) or 0)
+        fastest_lap = bool(result.get("fastest_lap", False))
+        dnf_reason = result.get("dnf_reason")
+        discipline = str(
+            getattr(self, "_initial_discipline", "SINGLE_SEATER") or "SINGLE_SEATER"
+        )
+        points = self._calculate_result_points(
+            dnf_reason, position, discipline, fastest_lap
+        )
+        if self._is_career_mode():
+            self._save_single_career_race_result(
+                result=result,
+                driver_id=driver_id,
+                team_id=team_id,
+                position=position,
+                points=points,
+                fastest_lap=fastest_lap,
+                dnf_reason=dnf_reason,
+            )
+        else:
+            from database.models import RaceResult
+
+            race_result = RaceResult(
+                id=0,
+                race_id=self._race_id if isinstance(self._race_id, int) else 0,
+                driver_id=driver_id,
+                team_id=team_id,
+                position=position,
+                points=points,
+                fastest_lap=fastest_lap,
+                dnf_reason=dnf_reason,
+                grid_position=result.get("grid_position", result.get("position")),
+            )
+            persist_race_results(self.db, [race_result])
+        return True
+
+    def _is_career_mode(self) -> bool:
+        return str(getattr(self, "_game_mode", "") or "").lower() == "career"
+
+    def _resolve_result_driver_and_team(
+        self, result: dict
+    ) -> Tuple[Optional[int], Optional[int]]:
         driver_id_raw = result.get("driver_id")
         if not isinstance(driver_id_raw, (int, str)):
             print(f"WARNING: Skipping result with invalid driver_id={driver_id_raw}")
-            return False
+            return None, None
         try:
             driver_id = int(driver_id_raw)
         except (TypeError, ValueError):
             print(f"WARNING: Skipping result with invalid driver_id={driver_id_raw}")
-            return False
-        driver = next((d for d in self.drivers if d.id == driver_id), None)
-        team_id = (
-            driver.current_team_id
-            if driver and hasattr(driver, "current_team_id")
-            else None
-        )
-        if team_id is None:
+            return None, None
+        driver = next((item for item in self.drivers if item.id == driver_id), None)
+        team_id = getattr(driver, "current_team_id", None) if driver else None
+        if not isinstance(team_id, int):
             print(f"WARNING: Skipping result for driver {driver_id} - no team assigned")
-            return False
+            return None, None
+        return driver_id, team_id
 
-        discipline = str(
-            getattr(self, "_initial_discipline", "SINGLE_SEATER") or "SINGLE_SEATER"
-        )
-        position = int(result.get("position", 0) or 0)
-        fastest_lap = bool(result.get("fastest_lap", False))
-        dnf_reason = result.get("dnf_reason")
+    def _calculate_result_points(
+        self,
+        dnf_reason: Optional[str],
+        position: int,
+        discipline: str,
+        fastest_lap: bool,
+    ) -> int:
+        if dnf_reason is not None or position <= 0 or self.db is None:
+            return 0
+        from services.championship_service import ChampionshipService
 
-        points = 0
-        if dnf_reason is None and position > 0 and self.db is not None:
-            points = ChampionshipService(self.db).calculate_points(
-                position=position,
-                discipline=discipline,
-                fastest_lap=fastest_lap,
-            )
-
-        race_result = RaceResult(
-            id=None,
-            race_id=self._race_id,
-            driver_id=driver_id,
-            team_id=team_id,
+        return ChampionshipService(self.db).calculate_points(
             position=position,
-            points=points,
+            discipline=discipline,
             fastest_lap=fastest_lap,
-            dnf_reason=dnf_reason,
-            grid_position=result.get("grid_position", result.get("position")),
         )
-        try:
-            if self.db is not None:
-                is_career = (
-                    str(getattr(self, "_game_mode", "") or "").lower() == "career"
-                )
-                if is_career:
-                    self._save_single_career_race_result(
-                        result=result,
-                        driver_id=driver_id,
-                        team_id=team_id,
-                        position=position,
-                        points=points,
-                        fastest_lap=fastest_lap,
-                        dnf_reason=dnf_reason,
-                    )
-                else:
-                    persist_race_results(self.db, [race_result])
-                return True
-        except Exception as e:
-            print(f"WARNING: Could not save result for driver {driver_id}: {e}")
-        return False
 
     def _save_single_career_race_result(
         self,

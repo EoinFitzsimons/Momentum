@@ -28,6 +28,7 @@ from GUI.accessibility_settings import (
     save_accessibility_settings,
 )
 from GUI.themed_messagebox import information, warning, about
+from race_settings import load_race_settings, save_race_settings
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -47,7 +48,7 @@ from PyQt6.QtWidgets import (
 )
 import sys
 import os
-from typing import Optional, List
+from typing import Optional, List, cast
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -80,6 +81,9 @@ COMBO_BOX_STYLE = """
 
 FEINT_BUTTON_BORDER = "1px solid rgba(185,242,255,0.24)"
 LOGO_STYLE = "font-size: 30px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+UNKNOWN_TEAM = "Unknown Team"
+FORM_LABEL_STYLE = "font-size: 14px; font-weight: bold;"
+CONTROLS_TUTORIAL_TITLE = "Controls Tutorial"
 
 
 class DriverCard(QWidget):
@@ -143,7 +147,7 @@ class DriverCard(QWidget):
         # Team name
         team_name_text = ""
         if team:
-            team_name_text = getattr(team, "name", "Unknown Team")
+            team_name_text = getattr(team, "name", UNKNOWN_TEAM)
         name_team_layout.addWidget(QLabel(team_name_text))
 
         top_row.addLayout(name_team_layout)
@@ -275,8 +279,9 @@ class MainMenuWindow(QMainWindow):
         self.setMinimumSize(800, 600)  # Absolute minimum for usability
 
         self.accessibility_settings = load_accessibility_settings()
+        self.race_settings = load_race_settings()
         app = QApplication.instance()
-        if app is not None:
+        if isinstance(app, QApplication):
             apply_accessibility_to_app(app, self.accessibility_settings)
 
         # Apply a dark Momentum palette consistent with existing branding
@@ -517,7 +522,7 @@ class MainMenuWindow(QMainWindow):
 
         # Display settings
         display_label = QLabel("Display Mode:")
-        display_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        display_label.setStyleSheet(FORM_LABEL_STYLE)
         layout.addWidget(display_label)
 
         # Radio buttons for display mode
@@ -545,7 +550,7 @@ class MainMenuWindow(QMainWindow):
         layout.addSpacing(20)
 
         accessibility_label = QLabel("Accessibility Theme:")
-        accessibility_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        accessibility_label.setStyleSheet(FORM_LABEL_STYLE)
         layout.addWidget(accessibility_label)
 
         self.theme_combo = QComboBox()
@@ -560,7 +565,7 @@ class MainMenuWindow(QMainWindow):
         layout.addWidget(self.theme_combo)
 
         scale_label = QLabel("UI Scale:")
-        scale_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        scale_label.setStyleSheet(FORM_LABEL_STYLE)
         layout.addWidget(scale_label)
 
         self.ui_scale_combo = QComboBox()
@@ -573,6 +578,39 @@ class MainMenuWindow(QMainWindow):
         scale_idx = self.ui_scale_combo.findData(current_scale)
         self.ui_scale_combo.setCurrentIndex(scale_idx if scale_idx >= 0 else 0)
         layout.addWidget(self.ui_scale_combo)
+
+        render_fps_label = QLabel("Render FPS:")
+        render_fps_label.setStyleSheet(FORM_LABEL_STYLE)
+        layout.addWidget(render_fps_label)
+
+        self.render_fps_combo = QComboBox()
+        self.render_fps_combo.addItem("Uncapped", 0)
+        for fps in (30, 60, 120, 144, 240):
+            self.render_fps_combo.addItem(f"{fps} FPS", fps)
+        self.render_fps_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.render_fps_combo.setAccessibleName("Render FPS")
+        render_fps_index = self.render_fps_combo.findData(
+            int(self.race_settings.get("render_fps", 0))
+        )
+        self.render_fps_combo.setCurrentIndex(
+            render_fps_index if render_fps_index >= 0 else 0
+        )
+        layout.addWidget(self.render_fps_combo)
+
+        simulation_speed_label = QLabel("Race Speed:")
+        simulation_speed_label.setStyleSheet(FORM_LABEL_STYLE)
+        layout.addWidget(simulation_speed_label)
+
+        self.simulation_speed_combo = QComboBox()
+        for speed in (0.5, 1.0, 2.0, 5.0, 10.0, 20.0):
+            self.simulation_speed_combo.addItem(f"{speed:g}x", speed)
+        self.simulation_speed_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.simulation_speed_combo.setAccessibleName("Race Speed")
+        speed_index = self.simulation_speed_combo.findData(
+            float(self.race_settings.get("simulation_speed", 5.0))
+        )
+        self.simulation_speed_combo.setCurrentIndex(speed_index if speed_index >= 0 else 3)
+        layout.addWidget(self.simulation_speed_combo)
 
         # Apply button
         apply_btn = QPushButton("Apply Display Settings")
@@ -594,12 +632,20 @@ class MainMenuWindow(QMainWindow):
         apply_accessibility_btn.clicked.connect(self._apply_accessibility_settings)
         layout.addWidget(apply_accessibility_btn)
 
-        tutorial_btn = QPushButton("Controls Tutorial")
+        apply_race_settings_btn = QPushButton("Apply Race Settings")
+        apply_race_settings_btn.setMinimumHeight(50)
+        apply_race_settings_btn.setProperty("primary", True)
+        apply_race_settings_btn.setToolTip("Apply render FPS and race speed settings")
+        apply_race_settings_btn.setAccessibleName("Apply Race Settings")
+        apply_race_settings_btn.clicked.connect(self._apply_race_settings)
+        layout.addWidget(apply_race_settings_btn)
+
+        tutorial_btn = QPushButton(CONTROLS_TUTORIAL_TITLE)
         tutorial_btn.setMinimumHeight(50)
         tutorial_btn.setToolTip(
             "Show quick controls tutorial relevant to current screens"
         )
-        tutorial_btn.setAccessibleName("Controls Tutorial")
+        tutorial_btn.setAccessibleName(CONTROLS_TUTORIAL_TITLE)
         tutorial_btn.clicked.connect(self._show_controls_tutorial)
         layout.addWidget(tutorial_btn)
 
@@ -692,6 +738,7 @@ class MainMenuWindow(QMainWindow):
         # Add display mode to config
         config["display_mode"] = self.display_mode
         config["accessibility"] = dict(self.accessibility_settings)
+        config["race_settings"] = dict(self.race_settings)
         self._show_menu_page()
         self.start_race_signal.emit(config)
         self.hide()
@@ -700,6 +747,7 @@ class MainMenuWindow(QMainWindow):
         """Start a career race."""
         config["display_mode"] = self.display_mode
         config["accessibility"] = dict(self.accessibility_settings)
+        config["race_settings"] = dict(self.race_settings)
         self._show_menu_page()
         self.start_race_signal.emit(config)
         self.hide()
@@ -770,7 +818,7 @@ class MainMenuWindow(QMainWindow):
         save_accessibility_settings(new_settings)
 
         app = QApplication.instance()
-        if app is not None:
+        if isinstance(app, QApplication):
             apply_accessibility_to_app(app, new_settings)
 
         self.setStyleSheet(
@@ -818,7 +866,7 @@ class MainMenuWindow(QMainWindow):
         """Show a short in-app tutorial for menu and race controls."""
         information(
             self,
-            "Controls Tutorial",
+            CONTROLS_TUTORIAL_TITLE,
             "Main Menu:\n"
             "- Ctrl+1: Quick Race\n"
             "- Ctrl+2: Championship\n"
@@ -834,10 +882,21 @@ class MainMenuWindow(QMainWindow):
             "You can remap race controls in the race window using Control Bindings.",
         )
 
+    def _apply_race_settings(self) -> None:
+        """Persist player-facing render and simulation speed preferences."""
+        self.race_settings = save_race_settings(
+            {
+                "render_fps": self.render_fps_combo.currentData(),
+                "simulation_speed": self.simulation_speed_combo.currentData(),
+            }
+        )
+        information(self, "Race Settings", "Race settings applied and saved.")
+
     def _on_race_start(self, config: dict):
         """Handle race start from setup dialog."""
         print(f"[INFO] Starting race with config: {config}")
         config["accessibility"] = dict(self.accessibility_settings)
+        config["race_settings"] = dict(self.race_settings)
         self.start_race_signal.emit(config)
         self.hide()  # Hide main menu while racing
 
@@ -1603,7 +1662,7 @@ class QuickRaceSetupWindow(QDialog):
                 driver_name = get_display_name(driver)
                 team = self._resolve_driver_team(driver)
                 if team is not None:
-                    team_name = getattr(team, "name", "Unknown Team")
+                    team_name = getattr(team, "name", UNKNOWN_TEAM)
 
         ready = current_item is not None and self.track_combo.count() > 0
         state = "READY TO START" if ready else "SETUP INCOMPLETE"
@@ -1626,7 +1685,7 @@ class QuickRaceSetupWindow(QDialog):
         if team is None:
             self.profile_team.setText("Team: Unassigned")
             return
-        team_name = getattr(team, "name", "Unknown Team")
+        team_name = getattr(team, "name", UNKNOWN_TEAM)
         team_tier = getattr(team, "tier", "N/A")
         self.profile_team.setText(f"Team: {team_name} ({team_tier})")
 

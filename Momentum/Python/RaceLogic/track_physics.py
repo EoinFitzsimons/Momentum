@@ -132,7 +132,7 @@ class TrackMap:
     def _generate_corners_impl(self):
         """Implementation body extracted to keep entrypoint complexity low."""
         track_length_m = self.track.length_km * 1000
-        num_corners = self.track.turns
+        num_corners = max(1, int(self.track.turns or 0))
         rng = np.random.default_rng(seed=42)  # Create random generator with seed
 
         # Distribute corners around track
@@ -262,12 +262,15 @@ class TrackMap:
         self, position_m: float
     ) -> Tuple[TrackSection, Optional[TrackCorner]]:
         """Get track section type and nearest corner at position"""
+        track_length_m = max(1.0, float(self.track.length_km) * 1000.0)
+        position_m = float(position_m) % track_length_m
         # Find nearest corner
         nearest_corner = None
         min_distance = float("inf")
 
         for corner in self.corners:
-            distance = abs(corner.position_m - position_m)
+            direct_distance = abs(corner.position_m - position_m)
+            distance = min(direct_distance, track_length_m - direct_distance)
             if distance < min_distance:
                 min_distance = distance
                 nearest_corner = corner

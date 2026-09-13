@@ -31,7 +31,7 @@ from services.championship_service import ChampionshipService
 from services.team_service import TeamService
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def test_db() -> Iterator[DatabaseManager]:
     """Create an isolated temporary SQLite database for each test."""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
@@ -40,7 +40,7 @@ def test_db() -> Iterator[DatabaseManager]:
         yield db
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def seeded_db(test_db: DatabaseManager):
     """Seed deterministic teams, tracks, and drivers for stable tests."""
     team_ids = []
@@ -110,7 +110,7 @@ def seeded_db(test_db: DatabaseManager):
     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def seeded_championship(seeded_db):
     """Create a championship season with scheduled races using seeded tracks."""
     db: DatabaseManager = seeded_db["db"]
@@ -140,7 +140,7 @@ def seeded_championship(seeded_db):
     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def api_client(seeded_db, monkeypatch):
     """Return FastAPI TestClient with simulation services patched to test DB."""
     import simulation

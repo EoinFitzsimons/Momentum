@@ -100,6 +100,7 @@ class MomentumLauncher:
                 tier=tier,
                 championship_id=championship_id,
                 race_id=race_id,
+                race_settings=config.get("race_settings"),
             )
         except TypeError:
             # Older signature fallback

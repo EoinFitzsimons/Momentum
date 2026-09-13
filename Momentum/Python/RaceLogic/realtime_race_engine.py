@@ -27,7 +27,7 @@ Date: December 2025
 import random
 import numpy as np
 import time
-from typing import List, Dict, Callable, Optional, Any, Tuple
+from typing import List, Dict, Callable, Optional, Any, Tuple, cast
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -334,6 +334,8 @@ class RealtimeRaceEngine:
         ] = None,  # Player-controlled team car IDs
         # Player's pace and overtake settings
         player_overrides: Optional[Dict[str, float]] = None,
+        weather_conditions: Optional[Dict[str, float]] = None,
+        track_conditions: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Simulate complete race with real-time updates
@@ -359,6 +361,8 @@ class RealtimeRaceEngine:
             player_driver_id,
             player_team_driver_ids,
             player_overrides,
+            weather_conditions,
+            track_conditions,
         )
 
         # Headless runs are used by the statistical and performance tests, so
@@ -391,6 +395,8 @@ class RealtimeRaceEngine:
         player_driver_id: Optional[int],
         player_team_driver_ids: Optional[List[int]],
         player_overrides: Optional[Dict[str, float]],
+        weather_conditions: Optional[Dict[str, float]],
+        track_conditions: Optional[Dict[str, Any]],
     ) -> Tuple[RaceState, float]:
         """Prepare track map, controls and race state for simulation loop."""
         if self.debug_logging:
@@ -413,6 +419,8 @@ class RealtimeRaceEngine:
             int(x) for x in (player_team_driver_ids or []) if x is not None
         }
         self.player_overrides = player_overrides or {}
+        self.weather_conditions = dict(weather_conditions or {})
+        self.track_conditions = dict(track_conditions or {})
         self._current_race_state = None
         if player_driver_id and self.debug_logging:
             print(
@@ -463,37 +471,43 @@ class RealtimeRaceEngine:
         for team_id, team in teams.items():
             if team_id is None:
                 continue
-            try:
-                staff = self.db.get_staff_by_team(int(team_id))
-            except Exception:
-                staff = []
+            self._team_staff_effects[int(team_id)] = self._calculate_team_staff_effects(
+                int(team_id), team
+            )
 
-            raw_effects: Dict[str, float] = {}
-            discipline = str(getattr(team, "discipline", "") or "").upper()
+    def _calculate_team_staff_effects(
+        self, team_id: int, team: Team
+    ) -> Dict[str, float]:
+        db = self.db
+        if db is None or not hasattr(db, "get_staff_by_team"):
+            return {}
+        try:
+            staff = db.get_staff_by_team(team_id)
+        except Exception:
+            staff = []
+        raw_effects: Dict[str, float] = {}
+        discipline = str(getattr(team, "discipline", "") or "").upper()
+        for member in staff:
+            self._accumulate_staff_member_effects(raw_effects, member, discipline)
+        return {
+            key: self._saturate_staff_effect(value)
+            for key, value in raw_effects.items()
+        }
 
-            for member in staff:
-                role_key = str(getattr(member, "role", "") or "").upper()
-                cfg = STAFF_ROLES_CONFIG.get(role_key)
-                if not cfg:
-                    continue
-
-                rating = float(getattr(member, "rating", 50.0) or 50.0)
-                rating_factor = self._rating_impact_factor(rating)
-                discipline_mod = float(
-                    cfg.get("discipline_modifiers", {}).get(discipline, 1.0)
-                )
-                base_effects = cfg.get("base_effects", {})
-
-                for effect_name, effect_value in base_effects.items():
-                    raw_effects[effect_name] = raw_effects.get(effect_name, 0.0) + (
-                        float(effect_value) * rating_factor * discipline_mod
-                    )
-
-            effects: Dict[str, float] = {}
-            for key, raw_value in raw_effects.items():
-                effects[key] = self._saturate_staff_effect(raw_value)
-
-            self._team_staff_effects[int(team_id)] = effects
+    def _accumulate_staff_member_effects(
+        self, raw_effects: Dict[str, float], member: Any, discipline: str
+    ) -> None:
+        role_key = str(getattr(member, "role", "") or "").upper()
+        cfg = STAFF_ROLES_CONFIG.get(role_key)
+        if not cfg:
+            return
+        rating = float(getattr(member, "rating", 50.0) or 50.0)
+        rating_factor = self._rating_impact_factor(rating)
+        discipline_mod = float(cfg.get("discipline_modifiers", {}).get(discipline, 1.0))
+        for effect_name, effect_value in cfg.get("base_effects", {}).items():
+            raw_effects[effect_name] = raw_effects.get(effect_name, 0.0) + (
+                float(effect_value) * rating_factor * discipline_mod
+            )
 
     def _rating_impact_factor(self, rating: float) -> float:
         """Map staff rating to nonlinear impact where early improvements matter more."""
@@ -606,21 +620,31 @@ class RealtimeRaceEngine:
         )
         current_wear = float(getattr(state, "tyre_condition", 1.0))
 
+        wetness = self._safe_condition_float("track_wetness", 0.0)
+        if wetness >= 0.45:
+            return "wet"
         if total_laps <= 10:
             return "soft" if laps_remaining <= 4 else "medium"
-
         if laps_remaining <= 6:
             return "soft"
+        return self._select_long_race_tyre(
+            state, total_laps, laps_remaining, current_compound, current_wear
+        )
 
+    def _select_long_race_tyre(
+        self,
+        state: DriverState,
+        total_laps: int,
+        laps_remaining: int,
+        current_compound: str,
+        current_wear: float,
+    ) -> str:
         if laps_remaining <= 11:
             return "medium"
-
         if current_wear < 0.35 and total_laps >= 18:
             return "hard"
-
         if current_compound == "soft" and current_wear < 0.55:
             return "medium"
-
         consistency = self._driver_attr_factor(
             get_safe_attribute(state.driver, "consistency")
         )
@@ -629,10 +653,8 @@ class RealtimeRaceEngine:
         )
         if total_laps >= 18 and (consistency + professionalism) / 2.0 > 0.62:
             return "hard"
-
         if current_wear < 0.50 and laps_remaining > 8:
             return "medium"
-
         return "soft" if laps_remaining <= 8 else "medium"
 
     def _tyre_wear_per_step(self, state: DriverState) -> float:
@@ -787,6 +809,7 @@ class RealtimeRaceEngine:
     ) -> int:
         """Execute one simulation frame and return the incremented frame index."""
         frame_start = time.time()
+        self._update_track_wetness(timestep, event_callback, race_state.current_time)
         self._update_running_drivers(
             race_state, track_length_m, timestep, event_callback
         )
@@ -798,6 +821,31 @@ class RealtimeRaceEngine:
         self._emit_position_update_if_needed(next_frame, race_state, event_callback)
         self._throttle_frame_if_needed(frame_start, timestep, realtime_speed)
         return next_frame
+
+    def _update_track_wetness(
+        self,
+        timestep: float,
+        event_callback: Optional[Callable[[Dict[str, Any]], None]],
+        current_time: float,
+    ) -> None:
+        """Move track wetness toward precipitation-driven conditions over time."""
+        precipitation = self._safe_condition_float("precipitation", 0.0)
+        current = self._safe_condition_float("track_wetness", 0.0)
+        target = float(np.clip(precipitation / 8.0, 0.0, 1.0))
+        rate = 0.035 if target > current else 0.012
+        updated = float(np.clip(current + (target - current) * rate * timestep * 30.0, 0.0, 1.0))
+        previous_band = int(current * 4.0)
+        updated_band = int(updated * 4.0)
+        self.track_conditions["track_wetness"] = updated
+        if updated_band != previous_band and callable(event_callback):
+            event_callback(
+                {
+                    "type": "track_condition_update",
+                    "time": float(current_time),
+                    "track_wetness": updated,
+                    "precipitation": precipitation,
+                }
+            )
 
     def _update_running_drivers(
         self,
@@ -913,6 +961,8 @@ class RealtimeRaceEngine:
 
         if self._pit_hard_trigger_active(state):
             return True
+        if self._should_pit_for_weather(state, laps_remaining):
+            return True
         if self._should_pit_for_ai_tyre_strategy(state, laps_remaining):
             return True
         if self._should_take_mandatory_stop(state, race_state, event_callback):
@@ -961,6 +1011,20 @@ class RealtimeRaceEngine:
             projected_loss >= self.TYRE_AI_PIT_PACE_LOSS_THRESHOLD
             and laps_remaining > self.PIT_MIN_LAPS_REMAINING
         )
+
+    def _should_pit_for_weather(
+        self, state: DriverState, laps_remaining: int
+    ) -> bool:
+        """Pit when current tyres are unsuitable for a materially wet track."""
+        if self._is_player_controlled_for_pit_strategy(state):
+            return False
+        if laps_remaining <= self.PIT_MIN_LAPS_REMAINING:
+            return False
+        wetness = self._safe_condition_float("track_wetness", 0.0)
+        is_wet = state.tyre_compound.lower() in {"wet", "rain"}
+        if wetness >= 0.45 and not is_wet:
+            return True
+        return wetness <= 0.12 and is_wet
 
     def _should_take_mandatory_stop(
         self,
@@ -1267,10 +1331,10 @@ class RealtimeRaceEngine:
 
         # Older tests may pass teams as a list/tuple; normalise to {team_id: team}.
         if not hasattr(teams, "get"):
-            teams = {
+            teams = cast(Dict[int, Team], {
                 int(getattr(team, "id", idx + 1)): team
                 for idx, team in enumerate(list(teams))
-            }
+            })
 
         # Ensure each driver is assigned to a valid team for race init.
         team_ids = list(teams.keys())
@@ -1318,7 +1382,8 @@ class RealtimeRaceEngine:
 
         # Create driver states in grid order
         for i, driver in enumerate(drivers):
-            team = teams.get(driver.current_team_id)
+            current_team_id = getattr(driver, "current_team_id", None)
+            team = teams.get(current_team_id) if isinstance(current_team_id, int) else None
             if not team:
                 continue
 
@@ -1593,6 +1658,16 @@ class RealtimeRaceEngine:
             return
 
         state.racing_mode = RacingMode.ATTACK
+        state.racing_line = (
+            RacingLine.ATTACKING
+            if attempt_type
+            in {
+                OvertakeAttemptType.LATE_BRAKING,
+                OvertakeAttemptType.AROUND_OUTSIDE,
+                OvertakeAttemptType.SWITCHBACK,
+            }
+            else RacingLine.IDEAL
+        )
         state.push_intensity = min(1.0, base_push + 0.35)
         self._log_overtake_attempt(
             driver.name, car_ahead.driver.name, gap_m, success_prob
@@ -1713,6 +1788,12 @@ class RealtimeRaceEngine:
             gap_m=gap_m,
             speed_advantage_kmh=(state.velocity_mps - car_ahead.velocity_mps) * 3.6,
             corner=corner,
+            attacker_line=state.racing_line,
+            defender_line=(
+                car_ahead.racing_line
+                if car_ahead.racing_mode == RacingMode.DEFEND
+                else RacingLine.IDEAL
+            ),
             success_probability=float(np.clip(success_prob, 0.05, 0.95)),
         )
 
@@ -1831,14 +1912,22 @@ class RealtimeRaceEngine:
         # Team performance adds small bonus (0-5%)
         team_modifier = 0.975 + (team_performance * 0.05)
 
-        # Cornering skill affects corners only
-        in_corner = self._is_in_corner_proxy(state, track_length_m)
+        section, corner = self._get_live_track_section(state, track_length_m)
+        vehicle_profile = self._get_vehicle_profile()
+        in_corner = section in {
+            TrackSection.SLOW_CORNER,
+            TrackSection.MEDIUM_CORNER,
+            TrackSection.FAST_CORNER,
+            TrackSection.BRAKING_ZONE,
+        }
 
         if in_corner:
-            # 85-100% speed in corners
-            corner_modifier = 0.84 + (cornering_skill * 0.16)
+            corner_modifier = (
+                0.84
+                + (cornering_skill * 0.16)
+            ) * vehicle_profile["cornering_multiplier"]
         else:
-            corner_modifier = 1.0  # Full speed on straights
+            corner_modifier = vehicle_profile["straight_multiplier"]
 
         # Calculate final speed
         speed = (
@@ -1853,6 +1942,15 @@ class RealtimeRaceEngine:
 
         # Tyre wear now falls off progressively by compound and wear state.
         speed *= self._tyre_pace_multiplier(state)
+        speed *= self._live_grip_multiplier(state, section, corner)
+
+        if corner is not None:
+            corner_speed_mps = (
+                corner.apex_speed_kmh
+                / 3.6
+                * vehicle_profile["cornering_multiplier"]
+            )
+            speed = min(speed, max(self.MIN_SPEED_MPS, corner_speed_mps))
 
         # Fuel weight - lighter car is faster
         fuel_bonus = 1.0 + (1.0 - state.fuel_load) * 0.03
@@ -1886,9 +1984,114 @@ class RealtimeRaceEngine:
         return np.clip(speed, self.MIN_SPEED_MPS, self.MAX_SPEED_MPS)
 
     def _is_in_corner_proxy(self, state: DriverState, track_length_m: float) -> bool:
-        """Approximate corner occupancy using lap-phase sine proxy."""
-        position_in_lap = (state.position_m % track_length_m) / track_length_m
-        return abs(np.sin(position_in_lap * 2 * np.pi * 8)) > 0.5
+        """Compatibility wrapper for callers that only need corner occupancy."""
+        section, _ = self._get_live_track_section(state, track_length_m)
+        return section in {
+            TrackSection.SLOW_CORNER,
+            TrackSection.MEDIUM_CORNER,
+            TrackSection.FAST_CORNER,
+            TrackSection.BRAKING_ZONE,
+        }
+
+    def _get_live_track_section(
+        self, state: DriverState, track_length_m: float
+    ) -> Tuple[TrackSection, Optional[Any]]:
+        if self.track_map is None:
+            return TrackSection.STRAIGHT, None
+        return self.track_map.get_section_at_position(
+            state.position_m % max(1.0, track_length_m)
+        )
+
+    def _get_vehicle_profile(self) -> Dict[str, float]:
+        """Return discipline-specific handling characteristics for live physics."""
+        discipline = "SINGLE_SEATER"
+        if self.track_map is not None:
+            discipline = str(
+                getattr(self.track_map.track, "primary_discipline", discipline)
+                or discipline
+            ).upper()
+        profiles = {
+            "SINGLE_SEATER": {
+                "straight_multiplier": 1.04,
+                "cornering_multiplier": 1.08,
+                "surface_sensitivity": 0.65,
+            },
+            "PRODUCTION_TOURING": {
+                "straight_multiplier": 0.96,
+                "cornering_multiplier": 0.94,
+                "surface_sensitivity": 0.85,
+            },
+            "URBAN_STREET": {
+                "straight_multiplier": 0.98,
+                "cornering_multiplier": 0.97,
+                "surface_sensitivity": 0.95,
+            },
+            "SPRINT_RALLYCROSS": {
+                "straight_multiplier": 0.90,
+                "cornering_multiplier": 0.91,
+                "surface_sensitivity": 1.15,
+            },
+            "ENDURANCE": {
+                "straight_multiplier": 0.93,
+                "cornering_multiplier": 0.96,
+                "surface_sensitivity": 0.80,
+            },
+        }
+        return profiles.get(discipline, profiles["SINGLE_SEATER"])
+
+    def _live_grip_multiplier(
+        self,
+        state: DriverState,
+        section: TrackSection,
+        corner: Optional[Any],
+    ) -> float:
+        """Combine surface, weather, line, tyre, and driver adaptation grip."""
+        if section == TrackSection.STRAIGHT:
+            return 1.0
+
+        profile = self._get_vehicle_profile()
+        base_grip = float(getattr(corner, "grip_level", 1.0) or 1.0)
+        track_grip = self.track_conditions.get("grip_level", 1.0)
+        try:
+            base_grip *= float(track_grip)
+        except (TypeError, ValueError):
+            pass
+
+        precipitation = self._safe_condition_float("precipitation", 0.0)
+        wetness = self._safe_condition_float("track_wetness", precipitation / 8.0)
+        wetness = float(np.clip(wetness, 0.0, 1.0))
+        wet_skill = self._driver_attr_factor(
+            get_safe_attribute(state.driver, "wet_weather_skill")
+        )
+        tyre_is_wet = state.tyre_compound.lower() in {"wet", "rain"}
+        wet_tyre_factor = 1.0
+        if wetness > 0.15:
+            wet_tyre_factor = 1.04 if tyre_is_wet else 0.72
+        weather_factor = 1.0 - (wetness * (0.18 - (wet_skill * 0.08)))
+        line_factor = {
+            RacingLine.IDEAL: 1.0,
+            RacingLine.DEFENSIVE: 0.97,
+            RacingLine.ATTACKING: 0.96,
+            RacingLine.OFF_LINE: 0.87,
+        }.get(state.racing_line, 1.0)
+        if wetness > 0.45 and state.racing_line == RacingLine.OFF_LINE:
+            line_factor *= 0.92
+
+        adaptation = self._driver_attr_factor(
+            get_safe_attribute(state.driver, "surface_adaptation")
+        )
+        surface_factor = 1.0 - (
+            max(0.0, 1.0 - base_grip) * profile["surface_sensitivity"] * (1.0 - adaptation * 0.35)
+        )
+        return float(
+            np.clip(surface_factor * weather_factor * wet_tyre_factor * line_factor, 0.55, 1.08)
+        )
+
+    def _safe_condition_float(self, key: str, default: float) -> float:
+        try:
+            return float(self.track_conditions.get(key, self.weather_conditions.get(key, default)))
+        except (TypeError, ValueError):
+            return float(default)
 
     def _log_speed_debug(
         self, state: DriverState, push_multiplier: float, speed: float
@@ -2673,7 +2876,7 @@ class RealtimeRaceEngine:
         lateral_overlap = self._compute_overtake_lateral_overlap(attempt, gap_meters)
 
         attempt.gap_m = gap_meters
-        attempt.speed_advantage_kmh = speed_diff * 3.6
+        attempt.speed_advantage_kmh = speed_diff * 3.6 + self._line_battle_delta(attempt)
         attempt.lateral_overlap = lateral_overlap
 
         if self._should_force_player_close_gap_pass(attacker_state, attempt):
@@ -2707,6 +2910,22 @@ class RealtimeRaceEngine:
             result, key, attempt, race_state, attacker_state, defender_state
         )
         return True
+
+    def _line_battle_delta(self, attempt: OvertakeAttempt) -> float:
+        """Translate line choice into a small, readable battle advantage."""
+        attacker_bonus = {
+            RacingLine.IDEAL: 0.0,
+            RacingLine.ATTACKING: 1.8,
+            RacingLine.DEFENSIVE: -0.8,
+            RacingLine.OFF_LINE: -2.4,
+        }.get(attempt.attacker_line, 0.0)
+        defender_bonus = {
+            RacingLine.IDEAL: 0.0,
+            RacingLine.DEFENSIVE: -2.2,
+            RacingLine.ATTACKING: 0.6,
+            RacingLine.OFF_LINE: 1.0,
+        }.get(attempt.defender_line, 0.0)
+        return attacker_bonus + defender_bonus
 
     def _compute_overtake_lateral_overlap(
         self, attempt: OvertakeAttempt, gap_meters: float

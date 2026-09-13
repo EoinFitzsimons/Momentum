@@ -158,7 +158,20 @@ QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selec
 
 def _resolve_readable_font_family() -> str:
     """Return a UI font family that is likely to render text in headless Qt."""
-    for font_path in PREFERRED_FONT_FILES:
+    family = _load_font_family_from_paths(PREFERRED_FONT_FILES)
+    if family:
+        return family
+    family = _find_available_preferred_family()
+    if family:
+        return family
+    family = _load_matplotlib_font_family()
+    if family:
+        return family
+    return _first_available_font_family()
+
+
+def _load_font_family_from_paths(font_paths: tuple[str, ...]) -> str:
+    for font_path in font_paths:
         if not os.path.exists(font_path):
             continue
         font_id = QFontDatabase.addApplicationFont(font_path)
@@ -167,31 +180,30 @@ def _resolve_readable_font_family() -> str:
         families = QFontDatabase.applicationFontFamilies(font_id)
         if families:
             return families[0]
+    return ""
 
+
+def _find_available_preferred_family() -> str:
     available = set(QFontDatabase.families())
-    for family in PREFERRED_FONT_FAMILIES:
-        if family in available:
-            return family
-    # Try to load DejaVu Sans from matplotlib as a reliable bundled fallback
+    return next((family for family in PREFERRED_FONT_FAMILIES if family in available), "")
+
+
+def _load_matplotlib_font_family() -> str:
     try:
         import matplotlib
 
-        dv_path = os.path.join(
+        font_path = os.path.join(
             matplotlib.get_data_path(), "fonts", "ttf", "DejaVuSans.ttf"
         )
-        if os.path.exists(dv_path):
-            font_id = QFontDatabase.addApplicationFont(dv_path)
-            if font_id != -1:
-                families = QFontDatabase.applicationFontFamilies(font_id)
-                if families:
-                    return families[0]
+        return _load_font_family_from_paths((font_path,))
     except Exception:
-        pass
+        return ""
 
-    # Final fallback: return first available family or empty string
+
+def _first_available_font_family() -> str:
     try:
-        fams = list(set(QFontDatabase.families()))
-        return fams[0] if fams else ""
+        families = list(QFontDatabase.families())
+        return families[0] if families else ""
     except Exception:
         return ""
 
