@@ -1,2 +1,0 @@
-
-C:\Users\eoin0\Documents\Code\FinalProject\FinalProject\Planning\UseCases\UC6_UpdateChampionshipStandings.drawio -> C:\Users\eoin0\Documents\Code\FinalProject\FinalProject\Planning\UseCases\exports\UC6_UpdateChampionshipStandings.svg

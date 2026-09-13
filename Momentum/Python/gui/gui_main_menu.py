@@ -756,8 +756,7 @@ class MainMenuWindow(QMainWindow):
             "<p>Version 1.0 Alpha</p>"
             "<p>A multi-discipline motorsport management simulator.</p>"
             "<p><b>Developer:</b> Eoin Fitzsimons</p>"
-            "<p><b>Project:</b> Final Year Computer Science Project</p>"
-            "<p><b>Year:</b> 2025-2026</p>",
+            "<p>Copyright (c) 2026 Eoin Fitzsimons. All rights reserved.</p>",
         )
 
     def _apply_accessibility_settings(self) -> None:

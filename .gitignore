@@ -1,5 +1,11 @@
 
-# Unity
+# Generated build and distribution output
+build/
+dist/
+*.whl
+*.zip
+
+# Unity (legacy tooling)
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
@@ -102,3 +108,8 @@ Momentum/Python/saves/telemetry_*.csv
 **/saves/telemetry_*.csv
 telemetry_*.csv
 /Momentum/Python/dist/Momentum/_internal
+
+# Generated screenshots and local reports
+Momentum/saves/
+*.html
+*.xml
