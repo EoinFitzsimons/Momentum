@@ -16,6 +16,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -82,11 +83,138 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
     """Career-specific entry dialog backed by dedicated career world tables."""
 
     def __init__(self, db, parent=None):
+        self._selected_discipline = None
         super().__init__(db, parent)
         self.setWindowTitle("Select Career")
         self._ensure_career_tables()
         self._replace_create_button_text()
+        self._select_discipline("SINGLE_SEATER")
+
+    def setup_ui(self):
+        """Build the career-world entry screen instead of a generic table."""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+        self.setStyleSheet(
+            """
+            QDialog { background-color: #202629; }
+            QLabel { color: #EAF8FA; }
+            QGroupBox { border: 1px solid #405057; border-radius: 8px; margin-top: 10px; padding: 12px; }
+            QGroupBox::title { color: #7EE6E0; padding: 0 6px; }
+            QPushButton { background-color: #29343A; color: #EAF8FA; border: 1px solid #4B626A; border-radius: 6px; padding: 10px; }
+            QPushButton:hover { background-color: #34464D; border-color: #7EE6E0; }
+            QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; }
+            QTableWidget { background-color: #172023; color: #EAF8FA; gridline-color: #34464D; border: 1px solid #405057; }
+            QHeaderView::section { background-color: #29343A; color: #B7D9DB; padding: 7px; border: none; }
+            """
+        )
+
+        logo = QLabel("MOMENTUM  /  CAREER WORLD")
+        logo.setStyleSheet("font-size: 24px; font-weight: 700; color: #7EE6E0; letter-spacing: 2px;")
+        layout.addWidget(logo)
+
+        self.career_title = QLabel("Build your racing life")
+        self.career_title.setStyleSheet("font-size: 30px; font-weight: 700; color: #F2FBFB;")
+        layout.addWidget(self.career_title)
+
+        self.career_subtitle = QLabel(
+            "Choose the world you want to inhabit. Your discipline shapes the calendar, the teams, the cars, and the way your career develops."
+        )
+        self.career_subtitle.setWordWrap(True)
+        self.career_subtitle.setStyleSheet("color: #A8C1C4; font-size: 14px;")
+        layout.addWidget(self.career_subtitle)
+
+        identity_row = QHBoxLayout()
+        self.profile_summary = QLabel("No career save yet")
+        self.profile_summary.setStyleSheet(
+            "background-color: #29343A; border-left: 4px solid #DD2D4A; padding: 12px; font-size: 14px;"
+        )
+        self.profile_summary.setWordWrap(True)
+        identity_row.addWidget(self.profile_summary, 1)
+        self.create_save_btn = QPushButton("Create / Reset World")
+        self.create_save_btn.clicked.connect(self.create_championship)
+        self.create_save_btn.setMinimumHeight(48)
+        identity_row.addWidget(self.create_save_btn)
+        layout.addLayout(identity_row)
+
+        discipline_group = QGroupBox("Choose Your Motorsport World")
+        discipline_layout = QGridLayout(discipline_group)
+        discipline_layout.setSpacing(8)
+        self.discipline_buttons = []
+        discipline_details = {
+            "SINGLE_SEATER": ("OPEN WHEEL", "Precision, aero, politics", "24 rounds"),
+            "PRODUCTION_TOURING": ("TOURING", "Close packs, contact, budgets", "12 rounds"),
+            "URBAN_STREET": ("STREET", "Style, risk, city circuits", "10 rounds"),
+            "DRAG_ACCELERATION": ("DRAG", "Launches, power, pressure", "14 rounds"),
+            "SPRINT_RALLYCROSS": ("RALLYCROSS", "Mixed surfaces, short shocks", "12 rounds"),
+            "ENDURANCE": ("ENDURANCE", "Stints, reliability, patience", "8 rounds"),
+        }
+        for index, (discipline, details) in enumerate(discipline_details.items()):
+            button = QPushButton(f"{details[0]}\n{details[1]}\n{details[2]}")
+            button.setCheckable(True)
+            button.setMinimumHeight(78)
+            button.setAccessibleName(f"Choose {_player_label(discipline)} career")
+            button.clicked.connect(
+                lambda checked, value=discipline: self._select_discipline(value)
+            )
+            self.discipline_buttons.append((discipline, button))
+            discipline_layout.addWidget(button, index // 3, index % 3)
+        layout.addWidget(discipline_group)
+
+        board_group = QGroupBox("Career Board")
+        board_layout = QVBoxLayout(board_group)
+        self.board_heading = QLabel("Select a discipline to see its active series")
+        self.board_heading.setStyleSheet("font-size: 16px; font-weight: 700; color: #7EE6E0;")
+        board_layout.addWidget(self.board_heading)
+        self.championships_table = QTableWidget()
+        self.championships_table.setColumnCount(5)
+        self.championships_table.setHorizontalHeaderLabels(
+            ["Series", "World", "Season", "Calendar", "Status"]
+        )
+        self.championships_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.championships_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.championships_table.doubleClicked.connect(self.select_championship)
+        board_layout.addWidget(self.championships_table)
+        layout.addWidget(board_group, 1)
+
+        actions = QHBoxLayout()
+        self.select_btn = QPushButton("Enter Selected World")
+        self.select_btn.clicked.connect(self.select_championship)
+        self.select_btn.setMinimumHeight(46)
+        actions.addWidget(self.select_btn)
+        cancel_btn = QPushButton("Back")
+        cancel_btn.clicked.connect(self.reject)
+        actions.addWidget(cancel_btn)
+        layout.addLayout(actions)
+
+    def _select_discipline(self, discipline: str) -> None:
+        self._selected_discipline = discipline
+        for value, button in self.discipline_buttons:
+            button.setChecked(value == discipline)
+        self.board_heading.setText(
+            f"{_player_label(discipline)} ecosystem · choose your starting series"
+        )
         self.load_championships()
+
+    def _load_profile_summary(self) -> None:
+        profile = None
+        try:
+            with self.db.get_connection() as conn:
+                profile = conn.execute(
+                    "SELECT player_name, age, nationality, bio FROM career_player_profiles WHERE player_id = ?",
+                    (PLAYER_ID,),
+                ).fetchone()
+        except Exception:
+            profile = None
+        if profile:
+            self.profile_summary.setText(
+                f"<b>{profile['player_name']}</b> · {profile['nationality']} · age {profile['age']}<br>"
+                f"{profile['bio']}"
+            )
+        else:
+            self.profile_summary.setText(
+                "No career save yet. Create your profile to generate a living motorsport world."
+            )
 
     def create_championship(self):
         """Create/reset career world and profile."""
@@ -99,12 +227,13 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         with self.db.get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, name, discipline, tier, season_length, current_season, is_active
+                                SELECT id, name, discipline, tier, season_length, current_season, is_active
                 FROM career_championships
                 WHERE player_id = ?
-                ORDER BY discipline, tier, id
+                                    AND (? IS NULL OR discipline = ?)
+                                ORDER BY discipline, tier, id
                 """,
-                (PLAYER_ID,),
+                                (PLAYER_ID, self._selected_discipline, self._selected_discipline),
             ).fetchall()
 
             self.championships_table.setRowCount(len(rows))
@@ -120,7 +249,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                     i, 2, QTableWidgetItem(str(rowd["current_season"]))
                 )
                 self.championships_table.setItem(
-                    i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} races")
+                    i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} rounds")
                 )
                 status = (
                     "Active" if int(rowd.get("is_active", 1) or 1) == 1 else "Inactive"
@@ -130,6 +259,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 item = self.championships_table.item(i, 0)
                 if item is not None:
                     item.setData(Qt.ItemDataRole.UserRole, rowd)
+            self._load_profile_summary()
 
     def _replace_create_button_text(self) -> None:
         for button in self.findChildren(QPushButton):
@@ -335,9 +465,18 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             raise ValueError("Could not derive any discipline/tier series from teams.")
 
         with self.db.get_connection() as conn:
-            conn.execute(
-                "DELETE FROM career_race_results WHERE player_id = ?", (player_id,)
-            )
+            career_race_ids = [
+                int(row[0])
+                for row in conn.execute(
+                    "SELECT id FROM career_races WHERE player_id = ?", (player_id,)
+                ).fetchall()
+            ]
+            if career_race_ids:
+                placeholders = ",".join("?" for _ in career_race_ids)
+                conn.execute(
+                    f"DELETE FROM career_race_results WHERE career_race_id IN ({placeholders})",
+                    career_race_ids,
+                )
             conn.execute("DELETE FROM career_races WHERE player_id = ?", (player_id,))
             conn.execute(
                 "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
@@ -369,6 +508,8 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                     """,
                     (player_id, series_name, discipline, tier, season_length),
                 )
+                if cursor.lastrowid is None:
+                    raise RuntimeError("Failed to create career championship")
                 career_championship_id = int(cursor.lastrowid)
 
                 track_ids = self._resolve_track_ids_for_championship(

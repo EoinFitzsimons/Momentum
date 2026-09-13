@@ -6,7 +6,7 @@ This is intentionally lightweight: sprites or atlas-based rendering can be
 added later.
 """
 
-import random
+import numpy as np
 from typing import List, Dict, Tuple
 from PyQt6.QtGui import QPainter, QColor, QBrush, QPixmap
 from PyQt6.QtCore import Qt
@@ -55,7 +55,7 @@ def place_props(
     if not points:
         return []
     minx, maxx, miny, maxy, area = _compute_bbox_area(points)
-    rnd = random.Random(seed or 0)
+    rnd = np.random.default_rng(seed or 0)
     count = max(0, int(area * density))
     props = []
     attempts = 0
@@ -63,12 +63,12 @@ def place_props(
     max_attempts = count * 6 + 50
     while placed < count and attempts < max_attempts:
         attempts += 1
-        rx = rnd.uniform(minx, maxx)
-        ry = rnd.uniform(miny, maxy)
+        rx = float(rnd.uniform(minx, maxx))
+        ry = float(rnd.uniform(miny, maxy))
         if not _point_in_poly(points, rx, ry):
             continue
-        ptype = "tree" if rnd.random() < 0.6 else "bush"
-        size = rnd.uniform(6.0, 18.0) if ptype == "tree" else rnd.uniform(3.0, 8.0)
+        ptype = "tree" if float(rnd.random()) < 0.6 else "bush"
+        size = float(rnd.uniform(6.0, 18.0)) if ptype == "tree" else float(rnd.uniform(3.0, 8.0))
         props.append({"x": rx, "y": ry, "type": ptype, "size": size})
         placed += 1
 

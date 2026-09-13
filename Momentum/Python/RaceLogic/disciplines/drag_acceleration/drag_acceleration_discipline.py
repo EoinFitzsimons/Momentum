@@ -29,7 +29,7 @@ from RaceLogic.base_race_engine import (
     RaceContext,
     RacingDiscipline,
 )
-from database.models import Driver, Team, RaceResult
+from database.models import Driver, Team
 
 UNKNOWN_DRIVER_LABEL = "Unknown Driver"
 
@@ -102,7 +102,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             "risk_appetite": 0.02,  # Calculated risk on launch
         }
 
-    def simulate_race(self, context: RaceContext) -> List[RaceResult]:
+    def simulate_race(self, context: RaceContext) -> List[Dict[str, Any]]:
         """
         Simulate drag racing event as a single-elimination knockout tournament.
 
@@ -314,7 +314,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         )
         ranking_entries.extend(eliminated)
 
-        final_results: List[RaceResult] = []
+        final_results: List[Dict[str, Any]] = []
         for pos, entry in enumerate(ranking_entries, 1):
             result = dict(entry["result"])
             result["position"] = pos
@@ -673,7 +673,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         return float(self.DRAG_DISTANCE_M)
 
     def _emit_drag_race_finished(
-        self, context: RaceContext, results: List[RaceResult], race_time: float
+        self, context: RaceContext, results: List[Dict[str, Any]], race_time: float
     ) -> None:
         """Emit race_finished payload for GUI handlers."""
         cb = getattr(context, "event_callback", None)
@@ -691,7 +691,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
     def _simulate_single_run(
         self, driver: Driver, team: Team, context: RaceContext
-    ) -> RaceResult:
+    ) -> Dict[str, Any]:
         """
         Simulate single 402m drag racing run
 

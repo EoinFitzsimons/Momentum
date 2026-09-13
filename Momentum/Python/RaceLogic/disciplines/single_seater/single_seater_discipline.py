@@ -235,6 +235,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
             player_driver_id=player_driver_id,
             player_team_driver_ids=player_team_driver_ids,
             player_overrides=player_overrides,
+            weather_conditions=context.weather_conditions,
+            track_conditions=context.track_conditions,
         )
 
         # The realtime engine returns a list of result dicts compatible with the

@@ -525,7 +525,7 @@ class CreateChampionshipDialog(QDialog):
             self.accept()
 
         except ValueError as e:
-            logger.error(
+            logger.exception(
                 f"Validation error while creating championship: {str(e)}", exc_info=True
             )
             critical(
@@ -534,7 +534,7 @@ class CreateChampionshipDialog(QDialog):
                 f"Invalid input:\n{str(e)}\n\nPlease check your inputs and try again.",
             )
         except AttributeError as e:
-            logger.error(
+            logger.exception(
                 f"Attribute error (likely database schema mismatch): {str(e)}",
                 exc_info=True,
             )
@@ -547,7 +547,7 @@ class CreateChampionshipDialog(QDialog):
                 "Check the log file for details.",
             )
         except Exception as e:
-            logger.error(
+            logger.exception(
                 f"Unexpected error creating championship: "
                 f"{type(e).__name__}: {str(e)}",
                 exc_info=True,
@@ -882,7 +882,7 @@ class ChampionshipWindow(QMainWindow):
             self._update_next_race_ui(next_race_id, races_completed, len(calendar))
 
         except Exception as e:
-            logger.error(f"Error loading championship data: {str(e)}", exc_info=True)
+            logger.exception("Error loading championship data")
             self.show_notification(f"Error loading data: {str(e)}", "danger")
 
     def auto_refresh(self):
@@ -981,7 +981,7 @@ class ChampionshipWindow(QMainWindow):
                 self.start_race_signal.emit(config)
 
             except Exception as e:
-                logger.error(f"Error updating race status: {str(e)}", exc_info=True)
+                logger.exception("Error updating race status")
                 critical(self, "Error", f"Failed to update race status: {str(e)}")
 
 
@@ -1326,7 +1326,11 @@ class PreRaceSetupDialog(QDialog):
         if self.selected_driver and getattr(
             self.selected_driver, "current_team_id", None
         ):
-            team_from_driver = self.db.get_team(self.selected_driver.current_team_id)
+            team_id = getattr(self.selected_driver, "current_team_id", None)
+            if isinstance(team_id, int):
+                team_from_driver = self.db.get_team(team_id)
+            else:
+                team_from_driver = None
             if team_from_driver:
                 selected_team = team_from_driver
 

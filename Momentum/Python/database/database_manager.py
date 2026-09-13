@@ -34,6 +34,7 @@ Authors: Eoin Fitzsimons
 import sqlite3
 import json
 import shutil
+import sys
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Sequence
 from pathlib import Path
@@ -153,7 +154,11 @@ class DatabaseManager(RaceResultPersistence):
 
         # First run in a packaged build should clone the bundled starter DB into
         # the writable app-data location so the exe sees the seeded game world.
-        if not db_path.exists() and BUNDLED_DATABASE_PATH.exists():
+        if (
+            getattr(sys, "frozen", False)
+            and not db_path.exists()
+            and BUNDLED_DATABASE_PATH.exists()
+        ):
             if BUNDLED_DATABASE_PATH.resolve() != db_path.resolve():
                 shutil.copy2(BUNDLED_DATABASE_PATH, db_path)
 
@@ -1447,37 +1452,44 @@ class DatabaseManager(RaceResultPersistence):
             return
 
         with self.get_connection() as conn:
-            grouped_results: Dict[int, List[RaceResult]] = {}
-            for result in race_result_batch:
-                grouped_results.setdefault(
-                    int(getattr(result, "race_id", 0) or 0), []
-                ).append(result)
+            grouped_results = self._group_race_results_by_race(race_result_batch)
 
             for race_id, results in grouped_results.items():
                 conn.execute(DELETE_RACE_RESULTS_SQL, (race_id,))
                 for result in results:
-                    cursor = conn.execute(
-                        """
-                        INSERT OR REPLACE INTO race_results
-                        (race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            result.race_id,
-                            result.driver_id,
-                            result.team_id,
-                            result.position,
-                            result.points,
-                            result.fastest_lap,
-                            result.dnf_reason,
-                            result.grid_position,
-                        ),
-                    )
-                    if getattr(result, "id", None) in (None, 0):
-                        try:
-                            result.id = cursor.lastrowid
-                        except Exception:
-                            pass
+                    self._insert_race_result(conn, result)
+
+    @staticmethod
+    def _group_race_results_by_race(
+        results: Sequence[RaceResult],
+    ) -> Dict[int, List[RaceResult]]:
+        grouped: Dict[int, List[RaceResult]] = {}
+        for result in results:
+            race_id = int(getattr(result, "race_id", 0) or 0)
+            grouped.setdefault(race_id, []).append(result)
+        return grouped
+
+    @staticmethod
+    def _insert_race_result(conn, result: RaceResult) -> None:
+        cursor = conn.execute(
+            """
+            INSERT OR REPLACE INTO race_results
+            (race_id, driver_id, team_id, position, points, fastest_lap, dnf_reason, grid_position)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                result.race_id,
+                result.driver_id,
+                result.team_id,
+                result.position,
+                result.points,
+                result.fastest_lap,
+                result.dnf_reason,
+                result.grid_position,
+            ),
+        )
+        if getattr(result, "id", None) in (None, 0) and cursor.lastrowid is not None:
+            result.id = int(cursor.lastrowid)
 
     def save_race_result(self, result: RaceResult) -> Optional[int]:
         """Compatibility wrapper that delegates to save_race_results."""

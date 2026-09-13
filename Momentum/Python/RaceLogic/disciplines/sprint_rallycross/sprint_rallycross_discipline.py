@@ -125,4 +125,6 @@ class SprintRallycrossEngine(BaseDisciplineEngine):
             player_driver_id=self._as_int(tc.get("player_driver_id")),
             player_team_driver_ids=self._as_int_list(tc.get("player_team_driver_ids")),
             player_overrides=self._as_dict(tc.get("player_overrides")),
+            weather_conditions=context.weather_conditions,
+            track_conditions=context.track_conditions,
         )
