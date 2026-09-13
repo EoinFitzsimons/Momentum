@@ -4,11 +4,9 @@
 
 Complete implementation of the Championship Management System covering Use Cases 4 through 10. This system provides comprehensive championship lifecycle management, race scheduling, results tracking, and standings calculation with discipline-specific points systems.
 
-## Issue Reference
+## Status
 
-- **GitHub Issue**: [#7 - Championship Management System](https://github.com/EoinFitzsimons/FinalProject/issues/7)
-- **Priority**: MEDIUM (Career Mode - Final Submission)
-- **Due Date**: March 15, 2026
+Active development.
 
 ## Implemented Use Cases
 
@@ -285,13 +283,6 @@ All required dependencies are in `requirements.txt`:
 - pydantic
 - sqlite3 (built-in)
 
-## Technical Report Reference
-
-This implementation addresses:
-- **Section 2.1.1**: Championship Management Architecture
-- **Section 3.2**: Use Case Implementation (UC-4 to UC-10)
-- **Section 4.1**: Integration Testing
-
 ## Contributing
 
 When extending this system:
@@ -301,6 +292,7 @@ When extending this system:
 4. Update API schemas in `api/schemas.py`
 5. Add tests to `tests/test_championship_management.py`
 
-## Licence
+## License
 
-Part of Momentum Motorsport Simulation - Final Year Project
+See the repository-level `LICENSE` and `NOTICE.md` files for distribution terms
+and third-party notices.

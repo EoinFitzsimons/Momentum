@@ -21,7 +21,7 @@ foreach ($line in $lines) {
                 elseif ($word -like "*behavior*") { $suggested = $word -replace "behavior", "behaviour" }
                 elseif ($word -like "*optimiz*") { $suggested = $word -replace "optimiz", "optimise" }
                 elseif ($word -like "*analyze*") { $suggested = $word -replace "analyze", "analyse" }
-                if ($suggested -ne $word) { $data += [PSCustomObject]@{ Path = $path.Replace("C:\Users\eoin0\Documents\Code\FinalProject\FinalProject\", ""); ExactPhrase = $word; Replacement = $suggested } }
+                if ($suggested -ne $word) { $data += [PSCustomObject]@{ Path = $path.Replace("C:\Users\eoin0\Documents\Code\Momentum\", ""); ExactPhrase = $word; Replacement = $suggested } }
             }
         }
     }

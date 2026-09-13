@@ -1,2 +1,0 @@
-
-C:\Users\eoin0\Documents\Code\FinalProject\FinalProject\Planning\UseCases\UC7_CreateRaceEvent.drawio -> C:\Users\eoin0\Documents\Code\FinalProject\FinalProject\Planning\UseCases\exports\UC7_CreateRaceEvent.svg

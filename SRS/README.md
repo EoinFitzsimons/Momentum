@@ -1,6 +1,6 @@
-SRS artifacts for FinalProject (Race Simulation)
+Runtime simulation specifications for Momentum
 
-This folder contains starter SRS artifacts produced by analysis:
+This folder contains runtime specifications and verification artifacts:
 - `requirements.yaml`: numbered requirements with acceptance criteria and test mappings
 - `determinism.md`: formal determinism acceptance and test fixtures
 - `perf_profiles.md`: hardware/workload baselines and SLAs
@@ -9,4 +9,5 @@ This folder contains starter SRS artifacts produced by analysis:
 - `event_contract.md` and `event_schemas/`: event schemas and contract guidance
 - `schemas/`: JSON Schemas for domain objects (`Driver`, `Team`, `Track`, `Result`)
 
-Use these as the authoritative source for implementing verification tests and CI checks.
+Use these as the authoritative source for runtime contracts, verification tests,
+and CI checks.
