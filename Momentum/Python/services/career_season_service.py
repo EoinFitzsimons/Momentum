@@ -32,6 +32,21 @@ class CareerSeasonService:
             player_id=player_id, season=completed_season
         )
 
+        with self.db.get_connection() as conn:
+            blocked = self._has_incomplete_races(conn, player_id, completed_season)
+        if blocked:
+            # Nothing else may run until the season is actually finished;
+            # otherwise retries would pay income and spend AI budgets again.
+            return {
+                "rolled_over": False,
+                "promoted": [],
+                "relegated": [],
+                "headless_resolved_races": headless["resolved_races"],
+                "headless_persisted_results": headless["persisted_results"],
+                "income_payouts": 0,
+                "ai_upgrades": 0,
+            }
+
         economy = self._run_off_season_economy(
             player_id=player_id, season=completed_season, discipline=discipline
         )
