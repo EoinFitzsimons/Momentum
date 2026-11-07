@@ -356,6 +356,10 @@ class UpgradeService:
             allowance = budget * spend_fraction
             levels = self.get_upgrade_levels(team_id)
             bought: List[Dict[str, Any]] = []
+            if season is not None:
+                # Marked before buying: an interrupted team under-spends this
+                # off-season rather than getting a fresh allowance on retry.
+                self._mark_spending_done(team_id, int(season))
 
             while allowance > 0:
                 spendable = min(allowance, budget - reserve)
@@ -375,8 +379,6 @@ class UpgradeService:
 
             if bought:
                 purchases[team_id] = bought
-            if season is not None:
-                self._mark_spending_done(team_id, int(season))
         return purchases
 
     def _teams_done_spending(self, season: int) -> set[int]:
