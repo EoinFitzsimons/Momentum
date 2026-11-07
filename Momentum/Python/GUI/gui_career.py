@@ -592,6 +592,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 (UPGRADE_CATEGORY,),
             )
             conn.execute("DELETE FROM team_car_upgrades")
+            conn.execute("DELETE FROM ai_offseason_spending")
             conn.execute(
                 "UPDATE team_ownership SET is_active = 0 WHERE player_id = ?",
                 (player_id,),
