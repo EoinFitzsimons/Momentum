@@ -126,6 +126,12 @@ class UpgradeService:
     """Buys upgrades for teams (player or AI) and pays out race income."""
 
     TABLE_SQL = """
+    CREATE TABLE IF NOT EXISTS ai_offseason_spending (
+        team_id INTEGER NOT NULL,
+        season INTEGER NOT NULL,
+        completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (team_id, season)
+    );
     CREATE TABLE IF NOT EXISTS team_car_upgrades (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         team_id INTEGER NOT NULL,
@@ -327,10 +333,18 @@ class UpgradeService:
         exclude_team_ids: Iterable[int] = (),
         spend_fraction: float = AI_SPEND_FRACTION,
         rng: Optional[random.Random] = None,
+        season: Optional[int] = None,
     ) -> Dict[int, List[Dict[str, Any]]]:
-        """Let every AI team in a discipline spend part of its budget on upgrades."""
+        """Let every AI team in a discipline spend part of its budget on upgrades.
+
+        When ``season`` is given, each team is marked once its off-season
+        spending is done, so a repeated call for the same season (for example
+        a retried rollover) only resumes the teams that have not spent yet.
+        """
         rng = rng or random.Random()
         excluded = {int(t) for t in exclude_team_ids}
+        if season is not None:
+            excluded |= self._teams_done_spending(int(season))
         purchases: Dict[int, List[Dict[str, Any]]] = {}
 
         for team in self.db.get_teams_by_discipline(discipline):
@@ -361,7 +375,25 @@ class UpgradeService:
 
             if bought:
                 purchases[team_id] = bought
+            if season is not None:
+                self._mark_spending_done(team_id, int(season))
         return purchases
+
+    def _teams_done_spending(self, season: int) -> set[int]:
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT team_id FROM ai_offseason_spending WHERE season = ?",
+                (season,),
+            ).fetchall()
+        return {int(row[0]) for row in rows}
+
+    def _mark_spending_done(self, team_id: int, season: int) -> None:
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO ai_offseason_spending (team_id, season) VALUES (?, ?)",
+                (int(team_id), int(season)),
+            )
+            conn.commit()
 
     # ------------------------------------------------------------------
     # Income

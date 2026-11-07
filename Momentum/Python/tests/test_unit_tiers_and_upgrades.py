@@ -339,6 +339,28 @@ def test_race_income_marker_for_race_1_does_not_shadow_race_10(test_db):
     assert test_db.get_team(team).budget == pytest.approx(expected)
 
 
+@pytest.mark.unit
+def test_ai_spending_for_a_season_runs_once_per_team(test_db):
+    """A retried off-season must not let a team spend twice for the same season."""
+    _create_team(test_db, "Spender", 60.0, budget=80_000_000.0)
+    service = UpgradeService(test_db)
+
+    first = service.run_ai_upgrade_spending(
+        "SINGLE_SEATER", rng=random.Random(5), season=1
+    )
+    assert first
+    budget_after_first = {t.id: t.budget for t in test_db.get_teams_by_discipline("SINGLE_SEATER")}
+
+    second = service.run_ai_upgrade_spending(
+        "SINGLE_SEATER", rng=random.Random(5), season=1
+    )
+    assert second == {}
+    assert {t.id: t.budget for t in test_db.get_teams_by_discipline("SINGLE_SEATER")} == budget_after_first
+
+    # The next off-season spends again.
+    assert service.run_ai_upgrade_spending("SINGLE_SEATER", rng=random.Random(5), season=2)
+
+
 # ---------------------------------------------------------------------------
 # Pace must not depend on tier or budget
 # ---------------------------------------------------------------------------
