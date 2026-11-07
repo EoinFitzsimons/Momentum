@@ -413,7 +413,7 @@ class UpgradeService:
                     SELECT team_id FROM team_budget_transactions
                     WHERE category = ? AND description LIKE ?
                     """,
-                    (RACE_INCOME_CATEGORY, f"%{marker}%"),
+                    (RACE_INCOME_CATEGORY, f"%({marker})%"),
                 ).fetchall()
             }
 
