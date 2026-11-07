@@ -151,6 +151,16 @@ class ChampionshipSelectionDialog(QDialog):
         list_layout = QVBoxLayout(list_group)
 
         self.championships_table = QTableWidget()
+
+        _vh = self.championships_table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.championships_table.setShowGrid(False)
+
+        self.championships_table.setAlternatingRowColors(True)
         self.championships_table.setColumnCount(5)
         self.championships_table.setHorizontalHeaderLabels(
             ["Name", "Discipline", "Season", "Races", "Status"]
@@ -649,6 +659,16 @@ class ChampionshipWindow(QMainWindow):
         standings_layout = QVBoxLayout(standings_group)
 
         self.standings_table = QTableWidget()
+
+        _vh = self.standings_table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.standings_table.setShowGrid(False)
+
+        self.standings_table.setAlternatingRowColors(True)
         self.standings_table.setColumnCount(7)
         self.standings_table.setHorizontalHeaderLabels(
             ["Pos", "Driver", "Team", "Points", "Wins", "Podiums", "Races"]
@@ -675,6 +695,16 @@ class ChampionshipWindow(QMainWindow):
         schedule_layout = QVBoxLayout(schedule_group)
 
         self.schedule_table = QTableWidget()
+
+        _vh = self.schedule_table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.schedule_table.setShowGrid(False)
+
+        self.schedule_table.setAlternatingRowColors(True)
         self.schedule_table.setColumnCount(4)
         self.schedule_table.setHorizontalHeaderLabels(
             ["Round", "Track", "Date", "Status"]
@@ -1424,6 +1454,16 @@ class PostRaceResultsDialog(QDialog):
         results_layout = QVBoxLayout(results_group)
 
         self.results_table = QTableWidget()
+
+        _vh = self.results_table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.results_table.setShowGrid(False)
+
+        self.results_table.setAlternatingRowColors(True)
         self.results_table.setColumnCount(7)
         self.results_table.setHorizontalHeaderLabels(
             ["Pos", "Driver", "Team", "Status", "Points", "Fastest Lap", "Gap"]
@@ -1472,6 +1512,16 @@ class PostRaceResultsDialog(QDialog):
         )
 
         self.standings_table = QTableWidget()
+
+        _vh = self.standings_table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.standings_table.setShowGrid(False)
+
+        self.standings_table.setAlternatingRowColors(True)
         self.standings_table.setColumnCount(6)
         self.standings_table.setHorizontalHeaderLabels(
             ["Pos", "Driver", "Team", "Points", "Wins", "Races"]
