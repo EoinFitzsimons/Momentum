@@ -283,6 +283,62 @@ def test_race_income_pays_every_team_once(test_db):
     assert winner_budget == pytest.approx(service.race_payout(1, "TIER_1", "SINGLE_SEATER"))
 
 
+@pytest.mark.unit
+def test_race_income_marker_for_race_1_does_not_shadow_race_10(test_db):
+    """Paying race 1 must not mark race 10 (same id prefix) as already paid."""
+    team = _create_team(test_db, "Prefix Team", 60.0, budget=0.0)
+    driver = _create_driver(test_db, "D1", team, 70.0)
+
+    with test_db.get_connection() as conn:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS career_championships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL,
+                name TEXT NOT NULL, discipline TEXT NOT NULL, tier TEXT NOT NULL,
+                season_length INTEGER NOT NULL, current_season INTEGER NOT NULL DEFAULT 1,
+                is_active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS career_races (
+                id INTEGER PRIMARY KEY, player_id TEXT NOT NULL,
+                career_championship_id INTEGER NOT NULL, track_id INTEGER NOT NULL,
+                season INTEGER NOT NULL, round_number INTEGER NOT NULL,
+                race_date TEXT NOT NULL, weather_conditions TEXT, laps INTEGER,
+                status TEXT NOT NULL DEFAULT 'scheduled'
+            );
+            CREATE TABLE IF NOT EXISTS career_race_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL,
+                career_race_id INTEGER NOT NULL, driver_id INTEGER NOT NULL,
+                team_id INTEGER, position INTEGER, points INTEGER DEFAULT 0,
+                fastest_lap INTEGER DEFAULT 0, dnf_reason TEXT, grid_position INTEGER,
+                UNIQUE(career_race_id, driver_id)
+            );
+            """
+        )
+        champ = conn.execute(
+            "INSERT INTO career_championships (player_id, name, discipline, tier, season_length) "
+            "VALUES ('p1', 'Series', 'SINGLE_SEATER', 'TIER_1', 10)"
+        ).lastrowid
+        for race_id, round_number in ((1, 1), (10, 10)):
+            conn.execute(
+                "INSERT INTO career_races (id, player_id, career_championship_id, track_id, season, round_number, race_date, status) "
+                "VALUES (?, 'p1', ?, 1, 1, ?, '2026-01-01', 'completed')",
+                (race_id, champ, round_number),
+            )
+            conn.execute(
+                "INSERT INTO career_race_results (player_id, career_race_id, driver_id, team_id, position) "
+                "VALUES ('p1', ?, ?, ?, 1)",
+                (race_id, driver, team),
+            )
+        conn.commit()
+
+    service = UpgradeService(test_db)
+    assert service.award_race_income(1) == 1
+    assert service.award_race_income(10) == 1
+    assert service.award_race_income(10) == 0
+    expected = 2 * service.race_payout(1, "TIER_1", "SINGLE_SEATER")
+    assert test_db.get_team(team).budget == pytest.approx(expected)
+
+
 # ---------------------------------------------------------------------------
 # Pace must not depend on tier or budget
 # ---------------------------------------------------------------------------
