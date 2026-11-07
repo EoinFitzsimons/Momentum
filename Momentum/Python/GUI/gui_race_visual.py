@@ -8,6 +8,7 @@ Integrates:
 """
 
 from services.career_result_service import persist_career_race_result
+from services.tier_service import normalise_tier
 from services.race_simulation_api import persist_race_results, simulate_race
 from RaceLogic.base_race_engine import RaceContext, RacingDiscipline
 from database.database_manager import DatabaseManager
@@ -158,18 +159,6 @@ RACE_CONTROL_KEY_OPTIONS: List[str] = [
     "Enter",
     "Tab",
 ]
-
-
-def _normalize_tier(value: Any) -> str:
-    """Normalize team/championship tier labels to canonical values."""
-    raw = str(value or "").strip().upper()
-    if raw in {"TOP_TIER", "TIER1", "TIER_1", "1"}:
-        return "TIER_1"
-    if raw in {"TIER2", "TIER_2", "2"}:
-        return "TIER_2"
-    if raw in {"TIER3", "TIER_3", "3"}:
-        return "TIER_3"
-    return "TIER_2"
 
 
 def compute_canonical_starting_grid(starting_grid, track_widget) -> list:
@@ -2908,7 +2897,7 @@ class RaceWindow(QMainWindow):
             self.track = None
             self._initial_track_id = track_id
             self._initial_discipline = discipline or "SINGLE_SEATER"
-            self._initial_tier = _normalize_tier(tier) if tier else None
+            self._initial_tier = normalise_tier(tier) if tier else None
             self._race_total_laps = self._discipline_total_laps()
             self._championship_id = championship_id  # Championship this race belongs to
             self._race_id = race_id  # Current race ID in championship
@@ -5018,7 +5007,7 @@ class RaceWindow(QMainWindow):
             return []
 
         norm = (discipline or "").lower().replace(" ", "_")
-        tier_norm = _normalize_tier(tier) if tier else None
+        tier_norm = normalise_tier(tier) if tier else None
         fetch_limit = self._contracted_fetch_limit(limit, tier_norm)
         rows = self._fetch_contracted_driver_rows(norm, fetch_limit)
 
@@ -5106,7 +5095,7 @@ class RaceWindow(QMainWindow):
                 team_cache[team_id] = team
         if not team:
             return False
-        return _normalize_tier(getattr(team, "tier", "TIER_2")) == tier_norm
+        return normalise_tier(getattr(team, "tier", "TIER_2")) == tier_norm
 
     def _ensure_contracted_grid_for_discipline(
         self, discipline: str, target_grid_size: int

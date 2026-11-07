@@ -70,11 +70,11 @@ Composite performance:
 
 Team performance:
 
-`tier_base in {tier1:0.9, tier2:0.7, tier3:0.5}`
+Tier is a league label and budget is unspent money, so neither enters the pace model.
+`car_rating` is the 0-1 car development rating from upgrades bought with the budget
+(`services/upgrade_service.py`).
 
-`budget_factor = min(team_budget / 200.0, 1.0) * 0.3`
-
-`team_performance = min(tier_base + budget_factor, 1.0)`
+`team_performance = min(0.35 + 0.35 * operations_rating / 100 + 0.30 * car_rating, 1.0)`
 
 Weather impact blend:
 

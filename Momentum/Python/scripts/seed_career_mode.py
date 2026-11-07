@@ -36,6 +36,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.database_manager import DatabaseManager
+from services.tier_service import TierService, normalise_tier, tier_label
 from config import DATABASE_PATH, DISCIPLINES, STAFF_ROLES_CONFIG
 from tools.locale_mapping import get_all_country_codes, get_locale_for_country
 
@@ -134,11 +135,12 @@ BUDGET_CAPS = {
     "ENDURANCE": 60_000_000,
 }
 
-# Tier distribution percentages
-TIER_DISTRIBUTION = {
-    "tier1": 0.15,  # Top 15%
-    "tier2": 0.30,  # Next 30%
-    "tier3": 0.55,  # Remaining 55%
+# Budget range (share of the discipline cap) by league. Richer leagues
+# attract bigger sponsors; the money is spent on upgrades, it is not pace.
+TIER_BUDGET_RANGES = {
+    "TIER_1": (0.85, 1.00),
+    "TIER_2": (0.60, 0.85),
+    "TIER_3": (0.35, 0.65),
 }
 
 # Common Faker locales for staff name generation
@@ -246,25 +248,15 @@ def _build_fake_for_nationality(nationality: str) -> Faker:
         return Faker("en_US")
 
 
-def _pick_tier_from_distribution() -> str:
-    """Sample a team tier using configured distribution weights."""
-    rand = random.random()
-    if rand < TIER_DISTRIBUTION["tier1"]:
-        return "tier1"
-    if rand < TIER_DISTRIBUTION["tier1"] + TIER_DISTRIBUTION["tier2"]:
-        return "tier2"
-    return "tier3"
-
-
 def _tier_age_skill_profile(tier: str) -> Tuple[int, float, float]:
-    """Return (age, skill_mean, skill_std) profile by normalized team tier."""
-    t = (tier or "").lower()
-    if t in ("tier1", "tier_1", "1"):
+    """Return (age, skill_mean, skill_std) profile by normalised team tier."""
+    t = normalise_tier(tier)
+    if t == "TIER_1":
         age = (
             random.randint(28, 45) if random.random() < 0.80 else random.randint(22, 27)
         )
         return age, 78.0, 10.0
-    if t in ("tier2", "tier_2", "2"):
+    if t == "TIER_2":
         age = random.choice([random.randint(22, 30)] * 6 + [random.randint(30, 38)] * 4)
         return age, 62.0, 12.0
     age = random.randint(18, 32) if random.random() < 0.85 else random.randint(35, 45)
@@ -496,19 +488,16 @@ def _safe_locales_for_team_names() -> list:
     ]
 
 
-def _calculate_team_budget_and_ops(discipline: str, tier: str) -> Tuple[float, float]:
-    """Return generated (budget, operations_rating) for team tier/discipline."""
+def _generate_operations_rating() -> float:
+    """Team operation quality, independent of league; leagues are assigned from it later."""
+    return round(max(40.0, min(96.0, random.gauss(64.0, 13.0))), 2)
+
+
+def _budget_for_tier(discipline: str, tier: str) -> float:
+    """Starting budget for a team given the league it was placed in."""
     base_budget = BUDGET_CAPS.get(discipline, 50_000_000)
-    if tier == "tier1":
-        budget = base_budget * random.uniform(0.85, 1.0)
-        operations_rating = round(random.uniform(75.0, 95.0), 2)
-    elif tier == "tier2":
-        budget = base_budget * random.uniform(0.60, 0.85)
-        operations_rating = round(random.uniform(60.0, 80.0), 2)
-    else:  # tier3
-        budget = base_budget * random.uniform(0.35, 0.65)
-        operations_rating = round(random.uniform(45.0, 70.0), 2)
-    return round(budget, 2), operations_rating
+    low, high = TIER_BUDGET_RANGES[normalise_tier(tier)]
+    return round(base_budget * random.uniform(low, high), 2)
 
 
 def _build_seed_team_data(
@@ -524,19 +513,21 @@ def _build_seed_team_data(
     fake_for_names = Faker(safe_locale)
     fake_for_principal = _build_fake_for_nationality(nationality)
 
-    tier = _pick_tier_from_distribution()
     team_name = generate_team_name(fake_for_names, discipline, existing_names)
     if not team_name:
         return None
 
-    budget, operations_rating = _calculate_team_budget_and_ops(discipline, tier)
+    operations_rating = _generate_operations_rating()
 
+    # Placeholder league/budget: assign_tiers_by_strength() sorts teams into
+    # leagues once drivers are contracted, then budgets follow the league.
+    tier = "TIER_3"
     team_data = {
         "name": team_name,
         "nationality": nationality,
         "discipline": discipline,
         "tier": tier,
-        "budget": budget,
+        "budget": _budget_for_tier(discipline, tier),
         "founded_year": random.randint(1950, 2024),
         "team_principal": clean_name(fake_for_principal.name()),
         "headquarters": fake_for_principal.city(),
@@ -977,6 +968,33 @@ def assign_driver_contracts(db: DatabaseManager, disciplines: list) -> int:
     return assignments
 
 
+def assign_tiers_by_strength(db: DatabaseManager, disciplines: list) -> int:
+    """Place each discipline's teams into leagues by strength, then set budgets.
+
+    The strongest teams (operations, car, driver line-up) start in TIER_1 so
+    the top league is not seeded with the slowest teams.
+    """
+    print("\n=== Assigning Leagues by Team Strength ===")
+    service = TierService(db)
+    placed = 0
+    with db.get_connection() as conn:
+        for discipline in disciplines:
+            placement = service.assign_tiers_by_strength(discipline)
+            for tier, team_ids in placement.items():
+                for team_id in team_ids:
+                    conn.execute(
+                        "UPDATE teams SET budget = ? WHERE id = ?",
+                        (_budget_for_tier(discipline, tier), int(team_id)),
+                    )
+                placed += len(team_ids)
+            summary = ", ".join(
+                f"{tier_label(t)}: {len(ids)}" for t, ids in placement.items()
+            )
+            print(f"  ✓ {discipline}: {summary}")
+        conn.commit()
+    return placed
+
+
 def adjust_drivers_by_tier(db: DatabaseManager) -> int:
     """Adjust driver attributes and ages based on their team's tier.
 
@@ -1084,8 +1102,7 @@ def adjust_drivers_by_tier(db: DatabaseManager) -> int:
     # Print summary
     for tier in sorted(tier_adjustments.keys()):
         count = tier_adjustments[tier]
-        tier_label = tier.replace("_", " ").title()
-        print(f"  ✓ {tier_label}: Adjusted {count} drivers")
+        print(f"  ✓ {tier_label(tier)}: Adjusted {count} drivers")
 
     print(f"✓ Total drivers adjusted: {adjusted_count}")
     return adjusted_count
@@ -1147,6 +1164,7 @@ def refresh_unsupported_disciplines(db: DatabaseManager, disciplines: list) -> d
                 "team_ownership",
                 "team_budget_transactions",
                 "team_facility_upgrades",
+                "team_car_upgrades",
                 "team_audit_log",
             ]:
                 cursor.execute(
@@ -1280,10 +1298,17 @@ def main():
     # Generate data
     try:
         drivers_created = seed_drivers(db, args.drivers, disciplines)
+        with db.get_connection() as conn:
+            teams_before = int(conn.execute("SELECT COUNT(1) FROM teams").fetchone()[0])
         teams_created = seed_teams(db, args.teams_per_discipline, disciplines)
         staff_created = seed_staff(db, args.staff)
         staff_contracts_assigned = assign_staff_contracts(db, disciplines)
         contracts_assigned = assign_driver_contracts(db, disciplines)
+        # Leagues and budgets are only (re)assigned for a fresh world; topping up
+        # an existing world must not erase earned promotions or money.
+        tiers_assigned = (
+            assign_tiers_by_strength(db, disciplines) if teams_before == 0 else 0
+        )
         drivers_adjusted = adjust_drivers_by_tier(db)
 
         # Show final stats
@@ -1301,6 +1326,7 @@ def main():
         print(f"  Staff: {staff_created}")
         print(f"  Staff contracts: {staff_contracts_assigned}")
         print(f"  Driver contracts: {contracts_assigned}")
+        print(f"  Teams placed in leagues: {tiers_assigned}")
         print(f"  Drivers adjusted by tier: {drivers_adjusted}")
 
         # Sample some entries
