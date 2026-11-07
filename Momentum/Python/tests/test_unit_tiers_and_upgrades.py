@@ -314,3 +314,16 @@ def test_base_engine_team_performance_ignores_tier_and_budget():
     assert engine._calculate_team_performance(developed) > engine._calculate_team_performance(
         poor_tier_3
     )
+
+
+@pytest.mark.unit
+def test_ai_spending_still_buys_cheaper_areas_when_an_expensive_one_is_unaffordable(
+    test_db,
+):
+    team_id = _create_team(test_db, "Tight AI", 60.0, budget=6_000_000.0)
+    service = UpgradeService(test_db)
+    # 35% of 6M is 2.1M: power (2.5M) is unaffordable, operations (1.5M) is not.
+    purchases = service.run_ai_upgrade_spending("SINGLE_SEATER", rng=random.Random(3))
+
+    assert purchases[team_id]
+    assert all(p["area"] != "power" for p in purchases[team_id])
