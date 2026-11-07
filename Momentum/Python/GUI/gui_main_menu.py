@@ -49,6 +49,7 @@ from PyQt6.QtWidgets import (
 import sys
 import os
 from typing import Optional, List, cast
+from services.tier_service import normalise_tier
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1425,13 +1426,7 @@ class QuickRaceSetupWindow(QDialog):
         return str(value).strip().lower().replace("_", "")
 
     def _canonical_tier(self, value: Optional[str]) -> str:
-        norm = self._normalize_tier(value)
-        mapping = {
-            "tier1": "TIER_1",
-            "tier2": "TIER_2",
-            "tier3": "TIER_3",
-        }
-        return mapping.get(norm, str(value).strip().upper() if value else "TIER_2")
+        return normalise_tier(value)
 
     def _resolve_driver_team(self, driver):
         """Resolve the contracted team object for a driver when available."""

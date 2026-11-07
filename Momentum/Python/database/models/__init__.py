@@ -149,7 +149,7 @@ class Championship:
     season_length: int
     points_system: str
     current_season: int
-    tier: str = "TOP_TIER"
+    tier: str = "TIER_1"
     founded_year: int = 2025
     description: str = ""
     archived: bool = False
@@ -319,7 +319,7 @@ CREATE TABLE IF NOT EXISTS championships (
     season_length INTEGER NOT NULL,
     points_system TEXT NOT NULL,
     current_season INTEGER NOT NULL,
-    tier TEXT DEFAULT 'TOP_TIER',
+    tier TEXT DEFAULT 'TIER_1',
     founded_year INTEGER DEFAULT 2025,
     description TEXT DEFAULT '',
     archived INTEGER DEFAULT 0,
@@ -408,6 +408,17 @@ CREATE TABLE IF NOT EXISTS team_facility_upgrades (
     invested_amount REAL NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(team_id, facility_name),
+    FOREIGN KEY (team_id) REFERENCES teams(id)
+);
+
+CREATE TABLE IF NOT EXISTS team_car_upgrades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    area TEXT NOT NULL,
+    level INTEGER NOT NULL DEFAULT 0,
+    invested_amount REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(team_id, area),
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 

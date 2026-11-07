@@ -424,7 +424,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
                     name=f"Team {team_id}",
                     nationality="USA",
                     discipline="drag",
-                    tier="tier1",
+                    tier="TIER_1",
                     budget=50.0,
                     founded_year=2020,
                     team_principal="Unknown",
@@ -871,7 +871,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         Args:
             driver: Driver with acceleration attributes
-            team: Team/vehicle tier and budget
+            team: Team with car development rating
             context: Race context with track/weather
 
         Returns:
@@ -888,9 +888,8 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         accel_control = getattr(driver, "acceleration_control", 50.0)
         control_factor = 1.0 - (accel_control / 100.0) * 0.3  # 0.7-1.0 range
 
-        # Team performance (budget affects vehicle power)
-        team_budget = getattr(team, "budget", 50.0)  # in millions
-        team_factor = 1.0 - (team_budget / 200.0) * 0.4  # Better budget = faster
+        # Team performance: car development (power upgrades) shortens the run
+        team_factor = 1.0 - (self._team_car_rating(team) * 0.4)
 
         # Weather impact (grip level)
         weather_factor = self._get_weather_grip_factor(context.weather_conditions)
@@ -983,7 +982,7 @@ class DragAccelerationEngine(BaseDisciplineEngine):
 
         Args:
             driver: Driver with raw_speed and drag aptitude
-            team: Team/vehicle tier and budget
+            team: Team with car development rating
             context: Race context
 
         Returns:
@@ -1000,20 +999,8 @@ class DragAccelerationEngine(BaseDisciplineEngine):
         drag_aptitude = getattr(driver, "drag_aptitude", 50.0)
         drag_factor = drag_aptitude / 50.0  # 0.0-2.0 range
 
-        # Team performance (budget and tier affect vehicle)
-        team_budget = getattr(team, "budget", 50.0)
-        team_factor = 0.7 + (team_budget / 200.0) * 0.6  # 0.7-1.3 range
-
-        # Team tier bonus (TOP_TIER teams have better aerodynamics)
-        tier = getattr(team, "tier", "tier2").upper()
-        tier_multiplier = {
-            "TOP_TIER": 1.2,
-            "TIER_1": 1.2,
-            "TIER_2": 1.0,
-            "TIER_3": 0.85,
-            "TIER2": 1.0,
-            "TIER3": 0.85,
-        }.get(tier, 1.0)
+        # Team performance: car development (power/aero upgrades) raises trap speed
+        team_factor = 0.85 + (self._team_car_rating(team) * 0.45)  # 0.85-1.30 range
 
         # Environmental factors
         weather_factor = self._get_weather_grip_factor(context.weather_conditions)
@@ -1024,7 +1011,6 @@ class DragAccelerationEngine(BaseDisciplineEngine):
             * speed_factor
             * drag_factor
             * team_factor
-            * tier_multiplier
             * weather_factor
         )
 
