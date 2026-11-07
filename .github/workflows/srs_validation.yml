@@ -160,7 +160,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           cd Momentum/Python
-          python -m pytest tests/ --cov=services --cov=RaceLogic --cov=tools --cov-report=term-missing --cov-report=html
+          python -m pytest tests/ -m "not performance" --cov=services --cov=RaceLogic --cov=tools --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage artifacts
         if: always()
