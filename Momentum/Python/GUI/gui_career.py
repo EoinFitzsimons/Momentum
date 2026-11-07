@@ -39,7 +39,7 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_season_service import CareerSeasonService
 from services.tier_service import TIERS, normalise_tier, tier_label
-from services.upgrade_service import UpgradeService
+from services.upgrade_service import UpgradeService, UPGRADE_CATEGORY
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
@@ -577,7 +577,20 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             conn.execute(
                 "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
             )
-            # A new world starts with undeveloped cars for every team.
+            # A new world starts with undeveloped cars for every team, so the
+            # money spent on the old cars goes back into each team's budget.
+            conn.execute(
+                """
+                UPDATE teams
+                SET budget = budget + COALESCE(
+                    (SELECT SUM(u.invested_amount) FROM team_car_upgrades u
+                     WHERE u.team_id = teams.id), 0)
+                """
+            )
+            conn.execute(
+                "DELETE FROM team_budget_transactions WHERE category = ?",
+                (UPGRADE_CATEGORY,),
+            )
             conn.execute("DELETE FROM team_car_upgrades")
             conn.execute(
                 "UPDATE team_ownership SET is_active = 0 WHERE player_id = ?",
