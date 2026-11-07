@@ -252,7 +252,7 @@ class TeamCreate(BaseModel):
     nationality: str = Field(default="INT")
     tier: str = Field(
         default="TIER_2",
-        description="Team tier level affects budget and staff limits",
+        description="League the team races in (TIER_1 is the top league)",
         examples=["TIER_1", "TIER_2", "TIER_3"],
     )
     team_principal: str = Field(default="")
@@ -619,7 +619,7 @@ class ChampionshipCreate(BaseModel):
     )
     season_length: int = Field(ge=1, le=50, default=20)
     points_system: str = Field(default="standard")
-    tier: str = Field(default="TOP_TIER")
+    tier: str = Field(default="TIER_1")
     founded_year: int = Field(ge=1900, le=2100, default=2025)
     description: str = Field(default="")
     track_ids: List[int] = Field(
