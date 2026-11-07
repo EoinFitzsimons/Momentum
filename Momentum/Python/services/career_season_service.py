@@ -47,8 +47,8 @@ class CareerSeasonService:
                 "ai_upgrades": 0,
             }
 
-        economy = self._run_off_season_economy(
-            player_id=player_id, season=completed_season, discipline=discipline
+        payouts = self._award_season_income(
+            player_id=player_id, season=completed_season
         )
 
         movements = self._apply_promotion_relegation(
@@ -59,6 +59,14 @@ class CareerSeasonService:
         rolled = self._rollover_world(
             player_id=player_id, completed_season=completed_season
         )
+        # AI teams spend only once the new season exists; a retry after a
+        # failed rollover is then blocked by the fresh calendar, so budgets
+        # cannot be spent twice for the same off-season.
+        ai_upgrades = (
+            self._run_ai_spending(player_id=player_id, discipline=discipline)
+            if rolled
+            else 0
+        )
 
         return {
             "rolled_over": rolled,
@@ -66,26 +74,24 @@ class CareerSeasonService:
             "relegated": movements["relegated"],
             "headless_resolved_races": headless["resolved_races"],
             "headless_persisted_results": headless["persisted_results"],
-            "income_payouts": economy["income_payouts"],
-            "ai_upgrades": economy["ai_upgrades"],
+            "income_payouts": payouts,
+            "ai_upgrades": ai_upgrades,
         }
 
-    def _run_off_season_economy(
-        self, player_id: str, season: int, discipline: str
-    ) -> dict[str, int]:
-        """Pay out the season's race income, then let AI teams buy upgrades."""
+    def _award_season_income(self, player_id: str, season: int) -> int:
+        """Pay out the season's race income (idempotent per race and team)."""
         upgrades = UpgradeService(self.db)
-        payouts = upgrades.award_pending_income(player_id=player_id, season=season)
+        return int(upgrades.award_pending_income(player_id=player_id, season=season))
 
+    def _run_ai_spending(self, player_id: str, discipline: str) -> int:
+        """Let AI teams in the discipline buy upgrades with part of their budget."""
+        upgrades = UpgradeService(self.db)
         owned_team_id = self.db.get_player_team_id(player_id)
         excluded = [int(owned_team_id)] if owned_team_id else []
         purchases = upgrades.run_ai_upgrade_spending(
             discipline=str(discipline or "").upper(), exclude_team_ids=excluded
         )
-        return {
-            "income_payouts": int(payouts),
-            "ai_upgrades": sum(len(items) for items in purchases.values()),
-        }
+        return sum(len(items) for items in purchases.values())
 
     def _resolve_non_player_races_headless(
         self, player_id: str, season: int
