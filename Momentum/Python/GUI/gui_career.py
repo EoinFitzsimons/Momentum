@@ -472,6 +472,8 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             conn.execute(
                 "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
             )
+            # A new world starts with undeveloped cars for every team.
+            conn.execute("DELETE FROM team_car_upgrades")
             conn.execute(
                 "UPDATE team_ownership SET is_active = 0 WHERE player_id = ?",
                 (player_id,),
