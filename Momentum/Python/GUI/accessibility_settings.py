@@ -137,7 +137,7 @@ QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selec
     color: #1F2430;
 }
 QGroupBox::title { color: #5DA5DA; background-color: #1F2430; }
-QHeaderView::section { background-color: #2A3142; color: #E6E6E6; }
+QHeaderView::section { background-color: #2A3142; color: #E6E6E6; border: none; }
 """ + _STRUCTURE_STYLESHEET
 
     # Default 'standard' theme: a dark, high-contrast friendly palette used by Momentum.
@@ -169,7 +169,7 @@ QTableWidget, QTreeWidget, QListWidget {
     outline: none;
 }
 QTableWidget::item, QTreeWidget::item { padding: 6px 10px; }
-QHeaderView::section { padding: 8px 10px; border: none; font-weight: 600; }
+QHeaderView::section { padding: 8px 10px; font-weight: 600; }
 QHeaderView::section:first { border-top-left-radius: 8px; }
 QHeaderView::section:last { border-top-right-radius: 8px; }
 QTableCornerButton::section { border: none; }
@@ -228,7 +228,7 @@ QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selec
     background-color: #35504F;
     color: #FFFFFF;
 }
-QHeaderView::section { background-color: #30363A; color: #9ED8DB; }
+QHeaderView::section { background-color: #30363A; color: #9ED8DB; border: none; }
 QHeaderView { background-color: #30363A; }
 QTableCornerButton::section { background-color: #30363A; }
 QScrollBar:vertical, QScrollBar:horizontal { background: #1F2426; }
