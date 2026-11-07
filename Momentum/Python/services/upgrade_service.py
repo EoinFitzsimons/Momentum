@@ -292,10 +292,26 @@ class UpgradeService:
         }
 
     def choose_ai_upgrade_area(
-        self, levels: Dict[str, int], rng: random.Random
+        self,
+        levels: Dict[str, int],
+        rng: random.Random,
+        max_cost: Optional[float] = None,
+        discipline: Any = None,
     ) -> Optional[str]:
-        """Pick the area an AI team develops next: weakest first, weighted by pace value."""
-        candidates = [a for a in UPGRADE_AREAS if levels.get(a, 0) < MAX_UPGRADE_LEVEL]
+        """Pick the area an AI team develops next: weakest first, weighted by pace value.
+
+        Only areas below max level and (when ``max_cost`` is given) affordable
+        are considered, so one expensive area never stops cheaper purchases.
+        """
+        candidates = [
+            a
+            for a in UPGRADE_AREAS
+            if levels.get(a, 0) < MAX_UPGRADE_LEVEL
+            and (
+                max_cost is None
+                or upgrade_cost(a, levels.get(a, 0), discipline) <= max_cost
+            )
+        ]
         if not candidates:
             return None
         weights = []
@@ -328,12 +344,13 @@ class UpgradeService:
             bought: List[Dict[str, Any]] = []
 
             while allowance > 0:
-                area = self.choose_ai_upgrade_area(levels, rng)
+                spendable = min(allowance, budget - reserve)
+                area = self.choose_ai_upgrade_area(
+                    levels, rng, max_cost=spendable, discipline=team.discipline
+                )
                 if area is None:
                     break
                 cost = upgrade_cost(area, levels[area], team.discipline)
-                if cost > allowance or budget - cost < reserve:
-                    break
                 result = self.purchase_upgrade(team_id, area, actor="ai")
                 if not result.get("ok"):
                     break
