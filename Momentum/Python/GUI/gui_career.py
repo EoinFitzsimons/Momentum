@@ -38,7 +38,7 @@ from GUI.themed_messagebox import information, warning
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_season_service import CareerSeasonService
-from services.tier_service import normalise_tier
+from services.tier_service import TIERS, normalise_tier, tier_label
 from services.upgrade_service import UpgradeService
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
@@ -169,22 +169,52 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
 
         board_group = QGroupBox("Career Board")
         board_layout = QVBoxLayout(board_group)
-        self.board_heading = QLabel("Select a discipline to see its active series")
+        self.board_heading = QLabel("Select a discipline to see its leagues")
         self.board_heading.setStyleSheet("font-size: 16px; font-weight: 700; color: #7EE6E0;")
         board_layout.addWidget(self.board_heading)
-        self.championships_table = QTableWidget()
-        self.championships_table.setColumnCount(5)
-        self.championships_table.setHorizontalHeaderLabels(
-            ["Series", "World", "Season", "Calendar", "Status"]
-        )
-        self.championships_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.championships_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self.championships_table.doubleClicked.connect(self.select_championship)
-        ch = self.championships_table.horizontalHeader()
-        if ch is not None:
-            ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        _style_table(self.championships_table, 200)
-        board_layout.addWidget(self.championships_table)
+
+        # One column per league: the series button on top, its teams below.
+        columns = QHBoxLayout()
+        columns.setSpacing(12)
+        self.tier_columns: dict[str, dict] = {}
+        self._selected_series: dict | None = None
+        for tier in TIERS:
+            column = QVBoxLayout()
+            column.setSpacing(8)
+            series_btn = QPushButton(tier_label(tier))
+            series_btn.setCheckable(True)
+            series_btn.setMinimumHeight(48)
+            series_btn.setAccessibleName(f"Enter {tier_label(tier)} series")
+            series_btn.clicked.connect(
+                lambda checked, value=tier: self._select_series(value)
+            )
+            column.addWidget(series_btn)
+            summary = QLabel("")
+            summary.setWordWrap(True)
+            summary.setStyleSheet("color: #A8C1C4; font-size: 12px;")
+            column.addWidget(summary)
+            table = QTableWidget()
+            table.setColumnCount(4)
+            table.setHorizontalHeaderLabels(["Team", "Drivers", "Staff", "Budget"])
+            table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+            table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            header = table.horizontalHeader()
+            if header is not None:
+                header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+                for col in range(1, 4):
+                    header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+            _style_table(table, 260)
+            table.cellClicked.connect(lambda *_, value=tier: self._select_series(value))
+            column.addWidget(table, 1)
+            columns.addLayout(column, 1)
+            self.tier_columns[tier] = {
+                "button": series_btn,
+                "summary": summary,
+                "table": table,
+                "series": None,
+            }
+        board_layout.addLayout(columns, 1)
         layout.addWidget(board_group, 1)
 
         actions = QHBoxLayout()
@@ -202,8 +232,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         for value, button in self.discipline_buttons:
             button.setChecked(value == discipline)
         self.board_heading.setText(
-            f"{_player_label(discipline)} ecosystem · choose your starting series"
+            f"{_player_label(discipline)} · choose the league you start in"
         )
+        self._selected_series = None
         self.load_championships()
 
     def _load_profile_summary(self) -> None:
@@ -232,44 +263,107 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             self.load_championships()
 
     def load_championships(self):
-        """Load career series from dedicated career tables (not championships table)."""
+        """Fill the league columns from the career tables and the team universe."""
         self._ensure_career_tables()
+        series_by_tier: dict[str, dict] = {}
         with self.db.get_connection() as conn:
             rows = conn.execute(
                 """
-                                SELECT id, name, discipline, tier, season_length, current_season, is_active
+                SELECT id, name, discipline, tier, season_length, current_season, is_active
                 FROM career_championships
                 WHERE player_id = ?
-                                    AND (? IS NULL OR discipline = ?)
-                                ORDER BY discipline, tier, id
+                  AND (? IS NULL OR discipline = ?)
+                ORDER BY tier, id
                 """,
-                                (PLAYER_ID, self._selected_discipline, self._selected_discipline),
+                (PLAYER_ID, self._selected_discipline, self._selected_discipline),
             ).fetchall()
+        for row in rows:
+            rowd = dict(row)
+            series_by_tier.setdefault(normalise_tier(rowd["tier"]), rowd)
 
-            self.championships_table.setRowCount(len(rows))
-            for i, row in enumerate(rows):
-                rowd = dict(row)
-                self.championships_table.setItem(
-                    i, 0, QTableWidgetItem(str(rowd["name"]))
-                )
-                self.championships_table.setItem(
-                    i, 1, QTableWidgetItem(_player_label(rowd["discipline"]))
-                )
-                self.championships_table.setItem(
-                    i, 2, QTableWidgetItem(str(rowd["current_season"]))
-                )
-                self.championships_table.setItem(
-                    i, 3, QTableWidgetItem(f"{int(rowd['season_length'])} rounds")
-                )
-                status = (
-                    "Active" if int(rowd.get("is_active", 1) or 1) == 1 else "Inactive"
-                )
-                self.championships_table.setItem(i, 4, QTableWidgetItem(status))
+        teams_by_tier: dict[str, list] = {tier: [] for tier in TIERS}
+        if self._selected_discipline:
+            for team in self.db.get_teams_by_discipline(self._selected_discipline):
+                teams_by_tier[normalise_tier(getattr(team, "tier", None))].append(team)
 
-                item = self.championships_table.item(i, 0)
+        for tier, widgets in self.tier_columns.items():
+            series = series_by_tier.get(tier)
+            widgets["series"] = series
+            button: QPushButton = widgets["button"]
+            if series:
+                button.setText(f"{tier_label(tier)} · {series['name']}")
+                button.setEnabled(True)
+            else:
+                button.setText(f"{tier_label(tier)} · no series yet")
+                button.setEnabled(False)
+            button.setChecked(
+                bool(self._selected_series and series and
+                     int(self._selected_series["id"]) == int(series["id"]))
+            )
+            self._fill_tier_table(widgets["table"], widgets["summary"], teams_by_tier[tier], series)
+        self._load_profile_summary()
+
+    def _fill_tier_table(self, table: QTableWidget, summary: QLabel, teams: list, series: dict | None) -> None:
+        teams = sorted(teams, key=lambda t: str(getattr(t, "name", "")))
+        table.setRowCount(len(teams))
+        driver_avgs: list[float] = []
+        staff_avgs: list[float] = []
+        for row, team in enumerate(teams):
+            driver_avg = self._average_driver_rating(int(team.id))
+            staff_avg = self._average_staff_rating(int(team.id))
+            if driver_avg is not None:
+                driver_avgs.append(driver_avg)
+            if staff_avg is not None:
+                staff_avgs.append(staff_avg)
+            table.setItem(row, 0, QTableWidgetItem(str(team.name)))
+            table.setItem(row, 1, QTableWidgetItem(
+                "-" if driver_avg is None else f"{driver_avg:.0f}"))
+            table.setItem(row, 2, QTableWidgetItem(
+                "-" if staff_avg is None else f"{staff_avg:.0f}"))
+            table.setItem(row, 3, QTableWidgetItem(
+                f"EUR {float(getattr(team, 'budget', 0.0) or 0.0) / 1_000_000:,.1f}M"))
+            for col in (1, 2, 3):
+                item = table.item(row, col)
                 if item is not None:
-                    item.setData(Qt.ItemDataRole.UserRole, rowd)
-            self._load_profile_summary()
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+        parts = [f"{len(teams)} teams"]
+        if series:
+            parts.append(f"{int(series['season_length'])} rounds")
+            parts.append(f"season {int(series.get('current_season', 1) or 1)}")
+        if driver_avgs:
+            parts.append(f"drivers avg {sum(driver_avgs) / len(driver_avgs):.0f}")
+        if staff_avgs:
+            parts.append(f"staff avg {sum(staff_avgs) / len(staff_avgs):.0f}")
+        summary.setText(" · ".join(parts))
+
+    def _average_driver_rating(self, team_id: int) -> float | None:
+        try:
+            drivers = self.db.get_drivers_by_team(team_id)
+        except Exception:
+            drivers = []
+        ratings = [
+            (float(getattr(d, "speed", 50.0) or 50.0)
+             + float(getattr(d, "racecraft", 50.0) or 50.0)
+             + float(getattr(d, "consistency", 50.0) or 50.0)) / 3.0
+            for d in drivers
+        ]
+        return sum(ratings) / len(ratings) if ratings else None
+
+    def _average_staff_rating(self, team_id: int) -> float | None:
+        try:
+            staff = self.db.get_staff_by_team(team_id)
+        except Exception:
+            staff = []
+        ratings = [float(getattr(m, "rating", 50.0) or 50.0) for m in staff]
+        return sum(ratings) / len(ratings) if ratings else None
+
+    def _select_series(self, tier: str) -> None:
+        widgets = self.tier_columns.get(tier)
+        series = widgets["series"] if widgets else None
+        self._selected_series = series
+        for value, column in self.tier_columns.items():
+            column["button"].setChecked(bool(series) and value == tier)
 
     def _replace_create_button_text(self) -> None:
         for button in self.findChildren(QPushButton):
@@ -294,17 +388,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 return
             self.load_championships()
 
-        row = self.championships_table.currentRow()
-        if row < 0:
-            warning(self, NO_SELECTION_TITLE, "Please select a career series.")
-            return
-
-        item = self.championships_table.item(row, 0)
-        if item is None:
-            warning(self, NO_SELECTION_TITLE, "Please select a valid career series.")
-            return
-
-        selected = item.data(Qt.ItemDataRole.UserRole)
+        selected = self._selected_series
         if not selected:
             warning(
                 self, NO_SELECTION_TITLE, "Could not resolve selected career series."
