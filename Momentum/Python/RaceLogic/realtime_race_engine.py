@@ -177,6 +177,7 @@ class RealtimeRaceEngine:
         self.db = db
         self.debug_logging: bool = False
         self._team_staff_effects: Dict[int, Dict[str, float]] = {}
+        self._team_car_ratings: Dict[int, float] = {}
         self.STAFF_EFFECT_CAP = 0.35
         self.STAFF_EFFECT_SATURATION_STRENGTH = 1.35
         self.DRIVER_EFFECT_CURVE_SCALE = 2.6
@@ -438,6 +439,7 @@ class RealtimeRaceEngine:
         race_state = self._initialize_race(drivers, teams, track_length_m, total_laps)
         self._current_race_state = race_state
         self._hydrate_staff_effects_for_teams(teams)
+        self._hydrate_car_ratings_for_teams(teams)
         return race_state, track_length_m
 
     def _get_track_discipline(self, track: Track) -> str:
@@ -474,6 +476,34 @@ class RealtimeRaceEngine:
             self._team_staff_effects[int(team_id)] = self._calculate_team_staff_effects(
                 int(team_id), team
             )
+
+    def _hydrate_car_ratings_for_teams(self, teams: Dict[int, Team]) -> None:
+        """Load each team's car upgrade rating (0-1) from the upgrade store."""
+        self._team_car_ratings = {}
+        if not self.db:
+            return
+        try:
+            from services.upgrade_service import UpgradeService
+
+            levels = UpgradeService(self.db).get_upgrade_levels_for_teams(
+                [int(tid) for tid in teams.keys() if tid is not None]
+            )
+        except Exception:
+            return
+        from services.upgrade_service import performance_rating_from_levels
+
+        for team_id, team_levels in levels.items():
+            self._team_car_ratings[int(team_id)] = performance_rating_from_levels(
+                team_levels
+            )
+
+    def _get_team_car_rating(self, team: Team) -> float:
+        """Car development rating in [0, 1]; explicit attribute wins over the DB."""
+        explicit = getattr(team, "car_rating", None)
+        if explicit is not None:
+            return max(0.0, min(1.0, float(explicit)))
+        team_id = int(getattr(team, "id", 0) or 0)
+        return float(self._team_car_ratings.get(team_id, 0.0))
 
     def _calculate_team_staff_effects(
         self, team_id: int, team: Team
@@ -2260,12 +2290,16 @@ class RealtimeRaceEngine:
         return float(np.clip(f_t1 - f_t0, 0.0, 1.0))
 
     def _get_team_multiplier(self, team: Team) -> float:
-        """Get team performance multiplier"""
-        tier_values = {"tier1": 0.95, "tier2": 0.75, "tier3": 0.55}
-        base = tier_values.get(team.tier.lower(), 0.75)
+        """Team performance multiplier from the car, operations and staff.
 
-        # Budget factor
-        budget_factor = min(team.budget / 200.0, 1.0) * 0.2
+        Tier is a league and budget is money to spend, so neither is read
+        here: pace comes from what the budget has been spent on.
+        """
+        operations = float(getattr(team, "operations_rating", 50.0) or 50.0)
+        operations_factor = max(0.0, min(1.0, operations / 100.0))
+        car_rating = self._get_team_car_rating(team)
+
+        base = 0.55 + (operations_factor * 0.20) + (car_rating * 0.25)
 
         # Staff-role effects from HQ roster.
         operations_effect = self._get_team_staff_effect(team, "operations")
@@ -2285,7 +2319,7 @@ class RealtimeRaceEngine:
         )
         staff_bonus = min(0.12, max(0.0, staff_bonus_raw))
 
-        return min(base + budget_factor + staff_bonus, 1.05)
+        return min(base + staff_bonus, 1.05)
 
     def _update_race_situation(self, race_state: RaceState):
         """Update gaps, positions, nearby cars, slipstream status"""

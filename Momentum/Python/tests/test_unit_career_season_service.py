@@ -233,7 +233,7 @@ def test_advance_season_rolls_over_and_applies_tier_movement(seeded_db):
         teams["t3_c"],
     ]:
         tier = db.get_team(team_id).tier
-        assert tier in {"TIER_1", "TIER_2", "TIER_3", "TOP_TIER"}
+        assert tier in {"TIER_1", "TIER_2", "TIER_3"}
 
     with db.get_connection() as conn:
         # All active championships should have moved to season 2 and received a season 2 calendar.

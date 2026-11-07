@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
 )
 from GUI.themed_messagebox import information, warning, critical
+from services.tier_service import TIERS
 
 
 class SearchResultsDialog(QDialog):
@@ -86,7 +87,7 @@ class NavigationBar(QWidget):
         "DRAG_ACCELERATION",
         "SPRINT_RALLYCROSS",
     ]
-    TIER_VALUES = ["TOP_TIER", "TIER_1", "TIER_2", "TIER_3"]
+    TIER_VALUES = list(TIERS)
     SQL_DISCIPLINE_FILTER = "LOWER(REPLACE(discipline, ' ', '_')) = ?"
     SQL_TIER_FILTER = "tier = ?"
     SQL_NAME_FILTER = "LOWER(name) LIKE ?"
