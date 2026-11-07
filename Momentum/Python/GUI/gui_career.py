@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -817,8 +818,13 @@ class CareerWindow(QMainWindow):
         self.load_data()
 
     def _setup_ui(self):
+        # The page is taller than a small window; scroll rather than clip it.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         central = QWidget()
-        self.setCentralWidget(central)
+        scroll.setWidget(central)
+        self.setCentralWidget(scroll)
         self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
 
         layout = QVBoxLayout(central)
