@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "${command:python.interpreterPath}",
             "args": [
-                "${workspaceFolder}/Momentum/Python/gui/launcher.py"
+                "${workspaceFolder}/Momentum/Python/GUI/launcher.py"
             ],
             "presentation": {
                 "reveal": "always",
