@@ -140,11 +140,11 @@ def capture_race_window(app, width: int, height: int, suffix: str):
 
 def _seed_career_world() -> tuple[SimpleNamespace, int, str]:
     """Create a small career save so the career HQ window has real content."""
+    from services.tier_service import normalise_tier
     from GUI.gui_career import (
         CareerSelectionDialog,
         PLAYER_ID,
         WORLD_START_DATE,
-        _normalize_tier,
     )
 
     db = DatabaseManager()
@@ -184,9 +184,9 @@ def _seed_career_world() -> tuple[SimpleNamespace, int, str]:
         raise RuntimeError("Could not find any teams for career screenshot capture")
 
     team = None
-    desired_tier = _normalize_tier(getattr(championship, "tier", "TIER_2"))
+    desired_tier = normalise_tier(getattr(championship, "tier", "TIER_2"))
     for candidate in teams:
-        if _normalize_tier(getattr(candidate, "tier", "TIER_2")) == desired_tier:
+        if normalise_tier(getattr(candidate, "tier", "TIER_2")) == desired_tier:
             team = candidate
             break
     if team is None:
