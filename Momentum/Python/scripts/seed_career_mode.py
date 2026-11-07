@@ -1164,6 +1164,7 @@ def refresh_unsupported_disciplines(db: DatabaseManager, disciplines: list) -> d
                 "team_ownership",
                 "team_budget_transactions",
                 "team_facility_upgrades",
+                "team_car_upgrades",
                 "team_audit_log",
             ]:
                 cursor.execute(
@@ -1297,11 +1298,17 @@ def main():
     # Generate data
     try:
         drivers_created = seed_drivers(db, args.drivers, disciplines)
+        with db.get_connection() as conn:
+            teams_before = int(conn.execute("SELECT COUNT(1) FROM teams").fetchone()[0])
         teams_created = seed_teams(db, args.teams_per_discipline, disciplines)
         staff_created = seed_staff(db, args.staff)
         staff_contracts_assigned = assign_staff_contracts(db, disciplines)
         contracts_assigned = assign_driver_contracts(db, disciplines)
-        tiers_assigned = assign_tiers_by_strength(db, disciplines)
+        # Leagues and budgets are only (re)assigned for a fresh world; topping up
+        # an existing world must not erase earned promotions or money.
+        tiers_assigned = (
+            assign_tiers_by_strength(db, disciplines) if teams_before == 0 else 0
+        )
         drivers_adjusted = adjust_drivers_by_tier(db)
 
         # Show final stats
