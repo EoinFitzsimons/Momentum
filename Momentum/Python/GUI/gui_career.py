@@ -179,6 +179,10 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self.championships_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.championships_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.championships_table.doubleClicked.connect(self.select_championship)
+        ch = self.championships_table.horizontalHeader()
+        if ch is not None:
+            ch.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        _style_table(self.championships_table, 200)
         board_layout.addWidget(self.championships_table)
         layout.addWidget(board_group, 1)
 
@@ -714,7 +718,10 @@ class CareerTeamSelectionDialog(QDialog):
         header = self.teams_table.horizontalHeader()
         if header is not None:
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            for col in range(1, 6):
+                header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
             header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        _style_table(self.teams_table, 240)
         _style_table(self.teams_table, 200)
         layout.addWidget(self.teams_table)
 
