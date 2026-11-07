@@ -41,6 +41,16 @@ class SearchResultsDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self.table = QTableWidget()
+
+        _vh = self.table.verticalHeader()
+
+        if _vh is not None:
+
+            _vh.setVisible(False)
+
+        self.table.setShowGrid(False)
+
+        self.table.setAlternatingRowColors(True)
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(rows))
