@@ -58,6 +58,20 @@ FACILITY_OPTIONS = [
 ]
 
 FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
+
+
+def _style_table(table: QTableWidget, min_height: int, max_height: int | None = None) -> None:
+    """Apply the shared card-table look: no row numbers, no grid, zebra rows."""
+    vh = table.verticalHeader()
+    if vh is not None:
+        vh.setVisible(False)
+    table.setShowGrid(False)
+    table.setAlternatingRowColors(True)
+    table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    table.setMinimumHeight(min_height)
+    if max_height is not None:
+        table.setMaximumHeight(max_height)
+
 LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
 CAREER_DISCIPLINE_RACE_COUNTS = {
@@ -701,6 +715,7 @@ class CareerTeamSelectionDialog(QDialog):
         if header is not None:
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
+        _style_table(self.teams_table, 200)
         layout.addWidget(self.teams_table)
 
         buttons = QHBoxLayout()
@@ -904,8 +919,9 @@ class CareerWindow(QMainWindow):
         if sh is not None:
             sh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             sh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.staff_table.setMaximumHeight(210)
+        _style_table(self.staff_table, 160, 260)
         v.addWidget(self.staff_table)
+        v.addStretch(1)
         return group
 
     def _create_car_group(self) -> QGroupBox:
@@ -928,8 +944,9 @@ class CareerWindow(QMainWindow):
         uh = self.upgrade_table.horizontalHeader()
         if uh is not None:
             uh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.upgrade_table.setMaximumHeight(230)
-        self.upgrade_table.verticalHeader().setVisible(False)
+            uh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            uh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        _style_table(self.upgrade_table, 215, 240)
         v.addWidget(self.upgrade_table)
 
         upgrade_row = QHBoxLayout()
@@ -997,7 +1014,7 @@ class CareerWindow(QMainWindow):
         sh = self.schedule_table.horizontalHeader()
         if sh is not None:
             sh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.schedule_table.setMaximumHeight(240)
+        _style_table(self.schedule_table, 150)
         v.addWidget(self.schedule_table)
         return group
 
@@ -1011,6 +1028,7 @@ class CareerWindow(QMainWindow):
         if sh is not None:
             sh.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
             sh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        _style_table(self.standings_table, 150)
         v.addWidget(self.standings_table)
         return group
 
