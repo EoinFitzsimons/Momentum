@@ -260,6 +260,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
     def create_championship(self):
         """Create/reset career world and profile."""
         if self._create_or_reset_career_save():
+            self._selected_series = None
             self.load_championships()
 
     def load_championships(self):
@@ -386,6 +387,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             )
             if not self._create_or_reset_career_save():
                 return
+            self._selected_series = None
             self.load_championships()
 
         selected = self._selected_series
