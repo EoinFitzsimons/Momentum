@@ -807,7 +807,6 @@ class CareerTeamSelectionDialog(QDialog):
                 header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
             header.setSectionResizeMode(6, QHeaderView.ResizeMode.Stretch)
         _style_table(self.teams_table, 240)
-        _style_table(self.teams_table, 200)
         layout.addWidget(self.teams_table)
 
         buttons = QHBoxLayout()
