@@ -37,6 +37,8 @@ from GUI.themed_messagebox import information, warning
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_season_service import CareerSeasonService
+from services.tier_service import normalise_tier
+from services.upgrade_service import UpgradeService
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
@@ -66,17 +68,6 @@ CAREER_DISCIPLINE_RACE_COUNTS = {
     "SPRINT_RALLYCROSS": 12,
     "ENDURANCE": 8,
 }
-
-
-def _normalize_tier(value: str) -> str:
-    raw = str(value or "").strip().upper().replace("-", "_")
-    if raw in {"TOP_TIER", "TIER1", "TIER_1", "1"}:
-        return "TIER_1"
-    if raw in {"TIER2", "TIER_2", "2"}:
-        return "TIER_2"
-    if raw in {"TIER3", "TIER_3", "3"}:
-        return "TIER_3"
-    return "TIER_2"
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
@@ -454,7 +445,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             {
                 (
                     str(getattr(team, "discipline", "") or "").upper(),
-                    _normalize_tier(getattr(team, "tier", "TIER_2")),
+                    normalise_tier(getattr(team, "tier", "TIER_2")),
                 )
                 for team in teams
                 if str(getattr(team, "discipline", "") or "").strip()
@@ -660,7 +651,7 @@ class CareerTeamSelectionDialog(QDialog):
         super().__init__(parent)
         self.db = db
         self.discipline = discipline
-        self.tier = _normalize_tier(tier) if tier else None
+        self.tier = normalise_tier(tier) if tier else None
         self.selected_team = None
 
         self.setWindowTitle("Select Career Team")
@@ -730,7 +721,7 @@ class CareerTeamSelectionDialog(QDialog):
             teams = [
                 team
                 for team in teams
-                if _normalize_tier(getattr(team, "tier", "TIER_2")) == self.tier
+                if normalise_tier(getattr(team, "tier", "TIER_2")) == self.tier
             ]
         self.teams_table.setRowCount(len(teams))
 
@@ -787,6 +778,7 @@ class CareerWindow(QMainWindow):
         self.championship = championship
         self.db = DatabaseManager()
         self.career_season_service = CareerSeasonService(self.db)
+        self.upgrade_service = UpgradeService(self.db)
         self.player_id = PLAYER_ID
 
         self.owned_team = None
@@ -919,11 +911,37 @@ class CareerWindow(QMainWindow):
         v = QVBoxLayout(group)
         self.car_ops_label = QLabel("Operations Rating: -")
         self.car_strategy_label = QLabel("Strategy Profile: -")
+        self.car_rating_label = QLabel("Car Development: -")
         self.facility_label = QLabel("Facilities: -")
         self.facility_label.setWordWrap(True)
         v.addWidget(self.car_ops_label)
         v.addWidget(self.car_strategy_label)
+        v.addWidget(self.car_rating_label)
         v.addWidget(self.facility_label)
+
+        self.upgrade_table = QTableWidget()
+        self.upgrade_table.setColumnCount(3)
+        self.upgrade_table.setHorizontalHeaderLabels(["Area", "Level", "Next Cost"])
+        self.upgrade_table.setAccessibleName("Car Upgrades")
+        uh = self.upgrade_table.horizontalHeader()
+        if uh is not None:
+            uh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.upgrade_table.setMaximumHeight(190)
+        v.addWidget(self.upgrade_table)
+
+        upgrade_row = QHBoxLayout()
+        self.upgrade_combo = QComboBox()
+        self.upgrade_combo.setAccessibleName("Upgrade Area")
+        upgrade_row.addWidget(self.upgrade_combo)
+        self.upgrade_btn = QPushButton("Buy Upgrade")
+        self.upgrade_btn.setAccessibleName("Buy Upgrade")
+        self.upgrade_btn.clicked.connect(self._run_car_upgrade)
+        upgrade_row.addWidget(self.upgrade_btn)
+        v.addLayout(upgrade_row)
+
+        self.upgrade_result_label = QLabel("")
+        self.upgrade_result_label.setWordWrap(True)
+        v.addWidget(self.upgrade_result_label)
         return group
 
     def _create_hq_management_group(self) -> QGroupBox:
@@ -1036,7 +1054,7 @@ class CareerWindow(QMainWindow):
                 (
                     self.player_id,
                     str(self.owned_team.discipline).upper(),
-                    _normalize_tier(getattr(self.owned_team, "tier", "TIER_2")),
+                    normalise_tier(getattr(self.owned_team, "tier", "TIER_2")),
                 ),
             ).fetchone()
             if row:
@@ -1177,10 +1195,60 @@ class CareerWindow(QMainWindow):
         facilities = self.db.get_facility_upgrades(self.owned_team.id)
         if not facilities:
             self.facility_label.setText("Facilities: Baseline package")
-            return
+        else:
+            parts = [f"{f['facility_name']} L{f['level']}" for f in facilities]
+            self.facility_label.setText("Facilities: " + ", ".join(parts))
 
-        parts = [f"{f['facility_name']} L{f['level']}" for f in facilities]
-        self.facility_label.setText("Facilities: " + ", ".join(parts))
+        self._load_upgrade_panel()
+
+    def _load_upgrade_panel(self):
+        if not self.owned_team:
+            return
+        car_rating = self.upgrade_service.car_performance_rating(self.owned_team.id)
+        self.car_rating_label.setText(f"Car Development: {car_rating * 100:.0f} / 100")
+
+        rows = self.upgrade_service.get_upgrade_summary(self.owned_team)
+        previous = self.upgrade_combo.currentData()
+        self.upgrade_combo.blockSignals(True)
+        self.upgrade_combo.clear()
+        self.upgrade_table.setRowCount(len(rows))
+        for idx, entry in enumerate(rows):
+            self.upgrade_table.setItem(idx, 0, QTableWidgetItem(str(entry["label"])))
+            self.upgrade_table.setItem(
+                idx, 1, QTableWidgetItem(f"{entry['level']} / {entry['max_level']}")
+            )
+            cost = entry["next_cost"]
+            self.upgrade_table.setItem(
+                idx,
+                2,
+                QTableWidgetItem("Max" if cost is None else f"EUR {cost:,.0f}"),
+            )
+            if cost is not None:
+                self.upgrade_combo.addItem(
+                    f"{entry['label']} L{entry['level'] + 1} (EUR {cost:,.0f})",
+                    entry["area"],
+                )
+        if previous is not None:
+            found = self.upgrade_combo.findData(previous)
+            if found >= 0:
+                self.upgrade_combo.setCurrentIndex(found)
+        self.upgrade_combo.blockSignals(False)
+        self.upgrade_btn.setEnabled(self.upgrade_combo.count() > 0)
+
+    def _run_car_upgrade(self):
+        if not self.owned_team:
+            return
+        area = self.upgrade_combo.currentData()
+        if not area:
+            return
+        result = self.upgrade_service.purchase_upgrade(
+            self.owned_team.id, str(area), actor="player"
+        )
+        if not result.get("ok"):
+            warning(self, BUDGET_WARNING_TITLE, str(result.get("message", "")))
+            return
+        self.upgrade_result_label.setText(str(result.get("message", "")))
+        self.load_data()
 
     def _load_schedule_panel(self):
         with self.db.get_connection() as conn:
@@ -1439,61 +1507,16 @@ class CareerWindow(QMainWindow):
         return True
 
     def _apply_pending_race_income(self):
+        """Pay prize and sponsor money for every completed race not yet paid (all teams)."""
         if not self.owned_team:
             return
-
-        with self.db.get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT id AS race_id, round_number, status
-                FROM career_races
-                WHERE player_id = ? AND career_championship_id = ? AND season = ?
-                ORDER BY round_number
-                """,
-                (
-                    self.player_id,
-                    int(self.championship.id),
-                    int(self.championship.current_season),
-                ),
-            ).fetchall()
-        calendar = [dict(r) for r in rows]
-        transactions = self.db.get_budget_transactions(self.owned_team.id)
-        existing_refs = {
-            str(t.get("description", ""))
-            for t in transactions
-            if t.get("category") == "race_income"
-        }
-
-        tier = str(getattr(self.owned_team, "tier", "TIER_2") or "TIER_2").upper()
-        base_income_map = {
-            "TOP_TIER": 520000,
-            "TIER_1": 460000,
-            "TIER_2": 330000,
-            "TIER_3": 240000,
-        }
-        base_income = int(base_income_map.get(tier, 330000))
-
-        quality_score, _ = self._compute_team_scores()
-        quality_multiplier = 0.85 + ((quality_score / 100.0) * 0.45)
-
-        for race in calendar:
-            if race.get("status") != "completed":
-                continue
-            race_id = int(race.get("race_id", 0) or 0)
-            if race_id <= 0:
-                continue
-            marker = f"race_income_ref:{race_id}"
-            if any(marker in desc for desc in existing_refs):
-                continue
-
-            payout = int(base_income * quality_multiplier)
-            applied = self._apply_budget_delta(
-                payout,
-                "race_income",
-                f"Race participation income R{race.get('round_number', '?')} ({marker})",
+        try:
+            self.upgrade_service.award_pending_income(
+                player_id=self.player_id,
+                season=int(getattr(self.championship, "current_season", 1) or 1),
             )
-            if applied:
-                existing_refs.add(marker)
+        except Exception as ex:
+            print(f"[CAREER] Failed to apply race income: {ex}")
 
     def _run_marketing_campaign(self):
         if not self.owned_team:

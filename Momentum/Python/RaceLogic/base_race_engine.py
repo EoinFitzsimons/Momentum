@@ -106,7 +106,7 @@ class BaseDisciplineEngine(ABC):
 
     Performance Weighting (default):
     - 50% driver attributes (weighted by get_attribute_weights())
-    - 30% team performance (budget, tier, capabilities)
+    - 30% team performance (car development, operations)
     - 10% weather conditions (rain, wind, temperature)
     - 10% track characteristics (difficulty, surface, layout)
     """
@@ -186,7 +186,7 @@ class BaseDisciplineEngine(ABC):
 
         Args:
             driver: Driver with comprehensive attributes
-            team: Team with budget and tier
+            team: Team with operations rating and car development
             context: Race context with track and conditions
             lap_number: Current lap number (for tyre/fuel degradation)
             current_position: Driver's current race position (for traffic)
@@ -210,13 +210,13 @@ class BaseDisciplineEngine(ABC):
 
         Performance Weighting:
         - 50% driver skill (weighted by discipline-specific attributes)
-        - 30% team performance (budget, tier, capabilities)
+        - 30% team performance (car development, operations)
         - 10% weather impact (rain, wind, temperature)
         - 10% track impact (difficulty, surface, layout)
 
         Args:
             driver: Driver with 50+ attributes (0-100 scale)
-            team: Team with budget and tier
+            team: Team with operations rating and car development
             context: Race context with conditions
 
         Returns:
@@ -256,7 +256,7 @@ class BaseDisciplineEngine(ABC):
         else:
             driver_score = 0.5  # Default if no attributes found
 
-        # Team performance based on budget and tier
+        # Team performance based on car development and operations
         team_performance = self._calculate_team_performance(team)
 
         # Environmental factors
@@ -274,27 +274,38 @@ class BaseDisciplineEngine(ABC):
 
     def _calculate_team_performance(self, team: Team) -> float:
         """
-        Calculate team performance factor based on tier and budget
+        Calculate team performance factor from the car and the operation.
+
+        Tier is a league label and budget is unspent money, so neither
+        affects pace. Pace comes from operations rating and the car
+        development rating (upgrade levels bought with the budget).
 
         Args:
-            team: Team with tier and budget attributes
+            team: Team with operations_rating and optional car_rating
 
         Returns:
             Team performance factor (0.0 to 1.0)
         """
-        # Base performance by tier
-        tier_multipliers = {
-            "tier1": 0.9,  # Top tier teams
-            "tier2": 0.7,  # Mid tier teams
-            "tier3": 0.5,  # Lower tier teams
-        }
-        base_performance = tier_multipliers.get(team.tier.lower(), 0.5)
+        operations = float(getattr(team, "operations_rating", 50.0) or 50.0)
+        operations_factor = max(0.0, min(1.0, operations / 100.0))
+        car_rating = self._team_car_rating(team)
+        return min(1.0, 0.35 + (operations_factor * 0.35) + (car_rating * 0.30))
 
-        # Budget factor (up to 30% bonus, capped at 1.0)
-        # Assuming €200M is maximum budget
-        budget_factor = min(team.budget / 200.0, 1.0) * 0.3
+    @staticmethod
+    def _team_car_rating(team: Team) -> float:
+        """Car development rating in [0, 1] supplied by the upgrade system."""
+        value = getattr(team, "car_rating", None)
+        if value is None:
+            return 0.0
+        return max(0.0, min(1.0, float(value)))
 
-        return min(base_performance + budget_factor, 1.0)
+    @staticmethod
+    def _team_reliability_rating(team: Team) -> float:
+        """Reliability development rating in [0, 1] supplied by the upgrade system."""
+        value = getattr(team, "reliability_rating", None)
+        if value is None:
+            return 0.0
+        return max(0.0, min(1.0, float(value)))
 
     def _calculate_weather_impact(self, driver: Driver, context: RaceContext) -> float:
         """
@@ -383,25 +394,22 @@ class BaseDisciplineEngine(ABC):
         """
         Check if mechanical failure occurs on this lap
 
-        Reliability simulation based on team tier, weather stress, and
-        random chance. Lower tier teams and harsh conditions increase
-        failure probability.
+        Reliability simulation based on reliability development, weather
+        stress and random chance. Undeveloped cars and harsh conditions
+        increase failure probability.
 
         Args:
-            team: Team with tier attribute
+            team: Team with optional reliability_rating attribute
             context: Race context with weather conditions
             lap_number: Current lap number
 
         Returns:
             DNF reason string if failure occurs, None otherwise
         """
-        # Base reliability by tier (% chance of failure per lap)
-        tier_failure_rates = {
-            "tier1": 0.0003,  # 0.03% per lap (~2% over 60 laps)
-            "tier2": 0.0008,  # 0.08% per lap (~5% over 60 laps)
-            "tier3": 0.0015,  # 0.15% per lap (~9% over 60 laps)
-        }
-        base_failure_rate = tier_failure_rates.get(team.tier.lower(), 0.001)
+        # Base reliability from development (% chance of failure per lap):
+        # 0.15% per lap undeveloped (~9% over 60 laps) down to 0.03% fully developed.
+        reliability = self._team_reliability_rating(team)
+        base_failure_rate = 0.0015 - (reliability * 0.0012)
 
         # Weather increases failure rate
         precipitation = context.weather_conditions["precipitation"]

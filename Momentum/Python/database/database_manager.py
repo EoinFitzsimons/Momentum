@@ -225,6 +225,8 @@ class DatabaseManager(RaceResultPersistence):
             )
 
             self._run_schema_migration_step(conn, self._ensure_team_management_tables)
+            self._run_schema_migration_step(conn, self._ensure_car_upgrade_table)
+            self._run_schema_migration_step(conn, self._normalise_tier_values)
 
             self._run_schema_migration_step(
                 conn,
@@ -279,6 +281,20 @@ class DatabaseManager(RaceResultPersistence):
                 pass
 
         conn.commit()
+
+    def _ensure_car_upgrade_table(self, conn: sqlite3.Connection) -> None:
+        """Ensure the car upgrade store used by the upgrade system exists."""
+        from services.upgrade_service import UpgradeService
+
+        conn.executescript(UpgradeService.TABLE_SQL)
+        conn.commit()
+
+    def _normalise_tier_values(self, conn: sqlite3.Connection) -> None:
+        """Rewrite legacy tier spellings (tier1, TOP_TIER) to TIER_1/2/3."""
+        from services.tier_service import normalise_tier_columns
+
+        if normalise_tier_columns(conn):
+            conn.commit()
 
     def _ensure_team_management_tables(self, conn: sqlite3.Connection) -> None:
         """Ensure supporting team management tables/indexes exist."""
@@ -470,12 +486,39 @@ class DatabaseManager(RaceResultPersistence):
             setattr(team, "budget_eur", float(getattr(team, "budget", 0.0)))
         except Exception:
             pass
+        self._attach_development_ratings(team)
         try:
             setattr(team, "version", int(row_dict.get("version", 1) or 1))
             setattr(team, "updated_at", str(row_dict.get("updated_at") or ""))
         except Exception:
             pass
         return team
+
+    def _attach_development_ratings(self, team: Team) -> None:
+        """Attach car_rating / reliability_rating (0-1) from bought upgrades."""
+        car_rating, reliability_rating = 0.0, 0.0
+        try:
+            from services.upgrade_service import (
+                UPGRADE_AREAS,
+                performance_rating_from_levels,
+                reliability_rating_from_levels,
+            )
+
+            levels = {area: 0 for area in UPGRADE_AREAS}
+            with sqlite3.connect(self.db_path) as conn:
+                rows = conn.execute(
+                    "SELECT area, level FROM team_car_upgrades WHERE team_id = ?",
+                    (int(team.id),),
+                ).fetchall()
+            for area, level in rows:
+                if area in levels:
+                    levels[area] = int(level or 0)
+            car_rating = performance_rating_from_levels(levels)
+            reliability_rating = reliability_rating_from_levels(levels)
+        except Exception:
+            pass
+        setattr(team, "car_rating", car_rating)
+        setattr(team, "reliability_rating", reliability_rating)
 
     # Driver operations
     def create_driver(self, driver: Driver) -> Optional[int]:

@@ -9,20 +9,11 @@ from typing import Any
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_result_service import persist_career_race_result
+from services.tier_service import TIERS, normalise_tier
+from services.upgrade_service import UpgradeService
 
-TIER_ORDER = ["TIER_1", "TIER_2", "TIER_3"]
+TIER_ORDER = list(TIERS)
 MAX_MOVES_PER_TIER = 2
-
-
-def _normalize_tier(value: str | None) -> str:
-    raw = str(value or "").strip().upper().replace("-", "_")
-    if raw in {"TOP_TIER", "TIER1", "TIER_1", "1"}:
-        return "TIER_1"
-    if raw in {"TIER2", "TIER_2", "2"}:
-        return "TIER_2"
-    if raw in {"TIER3", "TIER_3", "3"}:
-        return "TIER_3"
-    return "TIER_2"
 
 
 class CareerSeasonService:
@@ -41,6 +32,10 @@ class CareerSeasonService:
             player_id=player_id, season=completed_season
         )
 
+        economy = self._run_off_season_economy(
+            player_id=player_id, season=completed_season, discipline=discipline
+        )
+
         movements = self._apply_promotion_relegation(
             player_id=player_id,
             discipline=discipline,
@@ -56,6 +51,25 @@ class CareerSeasonService:
             "relegated": movements["relegated"],
             "headless_resolved_races": headless["resolved_races"],
             "headless_persisted_results": headless["persisted_results"],
+            "income_payouts": economy["income_payouts"],
+            "ai_upgrades": economy["ai_upgrades"],
+        }
+
+    def _run_off_season_economy(
+        self, player_id: str, season: int, discipline: str
+    ) -> dict[str, int]:
+        """Pay out the season's race income, then let AI teams buy upgrades."""
+        upgrades = UpgradeService(self.db)
+        payouts = upgrades.award_pending_income(player_id=player_id, season=season)
+
+        owned_team_id = self.db.get_player_team_id(player_id)
+        excluded = [int(owned_team_id)] if owned_team_id else []
+        purchases = upgrades.run_ai_upgrade_spending(
+            discipline=str(discipline or "").upper(), exclude_team_ids=excluded
+        )
+        return {
+            "income_payouts": int(payouts),
+            "ai_upgrades": sum(len(items) for items in purchases.values()),
         }
 
     def _resolve_non_player_races_headless(
@@ -65,7 +79,7 @@ class CareerSeasonService:
         owned_team = self.db.get_team(owned_team_id) if owned_team_id else None
         owned_discipline = str(getattr(owned_team, "discipline", "") or "").upper()
         owned_tier = (
-            _normalize_tier(getattr(owned_team, "tier", None)) if owned_team else None
+            normalise_tier(getattr(owned_team, "tier", None)) if owned_team else None
         )
 
         resolved_races = 0
@@ -92,7 +106,7 @@ class CareerSeasonService:
         for row in race_rows:
             race_id = int(row["race_id"])
             discipline_key = str(row["discipline"] or "").upper()
-            tier_key = _normalize_tier(row["tier"])
+            tier_key = normalise_tier(row["tier"])
 
             # Only auto-resolve championships outside the player's owned series.
             if (
@@ -157,7 +171,7 @@ class CareerSeasonService:
         teams = [
             team
             for team in self.db.get_teams_by_discipline(discipline)
-            if _normalize_tier(getattr(team, "tier", None)) == tier
+            if normalise_tier(getattr(team, "tier", None)) == tier
         ]
         if not teams:
             return []
@@ -178,11 +192,9 @@ class CareerSeasonService:
                 reverse=True,
             )[:2]
 
-            team_rating = float(
-                getattr(team, "operations_rating", 50.0) or 50.0
-            ) * 0.65 + min(
-                35.0,
-                (float(getattr(team, "budget", 0.0) or 0.0) / 100_000_000.0) * 35.0,
+            team_rating = (
+                float(getattr(team, "operations_rating", 50.0) or 50.0) * 0.65
+                + float(getattr(team, "car_rating", 0.0) or 0.0) * 35.0
             )
 
             for driver in top_drivers:
@@ -229,7 +241,7 @@ class CareerSeasonService:
             ).fetchall()
 
             for row in team_rows:
-                tier = _normalize_tier(row["tier"])
+                tier = normalise_tier(row["tier"])
                 by_tier.setdefault(tier, []).append(
                     {"team_id": int(row["id"]), "points": 0}
                 )
@@ -252,7 +264,7 @@ class CareerSeasonService:
 
             score_map: dict[tuple[str, int], int] = {}
             for row in points_rows:
-                key = (_normalize_tier(row["tier"]), int(row["team_id"]))
+                key = (normalise_tier(row["tier"]), int(row["team_id"]))
                 score_map[key] = int(row["total_points"] or 0)
 
             for tier_key, teams in by_tier.items():

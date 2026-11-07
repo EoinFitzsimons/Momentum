@@ -38,6 +38,7 @@ from PyQt6.QtGui import QFont, QColor
 from typing import Optional, List, Dict, Any, Tuple
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
+from services.tier_service import TIERS
 from database.models import Championship, Race
 from datetime import datetime
 
@@ -89,7 +90,6 @@ def _player_label(value: Any) -> str:
 
     normalized = raw.upper().replace(" ", "_")
     mapping = {
-        "TOP_TIER": "Top Tier",
         "TIER_1": "Tier 1",
         "TIER_2": "Tier 2",
         "TIER_3": "Tier 3",
@@ -387,7 +387,7 @@ class CreateChampionshipDialog(QDialog):
         tier_layout = QHBoxLayout()
         tier_layout.addWidget(QLabel("Tier:"))
         self.tier_combo = QComboBox()
-        tier_values = ["TOP_TIER", "TIER_2", "TIER_3"]
+        tier_values = list(TIERS)
         for value in tier_values:
             self.tier_combo.addItem(_player_label(value), value)
         tier_layout.addWidget(self.tier_combo)
