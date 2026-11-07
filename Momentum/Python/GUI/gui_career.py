@@ -926,7 +926,8 @@ class CareerWindow(QMainWindow):
         uh = self.upgrade_table.horizontalHeader()
         if uh is not None:
             uh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.upgrade_table.setMaximumHeight(190)
+        self.upgrade_table.setMaximumHeight(230)
+        self.upgrade_table.verticalHeader().setVisible(False)
         v.addWidget(self.upgrade_table)
 
         upgrade_row = QHBoxLayout()
