@@ -44,7 +44,8 @@ the Windows build helper is in `Momentum/Python/scripts/build_exe.ps1`.
 - `Momentum/Python/database/` - SQLite models and database access
 - `Momentum/Python/tests/` - automated tests
 - `Momentum/Python/docs/` - technical game documentation
-- `SRS/` - runtime schemas and simulation contracts used by the application
+- `DESIGN.md` - the game design: leagues, money, upgrades, people, races and seasons
+- `SRS/` - determinism requirement plus JSON schemas and fixtures used by the tests
 
 ## Licensing
 
