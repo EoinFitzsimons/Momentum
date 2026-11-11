@@ -106,3 +106,17 @@ def test_dressing_builds_pit_lane_and_grandstands(qt_app, layout):
 
 def pit_index(main, point):
     return min(range(len(main)), key=lambda i: (main[i].x - point.x) ** 2 + (main[i].y - point.y) ** 2)
+
+
+@pytest.mark.unit
+def test_pit_route_survives_short_main_straight(qt_app):
+    from GUI.circuit_dressing import build_pit_route
+    from GUI.gui_race_visual import TrackPoint
+
+    pts = [
+        TrackPoint(s=float(i), x=200 * math.cos(i / 200), y=200 * math.sin(i / 200),
+                   theta=i / 200 + math.pi / 2, curvature=1 / 200)
+        for i in range(int(2 * math.pi * 200))
+    ]
+    pit = build_pit_route(pts)
+    assert pit is not None and len(pit) > 100
