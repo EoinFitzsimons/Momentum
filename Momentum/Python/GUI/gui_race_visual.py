@@ -4029,6 +4029,13 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
 
     def _load_track_with_fallback(self) -> None:
+        """Load the track, then trim the grid to what the track can hold."""
+        self._load_track_record_with_fallback()
+        drivers = getattr(self, "drivers", None)
+        if drivers:
+            self.drivers = list(drivers)[: self._grid_limit()]
+
+    def _load_track_record_with_fallback(self) -> None:
         """Load track from database, falling back to a local simple track."""
         db = self.db
         if db is None:
