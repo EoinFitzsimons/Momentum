@@ -205,6 +205,7 @@ class DatabaseManager(RaceResultPersistence):
                     {"source": "TEXT DEFAULT ''"},
                 ),
             )
+            self._run_schema_migration_step(conn, self._backfill_ledger_openings)
 
             self._run_schema_migration_step(
                 conn,
@@ -268,6 +269,14 @@ class DatabaseManager(RaceResultPersistence):
             migration_fn(conn)
         except Exception:
             pass
+
+    @staticmethod
+    def _backfill_ledger_openings(conn: sqlite3.Connection) -> None:
+        """Saves made before the ledger get an opening entry per team."""
+        from services.finance_service import backfill_opening_balances
+
+        if backfill_opening_balances(conn):
+            conn.commit()
 
     def _ensure_table_columns(
         self,

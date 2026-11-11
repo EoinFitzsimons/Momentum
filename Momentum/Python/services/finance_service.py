@@ -10,7 +10,7 @@ and ``reconcile()`` says so for every team.
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 from database.database_manager import DatabaseManager
 
@@ -45,6 +45,37 @@ def ensure_ledger_schema(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE team_budget_transactions ADD COLUMN source TEXT DEFAULT ''")
 
 
+class Posting(NamedTuple):
+    balance: float
+    transaction_id: int
+
+
+def post_entry_with(
+    conn: sqlite3.Connection,
+    team_id: int,
+    amount: float,
+    category: str,
+    description: str = "",
+    source: str = "",
+) -> Posting:
+    """Record one transaction and move the balance inside the caller's transaction."""
+    ensure_ledger_schema(conn)
+    amount = round(float(amount), 2)
+    conn.execute(
+        "UPDATE teams SET budget = budget + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        (amount, int(team_id)),
+    )
+    cursor = conn.execute(
+        """
+        INSERT INTO team_budget_transactions (team_id, category, amount, description, source)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (int(team_id), str(category), amount, str(description or ""), str(source or "")),
+    )
+    row = conn.execute("SELECT budget FROM teams WHERE id = ?", (int(team_id),)).fetchone()
+    return Posting(float(row[0]) if row else 0.0, int(cursor.lastrowid or 0))
+
+
 def post_with(
     conn: sqlite3.Connection,
     team_id: int,
@@ -53,22 +84,49 @@ def post_with(
     description: str = "",
     source: str = "",
 ) -> float:
-    """Record one transaction and move the balance inside the caller's transaction."""
+    """As ``post_entry_with`` but returns only the new balance."""
+    return post_entry_with(conn, team_id, amount, category, description, source).balance
+
+
+def backfill_opening_balances(conn: sqlite3.Connection) -> int:
+    """Give pre-ledger saves an opening entry so their balances reconcile.
+
+    Teams created before the ledger existed have a balance but no transactions
+    explaining it. The unexplained part is posted once as owner funding
+    carried over from the earlier save. Returns the number of teams touched.
+    """
     ensure_ledger_schema(conn)
-    amount = round(float(amount), 2)
-    conn.execute(
-        "UPDATE teams SET budget = budget + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-        (amount, int(team_id)),
-    )
-    conn.execute(
+    rows = conn.execute(
         """
-        INSERT INTO team_budget_transactions (team_id, category, amount, description, source)
-        VALUES (?, ?, ?, ?, ?)
+        SELECT t.id, t.budget,
+               COALESCE((SELECT SUM(x.amount) FROM team_budget_transactions x
+                         WHERE x.team_id = t.id), 0) AS ledger,
+               (SELECT COUNT(1) FROM team_budget_transactions x
+                WHERE x.team_id = t.id AND x.category = ?) AS funded
+        FROM teams t
         """,
-        (int(team_id), str(category), amount, str(description or ""), str(source or "")),
-    )
-    row = conn.execute("SELECT budget FROM teams WHERE id = ?", (int(team_id),)).fetchone()
-    return float(row[0]) if row else 0.0
+        (OWNER_FUNDING,),
+    ).fetchall()
+    touched = 0
+    for team_id, balance, ledger, funded in rows:
+        gap = round(float(balance or 0.0) - float(ledger or 0.0), 2)
+        if abs(gap) <= RECONCILE_TOLERANCE or int(funded or 0):
+            continue
+        conn.execute(
+            """
+            INSERT INTO team_budget_transactions (team_id, category, amount, description, source)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                int(team_id),
+                OWNER_FUNDING,
+                gap,
+                "Opening balance carried over from a save made before the ledger",
+                "Owners (pre-ledger save)",
+            ),
+        )
+        touched += 1
+    return touched
 
 
 class FinanceService:
@@ -77,7 +135,7 @@ class FinanceService:
     def __init__(self, db: DatabaseManager):
         self.db = db
 
-    def post(
+    def post_entry(
         self,
         team_id: int,
         amount: float,
@@ -85,8 +143,8 @@ class FinanceService:
         description: str = "",
         source: str = "",
         allow_overdraft: bool = False,
-    ) -> float:
-        """Post a signed amount and return the new balance.
+    ) -> Posting:
+        """Post a signed amount and return the new balance and transaction id.
 
         Spending that the team cannot afford raises ``InsufficientFunds``
         unless ``allow_overdraft`` is set.
@@ -101,9 +159,23 @@ class FinanceService:
                     raise InsufficientFunds(
                         f"Team {team_id} has EUR {balance:,.0f}, cannot spend EUR {-amount:,.0f}"
                     )
-            new_balance = post_with(conn, team_id, amount, category, description, source)
+            posting = post_entry_with(conn, team_id, amount, category, description, source)
             conn.commit()
-        return new_balance
+        return posting
+
+    def post(
+        self,
+        team_id: int,
+        amount: float,
+        category: str,
+        description: str = "",
+        source: str = "",
+        allow_overdraft: bool = False,
+    ) -> float:
+        """Post a signed amount and return the new balance."""
+        return self.post_entry(
+            team_id, amount, category, description, source, allow_overdraft
+        ).balance
 
     def ledger_balance(self, team_id: int) -> float:
         with self.db.get_connection() as conn:
@@ -159,6 +231,9 @@ __all__ = [
     "FACILITY_UPGRADE",
     "FinanceService",
     "InsufficientFunds",
+    "Posting",
+    "backfill_opening_balances",
+    "post_entry_with",
     "MARKETING",
     "MARKETING_REVENUE",
     "OWNER_FUNDING",

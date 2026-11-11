@@ -477,10 +477,11 @@ class TeamService:
                 f"Insufficient budget. Requested: €{amount:,.0f}, Available: €{available_budget:,.0f}"
             )
 
-        team.budget = FinanceService(self.db).post(
+        posting = FinanceService(self.db).post_entry(
             team_id, -amount, category, description, source=team.name
         )
-        transaction_id = int(self.db.get_budget_transactions(team_id)[0]["id"])
+        team.budget = posting.balance
+        transaction_id = posting.transaction_id
 
         return {
             "success": True,
