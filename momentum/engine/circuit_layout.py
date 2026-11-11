@@ -422,6 +422,20 @@ def _build_pieces(
             links = []
         corners.append((name, parts, links))
 
+    if left + right == 2:
+        # An oval: two matching 180-degree ends joined by two equal straights,
+        # the only two-corner shape that closes. Its straights are fixed here
+        # because the closure solver has nothing to work with when every
+        # straight runs parallel to the start line.
+        r = max(anchor, min(FEATURE_MAX_RADIUS["carousel"], 0.08 * length))
+        straight = max(10.0, (length - 2 * _corner_length(180.0, r)) / 2.0)
+        return [
+            _Piece("S", role="main_a", length_m=straight * 0.62),
+            _Piece("C", angle_deg=180.0 * direction, radius_m=r, feature="hairpin"),
+            _Piece("S", role="link", length_m=straight),
+            _Piece("C", angle_deg=180.0 * direction, radius_m=r, feature="hairpin"),
+            _Piece("S", role="main_b", length_m=straight * 0.38),
+        ], direction
     scaled = _scale_to_loop(corners, direction)
     if scaled is None:
         return None
@@ -470,6 +484,8 @@ def _build_pieces(
 
 
 def _assign_straights(spec: LayoutSpec, pieces: List[_Piece], rng: random.Random) -> bool:
+    if all(p.length_m > 0 for p in pieces if p.kind == "S"):
+        return True  # the shape fixed its own straights (an oval)
     length = spec.length_m
     corner_total = sum(
         _corner_length(p.angle_deg, p.radius_m) for p in pieces if p.kind == "C"
