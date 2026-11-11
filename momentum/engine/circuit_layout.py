@@ -258,14 +258,36 @@ def _scale_to_loop(
         f = (360.0 + g * reverse) / dominant
     if not lo <= f <= hi or not lo <= g <= hi:
         return None
-    scaled = []
-    for name, ps, links in corners:
-        new_ps = []
-        for a, r in ps:
-            a = a * (f if a * direction > 0 else g)
-            a = max(-180.0, min(180.0, a))
-            new_ps.append((a, r))
-        scaled.append((name, new_ps, links))
+    scaled = [
+        (name, [(a * (f if a * direction > 0 else g), r) for a, r in ps], links)
+        for name, ps, links in corners
+    ]
+    # No corner turns more than a hairpin. Whatever the clamp removes is
+    # spread over the dominant corners that still have room, so the lap keeps
+    # turning through exactly one loop; if none have room the sample is out.
+    for _ in range(6):
+        deficit = 0.0
+        room = []
+        for ci, (_, ps, _) in enumerate(scaled):
+            for pi, (a, _) in enumerate(ps):
+                if abs(a) > 180.0:
+                    deficit += (abs(a) - 180.0) * direction * (1 if a * direction > 0 else -1)
+                elif a * direction > 0 and abs(a) < 179.0:
+                    room.append((ci, pi))
+        if abs(deficit) < 1e-6:
+            break
+        if not room:
+            return None
+        share = deficit / len(room)
+        scaled = [
+            (name, [
+                (max(-180.0, min(180.0, a)) + (share if (ci, pi) in room else 0.0), r)
+                for pi, (a, r) in enumerate(ps)
+            ], links)
+            for ci, (name, ps, links) in enumerate(scaled)
+        ]
+    if any(abs(a) > 180.0 + 1e-6 for _, ps, _ in scaled for a, _ in ps):
+        return None
     return scaled
 
 
@@ -535,8 +557,8 @@ def _close_loop(spec: LayoutSpec, pieces: List[_Piece], direction: int) -> Optio
         if abs(err) < math.radians(0.3):
             break
         new_angle = instructions[widest]["angle_deg"] - math.degrees(err)
-        if new_angle * instructions[widest]["angle_deg"] <= 0:
-            return None  # the correction would turn this corner the other way
+        if new_angle * instructions[widest]["angle_deg"] <= 0 or abs(new_angle) > 180.0:
+            return None  # the correction would reverse this corner or exceed a hairpin
         replacement = _corner_instruction(new_angle, instructions[widest]["radius_m"])
         replacement["feature"] = instructions[widest].get("feature", "")
         instructions[widest] = replacement
@@ -599,7 +621,7 @@ def _close_loop(spec: LayoutSpec, pieces: List[_Piece], direction: int) -> Optio
 
 
 def _validate(
-    instructions: List[Dict[str, Any]], direction: int
+    instructions: List[Dict[str, Any]], direction: int, one_sided: bool = False
 ) -> Optional[float]:
     """Return a quality score for a closed layout, or None if it is unusable."""
     pts = simulate(instructions)
@@ -642,7 +664,9 @@ def _validate(
         return None
     hull_area = float(ConvexHull(xy[::step]).volume)
     concavity = abs(signed_area) / max(1.0, hull_area)
-    if concavity > 0.9 or concavity < 0.4:
+    # Real road circuits fill 40-90% of their hull; a lap with no corners the
+    # other way (an oval or tri-oval) is convex by nature and allowed to be.
+    if concavity > (1.01 if one_sided else 0.9) or concavity < 0.4:
         return None
     return -abs(concavity - 0.68) - 0.25 * abs(math.log(aspect / 1.43))
 
@@ -662,7 +686,10 @@ def _search(spec: LayoutSpec, candidates: int) -> Optional[List[Dict[str, Any]]]
         instructions = _close_loop(spec, pieces, direction)
         if instructions is None:
             continue
-        score = _validate(instructions, direction)
+        one_sided = (spec.left_turns or 0) + (spec.right_turns or 0) > 0 and (
+            not spec.left_turns or not spec.right_turns
+        )
+        score = _validate(instructions, direction, one_sided=one_sided)
         if score is None:
             continue
         found += 1
@@ -687,8 +714,8 @@ def generate_layout(spec: LayoutSpec, candidates: int = 6) -> List[Dict[str, Any
         relaxed = replace(
             spec,
             turns=max(4, int(spec.turns or 12) - 2 * trim),
-            left_turns=max(1, left - trim) if left + right else None,
-            right_turns=max(1, right - trim) if left + right else None,
+            left_turns=(max(1, left - trim) if left else 0) if left + right else None,
+            right_turns=(max(1, right - trim) if right else 0) if left + right else None,
             seed=spec.seed + tier * 7919,
         )
         best = _search(relaxed, candidates)
