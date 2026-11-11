@@ -57,12 +57,13 @@ def test_race_settings_accept_uncapped_rendering_and_bound_speed():
 
 def test_track_lookup_wraps_across_start_line():
     track_map = TrackMap(_track())
+    turn_one = track_map.corners[0].position_m  # after the start/finish straight, not on the line
 
     section, corner = track_map.get_section_at_position(
-        track_map.track.length_km * 1000.0 - 1.0
+        track_map.track.length_km * 1000.0 + turn_one - 1.0  # one lap on, cumulative position
     )
 
-    assert corner is not None
+    assert corner is not None and corner.position_m == pytest.approx(turn_one)
     assert section in {
         TrackSection.SLOW_CORNER,
         TrackSection.MEDIUM_CORNER,
@@ -78,7 +79,7 @@ def test_wet_tyres_outperform_dry_tyres_on_a_wet_corner():
     driver = _driver()
     state = DriverState(1, driver.name, driver, _team())
     state.racing_line = RacingLine.IDEAL
-    section, corner = engine.track_map.get_section_at_position(0.0)
+    section, corner = engine.track_map.get_section_at_position(engine.track_map.corners[0].position_m)
 
     state.tyre_compound = "medium"
     dry_grip = engine._live_grip_multiplier(state, section, corner)
@@ -95,7 +96,7 @@ def test_off_line_has_less_grip_than_the_ideal_line():
     engine.weather_conditions = {"precipitation": 0.0}
     driver = _driver()
     state = DriverState(1, driver.name, driver, _team())
-    section, corner = engine.track_map.get_section_at_position(0.0)
+    section, corner = engine.track_map.get_section_at_position(engine.track_map.corners[0].position_m)
 
     state.racing_line = RacingLine.IDEAL
     ideal_grip = engine._live_grip_multiplier(state, section, corner)

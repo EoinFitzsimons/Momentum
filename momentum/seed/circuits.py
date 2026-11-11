@@ -12,7 +12,6 @@ import hashlib
 import json
 import math
 import random
-from pathlib import Path
 
 
 _SURFACE_GRIP_DEFAULTS = {
@@ -163,7 +162,7 @@ def _sanitize_payload(payload: dict) -> dict:
     payload["name"] = str(payload.get("name") or "").strip()
     payload["country"] = str(payload.get("country") or "").strip()
     payload["length_km"] = max(0.1, _parse_float(payload.get("length_km"), 3.2))
-    payload["turns"] = max(1, _parse_int(payload.get("turns"), 12))
+    payload["turns"] = max(0, _parse_int(payload.get("turns"), 12))
     payload["avg_speed_kmh"] = max(
         1.0, _parse_float(payload.get("avg_speed_kmh"), 160.0)
     )
@@ -180,17 +179,6 @@ def _sanitize_payload(payload: dict) -> dict:
         1.5, max(0.0, _parse_float(payload.get("surface_grip"), 1.0))
     )
     return payload
-
-
-def _load_circuits(data) -> list:
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        for key in ("circuits", "tracks", "items"):
-            value = data.get(key)
-            if isinstance(value, list):
-                return value
-    return []
 
 
 def _get_track_columns(conn) -> set:
@@ -301,24 +289,18 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    py_pkg = Path(__file__).resolve().parents[1]
-
     from momentum.database.database_manager import DatabaseManager
     from momentum.config import DATABASE_PATH as CONFIG_DB_PATH
 
     db_path = args.db or CONFIG_DB_PATH
     mgr = DatabaseManager(db_path=str(db_path))
 
-    data_file = py_pkg / "data" / "circuits_database.json"
-    if not data_file.exists():
-        print("circuits_database.json not found in momentum/data")
-        return 1
+    from momentum.data.circuit_schema import CircuitError, load_circuits
 
-    with open(data_file, "r", encoding="utf-8") as f:
-        circuits = _load_circuits(json.load(f))
-
-    if not circuits:
-        print("No circuits found in JSON payload.")
+    try:
+        circuits = [c.to_record() for c in load_circuits()]
+    except CircuitError as exc:
+        print(exc)
         return 1
 
     with mgr.get_connection() as conn:

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from momentum.database.models import Driver, Team, Track
+from momentum.engine.race_format import RaceFormat, race_format_for
 from momentum.engine.track_physics import TrackMap, TrackSection, RacingLine
 from momentum.engine.overtaking_system import (
     OvertakeAttempt,
@@ -106,6 +107,7 @@ class DriverState:
 
     # Performance modifiers
     in_slipstream: bool = False  # Currently benefiting from draft
+    drs_active: bool = False  # Wing open: in a DRS zone, within detection of the car ahead
     making_overtake: bool = False  # Currently attempting overtake
 
     # Incident tracking
@@ -190,6 +192,7 @@ class RealtimeRaceEngine:
 
         # Track-aware racing physics
         self.track_map: Optional[TrackMap] = None
+        self._race_format: Optional[RaceFormat] = None
         # (attacker_id, defender_id) -> attempt
         self.active_overtakes: Dict[Tuple[int, int], OvertakeAttempt] = {}
         # Recent overtake print timestamps to avoid duplicate console lines
@@ -209,6 +212,12 @@ class RealtimeRaceEngine:
         # from reduced air resistance. Real F1 data shows 5-10% boost.
         self.SLIPSTREAM_BONUS = 0.07  # 7% speed boost when drafting
         self.SLIPSTREAM_DISTANCE = 50.0  # Metres - effective draft range
+        # DRS: a rule of the discipline and tier (the track map has zones only
+        # where the field may use it). Opens within a second of the car ahead,
+        # inside a zone, once the opening laps are done; worth ~5% on the straight.
+        self.DRS_BONUS = 0.05
+        self.DRS_DETECTION_GAP_S = 1.0
+        self.DRS_ENABLED_FROM_LAP = 2
 
         # === DIRTY AIR EFFECT - MUCH STRONGER ===
         # When following closely in corners, turbulent air reduces downforce
@@ -385,6 +394,18 @@ class RealtimeRaceEngine:
         _ = frame
         return self._finalize_simulation_results(race_state, total_laps, event_callback)
 
+    @staticmethod
+    def _drs_allowed(race_format: RaceFormat, teams: Dict[int, Team]) -> bool:
+        """Whether the track map carries DRS zones for this field.
+
+        A field with no team information keeps the circuit's zones; a mixed
+        field has them if any class present may use DRS. Each car is then
+        checked against its own tier in ``_drs_available``.
+        """
+        if not teams:
+            return True
+        return any(race_format.allows_drs(team.tier) for team in teams.values())
+
     def _prepare_simulation_runtime(
         self,
         drivers: List[Driver],
@@ -402,7 +423,10 @@ class RealtimeRaceEngine:
         """Prepare track map, controls and race state for simulation loop."""
         if self.debug_logging:
             print(f"-> Generating track map for {track.name}...")
-        self.track_map = TrackMap(track=track)
+        self._race_format = race_format_for(track.primary_discipline)
+        self.track_map = TrackMap(
+            track=track, drs_allowed=self._drs_allowed(self._race_format, teams)
+        )
         self._event_callback = event_callback
         if self.debug_logging:
             print(
@@ -1998,6 +2022,8 @@ class RealtimeRaceEngine:
         # === SLIPSTREAM BOOST (straights) ===
         if state.in_slipstream:
             speed *= 1.0 + self.SLIPSTREAM_BONUS
+        if state.drs_active:
+            speed *= 1.0 + self.DRS_BONUS
 
         speed = self._apply_dirty_air_penalty(speed, state, track_length_m)
 
@@ -2347,6 +2373,7 @@ class RealtimeRaceEngine:
         if index == 0:
             state.gap_ahead = 999.0
             state.in_slipstream = False
+            state.drs_active = False
             return
 
         ahead_state = active_drivers[index - 1][1]
@@ -2357,6 +2384,20 @@ class RealtimeRaceEngine:
         state.in_slipstream = bool(
             ahead_state.lap == state.lap and distance_gap < self.SLIPSTREAM_DISTANCE
         )
+        state.drs_active = self._drs_available(state)
+
+    def _drs_available(self, state: DriverState) -> bool:
+        """Whether this car may open its wing right now."""
+        if state.in_pit_lane or state.lap < self.DRS_ENABLED_FROM_LAP:
+            return False
+        if state.gap_ahead > self.DRS_DETECTION_GAP_S:
+            return False
+        if self._race_format is not None and not self._race_format.allows_drs(state.team.tier):
+            return False
+        section, _ = self._get_live_track_section(state, self.track_map.track.length_km * 1000.0)
+        if section != TrackSection.STRAIGHT:
+            return False
+        return self.track_map.in_drs_zone(state.position_m)
 
     def _distance_to_ahead(
         self, state: DriverState, ahead_state: DriverState, track_length_m: float

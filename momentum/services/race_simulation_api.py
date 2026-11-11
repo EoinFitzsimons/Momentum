@@ -415,6 +415,7 @@ def simulate_race(
     player_driver_id: Optional[int] = None,
     player_overrides: Optional[Dict[str, float]] = None,
     context: Optional[RaceContext] = None,
+    realtime_speed: Optional[float] = None,
 ) -> List[RaceResult]:
     """
     Run real-time agent-based race simulation at 30 FPS
@@ -468,7 +469,8 @@ def simulate_race(
 
     # Calculate lap count
     laps = _calculate_race_laps(track, laps)
-    realtime_speed = _resolve_realtime_speed(verbose, event_callback)
+    if realtime_speed is None:
+        realtime_speed = _resolve_realtime_speed(verbose, event_callback)
 
     # Print summary
     _print_race_summary(verbose, track, drivers, laps)

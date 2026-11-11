@@ -31,7 +31,7 @@ Copy `.env.example` to `.env` when local configuration overrides are needed.
 
 The game starts from the seed database `momentum/database/momentum.db`:
 six disciplines, five leagues of 20 teams each, 1,500 drivers and their staff,
-plus every circuit in `momentum/data/circuits_database.json`. It is built from
+plus every circuit in `momentum/data/circuits/` (one file per discipline, validated by `momentum/data/circuit_schema.py`). It is built from
 source by `python -m momentum.seed.build`, which always produces the same file
 for the same seed. Nationalities follow each discipline's real-world heartlands
 (see `momentum/data/nationality_weights.py`), with smaller nations kept well

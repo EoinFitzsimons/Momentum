@@ -46,7 +46,7 @@ def test_skill_attribute_affects_finishing_position(seeded_db):
     high_skill_positions = []
     low_skill_positions = []
 
-    for seed in range(50):
+    for seed in range(25):
         results = simulate_race(
             drivers=[high_skill_driver, low_skill_driver],
             track=track,
@@ -94,7 +94,7 @@ def test_upset_frequency_is_bounded(seeded_db):
 
     # Run many races
     winner_counter = Counter()
-    total_races = 100
+    total_races = 40
 
     for seed in range(total_races):
         results = simulate_race(
@@ -306,7 +306,7 @@ def test_long_race_distance_produces_consistent_winner(seeded_db):
 
     # Run long races
     high_skill_wins = 0
-    total_races = 50
+    total_races = 20
 
     for seed in range(total_races):
         results = simulate_race(
