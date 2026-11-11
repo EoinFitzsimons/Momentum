@@ -83,33 +83,23 @@ def build(
     staff: int | None = None,
 ) -> dict[str, int]:
     """Create a fresh seed database at ``output`` and return its table counts."""
-    output = Path(output)
-    if os.environ.get("PYTHONHASHSEED") != "0":
-        # Some Faker providers draw from set-derived lists, so the build is only
-        # reproducible under a fixed hash seed. Callers need not know that.
-        return _build_in_pinned_process(output, seed, teams_per_discipline, drivers, staff)
+    output = Path(output).absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("", "-journal", "-wal", "-shm"):
         stale = Path(str(output) + suffix)
         if stale.exists():
             stale.unlink()
 
-    world.seed_world(seed)
-    disciplines = list(DISCIPLINES.keys())
-    if staff is None:
-        staff = teams_per_discipline * len(disciplines) * world.STAFF_SLOTS_PER_TEAM
-    if drivers is None:
-        drivers = world.default_driver_count(teams_per_discipline, disciplines)
+    if os.environ.get("PYTHONHASHSEED") == "0":
+        seed_world(output, seed, teams_per_discipline, drivers, staff)
+    else:
+        # Some Faker providers draw from set-derived lists, so the career world
+        # is only reproducible under a fixed hash seed. Callers need not know
+        # that. The circuits do not depend on it and are laid out here, where
+        # the layout memory in ``circuit_layout`` carries across builds.
+        _seed_world_in_pinned_process(output, seed, teams_per_discipline, drivers, staff)
 
     db = DatabaseManager(db_path=str(output), seed_from_bundle=False)
-    world.seed_drivers(db, drivers, disciplines)
-    world.seed_teams(db, teams_per_discipline, disciplines)
-    world.seed_staff(db, staff)
-    world.assign_staff_contracts(db, disciplines)
-    world.assign_driver_contracts(db, disciplines)
-    world.assign_tiers_by_strength(db, disciplines)
-    world.adjust_drivers_by_tier(db)
-
     if import_circuits.main(["--db", str(output), "--mode", "insert"]) != 0:
         raise RuntimeError("circuit import failed")
 
@@ -134,6 +124,34 @@ def build(
     return _counts(db)
 
 
+def seed_world(
+    output: Path,
+    seed: int,
+    teams_per_discipline: int,
+    drivers: int | None,
+    staff: int | None,
+) -> None:
+    """Generate the career world (drivers, teams, staff, contracts, tiers) into ``output``.
+
+    Must run under ``PYTHONHASHSEED=0`` to be reproducible; ``build`` sees to that.
+    """
+    world.seed_world(seed)
+    disciplines = list(DISCIPLINES.keys())
+    if staff is None:
+        staff = teams_per_discipline * len(disciplines) * world.STAFF_SLOTS_PER_TEAM
+    if drivers is None:
+        drivers = world.default_driver_count(teams_per_discipline, disciplines)
+
+    db = DatabaseManager(db_path=str(output), seed_from_bundle=False)
+    world.seed_drivers(db, drivers, disciplines)
+    world.seed_teams(db, teams_per_discipline, disciplines)
+    world.seed_staff(db, staff)
+    world.assign_staff_contracts(db, disciplines)
+    world.assign_driver_contracts(db, disciplines)
+    world.assign_tiers_by_strength(db, disciplines)
+    world.adjust_drivers_by_tier(db)
+
+
 def _counts(db: DatabaseManager) -> dict[str, int]:
     with db.get_connection() as conn:
         return {
@@ -142,21 +160,21 @@ def _counts(db: DatabaseManager) -> dict[str, int]:
         }
 
 
-def _build_in_pinned_process(
+def _seed_world_in_pinned_process(
     output: Path,
     seed: int,
     teams_per_discipline: int,
     drivers: int | None,
     staff: int | None,
-) -> dict[str, int]:
-    # The child runs from the repository root, so a relative output path must
-    # be anchored to the caller's directory before it crosses over. absolute()
-    # rather than resolve(): a symlinked output is replaced, not its target.
-    output = Path(output).absolute()
+) -> None:
+    # The child runs from the repository root, so the output path is absolute
+    # before it crosses over (absolute() rather than resolve(): a symlinked
+    # output is replaced, not its target).
     argv = [
         sys.executable,
         "-m",
         "momentum.seed.build",
+        "--world-only",
         "--output",
         str(output),
         "--seed",
@@ -174,7 +192,6 @@ def _build_in_pinned_process(
         cwd=str(Path(__file__).resolve().parents[2]),
         env=dict(os.environ, PYTHONHASHSEED="0"),
     )
-    return _counts(DatabaseManager(db_path=str(output)))
 
 
 def main(argv=None) -> int:
@@ -186,7 +203,14 @@ def main(argv=None) -> int:
         "--drivers", type=int, default=None, help="Default: every seat plus 15%% free agents"
     )
     parser.add_argument("--staff", type=int, default=None, help="Default: three per team")
+    parser.add_argument("--world-only", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+
+    if args.world_only:
+        if os.environ.get("PYTHONHASHSEED") != "0":
+            parser.error("--world-only requires PYTHONHASHSEED=0")
+        seed_world(Path(args.output), args.seed, args.teams_per_discipline, args.drivers, args.staff)
+        return 0
 
     counts = build(
         Path(args.output),

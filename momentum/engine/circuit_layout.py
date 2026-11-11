@@ -10,9 +10,10 @@ loop closes exactly under the same discrete integration used by
 
 from __future__ import annotations
 
+import copy
 import math
 import random
-from dataclasses import dataclass, replace
+from dataclasses import astuple, dataclass, replace
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -724,13 +725,25 @@ def _search(spec: LayoutSpec, candidates: int) -> Optional[List[Dict[str, Any]]]
     return best
 
 
+_LAYOUTS: Dict[Tuple[Any, ...], List[Dict[str, Any]]] = {}
+
+
 def generate_layout(spec: LayoutSpec, candidates: int = 6) -> List[Dict[str, Any]]:
     """Build a closed, non-overlapping layout and return dict instructions.
 
     The layout carries the circuit's exact corner counts. Only if repeated
     searches with fresh seeds find nothing are the counts trimmed, a few at a
-    time, so every circuit still receives a valid layout.
+    time, so every circuit still receives a valid layout. The search is
+    deterministic, so a spec already built in this process is answered from
+    memory (a seed rebuild and the GUI ask for the same circuits repeatedly).
     """
+    key = (astuple(spec), candidates)
+    if key not in _LAYOUTS:
+        _LAYOUTS[key] = _generate_layout(spec, candidates)
+    return copy.deepcopy(_LAYOUTS[key])
+
+
+def _generate_layout(spec: LayoutSpec, candidates: int) -> List[Dict[str, Any]]:
     for tier in range(6):
         trim = max(0, tier - 2)
         left = spec.left_turns or 0

@@ -160,6 +160,7 @@ class TestRealtimeModeAndStreaming:
             laps=context.total_laps,
             event_callback=capture_event,
             seed=42,
+            realtime_speed=1000.0,  # no frame throttling: the test is about the callback
             verbose=False,
         )
 
@@ -175,6 +176,7 @@ class TestRealtimeModeAndStreaming:
             laps=context.total_laps,
             event_callback=lambda x: None,
             seed=42,
+            realtime_speed=1000.0,
             verbose=False,
         )
 
