@@ -154,3 +154,9 @@ def test_pit_route_survives_short_main_straight(qt_app):
     pit = build_pit_route(tight)
     assert pit is not None
     assert all(math.hypot(p.x, p.y) >= 9.9 for p in pit)
+
+
+def test_one_corner_each_way_is_rejected_rather_than_searched():
+    spec = LayoutSpec(length_m=2000, turns=2, left_turns=1, right_turns=1, seed=3)
+    with pytest.raises(RuntimeError):
+        generate_layout(spec)

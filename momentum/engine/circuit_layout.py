@@ -104,6 +104,7 @@ class _Piece:
     length_m: float = 0.0
     feature: str = ""
     role: str = "link"
+    fixed: bool = False  # length set by the shape itself, not by the solver
 
 
 @lru_cache(maxsize=4096)
@@ -365,8 +366,8 @@ def _build_pieces(
     )
     length = spec.length_m
     left, right = _corner_counts(spec, rng)
-    if left + right < 2:
-        return None  # a lap needs at least the two ends of an oval
+    if left + right < 2 or left == right == 1:
+        return None  # a lap needs two corners, and one each way cannot close
     direction = 1 if left >= right else -1
     pools = {1: left, -1: right}
 
@@ -435,11 +436,11 @@ def _build_pieces(
         end_angle = 180.0 * (180.0 / real_turn) * direction
         straight = max(10.0, (length - 2 * _corner_length(end_angle, r)) / 2.0)
         return [
-            _Piece("S", role="main_a", length_m=straight * 0.62),
+            _Piece("S", role="main_a", length_m=straight * 0.62, fixed=True),
             _Piece("C", angle_deg=end_angle, radius_m=r, feature="hairpin"),
-            _Piece("S", role="link", length_m=straight),
+            _Piece("S", role="link", length_m=straight, fixed=True),
             _Piece("C", angle_deg=end_angle, radius_m=r, feature="hairpin"),
-            _Piece("S", role="main_b", length_m=straight * 0.38),
+            _Piece("S", role="main_b", length_m=straight * 0.38, fixed=True),
         ], direction
     scaled = _scale_to_loop(corners, direction)
     if scaled is None:
@@ -489,7 +490,7 @@ def _build_pieces(
 
 
 def _assign_straights(spec: LayoutSpec, pieces: List[_Piece], rng: random.Random) -> bool:
-    if all(p.length_m > 0 for p in pieces if p.kind == "S"):
+    if all(p.fixed for p in pieces if p.kind == "S"):
         return True  # the shape fixed its own straights (an oval)
     length = spec.length_m
     corner_total = sum(
@@ -507,7 +508,7 @@ def _assign_straights(spec: LayoutSpec, pieces: List[_Piece], rng: random.Random
     density = turns / max(0.8, length / 1000.0)
     busy = max(0.0, min(1.0, (density - 3.0) / 3.0))
     main = spec.longest_straight_m or length * 0.16
-    main = max(length * 0.07, min(length * (0.24 - 0.08 * busy), main))
+    main = max(length * 0.07, min(length * (0.32 - 0.08 * busy), main))
     scale = length / 5000.0
     fixed = {"chicane": (12.0, 30.0), "esses": (10.0, 35.0), "apex": (15.0, 50.0)}
     links = [p for p in pieces if p.kind == "S" and p.role in ("link", "approach")]
@@ -601,14 +602,15 @@ def _close_loop(spec: LayoutSpec, pieces: List[_Piece], direction: int) -> Optio
     dirs = _straight_directions(instructions)
     roles = [straight_pieces[n].role for n in range(len(dirs))]
     current = np.array([straight_pieces[n].length_m for n in range(len(dirs))])
+    fixed = np.array([straight_pieces[n].fixed for n in range(len(dirs))])
     main_total = sum(p.length_m for p in straight_pieces if p.role.startswith("main"))
     link_cap = max(main_total * 0.75, 0.12 * spec.length_m)
-    # The bounds always admit the lengths the straights already have, so a
-    # shape that arrives closed (an oval) is never solved into infeasibility.
-    lower = np.minimum(np.array([minimum[r] for r in roles]), current)
-    upper = np.maximum(
-        np.array([link_cap if r in ("link", "approach") else np.inf for r in roles]), current
-    )
+    # A straight the shape fixed itself (an oval's) keeps its length within
+    # the bounds, so the solver can never be handed an infeasible start.
+    lower = np.array([minimum[r] for r in roles])
+    upper = np.array([link_cap if r in ("link", "approach") else np.inf for r in roles])
+    lower = np.where(fixed, np.minimum(lower, current), lower)
+    upper = np.where(fixed, np.maximum(upper, current), upper)
     for _ in range(6):
         end_x, end_y, _, count = _end_state(instructions)
         gap = np.array([end_x, end_y])
@@ -740,6 +742,8 @@ def generate_layout(spec: LayoutSpec, candidates: int = 6) -> List[Dict[str, Any
             right_turns=(max(1, right - trim) if right else 0) if left + right else None,
             seed=spec.seed + tier * 7919,
         )
+        if relaxed.left_turns == relaxed.right_turns == 1:
+            continue  # one corner each way cannot make a lap
         best = _search(relaxed, candidates)
         if best is not None:
             return best
