@@ -261,7 +261,7 @@ class CareerSeasonService:
                 """
                 SELECT id, tier
                 FROM teams
-                WHERE UPPER(discipline) = ?
+                WHERE UPPER(discipline) = ? AND dissolved_at IS NULL
                 """,
                 (discipline_key,),
             ).fetchall()
