@@ -149,6 +149,9 @@ def _build_in_pinned_process(
     drivers: int | None,
     staff: int | None,
 ) -> dict[str, int]:
+    # The child runs from the repository root, so a relative output path must
+    # be anchored to the caller's directory before it crosses over.
+    output = Path(output).resolve()
     argv = [
         sys.executable,
         "-m",
