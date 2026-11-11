@@ -150,8 +150,9 @@ def _build_in_pinned_process(
     staff: int | None,
 ) -> dict[str, int]:
     # The child runs from the repository root, so a relative output path must
-    # be anchored to the caller's directory before it crosses over.
-    output = Path(output).resolve()
+    # be anchored to the caller's directory before it crosses over. absolute()
+    # rather than resolve(): a symlinked output is replaced, not its target.
+    output = Path(output).absolute()
     argv = [
         sys.executable,
         "-m",
