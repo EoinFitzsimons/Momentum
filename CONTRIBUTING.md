@@ -7,7 +7,11 @@ Before submitting a change:
 
 1. Read the repository license and third-party notice requirements.
 2. Keep secrets, personal data, local databases, logs, and generated builds
-   out of commits.
+   out of commits. The one exception is `Momentum/Python/database/momentum.db`,
+   the shipped seed database that fresh installs load tracks and world data
+   from. Rebuild it with `python scripts/build_seed_database.py` (the build is
+   deterministic, so the same source gives the same file) and commit it only
+   for intentional seed changes, never with local save or race data.
 3. Run `python -m pytest` from `Momentum/Python`.
 4. Describe user-visible changes and any new asset or dependency licenses.
 

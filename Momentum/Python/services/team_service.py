@@ -22,24 +22,19 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
+from services.tier_service import DEFAULT_TIER, TIERS, tier_scale
 
 
 class TeamService:
     """Service for managing team operations and lifecycle"""
 
-    # Budget limits by tier (in EUR)
+    # Budget limits in EUR: top league down to bottom league, evenly stepped.
     TIER_BUDGETS = {
-        "TIER_1": 130_000_000,  # Top tier - €130M
-        "TIER_2": 60_000_000,  # Mid tier - €60M
-        "TIER_3": 25_000_000,  # Junior tier - €25M
+        tier: round(tier_scale(tier, 130_000_000, 20_000_000)) for tier in TIERS
     }
 
-    # Staff limits by tier
-    TIER_STAFF_LIMITS = {
-        "TIER_1": 60,
-        "TIER_2": 40,
-        "TIER_3": 25,
-    }
+    # Staff limits by league
+    TIER_STAFF_LIMITS = {tier: round(tier_scale(tier, 60, 20)) for tier in TIERS}
 
     # Driver slots per team
     DRIVER_SLOTS_PER_DISCIPLINE = {
@@ -63,7 +58,7 @@ class TeamService:
         name: str,
         discipline: str = "SINGLE_SEATER",
         nationality: str = "INT",
-        tier: str = "TIER_2",
+        tier: str = DEFAULT_TIER,
         team_principal: str = "",
         headquarters: str = "",
         player_id: Optional[str] = None,
@@ -548,13 +543,7 @@ class TeamService:
         Returns:
             Estimated annual income in EUR
         """
-        base_income = {
-            "TIER_1": 5_000_000,
-            "TIER_2": 2_000_000,
-            "TIER_3": 500_000,
-        }
-
-        tier_income = base_income.get(team.tier, 2_000_000)
+        tier_income = tier_scale(team.tier, 5_000_000, 500_000)
 
         # Adjust based on performance
         performance_bonus = (team.total_wins * 100_000) + (team.total_podiums * 50_000)
@@ -573,12 +562,7 @@ class TeamService:
 
     def _facility_upgrade_cost(self, tier: str) -> float:
         """Facility upgrades scale by tier to preserve progression balance."""
-        base = {
-            "TIER_1": 6_000_000,
-            "TIER_2": 3_000_000,
-            "TIER_3": 1_500_000,
-        }
-        return float(base.get(tier, 3_000_000))
+        return tier_scale(tier, 6_000_000, 1_500_000)
 
 
 __all__ = ["TeamService"]

@@ -253,7 +253,7 @@ class TeamCreate(BaseModel):
     tier: str = Field(
         default="TIER_2",
         description="League the team races in (TIER_1 is the top league)",
-        examples=["TIER_1", "TIER_2", "TIER_3"],
+        examples=["TIER_1", "TIER_3", "TIER_5"],
     )
     team_principal: str = Field(default="")
     headquarters: str = Field(default="")

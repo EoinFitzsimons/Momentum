@@ -240,11 +240,7 @@ class CareerSeasonService:
     def _apply_promotion_relegation(
         self, player_id: str, discipline: str, season: int
     ) -> dict[str, list[int]]:
-        by_tier: dict[str, list[dict[str, Any]]] = {
-            "TIER_1": [],
-            "TIER_2": [],
-            "TIER_3": [],
-        }
+        by_tier: dict[str, list[dict[str, Any]]] = {tier: [] for tier in TIERS}
 
         discipline_key = str(discipline or "").upper()
 
@@ -293,7 +289,7 @@ class CareerSeasonService:
             relegated: list[int] = []
             moved_teams: set[int] = set()
 
-            for high_tier, low_tier in [("TIER_1", "TIER_2"), ("TIER_2", "TIER_3")]:
+            for high_tier, low_tier in zip(TIERS[:-1], TIERS[1:]):
                 upper = sorted(
                     [
                         item

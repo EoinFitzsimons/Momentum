@@ -8,6 +8,7 @@ Locale mapping utilities for Faker based on country codes.
 
 from __future__ import annotations
 
+import zlib
 from typing import Dict, List
 
 from data.countries import COUNTRIES
@@ -47,7 +48,6 @@ FALLBACK_LOCALES: List[str] = [
     "th_TH",
     "vi_VN",
     "id_ID",
-    "ms_MY",
     "hi_IN",
     "bn_BD",
     "ar_SA",
@@ -69,7 +69,6 @@ COUNTRY_TO_LOCALE_OVERRIDES: Dict[str, str] = {
     "BEL": "fr_FR",
     "CHE": "de_DE",
     "DEU": "de_DE",
-    "GER": "de_DE",
     "AUT": "de_DE",
     "ITA": "it_IT",
     "ESP": "es_ES",
@@ -84,6 +83,21 @@ COUNTRY_TO_LOCALE_OVERRIDES: Dict[str, str] = {
     "FIN": "fi_FI",
     "NOR": "no_NO",
     "DNK": "da_DK",
+    "MCO": "fr_FR",
+    "LUX": "fr_FR",
+    "LVA": "lv_LV",
+    "LTU": "lt_LT",
+    "EST": "et_EE",
+    "SVN": "sl_SI",
+    "HRV": "hr_HR",
+    "BGR": "bg_BG",
+    "SRB": "sr_BA",
+    "GEO": "ka_GE",
+    "ARM": "hy_AM",
+    "AZE": "az_AZ",
+    "NPL": "ne_NP",
+    "PHL": "fil_PH",
+    "BGD": "bn_BD",
     "ISL": "en_GB",
     "POL": "pl_PL",
     "CZE": "cs_CZ",
@@ -101,7 +115,7 @@ COUNTRY_TO_LOCALE_OVERRIDES: Dict[str, str] = {
     "THA": "th_TH",
     "VNM": "vi_VN",
     "IDN": "id_ID",
-    "MYS": "ms_MY",
+    "MYS": "id_ID",
     "SGP": "en_GB",
     "ISR": "he_IL",
     "IRN": "fa_IR",
@@ -234,8 +248,8 @@ def get_locale_for_country(country_code: str) -> str:
     if country_code in ARABIC_CODES:
         return "ar_SA"
 
-    # Deterministic fallback based on code hash
-    index = abs(hash(country_code)) % len(FALLBACK_LOCALES)
+    # Stable fallback: zlib.crc32 is identical across processes, unlike hash().
+    index = zlib.crc32(country_code.encode("utf-8")) % len(FALLBACK_LOCALES)
     return FALLBACK_LOCALES[index]
 
 

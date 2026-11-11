@@ -38,7 +38,7 @@ from PyQt6.QtGui import QFont, QColor
 from typing import Optional, List, Dict, Any, Tuple
 from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
-from services.tier_service import TIERS
+from services.tier_service import TIER_LABELS, TIERS
 from database.models import Championship, Race
 from datetime import datetime
 
@@ -90,9 +90,7 @@ def _player_label(value: Any) -> str:
 
     normalized = raw.upper().replace(" ", "_")
     mapping = {
-        "TIER_1": "Tier 1",
-        "TIER_2": "Tier 2",
-        "TIER_3": "Tier 3",
+        **TIER_LABELS,
         "SINGLE_SEATER": "Single Seater",
         "PRODUCTION_TOURING": "Production Touring",
         "URBAN_STREET": "Urban Street",

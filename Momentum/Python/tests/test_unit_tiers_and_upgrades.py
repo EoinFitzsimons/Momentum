@@ -12,6 +12,7 @@ from RaceLogic.disciplines.single_seater.single_seater_discipline import (
 )
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from services.tier_service import (
+    TIERS,
     TierService,
     normalise_tier,
     normalise_tier_columns,
@@ -84,8 +85,8 @@ def _create_driver(db, name: str, team_id: int, skill: float) -> int:
         ("Tier-2", "TIER_2"),
         ("TIER_3", "TIER_3"),
         ("3", "TIER_3"),
-        ("", "TIER_2"),
-        (None, "TIER_2"),
+        ("", "TIER_5"),
+        (None, "TIER_5"),
     ],
 )
 def test_normalise_tier_maps_every_legacy_spelling(raw, expected):
@@ -122,11 +123,12 @@ def test_normalise_tier_columns_rewrites_legacy_rows(test_db):
 # ---------------------------------------------------------------------------
 @pytest.mark.unit
 def test_split_by_shares_fills_top_league_first():
-    assert split_by_shares(0) == {"TIER_1": 0, "TIER_2": 0, "TIER_3": 0}
-    assert split_by_shares(2) == {"TIER_1": 1, "TIER_2": 1, "TIER_3": 0}
-    sizes = split_by_shares(20)
-    assert sum(sizes.values()) == 20
-    assert sizes["TIER_1"] < sizes["TIER_2"] < sizes["TIER_3"]
+    assert split_by_shares(0) == {tier: 0 for tier in TIERS}
+    assert split_by_shares(2) == {"TIER_1": 1, "TIER_2": 1, "TIER_3": 0, "TIER_4": 0, "TIER_5": 0}
+    sizes = split_by_shares(100)
+    assert sum(sizes.values()) == 100
+    assert all(size == 20 for size in sizes.values())
+    assert sum(split_by_shares(23).values()) == 23
 
 
 @pytest.mark.unit
@@ -144,9 +146,9 @@ def test_assign_tiers_by_strength_puts_strongest_team_in_tier_1(test_db):
     strongest = ids[strengths.index(95.0)]
     weakest = ids[strengths.index(40.0)]
     assert strongest in placement["TIER_1"]
-    assert weakest in placement["TIER_3"]
+    assert weakest in placement["TIER_5"]
     assert test_db.get_team(strongest).tier == "TIER_1"
-    assert test_db.get_team(weakest).tier == "TIER_3"
+    assert test_db.get_team(weakest).tier == "TIER_5"
     assert sum(len(v) for v in placement.values()) == len(ids)
 
     # Every TIER_1 team is stronger than every TIER_3 team.

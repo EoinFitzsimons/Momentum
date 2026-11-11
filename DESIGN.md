@@ -18,7 +18,7 @@ people it employs, the car it has developed and the decisions made during the ra
 matters because it funds all of these, and a well-run team on a modest budget should be
 able to outperform a richer team that invests poorly.
 
-**Leagues reflect history.** Each discipline is organised into three leagues, called
+**Leagues reflect history.** Each discipline is organised into five leagues, called
 tiers. A team's tier records how it has performed in previous seasons and determines who
 it races against, how much it can earn and how attractive it is to drivers, staff and
 sponsors. The tier itself has no bearing on how the car behaves on track.
@@ -54,9 +54,10 @@ style:
 | Sprint Rallycross | 12 | Mixed surfaces, short shocks |
 | Endurance | 8 | Stints, reliability, patience |
 
-Each discipline has three leagues: Tier 1 at the top, then Tier 2 and Tier 3. When a new
-world is created, roughly 15% of a discipline's teams are placed in Tier 1, 30% in Tier 2
-and the remaining 55% in Tier 3.
+Each discipline has five leagues of equal size, Tier 1 at the top down to Tier 5. The
+shipped world has 100 teams per discipline, so each league holds 20 teams. When a new
+world is created, teams are ranked by strength and split evenly across the five leagues,
+so the strongest start in Tier 1 and the weakest in Tier 5.
 
 ### 2.2 How the world moves on
 
@@ -195,7 +196,7 @@ contributes a modest bonus to a particular part of the car or the race operation
 bonuses saturate, so the first capable hire in a role makes the most difference and a
 team cannot buy its way to dominance by stacking elite staff.
 
-**[open]** Staff limits are currently tied to tier (60, 40 and 25 for Tiers 1 to 3).
+**[open]** Staff limits are currently tied to tier (60 in Tier 1, stepping down evenly to 20 in Tier 5).
 It may be better for budget alone to limit the size of the team.
 
 ### 6.3 Managers and the manager market

@@ -11,7 +11,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Iterable, List, Optional
 
-from services.tier_service import TIER_1, TIER_2, TIER_3, normalise_tier
+from services.tier_service import TIERS, normalise_tier, tier_scale
 
 UPGRADE_AREAS: tuple[str, ...] = (
     "power",
@@ -76,11 +76,11 @@ RACE_PRIZE_FLOOR = 150_000.0
 
 # Sponsor money paid for every race entered, by league.
 SPONSOR_STIPEND_PER_RACE: Dict[str, float] = {
-    TIER_1: 400_000.0,
-    TIER_2: 250_000.0,
-    TIER_3: 150_000.0,
+    tier: tier_scale(tier, 400_000.0, 100_000.0) for tier in TIERS
 }
-TIER_PRIZE_SCALE: Dict[str, float] = {TIER_1: 1.0, TIER_2: 0.55, TIER_3: 0.30}
+TIER_PRIZE_SCALE: Dict[str, float] = {
+    tier: round(tier_scale(tier, 1.0, 0.2), 3) for tier in TIERS
+}
 
 RACE_INCOME_CATEGORY = "race_income"
 UPGRADE_CATEGORY = "car_upgrade"

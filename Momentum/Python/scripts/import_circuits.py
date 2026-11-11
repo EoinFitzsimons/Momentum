@@ -202,28 +202,7 @@ def _upsert_tracks(conn, circuits) -> tuple:
     inserted = 0
     updated = 0
     skipped = 0
-    upsert_columns = [
-        "name",
-        "country",
-        "primary_discipline",
-        "is_point_to_point",
-        "joker_enabled",
-        "instructions_json",
-        "geometry_json",
-        "length_km",
-        "turns",
-        "avg_speed_kmh",
-        "longest_straight_m",
-        "tightest_corner_radius_m",
-        "left_turns",
-        "right_turns",
-        "drs_zones",
-        "surface",
-        "surface_type",
-        "surface_grip",
-        "climate",
-    ]
-    available_columns = [c for c in upsert_columns if c in _get_track_columns(conn)]
+    available_columns = [c for c in TRACK_COLUMNS if c in _get_track_columns(conn)]
 
     for rec in circuits:
         payload = _sanitize_payload(_build_track_payload(rec))
@@ -263,27 +242,49 @@ def _upsert_tracks(conn, circuits) -> tuple:
     return inserted, updated, skipped
 
 
+TRACK_COLUMNS = [
+    "name",
+    "country",
+    "primary_discipline",
+    "is_point_to_point",
+    "joker_enabled",
+    "instructions_json",
+    "geometry_json",
+    "length_km",
+    "turns",
+    "avg_speed_kmh",
+    "longest_straight_m",
+    "tightest_corner_radius_m",
+    "left_turns",
+    "right_turns",
+    "drs_zones",
+    "surface",
+    "surface_type",
+    "surface_grip",
+    "climate",
+]
+
+
 def _insert_tracks(conn, circuits) -> tuple:
+    """Append every circuit with its full payload, including the generated layout."""
     inserted = 0
     skipped = 0
-    for c in circuits:
+    available_columns = [c for c in TRACK_COLUMNS if c in _get_track_columns(conn)]
+    insert_columns = ", ".join(available_columns)
+    value_slots = ", ".join("?" for _ in available_columns)
+    for rec in circuits:
         try:
-            name = (c.get("name") or f"Circuit {c.get('circuit_id', '')}").strip()
-            if not name:
+            payload = _sanitize_payload(_build_track_payload(rec))
+            if not payload["name"]:
                 skipped += 1
                 continue
-            country = c.get("country") or ""
-            primary = (
-                c.get("primary_discipline") or c.get("discipline") or "SINGLE_SEATER"
-            )
-            geometry = json.dumps(c)
             conn.execute(
-                "INSERT INTO tracks (name, country, primary_discipline, geometry_json) VALUES (?, ?, ?, ?)",
-                (name, country, primary, geometry),
+                f"INSERT INTO tracks ({insert_columns}) VALUES ({value_slots})",
+                [payload[c] for c in available_columns],
             )
             inserted += 1
         except Exception as e:
-            print(f"Failed to insert circuit {c.get('circuit_id')}: {e}")
+            print(f"Failed to insert circuit {rec.get('circuit_id')}: {e}")
     return inserted, 0, skipped
 
 
