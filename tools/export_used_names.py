@@ -59,8 +59,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", help="Output path (default: build/used_names.db or .csv)")
     args = parser.parse_args(argv)
 
-    rows = collect(Path(args.db))
+    source = Path(args.db)
     out = Path(args.out) if args.out else REPO_ROOT / "build" / f"used_names.{'db' if args.format == 'sqlite' else 'csv'}"
+    if out.resolve() == source.resolve():
+        print(f"refusing to overwrite the source database: {source}", file=sys.stderr)
+        return 2
+    rows = collect(source)
     out.parent.mkdir(parents=True, exist_ok=True)
     (write_sqlite if args.format == "sqlite" else write_csv)(rows, out)
     print(f"{len(rows)} names written to {out}")
