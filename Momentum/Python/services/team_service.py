@@ -22,7 +22,6 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
-import database.database_extensions  # noqa
 from services.tier_service import DEFAULT_TIER, LEAGUE_SIZE, TIERS, normalise_tier, tier_scale
 from RaceLogic.race_format import DISCIPLINE_FORMATS
 from services.finance_service import (
@@ -617,13 +616,17 @@ class TeamService:
         has no hiring route of its own, so the founding comes with a line-up
         drawn from the free agents at the standard the league expects: the top
         league picks from the best available, the bottom league from further
-        down the list.
+        down the list. Every signing goes through ``HiringService`` so the
+        signing bonus is paid from the founding capital and the discipline's
+        salary cap is respected; drivers the team cannot afford are skipped.
         """
         from RaceLogic.race_format import driver_slots_for
+        from services.hiring_service import HiringService
 
         seats = max(1, int(driver_slots_for(discipline)))
+        hiring = HiringService(self.db.db_path)
         try:
-            pool, _total = self.db.get_available_drivers(  # type: ignore[attr-defined]
+            pool, _total = hiring.db.get_available_drivers(  # type: ignore[attr-defined]
                 discipline=discipline, page_size=500
             )
         except Exception:
@@ -639,16 +642,18 @@ class TeamService:
             driver_id = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
             if driver_id is None:
                 continue
-            salary = (row.get("salary") if isinstance(row, dict) else None) or tier_scale(
-                tier, 400_000.0, 40_000.0
+            salary = float(
+                (row.get("salary") if isinstance(row, dict) else None)
+                or tier_scale(tier, 400_000.0, 40_000.0)
             )
-            try:
-                self.db.sign_driver_contract(  # type: ignore[attr-defined]
-                    int(driver_id), int(team_id), 2, float(salary)
-                )
-            except Exception:
+            within_cap, _used, _cap = hiring.check_salary_cap_compliance(int(team_id), salary)
+            if not within_cap:
                 continue
-            signed.append(int(driver_id))
+            ok, _message, _contract = hiring.sign_driver_contract(
+                int(team_id), int(driver_id), 2, salary
+            )
+            if ok:
+                signed.append(int(driver_id))
         return signed
 
     def dissolve_team(self, team_id: int, reason: str = "") -> Dict[str, Any]:
