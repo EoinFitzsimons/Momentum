@@ -2,10 +2,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Launcher",
+            "name": "Python: Momentum",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/momentum/gui/launcher.py",
+            "module": "momentum",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         }
     ]

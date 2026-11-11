@@ -5,7 +5,6 @@ Integrates main menu with race visualisation window.
 """
 
 import sys
-import os
 
 # Configure matplotlib backend BEFORE any imports that might use it
 try:
@@ -21,10 +20,6 @@ except ImportError:
 except Exception as e:
     print(f"[LAUNCHER] WARNING: matplotlib configuration failed: {e}")
 
-# Running this file directly (python momentum/gui/launcher.py) needs the
-# repository root on the path; `python -m momentum` does not.
-if __package__ in (None, ""):
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from PyQt6.QtWidgets import QApplication
 from momentum.gui.accessibility_settings import (
