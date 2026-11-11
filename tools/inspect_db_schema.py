@@ -8,7 +8,7 @@ from pathlib import Path
 import sqlite3
 import sys
 
-DB_PATH = Path(__file__).resolve().parents[1] / "database" / "momentum.db"
+DB_PATH = Path(__file__).resolve().parents[1] / "momentum" / "database" / "momentum.db"
 
 
 def main():

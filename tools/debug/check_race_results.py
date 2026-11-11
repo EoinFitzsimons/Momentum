@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def _default_db() -> Path:
-    return Path(__file__).resolve().parents[2] / "database" / "momentum.db"
+    return Path(__file__).resolve().parents[2] / "momentum" / "database" / "momentum.db"
 
 
 def _print_schema(cur) -> bool:

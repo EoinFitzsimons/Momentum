@@ -6,7 +6,7 @@ produces a modified CREATE TABLE with renamed columns, copies data, and
 replaces the old table. Designed for SQLite.
 
 Usage:
-    python scripts/migrate_tire_to_tyre.py --db /path/to/momentum.db
+    python tools/migrate_tire_to_tyre.py --db /path/to/momentum.db
 
 It will create backups named <db>.backup before making changes.
 """
