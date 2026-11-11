@@ -4,6 +4,6 @@
 	"python.testing.pytestArgs": [
 		"tests"
 	],
-	"python.testing.cwd": "${workspaceFolder}/Momentum/Python",
+	"python.testing.cwd": "${workspaceFolder}",
 	"python.testing.autoTestDiscoverOnSaveEnabled": true
 }

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Lint and test (Python 3.12)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install Qt runtime libraries
+        run: |
+          # The Ubuntu mirrors behind the runners drop out now and then; retry
+          # rather than fail the whole run on a DNS blip.
+          installed=0
+          for attempt in 1 2 3 4 5; do
+            if sudo apt-get update && \
+               sudo apt-get install -y --no-install-recommends --fix-missing \
+                 libegl1 libgl1 libxkbcommon0 libdbus-1-3; then
+              installed=1
+              break
+            fi
+            echo "apt attempt $attempt failed; switching mirror and retrying in 20s"
+            # The Azure mirror behind the runners drops out of DNS now and then;
+            # fall back to the main Ubuntu archive for the remaining attempts.
+            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' \
+              /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
+              /etc/apt/sources.list.d/*.list 2>/dev/null || true; sleep 20
+          done
+          test "$installed" = 1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # Only real errors fail the build: syntax errors, undefined names,
+      # broken comparisons. Style is left to the editor.
+      - name: Lint for errors
+        run: |
+          python -m flake8 momentum tests tools --select=E9,F63,F7,F82
+
+      # Wall-clock benchmarks are excluded: shared runners miss their targets.
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pytest tests -m "not performance" --tb=short

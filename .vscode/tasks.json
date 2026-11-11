@@ -2,12 +2,11 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run launcher.py",
+            "label": "Run Momentum",
             "type": "shell",
             "command": "${command:python.interpreterPath}",
-            "args": [
-                "${workspaceFolder}/Momentum/Python/gui/launcher.py"
-            ],
+            "args": ["-m", "momentum"],
+            "options": { "cwd": "${workspaceFolder}" },
             "presentation": {
                 "reveal": "always",
                 "panel": "shared"
