@@ -63,9 +63,12 @@ def _smoothstep(t: float) -> float:
 
 def build_pit_route(points: Sequence[Any], offset: float = PIT_OFFSET) -> Optional[list]:
     """Pit lane alongside the main straight with smooth entry and exit tapers."""
+    if len(points) < 12:
+        return None
     window = main_straight_window(points)
     if len(window) < 120:
-        return None
+        # Short or curved start straight: follow the first stretch after the line.
+        window = list(range(min(8, len(points) - 1), max(9, min(290, len(points) // 3))))
     trim = int(len(window) * 0.06)
     window = window[trim: len(window) - trim]
     side = infield_side(points)
