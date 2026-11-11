@@ -14,45 +14,52 @@ Momentum currently uses Python, PyQt6, FastAPI, SQLite, NumPy, SciPy,
 Matplotlib, Pydantic, and Uvicorn.
 
 ```powershell
-Set-Location Momentum/Python
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python GUI/launcher.py
+python -m momentum
 ```
+
+Everything runs from the repository root; `python -m momentum` starts the game
+and `python -m momentum.api.app` the FastAPI server used by tests and modding.
+A checkout plays straight from the tracked seed database. A packaged or
+`pip`-installed game copies that seed on first launch into a per-user folder
+(`MOMENTUM_DATA_DIR`, else `%LOCALAPPDATA%\\Momentum`, `~/Library/Application
+Support/Momentum` or `~/.local/share/momentum`) and saves there.
 
 Copy `.env.example` to `.env` when local configuration overrides are needed.
 
-The game starts from the seed database `Momentum/Python/database/momentum.db`:
+The game starts from the seed database `momentum/database/momentum.db`:
 six disciplines, five leagues of 20 teams each, 1,500 drivers and their staff,
-plus every circuit in `data/circuits_database.json`. It is built from source by
-`python scripts/build_seed_database.py`, which always produces the same file
+plus every circuit in `momentum/data/circuits_database.json`. It is built from
+source by `python -m momentum.seed.build`, which always produces the same file
 for the same seed. Nationalities follow each discipline's real-world heartlands
-(see `data/nationality_weights.py`), with smaller nations kept well represented.
-The API can be started with `python simulation.py` or with Uvicorn as described
-in the source documentation.
+(see `momentum/data/nationality_weights.py`), with smaller nations kept well
+represented.
 
 ## Tests
 
-Run the test suite from `Momentum/Python`:
+Run the test suite from the repository root:
 
 ```powershell
+python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-The PyInstaller build configuration is in `Momentum/Python/Momentum.spec` and
-the Windows build helper is in `Momentum/Python/scripts/build_exe.ps1`.
+The PyInstaller build configuration is in `packaging/Momentum.spec` and the
+Windows build helper is `packaging/build_exe.ps1`.
 
 ## Repository layout
 
-- `Momentum/Python/GUI/` - desktop interface and bundled visual assets
-- `Momentum/Python/RaceLogic/` - simulation and discipline engines
-- `Momentum/Python/services/` - game services and persistence orchestration
-- `Momentum/Python/database/` - SQLite models and database access
-- `Momentum/Python/tests/` - automated tests
-- `Momentum/Python/docs/` - technical game documentation
+- `momentum/` - the game package: `gui/`, `engine/`, `services/`, `database/`,
+  `data/`, `vehicles/`, `api/` and `seed/` (see `docs/architecture.md`)
+- `tests/` - automated tests, run from the repository root
+- `tools/` - development scripts (seed world, circuits, previews, accessibility
+  captures); one-off diagnostics live in `tools/debug/`
+- `packaging/` - PyInstaller spec and Windows build scripts
+- `docs/` - technical documentation, `docs/srs/` (determinism requirement, JSON
+  schemas and fixtures used by the tests) and `docs/branding/`
 - `DESIGN.md` - the game design: leagues, money, upgrades, people, races and seasons
-- `SRS/` - determinism requirement plus JSON schemas and fixtures used by the tests
 
 ## Licensing
 
