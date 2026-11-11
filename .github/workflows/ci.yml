@@ -31,7 +31,12 @@ jobs:
               installed=1
               break
             fi
-            echo "apt attempt $attempt failed; retrying in 20s"; sleep 20
+            echo "apt attempt $attempt failed; switching mirror and retrying in 20s"
+            # The Azure mirror behind the runners drops out of DNS now and then;
+            # fall back to the main Ubuntu archive for the remaining attempts.
+            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' \
+              /etc/apt/sources.list /etc/apt/sources.list.d/*.sources \
+              /etc/apt/sources.list.d/*.list 2>/dev/null || true; sleep 20
           done
           test "$installed" = 1
 
