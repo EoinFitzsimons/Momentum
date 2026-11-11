@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from momentum.database.models import Driver, Team, Track
-from momentum.engine.race_format import race_format_for
+from momentum.engine.race_format import RaceFormat, race_format_for
 from momentum.engine.track_physics import TrackMap, TrackSection, RacingLine
 from momentum.engine.overtaking_system import (
     OvertakeAttempt,
@@ -192,6 +192,7 @@ class RealtimeRaceEngine:
 
         # Track-aware racing physics
         self.track_map: Optional[TrackMap] = None
+        self._race_format: Optional[RaceFormat] = None
         # (attacker_id, defender_id) -> attempt
         self.active_overtakes: Dict[Tuple[int, int], OvertakeAttempt] = {}
         # Recent overtake print timestamps to avoid duplicate console lines
@@ -394,15 +395,15 @@ class RealtimeRaceEngine:
         return self._finalize_simulation_results(race_state, total_laps, event_callback)
 
     @staticmethod
-    def _drs_allowed(track: Track, teams: Dict[int, Team]) -> bool:
-        """DRS is a rule of the discipline and the tier the entered teams race in.
+    def _drs_allowed(race_format: RaceFormat, teams: Dict[int, Team]) -> bool:
+        """Whether the track map carries DRS zones for this field.
 
         A field with no team information keeps the circuit's zones; a mixed
-        field has them if any class present may use DRS.
+        field has them if any class present may use DRS. Each car is then
+        checked against its own tier in ``_drs_available``.
         """
         if not teams:
             return True
-        race_format = race_format_for(track.primary_discipline)
         return any(race_format.allows_drs(team.tier) for team in teams.values())
 
     def _prepare_simulation_runtime(
@@ -422,7 +423,10 @@ class RealtimeRaceEngine:
         """Prepare track map, controls and race state for simulation loop."""
         if self.debug_logging:
             print(f"-> Generating track map for {track.name}...")
-        self.track_map = TrackMap(track=track, drs_allowed=self._drs_allowed(track, teams))
+        self._race_format = race_format_for(track.primary_discipline)
+        self.track_map = TrackMap(
+            track=track, drs_allowed=self._drs_allowed(self._race_format, teams)
+        )
         self._event_callback = event_callback
         if self.debug_logging:
             print(
@@ -2387,6 +2391,8 @@ class RealtimeRaceEngine:
         if state.in_pit_lane or state.lap < self.DRS_ENABLED_FROM_LAP:
             return False
         if state.gap_ahead > self.DRS_DETECTION_GAP_S:
+            return False
+        if self._race_format is not None and not self._race_format.allows_drs(state.team.tier):
             return False
         track_length_m = max(1.0, float(self.track_map.track.length_km) * 1000.0)
         lap_position_m = state.position_m % track_length_m

@@ -72,8 +72,9 @@ def test_lower_tier_endurance_field_races_without_drs_zones():
     def field_of(tier):
         return {1: Team(id=1, name="A", nationality="FRA", discipline="ENDURANCE", tier=tier, budget=1)}
 
-    assert RealtimeRaceEngine._drs_allowed(track, field_of("TIER_1"))
-    assert not RealtimeRaceEngine._drs_allowed(track, field_of("TIER_3"))
-    assert RealtimeRaceEngine._drs_allowed(track, {})  # no team information keeps the circuit's zones
+    endurance = race_format_for("ENDURANCE")
+    assert RealtimeRaceEngine._drs_allowed(endurance, field_of("TIER_1"))
+    assert not RealtimeRaceEngine._drs_allowed(endurance, field_of("TIER_3"))
+    assert RealtimeRaceEngine._drs_allowed(endurance, {})  # no team information keeps the circuit's zones
     assert len(TrackMap(track=track, drs_allowed=True).drs_zones) == 3
     assert TrackMap(track=track, drs_allowed=False).drs_zones == []
