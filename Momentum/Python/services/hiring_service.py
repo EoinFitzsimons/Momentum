@@ -422,6 +422,15 @@ class HiringService:
             performance_bonus,
         )
         if not success:
+            # The bonus went out before the contract write; put it back so the
+            # team is not charged for a driver it never secured.
+            FinanceService(self.db).post(
+                team_id,
+                signing_bonus,
+                SIGNING_BONUS,
+                f"Signing bonus returned: contract for {driver.name} not completed",
+                source=team.name,
+            )
             return (False, "Database error during contract signing", {})
 
 
