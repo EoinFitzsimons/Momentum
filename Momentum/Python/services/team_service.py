@@ -585,13 +585,8 @@ class TeamService:
             for team in self.db.get_teams_by_discipline(discipline)
             if normalise_tier(getattr(team, "tier", None)) == tier
         ]
-        replaced: Optional[Dict[str, Any]] = None
-        if len(league) >= LEAGUE_SIZE:
-            from services.tier_service import TierService
-
-            strength = TierService(self.db)
-            weakest = min(league, key=strength.team_strength)
-            replaced = self.dissolve_team(int(weakest.id), reason=f"replaced by {name}")
+        # Create first, so a rejected name or a failed insert leaves the
+        # league exactly as it was; only then does the weakest incumbent go.
         result = self.create_team(
             name=name,
             discipline=discipline,
@@ -601,6 +596,13 @@ class TeamService:
             headquarters=headquarters,
             player_id=player_id,
         )
+        replaced: Optional[Dict[str, Any]] = None
+        if len(league) >= LEAGUE_SIZE:
+            from services.tier_service import TierService
+
+            strength = TierService(self.db)
+            weakest = min(league, key=strength.team_strength)
+            replaced = self.dissolve_team(int(weakest.id), reason=f"replaced by {name}")
         result["replaced_team"] = replaced
         return result
 
