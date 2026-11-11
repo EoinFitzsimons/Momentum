@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "momentum"
+version = "0.1.0"
+description = "Multi-discipline motorsport management simulator"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+dynamic = ["dependencies", "optional-dependencies"]
+
+[project.scripts]
+momentum = "momentum.gui.launcher:main"
+momentum-seed = "momentum.seed.build:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["momentum*"]
+
+[tool.setuptools.package-data]
+"momentum.gui" = ["assets/*.png", "assets/props/*.png"]
+"momentum.database" = ["momentum.db"]
+"momentum.data" = ["*.json"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: fast isolated tests for deterministic business logic",
+    "integration: module/API/database interaction tests",
+    "performance: timing and scalability checks",
+    "slow: long-running tests not suited for every local run",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+exclude = ["build/", "dist/", "\\.venv.*"]

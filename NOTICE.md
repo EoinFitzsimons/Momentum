@@ -6,7 +6,7 @@ match the exact files shipped with that release.
 
 ## Software dependencies
 
-The dependency list is maintained in `Momentum/Python/requirements.txt`.
+The dependency list is maintained in `requirements.txt`.
 Before distributing a release, record the installed versions and the license
 notice for every direct and transitive dependency here.
 
