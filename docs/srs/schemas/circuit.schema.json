@@ -1,0 +1,1610 @@
+{
+  "$defs": {
+    "DragStrip": {
+      "additionalProperties": false,
+      "properties": {
+        "surface": {
+          "enum": [
+            "asphalt",
+            "concrete"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "primary_discipline": {
+          "const": "DRAG_ACCELERATION",
+          "title": "Primary Discipline",
+          "type": "string"
+        },
+        "race_distance_m": {
+          "const": 402.34,
+          "default": 402.34,
+          "title": "Race Distance M",
+          "type": "number"
+        },
+        "shutdown_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shutdown M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "surface",
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "primary_discipline",
+        "shutdown_m"
+      ],
+      "title": "DragStrip",
+      "type": "object"
+    },
+    "EnduranceCircuit": {
+      "additionalProperties": false,
+      "properties": {
+        "drs_zones": {
+          "minimum": 0,
+          "title": "Drs Zones",
+          "type": "integer"
+        },
+        "surface": {
+          "enum": [
+            "asphalt",
+            "concrete"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "length_km": {
+          "exclusiveMinimum": 0,
+          "title": "Length Km",
+          "type": "number"
+        },
+        "left_turns": {
+          "minimum": 0,
+          "title": "Left Turns",
+          "type": "integer"
+        },
+        "right_turns": {
+          "minimum": 0,
+          "title": "Right Turns",
+          "type": "integer"
+        },
+        "longest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Longest Straight M",
+          "type": "number"
+        },
+        "shortest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shortest Straight M",
+          "type": "number"
+        },
+        "tightest_corner_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Tightest Corner Radius M",
+          "type": "number"
+        },
+        "primary_discipline": {
+          "const": "ENDURANCE",
+          "title": "Primary Discipline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "drs_zones",
+        "surface",
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "length_km",
+        "left_turns",
+        "right_turns",
+        "longest_straight_m",
+        "shortest_straight_m",
+        "tightest_corner_radius_m",
+        "primary_discipline"
+      ],
+      "title": "EnduranceCircuit",
+      "type": "object"
+    },
+    "JokerRoute": {
+      "additionalProperties": false,
+      "description": "The alternative route each driver must take once per race.",
+      "properties": {
+        "extra_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Extra Length M",
+          "type": "number"
+        },
+        "branch_at_fraction": {
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Branch At Fraction",
+          "type": "number"
+        }
+      },
+      "required": [
+        "extra_length_m",
+        "branch_at_fraction"
+      ],
+      "title": "JokerRoute",
+      "type": "object"
+    },
+    "RallycrossCircuit": {
+      "additionalProperties": false,
+      "properties": {
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "length_km": {
+          "exclusiveMinimum": 0,
+          "title": "Length Km",
+          "type": "number"
+        },
+        "left_turns": {
+          "minimum": 0,
+          "title": "Left Turns",
+          "type": "integer"
+        },
+        "right_turns": {
+          "minimum": 0,
+          "title": "Right Turns",
+          "type": "integer"
+        },
+        "longest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Longest Straight M",
+          "type": "number"
+        },
+        "shortest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shortest Straight M",
+          "type": "number"
+        },
+        "tightest_corner_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Tightest Corner Radius M",
+          "type": "number"
+        },
+        "primary_discipline": {
+          "const": "SPRINT_RALLYCROSS",
+          "title": "Primary Discipline",
+          "type": "string"
+        },
+        "surfaces": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "propertyNames": {
+            "enum": [
+              "asphalt",
+              "gravel",
+              "dirt"
+            ]
+          },
+          "title": "Surfaces",
+          "type": "object"
+        },
+        "joker": {
+          "$ref": "#/$defs/JokerRoute"
+        }
+      },
+      "required": [
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "length_km",
+        "left_turns",
+        "right_turns",
+        "longest_straight_m",
+        "shortest_straight_m",
+        "tightest_corner_radius_m",
+        "primary_discipline",
+        "surfaces",
+        "joker"
+      ],
+      "title": "RallycrossCircuit",
+      "type": "object"
+    },
+    "SingleSeaterCircuit": {
+      "additionalProperties": false,
+      "properties": {
+        "drs_zones": {
+          "minimum": 0,
+          "title": "Drs Zones",
+          "type": "integer"
+        },
+        "surface": {
+          "enum": [
+            "asphalt",
+            "concrete"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "length_km": {
+          "exclusiveMinimum": 0,
+          "title": "Length Km",
+          "type": "number"
+        },
+        "left_turns": {
+          "minimum": 0,
+          "title": "Left Turns",
+          "type": "integer"
+        },
+        "right_turns": {
+          "minimum": 0,
+          "title": "Right Turns",
+          "type": "integer"
+        },
+        "longest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Longest Straight M",
+          "type": "number"
+        },
+        "shortest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shortest Straight M",
+          "type": "number"
+        },
+        "tightest_corner_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Tightest Corner Radius M",
+          "type": "number"
+        },
+        "primary_discipline": {
+          "const": "SINGLE_SEATER",
+          "title": "Primary Discipline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "drs_zones",
+        "surface",
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "length_km",
+        "left_turns",
+        "right_turns",
+        "longest_straight_m",
+        "shortest_straight_m",
+        "tightest_corner_radius_m",
+        "primary_discipline"
+      ],
+      "title": "SingleSeaterCircuit",
+      "type": "object"
+    },
+    "TouringCircuit": {
+      "additionalProperties": false,
+      "properties": {
+        "surface": {
+          "enum": [
+            "asphalt",
+            "concrete"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "length_km": {
+          "exclusiveMinimum": 0,
+          "title": "Length Km",
+          "type": "number"
+        },
+        "left_turns": {
+          "minimum": 0,
+          "title": "Left Turns",
+          "type": "integer"
+        },
+        "right_turns": {
+          "minimum": 0,
+          "title": "Right Turns",
+          "type": "integer"
+        },
+        "longest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Longest Straight M",
+          "type": "number"
+        },
+        "shortest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shortest Straight M",
+          "type": "number"
+        },
+        "tightest_corner_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Tightest Corner Radius M",
+          "type": "number"
+        },
+        "primary_discipline": {
+          "const": "PRODUCTION_TOURING",
+          "title": "Primary Discipline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface",
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "length_km",
+        "left_turns",
+        "right_turns",
+        "longest_straight_m",
+        "shortest_straight_m",
+        "tightest_corner_radius_m",
+        "primary_discipline"
+      ],
+      "title": "TouringCircuit",
+      "type": "object"
+    },
+    "UrbanStreetCircuit": {
+      "additionalProperties": false,
+      "properties": {
+        "surface": {
+          "enum": [
+            "asphalt",
+            "concrete"
+          ],
+          "title": "Surface",
+          "type": "string"
+        },
+        "circuit_id": {
+          "exclusiveMinimum": 0,
+          "title": "Circuit Id",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "country": {
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "region": {
+          "minLength": 1,
+          "title": "Region",
+          "type": "string"
+        },
+        "circuit_type": {
+          "enum": [
+            "permanent",
+            "road_course",
+            "street",
+            "mixed"
+          ],
+          "title": "Circuit Type",
+          "type": "string"
+        },
+        "ima_grade": {
+          "enum": [
+            "Diamond",
+            "Platinum",
+            "Gold",
+            "Silver",
+            "Bronze",
+            "Approved"
+          ],
+          "title": "Ima Grade",
+          "type": "string"
+        },
+        "elevation_change_m": {
+          "minimum": 0,
+          "title": "Elevation Change M",
+          "type": "number"
+        },
+        "max_gradient_percent": {
+          "minimum": 0,
+          "title": "Max Gradient Percent",
+          "type": "number"
+        },
+        "min_gradient_percent": {
+          "maximum": 0,
+          "title": "Min Gradient Percent",
+          "type": "number"
+        },
+        "track_width_avg_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Avg M",
+          "type": "number"
+        },
+        "track_width_min_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Min M",
+          "type": "number"
+        },
+        "track_width_max_m": {
+          "exclusiveMinimum": 0,
+          "title": "Track Width Max M",
+          "type": "number"
+        },
+        "avg_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Avg Speed Kmh",
+          "type": "number"
+        },
+        "top_speed_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Top Speed Kmh",
+          "type": "number"
+        },
+        "climate": {
+          "enum": [
+            "temperate",
+            "mediterranean",
+            "continental",
+            "desert",
+            "tropical",
+            "alpine"
+          ],
+          "title": "Climate",
+          "type": "string"
+        },
+        "avg_temp_summer_c": {
+          "title": "Avg Temp Summer C",
+          "type": "number"
+        },
+        "avg_temp_winter_c": {
+          "title": "Avg Temp Winter C",
+          "type": "number"
+        },
+        "rainfall_mm_annual": {
+          "minimum": 0,
+          "title": "Rainfall Mm Annual",
+          "type": "integer"
+        },
+        "altitude_m": {
+          "title": "Altitude M",
+          "type": "integer"
+        },
+        "pit_boxes": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Boxes",
+          "type": "integer"
+        },
+        "pit_lane_length_m": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Lane Length M",
+          "type": "number"
+        },
+        "pit_speed_limit_kmh": {
+          "exclusiveMinimum": 0,
+          "title": "Pit Speed Limit Kmh",
+          "type": "integer"
+        },
+        "paddock_capacity_teams": {
+          "exclusiveMinimum": 0,
+          "title": "Paddock Capacity Teams",
+          "type": "integer"
+        },
+        "grandstand_capacity": {
+          "minimum": 0,
+          "title": "Grandstand Capacity",
+          "type": "integer"
+        },
+        "safety_car_probability": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Safety Car Probability",
+          "type": "number"
+        },
+        "night_racing_capable": {
+          "title": "Night Racing Capable",
+          "type": "boolean"
+        },
+        "wet_weather_racing": {
+          "title": "Wet Weather Racing",
+          "type": "boolean"
+        },
+        "is_active": {
+          "title": "Is Active",
+          "type": "boolean"
+        },
+        "debut_year": {
+          "title": "Debut Year",
+          "type": "integer"
+        },
+        "last_used_year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Used Year"
+        },
+        "length_km": {
+          "exclusiveMinimum": 0,
+          "title": "Length Km",
+          "type": "number"
+        },
+        "left_turns": {
+          "minimum": 0,
+          "title": "Left Turns",
+          "type": "integer"
+        },
+        "right_turns": {
+          "minimum": 0,
+          "title": "Right Turns",
+          "type": "integer"
+        },
+        "longest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Longest Straight M",
+          "type": "number"
+        },
+        "shortest_straight_m": {
+          "exclusiveMinimum": 0,
+          "title": "Shortest Straight M",
+          "type": "number"
+        },
+        "tightest_corner_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Tightest Corner Radius M",
+          "type": "number"
+        },
+        "primary_discipline": {
+          "const": "URBAN_STREET",
+          "title": "Primary Discipline",
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface",
+        "circuit_id",
+        "name",
+        "country",
+        "region",
+        "circuit_type",
+        "ima_grade",
+        "elevation_change_m",
+        "max_gradient_percent",
+        "min_gradient_percent",
+        "track_width_avg_m",
+        "track_width_min_m",
+        "track_width_max_m",
+        "avg_speed_kmh",
+        "top_speed_kmh",
+        "climate",
+        "avg_temp_summer_c",
+        "avg_temp_winter_c",
+        "rainfall_mm_annual",
+        "altitude_m",
+        "pit_boxes",
+        "pit_lane_length_m",
+        "pit_speed_limit_kmh",
+        "paddock_capacity_teams",
+        "grandstand_capacity",
+        "safety_car_probability",
+        "night_racing_capable",
+        "wet_weather_racing",
+        "is_active",
+        "debut_year",
+        "length_km",
+        "left_turns",
+        "right_turns",
+        "longest_straight_m",
+        "shortest_straight_m",
+        "tightest_corner_radius_m",
+        "primary_discipline"
+      ],
+      "title": "UrbanStreetCircuit",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "DRAG_ACCELERATION": "#/$defs/DragStrip",
+      "ENDURANCE": "#/$defs/EnduranceCircuit",
+      "PRODUCTION_TOURING": "#/$defs/TouringCircuit",
+      "SINGLE_SEATER": "#/$defs/SingleSeaterCircuit",
+      "SPRINT_RALLYCROSS": "#/$defs/RallycrossCircuit",
+      "URBAN_STREET": "#/$defs/UrbanStreetCircuit"
+    },
+    "propertyName": "primary_discipline"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SingleSeaterCircuit"
+    },
+    {
+      "$ref": "#/$defs/EnduranceCircuit"
+    },
+    {
+      "$ref": "#/$defs/UrbanStreetCircuit"
+    },
+    {
+      "$ref": "#/$defs/TouringCircuit"
+    },
+    {
+      "$ref": "#/$defs/RallycrossCircuit"
+    },
+    {
+      "$ref": "#/$defs/DragStrip"
+    }
+  ]
+}

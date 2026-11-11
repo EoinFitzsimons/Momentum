@@ -11,9 +11,9 @@ rather than in one global number. Each discipline engine carries its
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
-from momentum.services.tier_service import TOP_TIER, normalise_tier
+from momentum.services.tier_service import TIERS, TOP_TIER, normalise_tier
 
 GRAND_PRIX = "grand_prix"  # one race, everyone on the grid
 HEATS_AND_FINAL = "heats_and_final"  # heats and semi-finals decide who reaches the final
@@ -37,11 +37,17 @@ class RaceFormat:
     # Track-length cap: roughly one car per this many metres of lap.
     metres_per_car: float = 100.0
     min_entries: int = 6
+    # Leagues whose cars carry a drag-reduction system. A circuit records where
+    # its DRS zones are; whether the cars may open the wing is a rule of the tier.
+    drs_tiers: Tuple[str, ...] = ()
 
     @property
     def driver_slots(self) -> int:
         """Drivers a team contracts for this format."""
         return self.cars_per_team * self.drivers_per_car + self.reserve_drivers
+
+    def allows_drs(self, tier: Optional[str]) -> bool:
+        return normalise_tier(tier) in self.drs_tiers
 
     def entry_cap(self, tier: Optional[str] = None) -> int:
         if tier is None:
@@ -70,6 +76,7 @@ SINGLE_SEATER_FORMAT = RaceFormat(
     max_entries=40,
     max_entries_by_tier={TOP_TIER: 30},
     metres_per_car=110.0,
+    drs_tiers=TIERS,
 )
 PRODUCTION_TOURING_FORMAT = RaceFormat(
     name="Touring car race",
@@ -84,6 +91,9 @@ ENDURANCE_FORMAT = RaceFormat(
     reserve_drivers=1,
     max_entries=20,
     metres_per_car=250.0,
+    # Only the purpose-built top-tier prototypes; the GT-style lower tiers are
+    # homologated road cars without it.
+    drs_tiers=(TOP_TIER,),
 )
 SPRINT_RALLYCROSS_FORMAT = RaceFormat(
     name="Rallycross heats and final",

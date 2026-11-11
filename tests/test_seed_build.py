@@ -13,6 +13,7 @@ from momentum.seed.world import is_latin_script
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.finance_service import OWNER_FUNDING, FinanceService
 from momentum.services.tier_service import TIERS
+from momentum.data.circuit_schema import load_circuits
 
 TEAMS_PER_DISCIPLINE = 10
 DRIVERS = None  # every seat plus free agents
@@ -119,13 +120,8 @@ def test_names_are_latin_and_nationalities_lean_towards_heartlands(seed_db):
 
 
 @pytest.mark.integration
-def test_tracks_match_source_json_and_no_play_state(seed_db):
-    data = json.loads(
-        (Path(__file__).resolve().parents[1] / "momentum" / "data" / "circuits_database.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    records = data if isinstance(data, list) else data.get("circuits", data)
+def test_tracks_match_source_data_and_no_play_state(seed_db):
+    records = [c.to_record() for c in load_circuits()]
     conn = sqlite3.connect(seed_db)
     assert conn.execute("SELECT COUNT(1) FROM tracks").fetchone()[0] == len(records)
     # Every circuit must carry a drawable layout, not just its metadata.
@@ -160,13 +156,8 @@ def test_build_into_the_default_save_starts_from_an_empty_schema(tmp_path, monke
 
 @pytest.mark.integration
 def test_every_shipped_track_has_its_exact_corner_counts(seed_db):
-    """The layout of every circuit matches the left and right turns in the source JSON."""
-    data = json.loads(
-        (Path(__file__).resolve().parents[1] / "momentum" / "data" / "circuits_database.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    records = data if isinstance(data, list) else data.get("circuits", data)
+    """The layout of every circuit matches the left and right turns in its source record."""
+    records = [c.to_record() for c in load_circuits()]
     wanted = {r["name"]: (int(r.get("left_turns") or 0), int(r.get("right_turns") or 0)) for r in records}
     conn = sqlite3.connect(seed_db)
     mismatched = []

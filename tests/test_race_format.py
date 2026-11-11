@@ -49,3 +49,13 @@ def test_grid_sizes_follow_the_format_the_league_and_the_track():
 @pytest.mark.unit
 def test_unknown_discipline_falls_back_to_a_grand_prix():
     assert race_format_for("something-new") is DISCIPLINE_FORMATS["SINGLE_SEATER"]
+
+
+@pytest.mark.unit
+def test_drs_is_a_rule_of_the_discipline_and_the_tier():
+    assert race_format_for("SINGLE_SEATER").allows_drs("TIER_5")
+    endurance = race_format_for("ENDURANCE")
+    assert endurance.allows_drs("TIER_1")
+    assert not endurance.allows_drs("TIER_2")
+    for discipline in ("URBAN_STREET", "PRODUCTION_TOURING", "SPRINT_RALLYCROSS", "DRAG_ACCELERATION"):
+        assert not race_format_for(discipline).allows_drs("TIER_1")
