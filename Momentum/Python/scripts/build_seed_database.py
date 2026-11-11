@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -85,6 +86,10 @@ def build(
 ) -> dict[str, int]:
     """Create a fresh seed database at ``output`` and return its table counts."""
     output = Path(output)
+    if os.environ.get("PYTHONHASHSEED") != "0":
+        # Some Faker providers draw from set-derived lists, so the build is only
+        # reproducible under a fixed hash seed. Callers need not know that.
+        return _build_in_pinned_process(output, seed, teams_per_discipline, drivers, staff)
     output.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("", "-journal", "-wal", "-shm"):
         stale = Path(str(output) + suffix)
@@ -117,11 +122,40 @@ def build(
     _pin_timestamps(db)
     with db.get_connection() as conn:
         conn.execute("VACUUM")
-        counts = {
+    return _counts(db)
+
+
+def _counts(db: DatabaseManager) -> dict[str, int]:
+    with db.get_connection() as conn:
+        return {
             table: int(conn.execute(f"SELECT COUNT(1) FROM {table}").fetchone()[0])
             for table in ("drivers", "teams", "staff_members", "tracks")
         }
-    return counts
+
+
+def _build_in_pinned_process(
+    output: Path,
+    seed: int,
+    teams_per_discipline: int,
+    drivers: int | None,
+    staff: int | None,
+) -> dict[str, int]:
+    argv = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--output",
+        str(output),
+        "--seed",
+        str(seed),
+        "--teams-per-discipline",
+        str(teams_per_discipline),
+    ]
+    if drivers is not None:
+        argv += ["--drivers", str(drivers)]
+    if staff is not None:
+        argv += ["--staff", str(staff)]
+    subprocess.run(argv, check=True, env=dict(os.environ, PYTHONHASHSEED="0"))
+    return _counts(DatabaseManager(db_path=str(output)))
 
 
 def main(argv=None) -> int:
@@ -134,7 +168,6 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--staff", type=int, default=None, help="Default: three per team")
     args = parser.parse_args(argv)
-    world.ensure_stable_hash_seed()
 
     counts = build(
         Path(args.output),
