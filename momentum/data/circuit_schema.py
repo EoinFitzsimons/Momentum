@@ -147,6 +147,7 @@ class LapCircuit(CircuitBase):
     def to_record(self) -> Dict[str, Any]:
         record = super().to_record()
         record["turns"] = self.turns
+        record.setdefault("drs_zones", 0)  # only the disciplines with DRS store zones
         return record
 
 
