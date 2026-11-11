@@ -122,6 +122,9 @@ class TrackMap:
     # its zones are; a field that may not use DRS races with none.
     drs_allowed: bool = True
 
+    CORNER_RADIUS_M = 50.0  # within this of a corner's position the car is in the corner
+    STRAIGHT_CLEARANCE_M = 150.0  # beyond this of any corner the section is a straight
+
     def __post_init__(self):
         """Generate track map from Track data"""
         if not self.corners:
@@ -141,10 +144,15 @@ class TrackMap:
         num_corners = max(1, int(self.track.turns or 0))
         rng = np.random.default_rng(seed=42)  # Create random generator with seed
 
-        # Distribute corners around track
+        # The start/finish straight is the circuit's longest; the corners share
+        # the rest of the lap evenly, so the stored straight exists in the model.
+        main_straight_m = min(
+            max(0.0, float(self.track.longest_straight_m or 0.0)), 0.5 * track_length_m
+        )
+        corner_span_m = track_length_m - main_straight_m
+
         for i in range(num_corners):
-            # Position (roughly evenly distributed)
-            position_m = (i / num_corners) * track_length_m
+            position_m = main_straight_m + (i / num_corners) * corner_span_m
 
             # Vary corner types based on track characteristics
             corner_type = self._determine_corner_type(i, num_corners)
@@ -252,17 +260,42 @@ class TrackMap:
                 return "fast"
 
     def _generate_drs_zones(self):
-        """Generate DRS activation zones"""
-        track_length_m = self.track.length_km * 1000
+        """Place the DRS zones on the longest corner-free stretches.
 
-        # Place DRS zones on longest straights
-        for i in range(self.track.drs_zones):
-            # DRS typically after slow corners leading to straights
-            start_fraction = (i + 0.5) / self.track.drs_zones
-            start_m = start_fraction * track_length_m
-            end_m = start_m + (self.track.longest_straight_m * 0.8)
+        A zone is the straight part of a gap between corners (clear of the
+        braking and acceleration sections ``get_section_at_position`` marks),
+        ends at the braking point and runs at most 80% of the longest straight.
+        The stretch over the start line is stored unwrapped, so its ``end`` may
+        exceed the lap length; callers compare positions modulo the lap.
+        """
+        track_length_m = max(1.0, float(self.track.length_km) * 1000.0)
+        positions = sorted(c.position_m for c in self.corners)
+        if not positions:
+            return
+        gaps = []
+        for i, start in enumerate(positions):
+            end = positions[(i + 1) % len(positions)]
+            if end <= start:
+                end += track_length_m
+            gaps.append((end - start, start, end))
+        zone_cap_m = 0.8 * float(self.track.longest_straight_m or 0.0)
+        for _, corner_a, corner_b in sorted(gaps, reverse=True)[: self.track.drs_zones]:
+            straight_start = corner_a + self.STRAIGHT_CLEARANCE_M
+            straight_end = corner_b - self.STRAIGHT_CLEARANCE_M
+            if straight_end <= straight_start:
+                continue
+            zone_start = max(straight_start, straight_end - zone_cap_m)
+            if straight_end > zone_start:
+                self.drs_zones.append((zone_start % track_length_m, straight_end - (zone_start - zone_start % track_length_m)))
+        self.drs_zones.sort()
 
-            self.drs_zones.append((start_m, end_m))
+    def in_drs_zone(self, position_m: float) -> bool:
+        """Whether a lap position (any lap) lies in a DRS zone, wrapping over the start line."""
+        track_length_m = max(1.0, float(self.track.length_km) * 1000.0)
+        return any(
+            (position_m - start) % track_length_m <= end - start
+            for start, end in self.drs_zones
+        )
 
     def get_section_at_position(
         self, position_m: float
@@ -282,14 +315,14 @@ class TrackMap:
                 nearest_corner = corner
 
         # Determine section type based on proximity to corner
-        if nearest_corner and min_distance < 50:  # Within 50m of corner
+        if nearest_corner and min_distance < self.CORNER_RADIUS_M:
             if nearest_corner.apex_speed_kmh < 80:
                 return TrackSection.SLOW_CORNER, nearest_corner
             elif nearest_corner.apex_speed_kmh < 150:
                 return TrackSection.MEDIUM_CORNER, nearest_corner
             else:
                 return TrackSection.FAST_CORNER, nearest_corner
-        elif nearest_corner and min_distance < 150:  # Braking/acceleration zone
+        elif nearest_corner and min_distance < self.STRAIGHT_CLEARANCE_M:  # Braking/acceleration zone
             # Check if approaching or exiting corner
             if position_m < nearest_corner.position_m:
                 return TrackSection.BRAKING_ZONE, nearest_corner

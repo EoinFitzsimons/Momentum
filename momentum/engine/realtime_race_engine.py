@@ -2394,12 +2394,10 @@ class RealtimeRaceEngine:
             return False
         if self._race_format is not None and not self._race_format.allows_drs(state.team.tier):
             return False
-        track_length_m = max(1.0, float(self.track_map.track.length_km) * 1000.0)
-        lap_position_m = state.position_m % track_length_m
-        section, _ = self.track_map.get_section_at_position(lap_position_m)
+        section, _ = self._get_live_track_section(state, self.track_map.track.length_km * 1000.0)
         if section != TrackSection.STRAIGHT:
             return False
-        return any(start <= lap_position_m <= end for start, end in self.track_map.drs_zones)
+        return self.track_map.in_drs_zone(state.position_m)
 
     def _distance_to_ahead(
         self, state: DriverState, ahead_state: DriverState, track_length_m: float
