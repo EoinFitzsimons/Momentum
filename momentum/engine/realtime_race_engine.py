@@ -107,6 +107,7 @@ class DriverState:
 
     # Performance modifiers
     in_slipstream: bool = False  # Currently benefiting from draft
+    drs_active: bool = False  # Wing open: in a DRS zone, within detection of the car ahead
     making_overtake: bool = False  # Currently attempting overtake
 
     # Incident tracking
@@ -210,6 +211,12 @@ class RealtimeRaceEngine:
         # from reduced air resistance. Real F1 data shows 5-10% boost.
         self.SLIPSTREAM_BONUS = 0.07  # 7% speed boost when drafting
         self.SLIPSTREAM_DISTANCE = 50.0  # Metres - effective draft range
+        # DRS: a rule of the discipline and tier (the track map has zones only
+        # where the field may use it). Opens within a second of the car ahead,
+        # inside a zone, once the opening laps are done; worth ~5% on the straight.
+        self.DRS_BONUS = 0.05
+        self.DRS_DETECTION_GAP_S = 1.0
+        self.DRS_ENABLED_FROM_LAP = 2
 
         # === DIRTY AIR EFFECT - MUCH STRONGER ===
         # When following closely in corners, turbulent air reduces downforce
@@ -2011,6 +2018,8 @@ class RealtimeRaceEngine:
         # === SLIPSTREAM BOOST (straights) ===
         if state.in_slipstream:
             speed *= 1.0 + self.SLIPSTREAM_BONUS
+        if state.drs_active:
+            speed *= 1.0 + self.DRS_BONUS
 
         speed = self._apply_dirty_air_penalty(speed, state, track_length_m)
 
@@ -2360,6 +2369,7 @@ class RealtimeRaceEngine:
         if index == 0:
             state.gap_ahead = 999.0
             state.in_slipstream = False
+            state.drs_active = False
             return
 
         ahead_state = active_drivers[index - 1][1]
@@ -2370,6 +2380,15 @@ class RealtimeRaceEngine:
         state.in_slipstream = bool(
             ahead_state.lap == state.lap and distance_gap < self.SLIPSTREAM_DISTANCE
         )
+        state.drs_active = self._drs_available(state)
+
+    def _drs_available(self, state: DriverState) -> bool:
+        """Whether this car may open its wing right now."""
+        if state.in_pit_lane or state.lap < self.DRS_ENABLED_FROM_LAP:
+            return False
+        if state.gap_ahead > self.DRS_DETECTION_GAP_S:
+            return False
+        return any(start <= state.position_m <= end for start, end in self.track_map.drs_zones)
 
     def _distance_to_ahead(
         self, state: DriverState, ahead_state: DriverState, track_length_m: float
