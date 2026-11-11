@@ -2396,6 +2396,9 @@ class RealtimeRaceEngine:
             return False
         track_length_m = max(1.0, float(self.track_map.track.length_km) * 1000.0)
         lap_position_m = state.position_m % track_length_m
+        section, _ = self.track_map.get_section_at_position(lap_position_m)
+        if section != TrackSection.STRAIGHT:
+            return False
         return any(start <= lap_position_m <= end for start, end in self.track_map.drs_zones)
 
     def _distance_to_ahead(

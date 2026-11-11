@@ -41,6 +41,9 @@ def test_drs_opens_only_in_a_zone_within_detection_after_the_opening_laps():
     assert not engine._drs_available(_state(inside, gap_ahead=1.4))
     assert not engine._drs_available(_state(inside, gap_ahead=0.8, lap=1))
     assert not engine._drs_available(_state(end + 50.0, gap_ahead=0.8))
+    corner_in_zone = next(c for c in engine.track_map.corners if start < c.position_m < end)
+    assert not engine._drs_available(_state(corner_in_zone.position_m, gap_ahead=0.8))
+    assert not engine._drs_available(_state(corner_in_zone.position_m - 120.0, gap_ahead=0.8))  # braking zone
     pitting = _state(inside, gap_ahead=0.8)
     pitting.in_pit_lane = True
     assert not engine._drs_available(pitting)
