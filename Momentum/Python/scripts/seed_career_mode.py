@@ -186,7 +186,7 @@ def locale_uses_latin_script(locale: str) -> bool:
     known = _LATIN_SCRIPT_CACHE.get(locale)
     if known is None:
         sample = "".join(fake_for_locale(locale).name() for _ in range(3))
-        known = all(ord(ch) < 0x250 for ch in sample)
+        known = is_latin_script(sample)
         _LATIN_SCRIPT_CACHE[locale] = known
     return known
 
@@ -200,10 +200,45 @@ def person_name(fake: Faker) -> str:
     romanised = getattr(fake, "romanized_name", None)
     if callable(romanised):
         try:
-            return str(romanised())
+            return _title_if_shouting(str(romanised()))
         except Exception:
             pass
     return str(fake.name())
+
+
+def _title_if_shouting(name: str) -> str:
+    """zh_TW romanises as "YAO KUAN-HUNG"; bring it in line with other names."""
+    return name.title() if name.isupper() else name
+
+
+# Real cities for teams from countries whose Faker cities cannot be romanised.
+ROMANISED_CITIES = {
+    "JPN": ["Tokyo", "Osaka", "Nagoya", "Suzuka", "Yokohama", "Kobe", "Fuji", "Sendai", "Hiroshima", "Sapporo", "Motegi", "Okayama"],
+    "CHN": ["Shanghai", "Beijing", "Zhuhai", "Shenzhen", "Guangzhou", "Chengdu", "Ningbo", "Hangzhou", "Wuhan", "Tianjin"],
+    "TWN": ["Taipei", "Kaohsiung", "Taichung", "Tainan", "Hsinchu", "Taoyuan"],
+}
+
+
+class RomanisedNameSource:
+    """Feeds ``generate_team_name`` romanised surnames and real cities.
+
+    Japanese and Chinese Faker locales romanise people but not companies or
+    cities, so a team from those countries is named after a family and based
+    in a real city rather than carrying a transliterated kanji reading.
+    """
+
+    def __init__(self, fake: Faker, cities: list):
+        self._fake = fake
+        self._cities = cities
+
+    def last_name(self) -> str:
+        return _title_if_shouting(str(self._fake.last_romanized_name()))
+
+    def company(self) -> str:
+        return self.last_name()
+
+    def city(self) -> str:
+        return random.choice(self._cities)
 
 
 def _birth_date_for_age(age: int) -> str:
@@ -285,14 +320,33 @@ def _load_unidecode():
 _unidecode = _load_unidecode()
 
 
+def is_latin_script(s: str) -> bool:
+    """True when every letter is Latin, accents and letters such as ə included."""
+    for ch in unicodedata.normalize("NFC", s):
+        if ord(ch) < 0x250 or unicodedata.combining(ch):
+            continue
+        if not ch.isalpha():
+            continue
+        if not unicodedata.name(ch, "").startswith("LATIN"):
+            return False
+    return True
+
+
 def to_latin(s: str) -> str:
-    """Convert string to Latin script"""
+    """Return ``s`` in Latin script.
+
+    Names already written in Latin letters keep their proper characters
+    (Müller, Nəzirli, Łukasz); only other scripts are transliterated.
+    """
     if not s:
         return s
+    normalised = unicodedata.normalize("NFC", s)
+    if is_latin_script(normalised):
+        return " ".join(normalised.split())
     if _unidecode:
-        out = _unidecode(s)
+        out = _unidecode(normalised)
     else:
-        out = unicodedata.normalize("NFKD", s)
+        out = unicodedata.normalize("NFKD", normalised)
         out = out.encode("ascii", "ignore").decode("ascii")
     return " ".join(out.split())
 
@@ -313,7 +367,7 @@ def clean_name(name: str) -> str:
         tokens.pop()
 
     cleaned = to_latin(" ".join(tokens)).strip()
-    if not re.search(r"[A-Za-z]", cleaned):
+    if not any(ch.isalpha() for ch in cleaned):
         return ""
     return cleaned
 
@@ -608,7 +662,10 @@ def _build_seed_team_data(
     # Team names read badly when transliterated from another script, so teams
     # from those countries take a name from a Latin-script locale instead.
     home_locale = get_locale_for_nationality(nationality)
-    if locale_uses_latin_script(home_locale):
+    if nationality in ROMANISED_CITIES and hasattr(fake_home, "last_romanized_name"):
+        fake_names = RomanisedNameSource(fake_home, ROMANISED_CITIES[nationality])
+        headquarters = fake_names.city()
+    elif locale_uses_latin_script(home_locale):
         fake_names = fake_home
         headquarters = to_latin(fake_home.city()).strip()
     else:

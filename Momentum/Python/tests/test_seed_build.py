@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from scripts.build_seed_database import PLAY_STATE_TABLES, build
+from scripts.seed_career_mode import is_latin_script
 from services.tier_service import TIERS
 
 TEAMS_PER_DISCIPLINE = 10
@@ -86,8 +87,10 @@ def test_every_team_has_drivers_staff_and_a_league_budget(seed_db):
 def test_names_are_latin_and_nationalities_lean_towards_heartlands(seed_db):
     conn = sqlite3.connect(seed_db)
     names = [r[0] for r in conn.execute("SELECT name FROM drivers")]
-    assert all(name.isascii() for name in names)
+    assert all(is_latin_script(name) for name in names)
     assert all("," not in name for name in names)
+    team_names = [r[0] for r in conn.execute("SELECT name FROM teams")]
+    assert all(is_latin_script(name) for name in team_names)
 
     rally = dict(
         conn.execute(
