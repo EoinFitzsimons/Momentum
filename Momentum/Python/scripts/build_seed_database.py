@@ -45,7 +45,6 @@ PLAY_STATE_TABLES: tuple[str, ...] = (
 )
 
 DEFAULT_TEAMS_PER_DISCIPLINE = 100
-DEFAULT_DRIVERS = 1500
 
 
 def _table_names(conn) -> set[str]:
@@ -81,7 +80,7 @@ def build(
     output: Path,
     seed: int = world.DEFAULT_SEED,
     teams_per_discipline: int = DEFAULT_TEAMS_PER_DISCIPLINE,
-    drivers: int = DEFAULT_DRIVERS,
+    drivers: int | None = None,
     staff: int | None = None,
 ) -> dict[str, int]:
     """Create a fresh seed database at ``output`` and return its table counts."""
@@ -96,6 +95,8 @@ def build(
     disciplines = list(DISCIPLINES.keys())
     if staff is None:
         staff = teams_per_discipline * len(disciplines) * world.STAFF_SLOTS_PER_TEAM
+    if drivers is None:
+        drivers = world.default_driver_count(teams_per_discipline, disciplines)
 
     db = DatabaseManager(db_path=str(output))
     world.seed_drivers(db, drivers, disciplines)
@@ -128,7 +129,9 @@ def main(argv=None) -> int:
     parser.add_argument("--output", default=DATABASE_PATH, help="Database file to (re)build")
     parser.add_argument("--seed", type=int, default=world.DEFAULT_SEED)
     parser.add_argument("--teams-per-discipline", type=int, default=DEFAULT_TEAMS_PER_DISCIPLINE)
-    parser.add_argument("--drivers", type=int, default=DEFAULT_DRIVERS)
+    parser.add_argument(
+        "--drivers", type=int, default=None, help="Default: every seat plus 15%% free agents"
+    )
     parser.add_argument("--staff", type=int, default=None, help="Default: three per team")
     args = parser.parse_args(argv)
     world.ensure_stable_hash_seed()

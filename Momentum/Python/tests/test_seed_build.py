@@ -12,7 +12,7 @@ from scripts.build_seed_database import PLAY_STATE_TABLES, build
 from services.tier_service import TIERS
 
 TEAMS_PER_DISCIPLINE = 10
-DRIVERS = 150
+DRIVERS = None  # every seat plus free agents
 
 
 def _rows(path: Path, table: str) -> list[tuple]:
@@ -64,6 +64,11 @@ def test_every_team_has_drivers_staff_and_a_league_budget(seed_db):
     ).fetchone()[0]
     assert without_drivers == 0
     assert without_staff == 0
+    short_handed = conn.execute(
+        "SELECT COUNT(1) FROM teams t WHERE t.discipline = 'ENDURANCE' AND "
+        "(SELECT COUNT(1) FROM drivers d WHERE d.current_team_id = t.id) < 4"
+    ).fetchone()[0]
+    assert short_handed == 0, "endurance teams need four drivers each"
     assert conn.execute(
         "SELECT COUNT(1) FROM staff_members WHERE name LIKE 'Generated Staff%'"
     ).fetchone()[0] == 0

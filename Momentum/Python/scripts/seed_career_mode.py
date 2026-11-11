@@ -252,6 +252,17 @@ DRIVER_SLOTS_PER_DISCIPLINE = {
 }
 
 STAFF_SLOTS_PER_TEAM = 3
+
+# Drivers generated per contracted seat; the surplus is the free-agent market.
+FREE_AGENT_MARGIN = 1.15
+
+
+def default_driver_count(teams_per_discipline: int, disciplines: list) -> int:
+    """Enough drivers to fill every seat in every discipline, plus free agents."""
+    seats = sum(
+        teams_per_discipline * DRIVER_SLOTS_PER_DISCIPLINE.get(d, 2) for d in disciplines
+    )
+    return int(round(seats * FREE_AGENT_MARGIN))
 MIN_STAFF_PER_TEAM = 1
 
 # Locale mapping is provided by tools.locale_mapping (best-effort per country)
@@ -427,6 +438,7 @@ def seed_drivers(db: DatabaseManager, count: int, disciplines: list) -> int:
     print(f"\n=== Generating {count} Drivers ===")
 
     country_codes = get_all_country_codes()
+    slot_weights = [DRIVER_SLOTS_PER_DISCIPLINE.get(d, 2) for d in disciplines]
 
     drivers_created = 0
 
@@ -436,7 +448,9 @@ def seed_drivers(db: DatabaseManager, count: int, disciplines: list) -> int:
 
         for i in range(count):
             # Select discipline and nationality
-            discipline = random.choice(disciplines)
+            # Endurance teams run four drivers, the rest two, so the driver
+            # pool is drawn in proportion to the seats on offer.
+            discipline = random.choices(disciplines, weights=slot_weights, k=1)[0]
             nationality = choose_nationality(random, discipline, country_codes)
 
             locale = get_locale_for_nationality(nationality)
@@ -1317,8 +1331,8 @@ def main():
     parser.add_argument(
         "--drivers",
         type=int,
-        default=1500,
-        help="Number of drivers to generate (default: 1500)",
+        default=None,
+        help="Number of drivers to generate (default: every seat filled plus 15%% free agents)",
     )
     parser.add_argument(
         "--teams-per-discipline",
@@ -1353,6 +1367,8 @@ def main():
     seed_world(args.seed)
     if args.staff is None:
         args.staff = args.teams_per_discipline * len(DISCIPLINES) * STAFF_SLOTS_PER_TEAM
+    if args.drivers is None:
+        args.drivers = default_driver_count(args.teams_per_discipline, list(DISCIPLINES))
 
     print("=" * 70)
     print("MOMENTUM CAREER MODE DATABASE GENERATOR")
