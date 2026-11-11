@@ -1,6 +1,7 @@
 import json
 
 import pytest
+from pathlib import Path
 
 from momentum.data.circuit_schema import (
     FILES,
@@ -67,3 +68,18 @@ def test_every_problem_is_reported_together(tmp_path):
     (tmp_path / FILES["PRODUCTION_TOURING"]).write_text(json.dumps([bad]), encoding="utf-8")
     with pytest.raises(CircuitError, match="track width"):
         load_circuits(tmp_path)
+
+
+@pytest.mark.unit
+def test_every_source_file_ships_in_installed_builds():
+    """pyproject's package-data must cover each per-discipline circuit file."""
+    import tomllib
+    from fnmatch import fnmatch
+
+    root = Path(__file__).resolve().parents[1]
+    with open(root / "pyproject.toml", "rb") as fh:
+        patterns = tomllib.load(fh)["tool"]["setuptools"]["package-data"]["momentum.data"]
+    data_dir = root / "momentum" / "data"
+    for source in sorted((data_dir / "circuits").glob("*.json")):
+        relative = source.relative_to(data_dir).as_posix()
+        assert any(fnmatch(relative, pattern) for pattern in patterns), relative

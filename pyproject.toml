@@ -24,7 +24,7 @@ include = ["momentum*"]
 [tool.setuptools.package-data]
 "momentum.gui" = ["assets/*.png", "assets/props/*.png"]
 "momentum.database" = ["momentum.db"]
-"momentum.data" = ["*.json"]
+"momentum.data" = ["*.json", "circuits/*.json"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
