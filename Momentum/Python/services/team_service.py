@@ -22,33 +22,29 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
+from services.tier_service import DEFAULT_TIER, LEAGUE_SIZE, TIERS, normalise_tier, tier_scale
+from RaceLogic.race_format import DISCIPLINE_FORMATS
+from services.finance_service import (
+    FACILITY_UPGRADE,
+    OWNER_FUNDING,
+    FinanceService,
+)
 
 
 class TeamService:
     """Service for managing team operations and lifecycle"""
 
-    # Budget limits by tier (in EUR)
+    # Budget limits in EUR: top league down to bottom league, evenly stepped.
     TIER_BUDGETS = {
-        "TIER_1": 130_000_000,  # Top tier - €130M
-        "TIER_2": 60_000_000,  # Mid tier - €60M
-        "TIER_3": 25_000_000,  # Junior tier - €25M
+        tier: round(tier_scale(tier, 130_000_000, 20_000_000)) for tier in TIERS
     }
 
-    # Staff limits by tier
-    TIER_STAFF_LIMITS = {
-        "TIER_1": 60,
-        "TIER_2": 40,
-        "TIER_3": 25,
-    }
+    # Staff limits by league
+    TIER_STAFF_LIMITS = {tier: round(tier_scale(tier, 60, 20)) for tier in TIERS}
 
-    # Driver slots per team
+    # Driver slots per team follow each discipline's race format.
     DRIVER_SLOTS_PER_DISCIPLINE = {
-        "SINGLE_SEATER": 2,
-        "PRODUCTION_TOURING": 2,
-        "URBAN_STREET": 2,
-        "DRAG_ACCELERATION": 2,
-        "SPRINT_RALLYCROSS": 2,
-        "ENDURANCE": 4,  # Endurance allows more drivers for multi-driver cars
+        discipline: fmt.driver_slots for discipline, fmt in DISCIPLINE_FORMATS.items()
     }
 
     def __init__(self, db_manager: DatabaseManager):
@@ -63,7 +59,7 @@ class TeamService:
         name: str,
         discipline: str = "SINGLE_SEATER",
         nationality: str = "INT",
-        tier: str = "TIER_2",
+        tier: str = DEFAULT_TIER,
         team_principal: str = "",
         headquarters: str = "",
         player_id: Optional[str] = None,
@@ -109,7 +105,7 @@ class TeamService:
             nationality=nationality,
             discipline=discipline,
             tier=tier,
-            budget=initial_budget,
+            budget=0.0,
             founded_year=datetime.now().year,
             team_principal=team_principal,
             history="",
@@ -127,6 +123,16 @@ class TeamService:
 
         if not team_id:
             raise RuntimeError(f"Failed to create team: {name}")
+
+        # Founding capital is the owners' money, posted so the ledger explains
+        # the opening balance rather than the balance appearing from nowhere.
+        FinanceService(self.db).post(
+            team_id,
+            initial_budget,
+            OWNER_FUNDING,
+            f"Founding capital for a {tier.replace('_', ' ').title()} entry",
+            source=f"{team_principal or name} and backers",
+        )
 
         if player_id:
             self.db.assign_team_owner(team_id, str(player_id))
@@ -331,9 +337,12 @@ class TeamService:
                     f"Required: €{facility_cost:,.0f}, Available: €{team.budget:,.0f}"
                 )
 
-            team.budget -= facility_cost
-            self.db.add_budget_transaction(
-                team_id, "facility_upgrade", facility_cost, f"Facility upgrade: {name}"
+            team.budget = FinanceService(self.db).post(
+                team_id,
+                -facility_cost,
+                FACILITY_UPGRADE,
+                f"Facility upgrade: {name}",
+                source=team.name,
             )
             self.db.upsert_facility_upgrade(team_id, name, facility_cost)
             changes[f"facility_upgrade::{name}"] = {
@@ -468,14 +477,11 @@ class TeamService:
                 f"Insufficient budget. Requested: €{amount:,.0f}, Available: €{available_budget:,.0f}"
             )
 
-        # Create budget transaction
-        transaction_id = self.db.add_budget_transaction(
-            team_id, category, amount, description
+        posting = FinanceService(self.db).post_entry(
+            team_id, -amount, category, description, source=team.name
         )
-
-        # Update team budget
-        team.budget -= amount
-        self.db.update_team(team_id, team)
+        team.budget = posting.balance
+        transaction_id = posting.transaction_id
 
         return {
             "success": True,
@@ -548,18 +554,145 @@ class TeamService:
         Returns:
             Estimated annual income in EUR
         """
-        base_income = {
-            "TIER_1": 5_000_000,
-            "TIER_2": 2_000_000,
-            "TIER_3": 500_000,
-        }
-
-        tier_income = base_income.get(team.tier, 2_000_000)
+        tier_income = tier_scale(team.tier, 5_000_000, 500_000)
 
         # Adjust based on performance
         performance_bonus = (team.total_wins * 100_000) + (team.total_podiums * 50_000)
 
         return tier_income + performance_bonus
+
+    def found_player_team(
+        self,
+        name: str,
+        discipline: str,
+        nationality: str,
+        tier: str,
+        team_principal: str = "",
+        headquarters: str = "",
+        player_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Found a player's own team in the league of their choice.
+
+        The new team gets that league's founding capital, staff limit and
+        sponsor level. Leagues hold ``LEAGUE_SIZE`` teams, so when the chosen
+        one is full its weakest team is dissolved to make room: its drivers and
+        staff become free agents.
+        """
+        tier = normalise_tier(tier)
+        discipline = str(discipline or "SINGLE_SEATER").upper()
+        league = [
+            team
+            for team in self.db.get_teams_by_discipline(discipline)
+            if normalise_tier(getattr(team, "tier", None)) == tier
+        ]
+        # Create first, so a rejected name or a failed insert leaves the
+        # league exactly as it was; only then does the weakest incumbent go.
+        result = self.create_team(
+            name=name,
+            discipline=discipline,
+            nationality=nationality,
+            tier=tier,
+            team_principal=team_principal,
+            headquarters=headquarters,
+            player_id=player_id,
+        )
+        replaced: Optional[Dict[str, Any]] = None
+        if len(league) >= LEAGUE_SIZE:
+            from services.tier_service import TierService
+
+            strength = TierService(self.db)
+            weakest = min(league, key=strength.team_strength)
+            replaced = self.dissolve_team(int(weakest.id), reason=f"replaced by {name}")
+        result["replaced_team"] = replaced
+        result["signed_drivers"] = self._sign_inaugural_line_up(
+            int(result["id"]), discipline, tier
+        )
+        return result
+
+    def _sign_inaugural_line_up(self, team_id: int, discipline: str, tier: str) -> List[int]:
+        """Fill a founded team's seats from the free-agent pool.
+
+        A new team cannot race without contracted drivers and the career screen
+        has no hiring route of its own, so the founding comes with a line-up
+        drawn from the free agents at the standard the league expects: the top
+        league picks from the best available, the bottom league from further
+        down the list. Every signing goes through ``HiringService`` so the
+        signing bonus is paid from the founding capital and the discipline's
+        salary cap is respected; drivers the team cannot afford are skipped.
+        """
+        from RaceLogic.race_format import driver_slots_for
+        from services.hiring_service import HiringService
+
+        seats = max(1, int(driver_slots_for(discipline)))
+        hiring = HiringService(self.db.db_path)
+        try:
+            pool, _total = hiring.db.get_available_drivers(  # type: ignore[attr-defined]
+                discipline=discipline, page_size=500
+            )
+        except Exception:
+            pool = []
+        if not pool:
+            return []
+        start = int(len(pool) * tier_scale(tier, 0.0, 0.8))
+        start = min(start, max(0, len(pool) - seats))
+        signed: List[int] = []
+        for row in pool[start:]:
+            if len(signed) >= seats:
+                break
+            driver_id = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
+            if driver_id is None:
+                continue
+            salary = float(
+                (row.get("salary") if isinstance(row, dict) else None)
+                or tier_scale(tier, 400_000.0, 40_000.0)
+            )
+            within_cap, _used, _cap = hiring.check_salary_cap_compliance(int(team_id), salary)
+            if not within_cap:
+                continue
+            ok, _message, _contract = hiring.sign_driver_contract(
+                int(team_id), int(driver_id), 2, salary
+            )
+            if ok:
+                signed.append(int(driver_id))
+        return signed
+
+    def dissolve_team(self, team_id: int, reason: str = "") -> Dict[str, Any]:
+        """Wind a team up: release its people and remove it from the league.
+
+        The ledger rows stay behind so the money remains traceable.
+        """
+        team = self.db.get_team(team_id)
+        if team is None:
+            raise ValueError(f"Team {team_id} not found")
+        released_drivers = [int(d.id) for d in self.db.get_drivers_by_team(team_id)]
+        for driver_id in released_drivers:
+            self.db.release_driver(driver_id)  # type: ignore[attr-defined]
+        try:
+            released_staff = [int(s.id) for s in self.db.get_staff_by_team(team_id)]
+        except Exception:
+            released_staff = []
+        for staff_id in released_staff:
+            self.db.release_staff(staff_id)  # type: ignore[attr-defined]
+        # The row stays (results and ledger entries point at it); it simply
+        # leaves the league.
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "UPDATE team_ownership SET is_active = 0 WHERE team_id = ?", (int(team_id),)
+            )
+            conn.execute(
+                "UPDATE teams SET dissolved_at = CURRENT_TIMESTAMP, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (int(team_id),),
+            )
+            conn.commit()
+        return {
+            "id": int(team_id),
+            "name": team.name,
+            "tier": normalise_tier(getattr(team, "tier", None)),
+            "released_drivers": released_drivers,
+            "released_staff": released_staff,
+            "reason": reason,
+        }
 
     def _log_team_change(
         self,
@@ -573,12 +706,7 @@ class TeamService:
 
     def _facility_upgrade_cost(self, tier: str) -> float:
         """Facility upgrades scale by tier to preserve progression balance."""
-        base = {
-            "TIER_1": 6_000_000,
-            "TIER_2": 3_000_000,
-            "TIER_3": 1_500_000,
-        }
-        return float(base.get(tier, 3_000_000))
+        return tier_scale(tier, 6_000_000, 1_500_000)
 
 
 __all__ = ["TeamService"]

@@ -29,6 +29,7 @@ from RaceLogic.base_race_engine import (
     RaceContext,
     RacingDiscipline,
 )
+from RaceLogic.race_format import DRAG_ACCELERATION_FORMAT
 from database.models import Driver, Team
 
 UNKNOWN_DRIVER_LABEL = "Unknown Driver"
@@ -67,6 +68,8 @@ class DragAccelerationEngine(BaseDisciplineEngine):
     - pressure_handling (6%): Mental toughness
     - g_force_tolerance (8%): Physical endurance
     """
+
+    race_format = DRAG_ACCELERATION_FORMAT
 
     def __init__(self, seed: Optional[int] = None):
         """Initialise drag racing engine"""

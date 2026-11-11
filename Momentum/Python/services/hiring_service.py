@@ -22,6 +22,12 @@ from datetime import datetime
 # Import database extensions to add hiring methods
 import database.database_extensions  # noqa
 from database.database_manager import DatabaseManager
+from services.finance_service import (
+    CONTRACT_BUYOUT,
+    SIGNING_BONUS,
+    FinanceService,
+    InsufficientFunds,
+)
 from database.models import Driver, Team
 from config import DATABASE_PATH
 
@@ -395,6 +401,17 @@ class HiringService:
         contract_start = start_season or datetime.now().year
         contract_end = contract_start + contract_length - 1
 
+        try:
+            new_budget = FinanceService(self.db).post(
+                team_id,
+                -signing_bonus,
+                SIGNING_BONUS,
+                f"Signing bonus for {driver.name}",
+                source=team.name,
+            )
+        except InsufficientFunds as exc:
+            return (False, f"Insufficient budget for signing bonus: {exc}", {})
+
         # Sign contract
         success = self.db.sign_driver_contract(  # type: ignore[attr-defined]
             driver_id,
@@ -405,10 +422,17 @@ class HiringService:
             performance_bonus,
         )
         if not success:
+            # The bonus went out before the contract write; put it back so the
+            # team is not charged for a driver it never secured.
+            FinanceService(self.db).post(
+                team_id,
+                signing_bonus,
+                SIGNING_BONUS,
+                f"Signing bonus returned: contract for {driver.name} not completed",
+                source=team.name,
+            )
             return (False, "Database error during contract signing", {})
 
-        # Deduct signing bonus from team budget
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
 
         # Return contract details
         contract_details = {
@@ -463,9 +487,19 @@ class HiringService:
                 {},
             )
 
+        try:
+            new_budget = FinanceService(self.db).post(
+                team_id,
+                -buyout_cost,
+                CONTRACT_BUYOUT,
+                f"Contract buyout for {driver.name}",
+                source=team.name,
+            )
+        except InsufficientFunds as exc:
+            return (False, f"Insufficient budget for buyout: {exc}", {})
+
         # Release driver
         self.db.release_driver(personnel_id)  # type: ignore[attr-defined]
-        new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
 
         return (
             True,
@@ -503,9 +537,19 @@ class HiringService:
         if team.budget < buyout_cost:
             return (False, "Insufficient budget for buyout", {})
 
+        try:
+            new_budget = FinanceService(self.db).post(
+                team_id,
+                -buyout_cost,
+                CONTRACT_BUYOUT,
+                f"Contract buyout for {staff.name}",
+                source=team.name,
+            )
+        except InsufficientFunds as exc:
+            return (False, f"Insufficient budget for buyout: {exc}", {})
+
         # Release staff
         self.db.release_staff(personnel_id)  # type: ignore[attr-defined]
-        new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
 
         return (
             True,
@@ -671,6 +715,17 @@ class HiringService:
         contract_start = start_season or datetime.now().year
         contract_end = contract_start + contract_length - 1
 
+        try:
+            new_budget = FinanceService(self.db).post(
+                team_id,
+                -signing_bonus,
+                SIGNING_BONUS,
+                f"Signing bonus for {staff.name}",
+                source=team.name,
+            )
+        except InsufficientFunds as exc:
+            return (False, f"Insufficient budget for signing bonus: {exc}", {})
+
         # Sign contract
         success = self.db.sign_staff_contract(  # type: ignore[attr-defined]
             staff_id, team_id, contract_length, salary, contract_start
@@ -678,8 +733,6 @@ class HiringService:
         if not success:
             return (False, "Database error during contract signing", {})
 
-        # Deduct signing bonus
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
 
         # Return contract details
         contract_details = {

@@ -21,10 +21,11 @@ Features:
 
 import argparse
 import json
+import os
 import random
 import re
 import unicodedata
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -36,9 +37,13 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.database_manager import DatabaseManager
-from services.tier_service import TierService, normalise_tier, tier_label
+from services.tier_service import BOTTOM_TIER, TierService, tier_label, tier_scale
+from services.finance_service import OWNER_FUNDING, post_with
+from RaceLogic.race_format import DISCIPLINE_FORMATS
 from config import DATABASE_PATH, DISCIPLINES, STAFF_ROLES_CONFIG
 from tools.locale_mapping import get_all_country_codes, get_locale_for_country
+from data.nationality_weights import choose_nationality
+from data.countries import COUNTRIES
 
 
 # ============================================================================
@@ -135,13 +140,124 @@ BUDGET_CAPS = {
     "ENDURANCE": 60_000_000,
 }
 
-# Budget range (share of the discipline cap) by league. Richer leagues
-# attract bigger sponsors; the money is spent on upgrades, it is not pace.
-TIER_BUDGET_RANGES = {
-    "TIER_1": (0.85, 1.00),
-    "TIER_2": (0.60, 0.85),
-    "TIER_3": (0.35, 0.65),
+# Seeds and dates are fixed so the same arguments always build the same world.
+DEFAULT_SEED = 2026
+SEED_REFERENCE_DATE = date(2026, 1, 1)
+
+_FAKER_CACHE: dict = {}
+
+
+def seed_world(seed: int) -> None:
+    """Seed every random source the generator uses."""
+    random.seed(seed)
+    Faker.seed(seed)
+    _FAKER_CACHE.clear()
+    _LATIN_SCRIPT_CACHE.clear()
+
+
+def fake_for_locale(locale: str) -> Faker:
+    """One Faker per locale; building them per driver is slow and wasteful."""
+    fake = _FAKER_CACHE.get(locale)
+    if fake is None:
+        try:
+            fake = Faker(locale)
+        except Exception:
+            fake = _FAKER_CACHE.get("en_US") or Faker("en_US")
+        _FAKER_CACHE[locale] = fake
+    return fake
+
+
+def ensure_stable_hash_seed() -> None:
+    """Re-run the current script with ``PYTHONHASHSEED=0`` if it is not set.
+
+    Some Faker providers build their data from sets (the Italian city list is
+    one), so their draw order follows Python's per-process hash salt and
+    ``Faker.seed`` alone cannot make them reproducible across runs.
+    """
+    if os.environ.get("PYTHONHASHSEED") == "0":
+        return
+    env = dict(os.environ, PYTHONHASHSEED="0")
+    os.execve(sys.executable, [sys.executable, *sys.argv], env)
+
+
+_LATIN_SCRIPT_CACHE: dict = {}
+
+
+def locale_uses_latin_script(locale: str) -> bool:
+    """True when a locale's names are already Latin (no transliteration needed)."""
+    known = _LATIN_SCRIPT_CACHE.get(locale)
+    if known is None:
+        sample = "".join(fake_for_locale(locale).name() for _ in range(3))
+        known = is_latin_script(sample)
+        _LATIN_SCRIPT_CACHE[locale] = known
+    return known
+
+
+def person_name(fake: Faker) -> str:
+    """A person's name in Latin letters.
+
+    Japanese and Chinese providers offer a proper romanisation; transliterating
+    the kanji would give Chinese readings for Japanese names.
+    """
+    romanised = getattr(fake, "romanized_name", None)
+    if callable(romanised):
+        try:
+            return _title_if_shouting(str(romanised()))
+        except Exception:
+            pass
+    return str(fake.name())
+
+
+def _title_if_shouting(name: str) -> str:
+    """zh_TW romanises as "YAO KUAN-HUNG"; bring it in line with other names."""
+    return name.title() if name.isupper() else name
+
+
+# Real cities for teams from countries whose Faker cities cannot be romanised.
+ROMANISED_CITIES = {
+    "JPN": ["Tokyo", "Osaka", "Nagoya", "Suzuka", "Yokohama", "Kobe", "Fuji", "Sendai", "Hiroshima", "Sapporo", "Motegi", "Okayama"],
+    "CHN": ["Shanghai", "Beijing", "Zhuhai", "Shenzhen", "Guangzhou", "Chengdu", "Ningbo", "Hangzhou", "Wuhan", "Tianjin"],
+    "TWN": ["Taipei", "Kaohsiung", "Taichung", "Tainan", "Hsinchu", "Taoyuan"],
 }
+
+
+class RomanisedNameSource:
+    """Feeds ``generate_team_name`` romanised surnames and real cities.
+
+    Japanese and Chinese Faker locales romanise people but not companies or
+    cities, so a team from those countries is named after a family and based
+    in a real city rather than carrying a transliterated kanji reading.
+    """
+
+    def __init__(self, fake: Faker, cities: list):
+        self._fake = fake
+        self._cities = cities
+
+    def last_name(self) -> str:
+        return _title_if_shouting(str(self._fake.last_romanized_name()))
+
+    def company(self) -> str:
+        return self.last_name()
+
+    def city(self) -> str:
+        return random.choice(self._cities)
+
+
+def _birth_date_for_age(age: int) -> str:
+    """Birth date relative to the fixed reference date, not today."""
+    return (SEED_REFERENCE_DATE - timedelta(days=round(365.25 * age))).strftime(
+        "%Y-%m-%d"
+    )
+
+
+def _budget_share_range(tier: str) -> Tuple[float, float]:
+    """Share of the discipline budget cap a league's teams start with.
+
+    The top league sits near the cap and each league below steps down evenly;
+    the money is spent on upgrades, it is not pace.
+    """
+    low = tier_scale(tier, 0.85, 0.20)
+    return low, low + 0.15
 
 # Common Faker locales for staff name generation
 COMMON_LOCALES = [
@@ -163,16 +279,23 @@ HONORIFIC_PREFIXES = {"dr", "mr", "ms", "mrs", "miss", "prof", "sir", "dame", "l
 
 HONORIFIC_SUFFIXES = {"md", "dds", "phd", "jr", "sr", "ii", "iii", "iv"}
 
+# Driver slots per team come from each discipline's race format.
 DRIVER_SLOTS_PER_DISCIPLINE = {
-    "SINGLE_SEATER": 2,
-    "PRODUCTION_TOURING": 2,
-    "URBAN_STREET": 2,
-    "DRAG_ACCELERATION": 2,
-    "SPRINT_RALLYCROSS": 2,
-    "ENDURANCE": 4,
+    discipline: fmt.driver_slots for discipline, fmt in DISCIPLINE_FORMATS.items()
 }
 
 STAFF_SLOTS_PER_TEAM = 3
+
+# Drivers generated per contracted seat; the surplus is the free-agent market.
+FREE_AGENT_MARGIN = 1.15
+
+
+def default_driver_count(teams_per_discipline: int, disciplines: list) -> int:
+    """Enough drivers to fill every seat in every discipline, plus free agents."""
+    seats = sum(
+        teams_per_discipline * DRIVER_SLOTS_PER_DISCIPLINE.get(d, 2) for d in disciplines
+    )
+    return int(round(seats * FREE_AGENT_MARGIN))
 MIN_STAFF_PER_TEAM = 1
 
 # Locale mapping is provided by tools.locale_mapping (best-effort per country)
@@ -195,14 +318,33 @@ def _load_unidecode():
 _unidecode = _load_unidecode()
 
 
+def is_latin_script(s: str) -> bool:
+    """True when every letter is Latin, accents and letters such as ə included."""
+    for ch in unicodedata.normalize("NFC", s):
+        if ord(ch) < 0x250 or unicodedata.combining(ch):
+            continue
+        if not ch.isalpha():
+            continue
+        if not unicodedata.name(ch, "").startswith("LATIN"):
+            return False
+    return True
+
+
 def to_latin(s: str) -> str:
-    """Convert string to Latin script"""
+    """Return ``s`` in Latin script.
+
+    Names already written in Latin letters keep their proper characters
+    (Müller, Nəzirli, Łukasz); only other scripts are transliterated.
+    """
     if not s:
         return s
+    normalised = unicodedata.normalize("NFC", s)
+    if is_latin_script(normalised):
+        return " ".join(normalised.split())
     if _unidecode:
-        out = _unidecode(s)
+        out = _unidecode(normalised)
     else:
-        out = unicodedata.normalize("NFKD", s)
+        out = unicodedata.normalize("NFKD", normalised)
         out = out.encode("ascii", "ignore").decode("ascii")
     return " ".join(out.split())
 
@@ -211,6 +353,8 @@ def clean_name(name: str) -> str:
     """Remove honorifics and clean name"""
     if not name:
         return ""
+    # Faker appends qualifications after a comma in some locales ("..., S.E.").
+    name = name.split(",", 1)[0]
     tokens = [t for t in name.strip().split() if t]
     if not tokens:
         return ""
@@ -221,14 +365,14 @@ def clean_name(name: str) -> str:
         tokens.pop()
 
     cleaned = to_latin(" ".join(tokens)).strip()
-    if not re.search(r"[A-Za-z]", cleaned):
+    if not any(ch.isalpha() for ch in cleaned):
         return ""
     return cleaned
 
 
 def random_birth_date(min_age: int = 18, max_age: int = 45) -> str:
     """Generate random birth date for given age range"""
-    today = datetime.now().date()
+    today = SEED_REFERENCE_DATE
     age = random.randint(min_age, max_age)
     birth = today - timedelta(days=365 * age + random.randint(0, 365))
     return birth.strftime("%Y-%m-%d")
@@ -239,28 +383,35 @@ def get_locale_for_nationality(nationality: str) -> str:
     return get_locale_for_country(nationality)
 
 
+# Scripts that unidecode turns into readable Latin names. Arabic, Thai, Hebrew
+# or Devanagari do not transliterate well, so people from those countries get
+# names from a Latin-script locale instead.
+ROMANISABLE_LOCALES = frozenset(
+    {"ru_RU", "uk_UA", "bg_BG", "el_GR", "ja_JP", "zh_CN", "zh_TW"}
+)
+
+
 def _build_fake_for_nationality(nationality: str) -> Faker:
-    """Create Faker instance for nationality locale with safe fallback."""
+    """Faker whose names come out readable in Latin letters for this country."""
     locale = get_locale_for_nationality(nationality)
-    try:
-        return Faker(locale)
-    except Exception:
-        return Faker("en_US")
+    if locale in ROMANISABLE_LOCALES or locale_uses_latin_script(locale):
+        return fake_for_locale(locale)
+    return fake_for_locale(random.choice(COMMON_LOCALES))
 
 
 def _tier_age_skill_profile(tier: str) -> Tuple[int, float, float]:
     """Return (age, skill_mean, skill_std) profile by normalised team tier."""
-    t = normalise_tier(tier)
-    if t == "TIER_1":
-        age = (
-            random.randint(28, 45) if random.random() < 0.80 else random.randint(22, 27)
-        )
-        return age, 78.0, 10.0
-    if t == "TIER_2":
-        age = random.choice([random.randint(22, 30)] * 6 + [random.randint(30, 38)] * 4)
-        return age, 62.0, 12.0
-    age = random.randint(18, 32) if random.random() < 0.85 else random.randint(35, 45)
-    return age, 55.0, 13.0
+    # Top league: experienced and strong; bottom league: young and raw, with
+    # the occasional veteran. Everything in between steps down evenly.
+    core_low = round(tier_scale(tier, 27, 18))
+    core_high = round(tier_scale(tier, 42, 31))
+    if random.random() < 0.82:
+        age = random.randint(core_low, core_high)
+    elif tier_scale(tier, 1.0, 0.0) > 0.5:
+        age = random.randint(21, max(22, core_low))
+    else:
+        age = random.randint(min(44, core_high + 1), 45)
+    return age, tier_scale(tier, 78.0, 50.0), tier_scale(tier, 10.0, 13.0)
 
 
 def skill_distribution(
@@ -280,7 +431,7 @@ def generate_driver(
     fake: Faker, nationality: str, discipline: str, locale: str
 ) -> Optional[dict]:
     """Generate a single driver with all attributes"""
-    name = clean_name(fake.name())
+    name = clean_name(person_name(fake))
     if not name:
         return None
 
@@ -299,9 +450,7 @@ def generate_driver(
     else:
         skill_mean = 55.0  # Rookies
 
-    birth_date = (
-        datetime.now(timezone.utc).date() - timedelta(days=365 * age)
-    ).strftime("%Y-%m-%d")
+    birth_date = _birth_date_for_age(age)
 
     # Generate all skill attributes
     driver_data = {
@@ -340,9 +489,8 @@ def seed_drivers(db: DatabaseManager, count: int, disciplines: list) -> int:
     """Seed database with drivers"""
     print(f"\n=== Generating {count} Drivers ===")
 
-    # Use every country code at least once
     country_codes = get_all_country_codes()
-    random.shuffle(country_codes)
+    slot_weights = [DRIVER_SLOTS_PER_DISCIPLINE.get(d, 2) for d in disciplines]
 
     drivers_created = 0
 
@@ -352,18 +500,13 @@ def seed_drivers(db: DatabaseManager, count: int, disciplines: list) -> int:
 
         for i in range(count):
             # Select discipline and nationality
-            discipline = random.choice(disciplines)
-            if i < len(country_codes):
-                nationality = country_codes[i]
-            else:
-                nationality = random.choice(country_codes)
+            # Endurance teams run four drivers, the rest two, so the driver
+            # pool is drawn in proportion to the seats on offer.
+            discipline = random.choices(disciplines, weights=slot_weights, k=1)[0]
+            nationality = choose_nationality(random, discipline, country_codes)
 
             locale = get_locale_for_nationality(nationality)
-            try:
-                fake = Faker(locale)
-            except Exception:
-                fake = Faker("en_US")
-                locale = "en_US"
+            fake = _build_fake_for_nationality(nationality)
 
             driver_data = generate_driver(fake, nationality, discipline, locale)
             if not driver_data:
@@ -463,8 +606,6 @@ def generate_team_name(
 def _get_country_codes_for_team_seed() -> list:
     """Return all country codes used for team nationality sampling."""
     try:
-        from data.countries import COUNTRIES
-
         return list(COUNTRIES.keys())
     except ImportError:
         return ["USA", "GBR", "DEU", "ITA", "FRA", "ESP", "JPN", "BRA"]
@@ -493,10 +634,43 @@ def _generate_operations_rating() -> float:
     return round(max(40.0, min(96.0, random.gauss(64.0, 13.0))), 2)
 
 
+# Where a team's opening money comes from. Picked per team for flavour; the
+# amount itself follows the league the team was placed in.
+OWNER_FORTUNES = [
+    "a family haulage business",
+    "a regional construction group",
+    "a chain of car dealerships",
+    "the sale of a software company",
+    "a commercial property portfolio",
+    "an energy drinks brand",
+    "a shipping and ports company",
+    "a mining concern",
+    "a supermarket chain",
+    "a motorsport parts manufacturer",
+    "a telecoms fortune",
+    "a consortium of local sponsors",
+    "a private equity fund",
+    "a fashion and lifestyle label",
+    "a racing-mad hotelier",
+]
+
+
+def _owner_backing(team_principal: str, nationality: str) -> str:
+    """Flavour text naming who put the opening money in and where it came from."""
+    name = str(team_principal or "").strip()
+    nationality = str(nationality or "")
+    fortune = random.choice(OWNER_FORTUNES)
+    if random.random() < 0.6 and name:
+        return f"{name}, owner-principal, funded by {fortune}"
+    fake = _build_fake_for_nationality(nationality) if nationality else fake_for_locale("en_GB")
+    owner = clean_name(person_name(fake)) or "A private owner"
+    return f"{owner}, owner, funded by {fortune}"
+
+
 def _budget_for_tier(discipline: str, tier: str) -> float:
     """Starting budget for a team given the league it was placed in."""
     base_budget = BUDGET_CAPS.get(discipline, 50_000_000)
-    low, high = TIER_BUDGET_RANGES[normalise_tier(tier)]
+    low, high = _budget_share_range(tier)
     return round(base_budget * random.uniform(low, high), 2)
 
 
@@ -507,13 +681,32 @@ def _build_seed_team_data(
     existing_names: set,
 ) -> Optional[dict]:
     """Generate one team payload suitable for insertion, or None if invalid."""
-    nationality = random.choice(country_codes)
+    nationality = choose_nationality(random, discipline, country_codes)
 
-    safe_locale = random.choice(safe_locales_for_names)
-    fake_for_names = Faker(safe_locale)
-    fake_for_principal = _build_fake_for_nationality(nationality)
+    # Name and headquarters come from the home country; principals can be
+    # from anywhere, as they are in real teams.
+    fake_home = _build_fake_for_nationality(nationality)
+    fake_for_principal = fake_for_locale(
+        get_locale_for_nationality(choose_nationality(random, discipline, country_codes))
+    )
 
-    team_name = generate_team_name(fake_for_names, discipline, existing_names)
+    # Team names read badly when transliterated from another script, so teams
+    # from those countries take a name from a Latin-script locale instead.
+    home_locale = get_locale_for_nationality(nationality)
+    if nationality in ROMANISED_CITIES and hasattr(fake_home, "last_romanized_name"):
+        fake_names = RomanisedNameSource(fake_home, ROMANISED_CITIES[nationality])
+        headquarters = fake_names.city()
+    elif locale_uses_latin_script(home_locale):
+        fake_names = fake_home
+        headquarters = to_latin(fake_home.city()).strip()
+    else:
+        fake_names = fake_for_locale(random.choice(safe_locales_for_names))
+        headquarters = str(COUNTRIES.get(nationality, nationality))
+
+    team_name = generate_team_name(fake_names, discipline, existing_names)
+    if not team_name and fake_names is fake_home:
+        fake_safe = fake_for_locale(random.choice(safe_locales_for_names))
+        team_name = generate_team_name(fake_safe, discipline, existing_names)
     if not team_name:
         return None
 
@@ -521,16 +714,17 @@ def _build_seed_team_data(
 
     # Placeholder league/budget: assign_tiers_by_strength() sorts teams into
     # leagues once drivers are contracted, then budgets follow the league.
-    tier = "TIER_3"
+    tier = BOTTOM_TIER
     team_data = {
         "name": team_name,
         "nationality": nationality,
         "discipline": discipline,
         "tier": tier,
-        "budget": _budget_for_tier(discipline, tier),
+        # Opening money is posted to the ledger once the league is known.
+        "budget": 0.0,
         "founded_year": random.randint(1950, 2024),
-        "team_principal": clean_name(fake_for_principal.name()),
-        "headquarters": fake_for_principal.city(),
+        "team_principal": clean_name(person_name(fake_for_principal)),
+        "headquarters": headquarters or str(COUNTRIES.get(nationality, nationality)),
         "operations_rating": operations_rating,
         "strategy_profile": random.choice(["conservative", "standard", "aggressive"]),
     }
@@ -562,6 +756,16 @@ def _insert_seed_team(cursor, team_data: dict) -> None:
             team_data["operations_rating"],
             team_data["strategy_profile"],
         ),
+    )
+    # Opening capital at the bottom-league rate, on the books from day one;
+    # league placement tops it up later.
+    post_with(
+        cursor.connection,
+        int(cursor.lastrowid),
+        _budget_for_tier(team_data["discipline"], team_data["tier"]),
+        OWNER_FUNDING,
+        "Opening capital",
+        source=_owner_backing(team_data.get("team_principal", ""), team_data.get("nationality", "")),
     )
 
 
@@ -625,7 +829,7 @@ def seed_teams(
 
 def generate_staff_member(fake: Faker, role: str) -> Optional[dict]:
     """Generate a single staff member"""
-    name = clean_name(fake.name())
+    name = clean_name(person_name(fake))
     if not name:
         return None
 
@@ -654,9 +858,9 @@ def seed_staff(db: DatabaseManager, count: int) -> int:
             # Random locale for name
             locale = random.choice(COMMON_LOCALES)
             try:
-                fake = Faker(locale)
+                fake = fake_for_locale(locale)
             except Exception:
-                fake = Faker("en_US")
+                fake = fake_for_locale("en_US")
 
             # Select role based on weights
             role = random.choice(role_pool)
@@ -765,21 +969,13 @@ def assign_staff_contracts(db: DatabaseManager, disciplines: list) -> int:  # NO
                 attempts += 1
                 locale = random.choice(COMMON_LOCALES)
                 try:
-                    fake = Faker(locale)
+                    fake = fake_for_locale(locale)
                 except Exception:
-                    fake = Faker("en_US")
+                    fake = fake_for_locale("en_US")
                 role = random.choice(role_pool)
                 staff_data = generate_staff_member(fake, role)
                 if not staff_data:
-                    role_cfg = STAFF_ROLES_CONFIG.get(
-                        role, {"rating_range": (50.0, 80.0)}
-                    )
-                    min_rating, max_rating = role_cfg["rating_range"]
-                    staff_data = {
-                        "name": f"Generated Staff {random.randint(100000, 999999)}",
-                        "role": role,
-                        "rating": round(random.uniform(min_rating, max_rating), 2),
-                    }
+                    continue
                 cursor.execute(
                     """
                     INSERT INTO staff_members (name, role, rating)
@@ -811,7 +1007,7 @@ def assign_staff_contracts(db: DatabaseManager, disciplines: list) -> int:  # NO
 
         mandatory_targets = list(team_ids_needing_minimum)
         pair_count = min(len(staff_rows), len(mandatory_targets))
-        start_season = datetime.now().year
+        start_season = SEED_REFERENCE_DATE.year
 
         for idx in range(pair_count):
             team_id = mandatory_targets[idx]
@@ -977,15 +1173,34 @@ def assign_tiers_by_strength(db: DatabaseManager, disciplines: list) -> int:
     print("\n=== Assigning Leagues by Team Strength ===")
     service = TierService(db)
     placed = 0
+    # TierService writes through its own connection, so finish every placement
+    # before opening ours; two writers on one SQLite file lock each other out.
+    placements = {
+        discipline: service.assign_tiers_by_strength(discipline)
+        for discipline in disciplines
+    }
     with db.get_connection() as conn:
-        for discipline in disciplines:
-            placement = service.assign_tiers_by_strength(discipline)
+        for discipline, placement in placements.items():
             for tier, team_ids in placement.items():
                 for team_id in team_ids:
-                    conn.execute(
-                        "UPDATE teams SET budget = ? WHERE id = ?",
-                        (_budget_for_tier(discipline, tier), int(team_id)),
+                    row = conn.execute(
+                        "SELECT budget, nationality, team_principal FROM teams WHERE id = ?",
+                        (int(team_id),),
+                    ).fetchone()
+                    # Teams were funded at the bottom-league rate when created;
+                    # the owners top up to the league they have been placed in.
+                    top_up = round(
+                        _budget_for_tier(discipline, tier) - float(row["budget"] or 0.0), 2
                     )
+                    if top_up > 0.005:
+                        post_with(
+                            conn,
+                            int(team_id),
+                            top_up,
+                            OWNER_FUNDING,
+                            f"Owners' top-up for placement in {tier_label(tier)}",
+                            source=_owner_backing(row["team_principal"], row["nationality"]),
+                        )
                 placed += len(team_ids)
             summary = ", ".join(
                 f"{tier_label(t)}: {len(ids)}" for t, ids in placement.items()
@@ -998,10 +1213,8 @@ def assign_tiers_by_strength(db: DatabaseManager, disciplines: list) -> int:
 def adjust_drivers_by_tier(db: DatabaseManager) -> int:
     """Adjust driver attributes and ages based on their team's tier.
 
-    Tier weighting:
-    - TIER_1: High skill (70-95+), experienced drivers (28-45 mostly)
-    - TIER_2: Mid skill (55-80), mixed ages (20-40)
-    - TIER_3: Lower skill (40-70 mostly), young drivers (18-32) with occasional veterans
+    The top league gets experienced, strong drivers and the bottom league young,
+    raw ones; see ``_tier_age_skill_profile`` for the gradient between them.
     """
     print("\n=== Adjusting Driver Attributes by Team Tier ===")
 
@@ -1040,9 +1253,7 @@ def adjust_drivers_by_tier(db: DatabaseManager) -> int:
             new_age, skill_mean, skill_std = _tier_age_skill_profile(tier)
 
             # Calculate new birth date from age
-            new_birth_date = (
-                datetime.now(timezone.utc).date() - timedelta(days=365 * new_age)
-            ).strftime("%Y-%m-%d")
+            new_birth_date = _birth_date_for_age(new_age)
 
             # Generate tier-appropriate skill attributes
             speed = skill_distribution(skill_mean, skill_std)
@@ -1233,8 +1444,8 @@ def main():
     parser.add_argument(
         "--drivers",
         type=int,
-        default=1500,
-        help="Number of drivers to generate (default: 1500)",
+        default=None,
+        help="Number of drivers to generate (default: every seat filled plus 15%% free agents)",
     )
     parser.add_argument(
         "--teams-per-discipline",
@@ -1243,7 +1454,16 @@ def main():
         help="Teams per discipline (default: 100)",
     )
     parser.add_argument(
-        "--staff", type=int, default=100, help="Number of staff members (default: 100)"
+        "--staff",
+        type=int,
+        default=None,
+        help="Number of staff members (default: three per team)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_SEED,
+        help=f"Random seed; the same seed builds the same world (default: {DEFAULT_SEED})",
     )
     parser.add_argument(
         "--clear-existing",
@@ -1256,6 +1476,12 @@ def main():
         help="Purge unsupported discipline records before seeding",
     )
     args = parser.parse_args()
+    ensure_stable_hash_seed()
+    seed_world(args.seed)
+    if args.staff is None:
+        args.staff = args.teams_per_discipline * len(DISCIPLINES) * STAFF_SLOTS_PER_TEAM
+    if args.drivers is None:
+        args.drivers = default_driver_count(args.teams_per_discipline, list(DISCIPLINES))
 
     print("=" * 70)
     print("MOMENTUM CAREER MODE DATABASE GENERATOR")
@@ -1265,6 +1491,7 @@ def main():
     print(f"  Drivers: {args.drivers}")
     print(f"  Teams per discipline: {args.teams_per_discipline}")
     print(f"  Staff: {args.staff}")
+    print(f"  Seed: {args.seed}")
     print(f"  Total teams: ~{args.teams_per_discipline * 6}")
     print(f"  Clear existing data: {args.clear_existing}")
     print(f"  Hard refresh unsupported disciplines: {args.hard_refresh}")

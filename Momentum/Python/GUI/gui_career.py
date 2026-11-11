@@ -39,7 +39,8 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_season_service import CareerSeasonService
 from services.tier_service import TIERS, normalise_tier, tier_label
-from services.upgrade_service import UpgradeService, UPGRADE_CATEGORY
+from services.upgrade_service import UpgradeService
+from services.finance_service import CAR_UPGRADE_REFUND, FinanceService, InsufficientFunds, post_with
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
@@ -578,19 +579,24 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
             )
             # A new world starts with undeveloped cars for every team, so the
-            # money spent on the old cars goes back into each team's budget.
-            conn.execute(
+            # money spent on the old cars is refunded, on the books, before the
+            # upgrades are removed.
+            refunds = conn.execute(
                 """
-                UPDATE teams
-                SET budget = budget + COALESCE(
-                    (SELECT SUM(u.invested_amount) FROM team_car_upgrades u
-                     WHERE u.team_id = teams.id), 0)
+                SELECT team_id, SUM(invested_amount) AS invested
+                FROM team_car_upgrades GROUP BY team_id
                 """
-            )
-            conn.execute(
-                "DELETE FROM team_budget_transactions WHERE category = ?",
-                (UPGRADE_CATEGORY,),
-            )
+            ).fetchall()
+            for refund in refunds:
+                if float(refund["invested"] or 0.0) > 0:
+                    post_with(
+                        conn,
+                        int(refund["team_id"]),
+                        float(refund["invested"]),
+                        CAR_UPGRADE_REFUND,
+                        "Car development written back at career reset",
+                        source="Career reset",
+                    )
             conn.execute("DELETE FROM team_car_upgrades")
             conn.execute("DELETE FROM ai_offseason_spending")
             conn.execute(
@@ -759,6 +765,114 @@ class CareerProfileDialog(QDialog):
         }
 
 
+class FoundTeamDialog(QDialog):
+    """Found a player-owned team in a chosen league.
+
+    The league decides the money: founding capital is posted to the ledger as
+    owner funding, and staff limits and sponsor interest follow the same tier.
+    A full league makes room by dissolving its weakest team.
+    """
+
+    def __init__(
+        self,
+        db: DatabaseManager,
+        discipline: str | None,
+        tier: str | None = None,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.db = db
+        self.discipline = str(discipline or "SINGLE_SEATER").upper()
+        self.created_team_id: int | None = None
+        self.setWindowTitle("Found a New Team")
+        self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
+        self.resize(560, 420)
+
+        from data.countries import COUNTRIES
+        from services.team_service import TeamService
+
+        self._service = TeamService(db)
+        layout = QVBoxLayout(self)
+        title = QLabel("Found Your Own Team")
+        title.setStyleSheet("font-size: 22px; font-weight: 700; color: #B9F2FF;")
+        layout.addWidget(title)
+        intro = QLabel(
+            "Choose the league you want to start in. Your founding capital, staff "
+            "limit and sponsor interest come from that league. Leagues are full, "
+            "so the weakest team there makes way and its people become free agents."
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #CCCCCC;")
+        layout.addWidget(intro)
+
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("Team name")
+        form.addRow("Team name", self.name_edit)
+        self.principal_edit = QLineEdit()
+        self.principal_edit.setPlaceholderText("Team principal (you, or a hired name)")
+        form.addRow("Team principal", self.principal_edit)
+        self.country_combo = QComboBox()
+        for code, country in sorted(COUNTRIES.items(), key=lambda item: item[1]):
+            self.country_combo.addItem(f"{country} ({code})", code)
+        self.country_combo.setCurrentIndex(max(0, self.country_combo.findData("GBR")))
+        form.addRow("Home country", self.country_combo)
+        self.hq_edit = QLineEdit()
+        self.hq_edit.setPlaceholderText("Headquarters (town or city)")
+        form.addRow("Headquarters", self.hq_edit)
+        self.tier_combo = QComboBox()
+        for league in TIERS:
+            capital = self._service.TIER_BUDGETS[league]
+            staff = self._service.TIER_STAFF_LIMITS[league]
+            self.tier_combo.addItem(
+                f"{tier_label(league)}  ·  founding capital €{capital:,.0f}  ·  "
+                f"up to {staff} staff",
+                league,
+            )
+        start_tier = normalise_tier(tier) if tier else TIERS[-1]
+        self.tier_combo.setCurrentIndex(max(0, self.tier_combo.findData(start_tier)))
+        form.addRow("Starting league", self.tier_combo)
+        form.addRow("Discipline", QLabel(_player_label(self.discipline)))
+        layout.addLayout(form)
+
+        buttons = QHBoxLayout()
+        create_btn = QPushButton("Found Team")
+        create_btn.clicked.connect(self._create)
+        buttons.addWidget(create_btn)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(cancel_btn)
+        layout.addLayout(buttons)
+
+    def _create(self):
+        name = self.name_edit.text().strip()
+        if not name:
+            warning(self, "Team Name Required", "Give your team a name first.")
+            return
+        try:
+            result = self._service.found_player_team(
+                name=name,
+                discipline=self.discipline,
+                nationality=str(self.country_combo.currentData() or "INT"),
+                tier=str(self.tier_combo.currentData()),
+                team_principal=self.principal_edit.text().strip(),
+                headquarters=self.hq_edit.text().strip(),
+            )
+        except Exception as exc:
+            warning(self, "Could Not Found Team", str(exc))
+            return
+        self.created_team_id = int(result["id"])
+        replaced = result.get("replaced_team")
+        if replaced:
+            information(
+                self,
+                "League Entry Confirmed",
+                f"{replaced['name']} has made way for {name} in "
+                f"{tier_label(replaced['tier'])}; their drivers and staff are now free agents.",
+            )
+        self.accept()
+
+
 class CareerTeamSelectionDialog(QDialog):
     """Select the player-owned team for this career save."""
 
@@ -829,11 +943,28 @@ class CareerTeamSelectionDialog(QDialog):
         select_btn = QPushButton("Confirm Team")
         select_btn.clicked.connect(self._select_team)
         buttons.addWidget(select_btn)
-
+        found_btn = QPushButton("Found a New Team")
+        found_btn.setToolTip(
+            "Start your own team in the league you choose, with that league's "
+            "founding capital, staff limit and sponsor interest."
+        )
+        found_btn.clicked.connect(self._found_team)
+        buttons.addWidget(found_btn)
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(cancel_btn)
         layout.addLayout(buttons)
+
+    def _found_team(self):
+        dialog = FoundTeamDialog(self.db, self.discipline, self.tier, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.created_team_id is None:
+            return
+        team = self.db.get_team(int(dialog.created_team_id))
+        if team is None:
+            warning(self, SELECTION_ERROR_TITLE, "The new team could not be loaded.")
+            return
+        self.selected_team = team
+        self.accept()
 
     def _load_teams(self):
         if self.discipline:
@@ -1617,22 +1748,16 @@ class CareerWindow(QMainWindow):
         if not self.owned_team:
             return False
 
-        current_budget = float(self.owned_team.budget or 0.0)
-        new_budget = current_budget + float(amount)
-        if new_budget < 0:
-            return False
-
-        self.owned_team.budget = new_budget
-        updated = self.db.update_team(self.owned_team.id, self.owned_team)
-        if not updated:
-            return False
-
         try:
-            self.db.add_budget_transaction(
-                self.owned_team.id, category, float(amount), description
+            FinanceService(self.db).post(
+                self.owned_team.id,
+                float(amount),
+                category,
+                description,
+                source=self.owned_team.name,
             )
-        except Exception:
-            pass
+        except InsufficientFunds:
+            return False
 
         refreshed = self.db.get_team(self.owned_team.id)
         if refreshed is not None:

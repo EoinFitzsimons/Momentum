@@ -201,6 +201,20 @@ class DatabaseManager(RaceResultPersistence):
                 conn,
                 lambda c: self._ensure_table_columns(
                     c,
+                    "team_budget_transactions",
+                    {"source": "TEXT DEFAULT ''"},
+                ),
+            )
+            self._run_schema_migration_step(conn, self._backfill_ledger_openings)
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(c, "teams", {"dissolved_at": "TEXT"}),
+            )
+
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
                     "drivers",
                     {
                         "contract_start_season": INTEGER_DEFAULT_NULL,
@@ -260,6 +274,14 @@ class DatabaseManager(RaceResultPersistence):
         except Exception:
             pass
 
+    @staticmethod
+    def _backfill_ledger_openings(conn: sqlite3.Connection) -> None:
+        """Saves made before the ledger get an opening entry per team."""
+        from services.finance_service import backfill_opening_balances
+
+        if backfill_opening_balances(conn):
+            conn.commit()
+
     def _ensure_table_columns(
         self,
         conn: sqlite3.Connection,
@@ -314,6 +336,7 @@ class DatabaseManager(RaceResultPersistence):
             category TEXT NOT NULL,
             amount REAL NOT NULL,
             description TEXT DEFAULT '',
+            source TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (team_id) REFERENCES teams(id)
         );
@@ -712,7 +735,8 @@ class DatabaseManager(RaceResultPersistence):
             # it).
             norm = discipline.lower().replace(" ", "_")
             rows = conn.execute(
-                "SELECT * FROM teams WHERE LOWER(REPLACE(discipline, ' ', '_')) = ? ORDER BY tier, name",
+                "SELECT * FROM teams WHERE LOWER(REPLACE(discipline, ' ', '_')) = ? "
+                "AND dissolved_at IS NULL ORDER BY tier, name",
                 (norm,),
             ).fetchall()
             return [self._hydrate_team(dict(row)) for row in rows]
@@ -728,6 +752,7 @@ class DatabaseManager(RaceResultPersistence):
             rows = conn.execute(
                 """SELECT * FROM teams
                    WHERE LOWER(REPLACE(discipline, ' ', '_')) = ?
+                     AND dissolved_at IS NULL
                    AND tier = ?
                    ORDER BY name""",
                 (norm_discipline, tier),
@@ -737,7 +762,9 @@ class DatabaseManager(RaceResultPersistence):
     def get_all_teams(self) -> List[Team]:
         """Get all teams."""
         with self.get_connection() as conn:
-            rows = conn.execute("SELECT * FROM teams ORDER BY name").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM teams WHERE dissolved_at IS NULL ORDER BY name"
+            ).fetchall()
             return [self._hydrate_team(dict(row)) for row in rows]
 
     def update_team(
@@ -848,7 +875,7 @@ class DatabaseManager(RaceResultPersistence):
         with self.get_connection() as conn:
             rows = conn.execute(
                 """
-                SELECT id, team_id, category, amount, description, created_at
+                SELECT id, team_id, category, amount, description, source, created_at
                 FROM team_budget_transactions
                 WHERE team_id = ?
                 ORDER BY id DESC

@@ -22,6 +22,13 @@ python GUI/launcher.py
 ```
 
 Copy `.env.example` to `.env` when local configuration overrides are needed.
+
+The game starts from the seed database `Momentum/Python/database/momentum.db`:
+six disciplines, five leagues of 20 teams each, 1,500 drivers and their staff,
+plus every circuit in `data/circuits_database.json`. It is built from source by
+`python scripts/build_seed_database.py`, which always produces the same file
+for the same seed. Nationalities follow each discipline's real-world heartlands
+(see `data/nationality_weights.py`), with smaller nations kept well represented.
 The API can be started with `python simulation.py` or with Uvicorn as described
 in the source documentation.
 

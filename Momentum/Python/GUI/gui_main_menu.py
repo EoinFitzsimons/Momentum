@@ -49,7 +49,7 @@ from PyQt6.QtWidgets import (
 import sys
 import os
 from typing import Optional, List, cast
-from services.tier_service import normalise_tier
+from services.tier_service import DEFAULT_TIER, TIERS, normalise_tier, tier_label
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1293,7 +1293,7 @@ class QuickRaceSetupWindow(QDialog):
         # Get selected discipline and tier
         selected_discipline = self.discipline_combo.currentData()
         selected_tier = (
-            self.tier_combo.currentData() if hasattr(self, "tier_combo") else "TIER_2"
+            self.tier_combo.currentData() if hasattr(self, "tier_combo") else DEFAULT_TIER
         )
 
         # Enforce valid driver-team contract for the chosen discipline.
@@ -1393,20 +1393,12 @@ class QuickRaceSetupWindow(QDialog):
                 found_tiers = [self._canonical_tier(r[0]) for r in rows if r and r[0]]
 
         if not found_tiers:
-            found_tiers = ["TIER_1", "TIER_2", "TIER_3"]
+            found_tiers = list(TIERS)
 
         self.tier_combo.blockSignals(True)
         self.tier_combo.clear()
         for tier in found_tiers:
-            if tier.endswith("_1"):
-                display = "Tier 1"
-            elif tier.endswith("_2"):
-                display = "Tier 2"
-            elif tier.endswith("_3"):
-                display = "Tier 3"
-            else:
-                display = tier.replace("_", " ").title()
-            self.tier_combo.addItem(display, tier)
+            self.tier_combo.addItem(tier_label(tier), tier)
 
         target = self._canonical_tier(previous_tier)
         idx = self.tier_combo.findData(target)
@@ -1562,7 +1554,7 @@ class QuickRaceSetupWindow(QDialog):
 
         selected_discipline = self.discipline_combo.currentData()
         selected_tier = (
-            self.tier_combo.currentData() if hasattr(self, "tier_combo") else "TIER_2"
+            self.tier_combo.currentData() if hasattr(self, "tier_combo") else DEFAULT_TIER
         )
         contracted = self._get_contracted_drivers_for_discipline(
             selected_discipline, selected_tier

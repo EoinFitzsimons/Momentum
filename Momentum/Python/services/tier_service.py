@@ -13,33 +13,23 @@ from typing import Any, Dict, Iterable, List, Optional
 TIER_1 = "TIER_1"
 TIER_2 = "TIER_2"
 TIER_3 = "TIER_3"
-TIERS: tuple[str, ...] = (TIER_1, TIER_2, TIER_3)
-DEFAULT_TIER = TIER_2
-
-TIER_LABELS: Dict[str, str] = {
-    TIER_1: "Tier 1",
-    TIER_2: "Tier 2",
-    TIER_3: "Tier 3",
-}
-
-# Share of a discipline's teams placed in each league for a fresh world.
-TIER_SHARES: Dict[str, float] = {TIER_1: 0.15, TIER_2: 0.30, TIER_3: 0.55}
-
-_TIER_ALIASES: Dict[str, str] = {
-    "TIER_1": TIER_1,
-    "TIER1": TIER_1,
-    "TOP_TIER": TIER_1,
-    "TOPTIER": TIER_1,
-    "1": TIER_1,
-    "TIER_2": TIER_2,
-    "TIER2": TIER_2,
-    "2": TIER_2,
-    "TIER_3": TIER_3,
-    "TIER3": TIER_3,
-    "3": TIER_3,
-}
-
-# Tables holding a tier column that must only contain canonical values.
+TIER_4 = "TIER_4"
+TIER_5 = "TIER_5"
+TIERS: tuple[str, ...] = (TIER_1, TIER_2, TIER_3, TIER_4, TIER_5)
+# Teams in each league of a discipline.
+LEAGUE_SIZE = 20
+TOP_TIER = TIERS[0]
+BOTTOM_TIER = TIERS[-1]
+# Unknown or new teams start in the bottom league.
+DEFAULT_TIER = BOTTOM_TIER
+TIER_LABELS: Dict[str, str] = {tier: f"Tier {idx}" for idx, tier in enumerate(TIERS, 1)}
+# Leagues are the same size; a fresh world is split evenly by strength.
+TIER_SHARES: Dict[str, float] = {tier: 1.0 / len(TIERS) for tier in TIERS}
+_TIER_ALIASES: Dict[str, str] = {}
+for _idx, _tier in enumerate(TIERS, 1):
+    for _alias in (_tier, f"TIER{_idx}", str(_idx)):
+        _TIER_ALIASES[_alias] = _tier
+_TIER_ALIASES.update({"TOP_TIER": TOP_TIER, "TOPTIER": TOP_TIER, "BOTTOM_TIER": BOTTOM_TIER})
 _TIERED_TABLES: tuple[str, ...] = ("teams", "championships", "career_championships")
 
 
@@ -55,8 +45,20 @@ def tier_label(value: Any) -> str:
 
 
 def tier_rank(value: Any) -> int:
-    """1 for the top league, 3 for the bottom one."""
+    """1 for the top league, ``len(TIERS)`` for the bottom one."""
     return TIERS.index(normalise_tier(value)) + 1
+
+
+def tier_scale(value: Any, top: float, bottom: float) -> float:
+    """Interpolate a per-league quantity between the top and bottom leagues.
+
+    Money, staff limits and seed quality all step down evenly league by
+    league, so one pair of end values describes every tier.
+    """
+    if len(TIERS) == 1:
+        return float(top)
+    fraction = (tier_rank(value) - 1) / (len(TIERS) - 1)
+    return float(top) + (float(bottom) - float(top)) * fraction
 
 
 def normalise_tier_columns(conn: Any) -> int:
@@ -88,13 +90,13 @@ def split_by_shares(count: int) -> Dict[str, int]:
     if count <= 0:
         return {tier: 0 for tier in TIERS}
     if count < len(TIERS):
-        # Too few teams for three leagues: fill from the top down.
+        # Too few teams for every league: fill from the top down.
         return {tier: (1 if idx < count else 0) for idx, tier in enumerate(TIERS)}
     sizes = {tier: max(1, int(round(count * TIER_SHARES[tier]))) for tier in TIERS}
-    sizes[TIER_3] = max(1, count - sizes[TIER_1] - sizes[TIER_2])
+    sizes[BOTTOM_TIER] = max(1, count - sum(sizes[t] for t in TIERS[:-1]))
     overflow = sum(sizes.values()) - count
     while overflow > 0:
-        for tier in (TIER_2, TIER_1):
+        for tier in reversed(TIERS[:-1]):
             if overflow > 0 and sizes[tier] > 1:
                 sizes[tier] -= 1
                 overflow -= 1
@@ -187,6 +189,10 @@ __all__ = [
     "TIER_1",
     "TIER_2",
     "TIER_3",
+    "TIER_4",
+    "TIER_5",
+    "TOP_TIER",
+    "BOTTOM_TIER",
     "TIERS",
     "DEFAULT_TIER",
     "TIER_LABELS",
@@ -197,4 +203,5 @@ __all__ = [
     "split_by_shares",
     "tier_label",
     "tier_rank",
+    "tier_scale",
 ]

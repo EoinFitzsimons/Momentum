@@ -75,7 +75,8 @@ import traceback as _traceback
 import logging
 from typing import Any, List, Dict, Optional, Tuple, Union, cast
 from dataclasses import dataclass
-from config import RACE_GRID_SIZE, RENDER_FPS
+from config import RACE_GRID_SIZE_OVERRIDE, RENDER_FPS
+from RaceLogic.race_format import race_format_for
 from services.driver_attributes import get_preferred_window_size
 from race_settings import load_race_settings, normalize_race_settings
 from .infield_presets import select_preset
@@ -3925,11 +3926,7 @@ class RaceWindow(QMainWindow):
                 print("ERROR: No drivers found in database")
                 return False
 
-            self.drivers = (
-                loaded_drivers[:RACE_GRID_SIZE]
-                if len(loaded_drivers) >= RACE_GRID_SIZE
-                else loaded_drivers
-            )
+            self.drivers = loaded_drivers[: self._grid_limit()]
             print(f"Loaded {len(self.drivers)} drivers")
             if self.drivers:
                 print(
@@ -3982,9 +3979,10 @@ class RaceWindow(QMainWindow):
             QColor(100, 200, 255),
             QColor(200, 100, 255),
         ]
-        if RACE_GRID_SIZE > len(palette):
-            repeat = (RACE_GRID_SIZE // len(palette)) + 1
-            palette = (palette * repeat)[:RACE_GRID_SIZE]
+        grid_limit = self._grid_limit()
+        if grid_limit > len(palette):
+            repeat = (grid_limit // len(palette)) + 1
+            palette = (palette * repeat)[:grid_limit]
         self.driver_colours = {}
         for i, driver in enumerate(self.drivers):
             self.driver_colours[driver.id] = palette[i % len(palette)]
@@ -4031,6 +4029,13 @@ class RaceWindow(QMainWindow):
             _traceback.print_exc()
 
     def _load_track_with_fallback(self) -> None:
+        """Load the track, then trim the grid to what the track can hold."""
+        self._load_track_record_with_fallback()
+        drivers = getattr(self, "drivers", None)
+        if drivers:
+            self.drivers = list(drivers)[: self._grid_limit()]
+
+    def _load_track_record_with_fallback(self) -> None:
         """Load track from database, falling back to a local simple track."""
         db = self.db
         if db is None:
@@ -4987,10 +4992,7 @@ class RaceWindow(QMainWindow):
             return []
 
         # Use existing contracted drivers only; do not mutate contracts here.
-        limit = RACE_GRID_SIZE
-        if str(self._initial_discipline).upper() == "DRAG_ACCELERATION":
-            # Drag uses one representative per team and bracket-friendly grids.
-            limit = min(16, RACE_GRID_SIZE)
+        limit = self._grid_limit()
         contracted = self._get_contracted_discipline_drivers(
             self._initial_discipline,
             limit,
@@ -5009,11 +5011,17 @@ class RaceWindow(QMainWindow):
             return contracted_any_tier
 
         # Last-resort fallback if discipline data is unavailable.
-        all_drivers = self.db.get_all_drivers()
-        return (
-            all_drivers[:RACE_GRID_SIZE]
-            if len(all_drivers) >= RACE_GRID_SIZE
-            else all_drivers
+        return self.db.get_all_drivers()[:limit]
+
+    def _grid_limit(self) -> int:
+        """Cars on the grid for this discipline, league and track."""
+        if RACE_GRID_SIZE_OVERRIDE:
+            return int(RACE_GRID_SIZE_OVERRIDE)
+        track = getattr(self, "track", None)
+        length_km = getattr(track, "length_km", None) if track is not None else None
+        length_m = float(length_km) * 1000.0 if length_km else None
+        return race_format_for(getattr(self, "_initial_discipline", None)).grid_size(
+            track_length_m=length_m, tier=getattr(self, "_initial_tier", None)
         )
 
     def _get_contracted_discipline_drivers(
@@ -5050,11 +5058,11 @@ class RaceWindow(QMainWindow):
 
     def _contracted_fetch_limit(self, limit: int, tier_norm: Optional[str]) -> int:
         """Return candidate query size, widened when tier filtering is active."""
-        fetch_limit = int(limit)
         if tier_norm:
-            # Pull a broader candidate list first, then normalize/filter tiers in Python.
-            fetch_limit = max(fetch_limit * 8, fetch_limit + 20)
-        return fetch_limit
+            # The tier filter is applied in Python, so every contracted driver in
+            # the discipline must be a candidate or a lower league comes up short.
+            return 1_000_000
+        return int(limit)
 
     def _fetch_contracted_driver_rows(
         self, discipline_norm: str, fetch_limit: int
@@ -7625,7 +7633,7 @@ class RaceWindow(QMainWindow):
         """Ensure selected player driver is present for non-drag disciplines."""
         present = any(getattr(d, "id", None) == driver.id for d in existing)
         if not present:
-            if len(existing) >= RACE_GRID_SIZE:
+            if len(existing) >= self._grid_limit():
                 existing[-1] = driver
             else:
                 existing.append(driver)
@@ -7682,7 +7690,7 @@ class RaceWindow(QMainWindow):
                 td_id = getattr(team_driver, "id", None)
                 if td_id is None or int(td_id) in present_ids:
                     continue
-                if len(self.drivers) < RACE_GRID_SIZE:
+                if len(self.drivers) < self._grid_limit():
                     self.drivers.append(team_driver)
                 else:
                     self.drivers[replace_idx] = team_driver

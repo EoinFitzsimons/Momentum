@@ -396,6 +396,7 @@ CREATE TABLE IF NOT EXISTS team_budget_transactions (
     category TEXT NOT NULL,
     amount REAL NOT NULL,
     description TEXT DEFAULT '',
+    source TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );

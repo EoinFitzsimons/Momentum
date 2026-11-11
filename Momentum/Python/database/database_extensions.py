@@ -285,21 +285,13 @@ def expire_contracts_for_season(self, season: int) -> Dict[str, int]:
 
 
 def update_team_budget(self, team_id: int, amount: float) -> float:
-    """Update team budget (add or subtract)"""
-    with self.get_connection() as conn:
-        conn.execute(
-            """
-            UPDATE teams
-            SET budget = budget + ?
-            WHERE id = ?
-        """,
-            (amount, team_id),
-        )
+    """Adjust a team's budget; recorded in the ledger as an adjustment."""
+    from services.finance_service import ADJUSTMENT, post_with
 
-        row = conn.execute(
-            "SELECT budget FROM teams WHERE id = ?", (team_id,)
-        ).fetchone()
-        return row[0] if row else 0.0
+    with self.get_connection() as conn:
+        balance = post_with(conn, team_id, amount, ADJUSTMENT, "Budget adjustment")
+        conn.commit()
+    return balance
 
 
 def update_driver_skills(self, driver_id: int, skill_changes: Dict[str, float]) -> None:

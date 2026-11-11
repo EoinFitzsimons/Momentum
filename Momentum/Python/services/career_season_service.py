@@ -10,6 +10,7 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_result_service import persist_career_race_result
 from services.tier_service import TIERS, normalise_tier
+from RaceLogic.race_format import GRAND_PRIX, race_format_for
 from services.upgrade_service import UpgradeService
 
 TIER_ORDER = list(TIERS)
@@ -194,13 +195,14 @@ class CareerSeasonService:
         if not teams:
             return []
 
+        fmt = race_format_for(discipline)
         entries: list[dict[str, int | float]] = []
         for team in teams:
             drivers = self.db.get_drivers_by_team(int(team.id))
             if not drivers:
                 continue
 
-            top_drivers = sorted(
+            ranked = sorted(
                 drivers,
                 key=lambda d: (
                     float(getattr(d, "speed", 50.0) or 50.0)
@@ -208,19 +210,24 @@ class CareerSeasonService:
                     + float(getattr(d, "consistency", 50.0) or 50.0)
                 ),
                 reverse=True,
-            )[:2]
-
+            )
             team_rating = (
                 float(getattr(team, "operations_rating", 50.0) or 50.0) * 0.65
                 + float(getattr(team, "car_rating", 0.0) or 0.0) * 35.0
             )
-
-            for driver in top_drivers:
-                driver_rating = (
-                    float(getattr(driver, "speed", 50.0) or 50.0) * 0.42
-                    + float(getattr(driver, "racecraft", 50.0) or 50.0) * 0.33
-                    + float(getattr(driver, "consistency", 50.0) or 50.0) * 0.25
-                )
+            # One entry per car. Endurance cars share three drivers, so the
+            # car's pace is the crew's average and the lead driver carries it.
+            per_car = max(1, int(fmt.drivers_per_car))
+            for car in range(int(fmt.cars_per_team)):
+                crew = ranked[car * per_car : (car + 1) * per_car]
+                if not crew:
+                    break
+                driver_rating = sum(
+                    float(getattr(d, "speed", 50.0) or 50.0) * 0.42
+                    + float(getattr(d, "racecraft", 50.0) or 50.0) * 0.33
+                    + float(getattr(d, "consistency", 50.0) or 50.0) * 0.25
+                    for d in crew
+                ) / len(crew)
                 total = (
                     (driver_rating * 0.62)
                     + (team_rating * 0.33)
@@ -228,23 +235,24 @@ class CareerSeasonService:
                 )
                 entries.append(
                     {
-                        "driver_id": int(driver.id),
+                        "driver_id": int(crew[0].id),
                         "team_id": int(team.id),
                         "score": float(total),
                     }
                 )
 
         entries.sort(key=lambda item: float(item["score"]), reverse=True)
+        if fmt.race_day == GRAND_PRIX:
+            # A grand prix grid is capped by regulation and track length; the
+            # slowest cars fail to qualify and take nothing from the round.
+            return entries[: fmt.grid_size(tier=tier, available=len(entries))]
+        # Heats, brackets and battles classify everyone who took part.
         return entries
 
     def _apply_promotion_relegation(
         self, player_id: str, discipline: str, season: int
     ) -> dict[str, list[int]]:
-        by_tier: dict[str, list[dict[str, Any]]] = {
-            "TIER_1": [],
-            "TIER_2": [],
-            "TIER_3": [],
-        }
+        by_tier: dict[str, list[dict[str, Any]]] = {tier: [] for tier in TIERS}
 
         discipline_key = str(discipline or "").upper()
 
@@ -253,7 +261,7 @@ class CareerSeasonService:
                 """
                 SELECT id, tier
                 FROM teams
-                WHERE UPPER(discipline) = ?
+                WHERE UPPER(discipline) = ? AND dissolved_at IS NULL
                 """,
                 (discipline_key,),
             ).fetchall()
@@ -293,7 +301,7 @@ class CareerSeasonService:
             relegated: list[int] = []
             moved_teams: set[int] = set()
 
-            for high_tier, low_tier in [("TIER_1", "TIER_2"), ("TIER_2", "TIER_3")]:
+            for high_tier, low_tier in zip(TIERS[:-1], TIERS[1:]):
                 upper = sorted(
                     [
                         item

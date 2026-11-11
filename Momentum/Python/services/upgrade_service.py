@@ -11,7 +11,8 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Iterable, List, Optional
 
-from services.tier_service import TIER_1, TIER_2, TIER_3, normalise_tier
+from services.tier_service import TIERS, normalise_tier, tier_scale
+from services.finance_service import RACE_INCOME, CAR_UPGRADE, post_with
 
 UPGRADE_AREAS: tuple[str, ...] = (
     "power",
@@ -76,14 +77,14 @@ RACE_PRIZE_FLOOR = 150_000.0
 
 # Sponsor money paid for every race entered, by league.
 SPONSOR_STIPEND_PER_RACE: Dict[str, float] = {
-    TIER_1: 400_000.0,
-    TIER_2: 250_000.0,
-    TIER_3: 150_000.0,
+    tier: tier_scale(tier, 400_000.0, 100_000.0) for tier in TIERS
 }
-TIER_PRIZE_SCALE: Dict[str, float] = {TIER_1: 1.0, TIER_2: 0.55, TIER_3: 0.30}
+TIER_PRIZE_SCALE: Dict[str, float] = {
+    tier: round(tier_scale(tier, 1.0, 0.2), 3) for tier in TIERS
+}
 
-RACE_INCOME_CATEGORY = "race_income"
-UPGRADE_CATEGORY = "car_upgrade"
+RACE_INCOME_CATEGORY = RACE_INCOME
+UPGRADE_CATEGORY = CAR_UPGRADE
 AI_SPEND_FRACTION = 0.35
 AI_RESERVE_FRACTION = 0.10
 
@@ -120,6 +121,10 @@ def reliability_rating_from_levels(levels: Dict[str, int]) -> float:
 
 def race_income_marker(career_race_id: int) -> str:
     return f"race_income_ref:{int(career_race_id)}"
+
+
+def tier_label_text(tier: Any) -> str:
+    return f"Tier {TIERS.index(normalise_tier(tier)) + 1}"
 
 
 class UpgradeService:
@@ -256,9 +261,13 @@ class UpgradeService:
             }
 
         with self.db.get_connection() as conn:
-            conn.execute(
-                "UPDATE teams SET budget = budget - ? WHERE id = ?",
-                (cost, int(team_id)),
+            post_with(
+                conn,
+                int(team_id),
+                -cost,
+                CAR_UPGRADE,
+                f"{UPGRADE_AREA_LABELS[area]} upgrade to level {level + 1} ({actor})",
+                source=str(getattr(team, "name", "") or ""),
             )
             conn.execute(
                 """
@@ -270,18 +279,6 @@ class UpgradeService:
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (int(team_id), area, cost),
-            )
-            conn.execute(
-                """
-                INSERT INTO team_budget_transactions (team_id, category, amount, description)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    int(team_id),
-                    UPGRADE_CATEGORY,
-                    -cost,
-                    f"{UPGRADE_AREA_LABELS[area]} level {level + 1} ({actor})",
-                ),
             )
             remaining = conn.execute(
                 "SELECT budget FROM teams WHERE id = ?", (int(team_id),)
@@ -457,21 +454,13 @@ class UpgradeService:
                 if team_id in already_paid:
                     continue
                 payout = self.race_payout(row[1], tier, discipline)
-                conn.execute(
-                    "UPDATE teams SET budget = budget + ? WHERE id = ?",
-                    (payout, team_id),
-                )
-                conn.execute(
-                    """
-                    INSERT INTO team_budget_transactions (team_id, category, amount, description)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        team_id,
-                        RACE_INCOME_CATEGORY,
-                        payout,
-                        f"Prize money and sponsor income, best finish P{int(row[1] or 0)} ({marker})",
-                    ),
+                post_with(
+                    conn,
+                    team_id,
+                    payout,
+                    RACE_INCOME,
+                    f"Prize money and sponsor income, best finish P{int(row[1] or 0)} ({marker})",
+                    source=f"{str(discipline).replace('_', ' ').title()} {tier_label_text(tier)} promoter and sponsors",
                 )
                 paid += 1
             conn.commit()

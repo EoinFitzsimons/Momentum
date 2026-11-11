@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 
 from database.models import Driver, Team, Track
 from config import RANDOM_SEED, DRIVER_ATTRIBUTE_DEFAULT
+from RaceLogic.race_format import RaceFormat, SINGLE_SEATER_FORMAT
 
 
 class RacingDiscipline(Enum):
@@ -110,6 +111,9 @@ class BaseDisciplineEngine(ABC):
     - 10% weather conditions (rain, wind, temperature)
     - 10% track characteristics (difficulty, surface, layout)
     """
+
+    # How a race day in this discipline is organised; adapters override it.
+    race_format: RaceFormat = SINGLE_SEATER_FORMAT
 
     def __init__(self, seed: int = RANDOM_SEED):
         """
