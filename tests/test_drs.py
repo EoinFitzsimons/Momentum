@@ -33,8 +33,9 @@ def _state(position_m: float, gap_ahead: float, lap: int = 3) -> DriverState:
 def test_drs_opens_only_in_a_zone_within_detection_after_the_opening_laps():
     engine = _engine(drs_allowed=True)
     start, end = engine.track_map.drs_zones[0]
-    inside = (start + end) / 2
+    inside = start + 250.0  # a straight inside the first zone, clear of the corners at 1500 m and 2000 m
     assert engine._drs_available(_state(inside, gap_ahead=0.8))
+    assert engine._drs_available(_state(3 * 6000.0 + inside, gap_ahead=0.8))  # position_m is cumulative
     assert not engine._drs_available(_state(inside, gap_ahead=1.4))
     assert not engine._drs_available(_state(inside, gap_ahead=0.8, lap=1))
     assert not engine._drs_available(_state(end + 50.0, gap_ahead=0.8))

@@ -77,4 +77,3 @@ def test_lower_tier_endurance_field_races_without_drs_zones():
     assert RealtimeRaceEngine._drs_allowed(track, {})  # no team information keeps the circuit's zones
     assert len(TrackMap(track=track, drs_allowed=True).drs_zones) == 3
     assert TrackMap(track=track, drs_allowed=False).drs_zones == []
-

@@ -2388,7 +2388,9 @@ class RealtimeRaceEngine:
             return False
         if state.gap_ahead > self.DRS_DETECTION_GAP_S:
             return False
-        return any(start <= state.position_m <= end for start, end in self.track_map.drs_zones)
+        track_length_m = max(1.0, float(self.track_map.track.length_km) * 1000.0)
+        lap_position_m = state.position_m % track_length_m
+        return any(start <= lap_position_m <= end for start, end in self.track_map.drs_zones)
 
     def _distance_to_ahead(
         self, state: DriverState, ahead_state: DriverState, track_length_m: float
