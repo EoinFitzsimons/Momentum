@@ -15,6 +15,13 @@ SPECS = [
                discipline="PRODUCTION_TOURING", seed=17),
     LayoutSpec(length_m=2400, turns=14, left_turns=8, right_turns=6,
                discipline="URBAN_STREET", seed=99),
+    # A long technical circuit: 41 corners in 9.3 km, as dense as the real
+    # Nordschleife, which the old length-scaled corners could never fit.
+    LayoutSpec(length_m=9290, turns=41, left_turns=20, right_turns=21,
+               tightest_corner_radius_m=63.8, seed=5),
+    # A kart-sized lap with hairpins every fifty metres.
+    LayoutSpec(length_m=820, turns=16, left_turns=7, right_turns=9,
+               tightest_corner_radius_m=9, discipline="URBAN_STREET", seed=3),
 ]
 
 
@@ -58,6 +65,24 @@ def test_layout_turns_both_ways_and_completes_one_loop(layout):
     assert any(a > 0 for a in angles) and any(a < 0 for a in angles)
     heading = simulate(instructions)[-1, 2]
     assert abs(abs(math.degrees(heading)) - 360.0) < 2.0
+
+
+@pytest.mark.unit
+def test_layout_has_exactly_the_specified_corners(layout):
+    """Every corner in the source data is a real change of direction."""
+    spec, instructions = layout
+    angles = [i["angle_deg"] for i in instructions if i["type"] == "C"]
+    assert sum(a > 0 for a in angles) == spec.left_turns
+    assert sum(a < 0 for a in angles) == spec.right_turns
+
+
+@pytest.mark.unit
+def test_corner_radius_follows_the_circuit_not_the_lap_length():
+    """A 10 km lap can still have a 15 m hairpin; a kart track cannot have a 300 m sweeper."""
+    long_lap = generate_layout(SPECS[3])
+    kart = generate_layout(SPECS[4])
+    assert min(i["radius_m"] for i in long_lap if i["type"] == "C") < 80.0
+    assert max(i["radius_m"] for i in kart if i["type"] == "C") < 150.0
 
 
 @pytest.mark.unit
@@ -129,3 +154,9 @@ def test_pit_route_survives_short_main_straight(qt_app):
     pit = build_pit_route(tight)
     assert pit is not None
     assert all(math.hypot(p.x, p.y) >= 9.9 for p in pit)
+
+
+def test_one_corner_each_way_is_rejected_rather_than_searched():
+    spec = LayoutSpec(length_m=2000, turns=2, left_turns=1, right_turns=1, seed=3)
+    with pytest.raises(RuntimeError):
+        generate_layout(spec)

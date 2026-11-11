@@ -156,3 +156,26 @@ def test_build_into_the_default_save_starts_from_an_empty_schema(tmp_path, monke
     counts = build(output, seed=11, teams_per_discipline=1, drivers=12)
     assert counts["teams"] == 6
     assert counts["drivers"] == 12
+
+
+@pytest.mark.integration
+def test_every_shipped_track_has_its_exact_corner_counts(seed_db):
+    """The layout of every circuit matches the left and right turns in the source JSON."""
+    data = json.loads(
+        (Path(__file__).resolve().parents[1] / "momentum" / "data" / "circuits_database.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    records = data if isinstance(data, list) else data.get("circuits", data)
+    wanted = {r["name"]: (int(r.get("left_turns") or 0), int(r.get("right_turns") or 0)) for r in records}
+    conn = sqlite3.connect(seed_db)
+    mismatched = []
+    for name, instructions_json in conn.execute("SELECT name, instructions_json FROM tracks"):
+        left, right = wanted[name]
+        if left + right == 0:
+            continue
+        angles = [i["angle_deg"] for i in json.loads(instructions_json) if i.get("type") == "C"]
+        got = (sum(a > 0 for a in angles), sum(a < 0 for a in angles))
+        if got != (left, right):
+            mismatched.append((name, (left, right), got))
+    assert mismatched == []
