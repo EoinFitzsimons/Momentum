@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from database.database_manager import DatabaseManager
+from database.models import Driver
 from services.finance_service import OWNER_FUNDING, FinanceService
 from services.team_service import TeamService
 from services.tier_service import LEAGUE_SIZE
@@ -41,6 +42,20 @@ def test_full_league_makes_room_by_dissolving_its_weakest_team(db):
     before = {t.id for t in db.get_teams_by_discipline("SINGLE_SEATER")}
     assert len(before) == LEAGUE_SIZE
 
+    for index in range(3):
+        db.create_driver(
+            Driver(
+                id=0,
+                name=f"Free Agent {index + 1}",
+                nationality="IRL",
+                birth_date="1999-01-01",
+                speed=60 + index,
+                racecraft=60 + index,
+                consistency=60 + index,
+                preferred_discipline="SINGLE_SEATER",
+                current_team_id=None,
+            )
+        )
     result = service.found_player_team("Newcomers", "SINGLE_SEATER", "GBR", "TIER_1")
     after = db.get_teams_by_discipline("SINGLE_SEATER")
     assert len(after) == LEAGUE_SIZE
@@ -48,3 +63,5 @@ def test_full_league_makes_room_by_dissolving_its_weakest_team(db):
     assert result["replaced_team"]["id"] in before
     assert result["replaced_team"]["id"] not in {t.id for t in after}
     assert FinanceService(db).reconcile() == []
+    assert len(result["signed_drivers"]) >= 1
+    assert len(db.get_drivers_by_team(int(result["id"]))) >= 1

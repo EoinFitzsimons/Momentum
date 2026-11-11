@@ -22,6 +22,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
+import database.database_extensions  # noqa
 from services.tier_service import DEFAULT_TIER, LEAGUE_SIZE, TIERS, normalise_tier, tier_scale
 from RaceLogic.race_format import DISCIPLINE_FORMATS
 from services.finance_service import (
@@ -604,7 +605,51 @@ class TeamService:
             weakest = min(league, key=strength.team_strength)
             replaced = self.dissolve_team(int(weakest.id), reason=f"replaced by {name}")
         result["replaced_team"] = replaced
+        result["signed_drivers"] = self._sign_inaugural_line_up(
+            int(result["id"]), discipline, tier
+        )
         return result
+
+    def _sign_inaugural_line_up(self, team_id: int, discipline: str, tier: str) -> List[int]:
+        """Fill a founded team's seats from the free-agent pool.
+
+        A new team cannot race without contracted drivers and the career screen
+        has no hiring route of its own, so the founding comes with a line-up
+        drawn from the free agents at the standard the league expects: the top
+        league picks from the best available, the bottom league from further
+        down the list.
+        """
+        from RaceLogic.race_format import driver_slots_for
+
+        seats = max(1, int(driver_slots_for(discipline)))
+        try:
+            pool, _total = self.db.get_available_drivers(  # type: ignore[attr-defined]
+                discipline=discipline, page_size=500
+            )
+        except Exception:
+            pool = []
+        if not pool:
+            return []
+        start = int(len(pool) * tier_scale(tier, 0.0, 0.8))
+        start = min(start, max(0, len(pool) - seats))
+        signed: List[int] = []
+        for row in pool[start:]:
+            if len(signed) >= seats:
+                break
+            driver_id = row.get("id") if isinstance(row, dict) else getattr(row, "id", None)
+            if driver_id is None:
+                continue
+            salary = (row.get("salary") if isinstance(row, dict) else None) or tier_scale(
+                tier, 400_000.0, 40_000.0
+            )
+            try:
+                self.db.sign_driver_contract(  # type: ignore[attr-defined]
+                    int(driver_id), int(team_id), 2, float(salary)
+                )
+            except Exception:
+                continue
+            signed.append(int(driver_id))
+        return signed
 
     def dissolve_team(self, team_id: int, reason: str = "") -> Dict[str, Any]:
         """Wind a team up: release its people and remove it from the league.
