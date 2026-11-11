@@ -34,7 +34,6 @@ Authors: Eoin Fitzsimons
 import sqlite3
 import json
 import shutil
-import sys
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any, Sequence
 from pathlib import Path
@@ -152,15 +151,17 @@ class DatabaseManager(RaceResultPersistence):
         db_path = Path(self.db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # First run in a packaged build should clone the bundled starter DB into
-        # the writable app-data location so the exe sees the seeded game world.
+        # First run of a packaged or installed game: copy the bundled seed
+        # world into the writable per-user location the game plays from. Only
+        # the configured default database is seeded this way; any other path
+        # (tests, tools, explicit saves) starts from an empty schema.
         if (
-            getattr(sys, "frozen", False)
-            and not db_path.exists()
+            not db_path.exists()
             and BUNDLED_DATABASE_PATH.exists()
+            and db_path.resolve() == Path(DATABASE_PATH).resolve()
+            and BUNDLED_DATABASE_PATH.resolve() != db_path.resolve()
         ):
-            if BUNDLED_DATABASE_PATH.resolve() != db_path.resolve():
-                shutil.copy2(BUNDLED_DATABASE_PATH, db_path)
+            shutil.copy2(BUNDLED_DATABASE_PATH, db_path)
 
         # Execute complete schema creation script
         # Uses transaction to ensure atomicity of schema operations

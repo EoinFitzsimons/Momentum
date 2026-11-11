@@ -22,6 +22,10 @@ python -m momentum
 
 Everything runs from the repository root; `python -m momentum` starts the game
 and `python -m momentum.api.app` the FastAPI server used by tests and modding.
+A checkout plays straight from the tracked seed database. A packaged or
+`pip`-installed game copies that seed on first launch into a per-user folder
+(`MOMENTUM_DATA_DIR`, else `%LOCALAPPDATA%\\Momentum`, `~/Library/Application
+Support/Momentum` or `~/.local/share/momentum`) and saves there.
 
 Copy `.env.example` to `.env` when local configuration overrides are needed.
 

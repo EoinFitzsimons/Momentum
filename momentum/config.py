@@ -29,34 +29,45 @@ PARANAMES_DB_PATH = os.getenv("PARANAMES_DB_PATH", "data/paranames.db")
 
 DATABASE_FILENAME = "momentum.db"
 
-# Database Configuration
+_PACKAGE_DIR = Path(__file__).resolve().parent
+
+# The seed world shipped with the code. In a PyInstaller build it is unpacked
+# under _MEIPASS; otherwise it sits inside the package.
 if getattr(sys, "frozen", False):
     _bundled_database_path = (
-        Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+        Path(getattr(sys, "_MEIPASS", _PACKAGE_DIR.parent))
         / "momentum"
         / "database"
         / DATABASE_FILENAME
     )
 else:
-    _bundled_database_path = Path(__file__).resolve().parent / "database" / DATABASE_FILENAME
+    _bundled_database_path = _PACKAGE_DIR / "database" / DATABASE_FILENAME
 
-if getattr(sys, "frozen", False):
-    _default_database_path = (
-        Path(
-            os.getenv(
-                "MOMENTUM_DATA_DIR",
-                os.path.join(
-                    os.getenv("LOCALAPPDATA", os.path.expanduser("~")),
-                    "Momentum",
-                ),
-            )
-        )
-        / DATABASE_FILENAME
-    )
+# A repository checkout (pyproject.toml beside the package) plays straight
+# from the tracked seed, as development always has. A frozen build or a
+# package installed into site-packages must not write there, so it gets a
+# per-user copy instead.
+IS_REPOSITORY_CHECKOUT = (_PACKAGE_DIR.parent / "pyproject.toml").exists()
+
+
+def user_data_dir() -> Path:
+    """Writable per-user directory for saves, honouring MOMENTUM_DATA_DIR."""
+    override = os.getenv("MOMENTUM_DATA_DIR")
+    if override:
+        return Path(override)
+    if sys.platform.startswith("win"):
+        base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
+        return Path(base) / "Momentum"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Momentum"
+    base = os.getenv("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return Path(base) / "momentum"
+
+
+if IS_REPOSITORY_CHECKOUT and not getattr(sys, "frozen", False):
+    _default_database_path = _bundled_database_path
 else:
-    _default_database_path = (
-        Path(__file__).resolve().parent / "database" / DATABASE_FILENAME
-    )
+    _default_database_path = user_data_dir() / DATABASE_FILENAME
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(_default_database_path))
 BUNDLED_DATABASE_PATH = _bundled_database_path
