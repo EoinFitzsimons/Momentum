@@ -13,6 +13,8 @@ All models follow REST best practices with clear naming and documentation.
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+from services.tier_service import DEFAULT_TIER
+
 
 RACING_DISCIPLINE_DESCRIPTION = "Racing discipline"
 
@@ -163,7 +165,7 @@ class TeamSummary(BaseModel):
     name: str
     discipline: str
     nationality: str = "INT"
-    tier: str = Field(default="TIER_2")
+    tier: str = Field(default=DEFAULT_TIER)
     budget: float = Field(ge=0.0, default=50000000.0)
 
 
@@ -251,8 +253,8 @@ class TeamCreate(BaseModel):
     )
     nationality: str = Field(default="INT")
     tier: str = Field(
-        default="TIER_2",
-        description="League the team races in (TIER_1 is the top league)",
+        default=DEFAULT_TIER,
+        description="League the team races in (TIER_1 is the top league, new teams start at the bottom)",
         examples=["TIER_1", "TIER_3", "TIER_5"],
     )
     team_principal: str = Field(default="")
