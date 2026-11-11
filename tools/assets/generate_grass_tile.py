@@ -2,7 +2,9 @@ from PIL import Image, ImageDraw
 import numpy as np
 import os
 
-OUT = os.path.join(os.path.dirname(__file__), "..", "assets", "grass_tile.png")
+OUT = os.path.join(
+    os.path.dirname(__file__), "..", "..", "momentum", "gui", "assets", "grass_tile.png"
+)
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
 # Generate a small 64x64 low-poly grass tile

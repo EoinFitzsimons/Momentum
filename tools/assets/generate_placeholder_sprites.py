@@ -1,7 +1,9 @@
 from PIL import Image, ImageDraw
 import os
 
-OUT_DIR = os.path.join(os.path.dirname(__file__), "..", "assets", "props")
+OUT_DIR = os.path.join(
+    os.path.dirname(__file__), "..", "..", "momentum", "gui", "assets", "props"
+)
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
