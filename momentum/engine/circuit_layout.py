@@ -428,12 +428,17 @@ def _build_pieces(
         # because the closure solver has nothing to work with when every
         # straight runs parallel to the start line.
         r = max(anchor, min(FEATURE_MAX_RADIUS["carousel"], 0.08 * length))
-        straight = max(10.0, (length - 2 * _corner_length(180.0, r)) / 2.0)
+        # The clothoid approximation turns through slightly more than the
+        # nominal angle at this radius; both ends get the angle whose real
+        # turn is a half circle, so the straights come out exactly parallel.
+        real_turn = abs(math.degrees(_end_state([_corner_instruction(180.0, r)])[2]))
+        end_angle = 180.0 * (180.0 / real_turn) * direction
+        straight = max(10.0, (length - 2 * _corner_length(end_angle, r)) / 2.0)
         return [
             _Piece("S", role="main_a", length_m=straight * 0.62),
-            _Piece("C", angle_deg=180.0 * direction, radius_m=r, feature="hairpin"),
+            _Piece("C", angle_deg=end_angle, radius_m=r, feature="hairpin"),
             _Piece("S", role="link", length_m=straight),
-            _Piece("C", angle_deg=180.0 * direction, radius_m=r, feature="hairpin"),
+            _Piece("C", angle_deg=end_angle, radius_m=r, feature="hairpin"),
             _Piece("S", role="main_b", length_m=straight * 0.38),
         ], direction
     scaled = _scale_to_loop(corners, direction)
@@ -595,13 +600,14 @@ def _close_loop(spec: LayoutSpec, pieces: List[_Piece], direction: int) -> Optio
             minimum[p.role] = p.length_m * 0.8
     dirs = _straight_directions(instructions)
     roles = [straight_pieces[n].role for n in range(len(dirs))]
-    lower = np.array([minimum[r] for r in roles])
+    current = np.array([straight_pieces[n].length_m for n in range(len(dirs))])
     main_total = sum(p.length_m for p in straight_pieces if p.role.startswith("main"))
-    upper = np.array(
-        [
-            max(main_total * 0.75, 0.12 * spec.length_m) if r in ("link", "approach") else np.inf
-            for r in roles
-        ]
+    link_cap = max(main_total * 0.75, 0.12 * spec.length_m)
+    # The bounds always admit the lengths the straights already have, so a
+    # shape that arrives closed (an oval) is never solved into infeasibility.
+    lower = np.minimum(np.array([minimum[r] for r in roles]), current)
+    upper = np.maximum(
+        np.array([link_cap if r in ("link", "approach") else np.inf for r in roles]), current
     )
     for _ in range(6):
         end_x, end_y, _, count = _end_state(instructions)
