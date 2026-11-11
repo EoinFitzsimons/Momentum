@@ -365,8 +365,8 @@ def _build_pieces(
     )
     length = spec.length_m
     left, right = _corner_counts(spec, rng)
-    if left + right < 3:
-        return None
+    if left + right < 2:
+        return None  # a lap needs at least the two ends of an oval
     direction = 1 if left >= right else -1
     pools = {1: left, -1: right}
 
