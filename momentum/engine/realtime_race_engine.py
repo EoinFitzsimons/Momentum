@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from momentum.database.models import Driver, Team, Track
+from momentum.engine.race_format import race_format_for
 from momentum.engine.track_physics import TrackMap, TrackSection, RacingLine
 from momentum.engine.overtaking_system import (
     OvertakeAttempt,
@@ -385,6 +386,18 @@ class RealtimeRaceEngine:
         _ = frame
         return self._finalize_simulation_results(race_state, total_laps, event_callback)
 
+    @staticmethod
+    def _drs_allowed(track: Track, teams: Dict[int, Team]) -> bool:
+        """DRS is a rule of the discipline and the tier the entered teams race in.
+
+        A field with no team information keeps the circuit's zones; a mixed
+        field has them if any class present may use DRS.
+        """
+        if not teams:
+            return True
+        race_format = race_format_for(track.primary_discipline)
+        return any(race_format.allows_drs(team.tier) for team in teams.values())
+
     def _prepare_simulation_runtime(
         self,
         drivers: List[Driver],
@@ -402,7 +415,7 @@ class RealtimeRaceEngine:
         """Prepare track map, controls and race state for simulation loop."""
         if self.debug_logging:
             print(f"-> Generating track map for {track.name}...")
-        self.track_map = TrackMap(track=track)
+        self.track_map = TrackMap(track=track, drs_allowed=self._drs_allowed(track, teams))
         self._event_callback = event_callback
         if self.debug_logging:
             print(

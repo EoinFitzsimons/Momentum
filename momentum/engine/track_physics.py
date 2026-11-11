@@ -117,12 +117,18 @@ class TrackMap:
     drs_zones: List[Tuple[float, float]] = field(
         default_factory=list
     )  # (start_m, end_m)
+    # Whether the cars in this race may open the wing: a rule of the discipline
+    # and the tier (``RaceFormat.allows_drs``). The circuit only records where
+    # its zones are; a field that may not use DRS races with none.
+    drs_allowed: bool = True
 
     def __post_init__(self):
         """Generate track map from Track data"""
         if not self.corners:
             self._generate_corners()
-        if not self.drs_zones and self.track.drs_zones > 0:
+        if not self.drs_allowed:
+            self.drs_zones = []
+        elif not self.drs_zones and self.track.drs_zones > 0:
             self._generate_drs_zones()
 
     def _generate_corners(self):

@@ -59,3 +59,22 @@ def test_drs_is_a_rule_of_the_discipline_and_the_tier():
     assert not endurance.allows_drs("TIER_2")
     for discipline in ("URBAN_STREET", "PRODUCTION_TOURING", "SPRINT_RALLYCROSS", "DRAG_ACCELERATION"):
         assert not race_format_for(discipline).allows_drs("TIER_1")
+
+
+@pytest.mark.unit
+def test_lower_tier_endurance_field_races_without_drs_zones():
+    from momentum.database.models import Team, Track
+    from momentum.engine.realtime_race_engine import RealtimeRaceEngine
+    from momentum.engine.track_physics import TrackMap
+
+    track = Track(id=1, name="Enduro", country="FR", primary_discipline="ENDURANCE", length_km=6.0, drs_zones=3)
+
+    def field_of(tier):
+        return {1: Team(id=1, name="A", nationality="FRA", discipline="ENDURANCE", tier=tier, budget=1)}
+
+    assert RealtimeRaceEngine._drs_allowed(track, field_of("TIER_1"))
+    assert not RealtimeRaceEngine._drs_allowed(track, field_of("TIER_3"))
+    assert RealtimeRaceEngine._drs_allowed(track, {})  # no team information keeps the circuit's zones
+    assert len(TrackMap(track=track, drs_allowed=True).drs_zones) == 3
+    assert TrackMap(track=track, drs_allowed=False).drs_zones == []
+
