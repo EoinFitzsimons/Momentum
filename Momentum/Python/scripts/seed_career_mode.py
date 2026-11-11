@@ -655,10 +655,10 @@ OWNER_FORTUNES = [
 ]
 
 
-def _owner_backing(team_row) -> str:
+def _owner_backing(team_principal: str, nationality: str) -> str:
     """Flavour text naming who put the opening money in and where it came from."""
-    name = str(team_row["team_principal"] or "").strip() if team_row else ""
-    nationality = str(team_row["nationality"] or "") if team_row else ""
+    name = str(team_principal or "").strip()
+    nationality = str(nationality or "")
     fortune = random.choice(OWNER_FORTUNES)
     if random.random() < 0.6 and name:
         return f"{name}, owner-principal, funded by {fortune}"
@@ -756,6 +756,16 @@ def _insert_seed_team(cursor, team_data: dict) -> None:
             team_data["operations_rating"],
             team_data["strategy_profile"],
         ),
+    )
+    # Opening capital at the bottom-league rate, on the books from day one;
+    # league placement tops it up later.
+    post_with(
+        cursor.connection,
+        int(cursor.lastrowid),
+        _budget_for_tier(team_data["discipline"], team_data["tier"]),
+        OWNER_FUNDING,
+        "Opening capital",
+        source=_owner_backing(team_data.get("team_principal", ""), team_data.get("nationality", "")),
     )
 
 
@@ -1174,17 +1184,23 @@ def assign_tiers_by_strength(db: DatabaseManager, disciplines: list) -> int:
             for tier, team_ids in placement.items():
                 for team_id in team_ids:
                     row = conn.execute(
-                        "SELECT name, nationality, team_principal FROM teams WHERE id = ?",
+                        "SELECT budget, nationality, team_principal FROM teams WHERE id = ?",
                         (int(team_id),),
                     ).fetchone()
-                    post_with(
-                        conn,
-                        int(team_id),
-                        _budget_for_tier(discipline, tier),
-                        OWNER_FUNDING,
-                        f"Opening capital for the {tier_label(tier)} season",
-                        source=_owner_backing(row),
+                    # Teams were funded at the bottom-league rate when created;
+                    # the owners top up to the league they have been placed in.
+                    top_up = round(
+                        _budget_for_tier(discipline, tier) - float(row["budget"] or 0.0), 2
                     )
+                    if top_up > 0.005:
+                        post_with(
+                            conn,
+                            int(team_id),
+                            top_up,
+                            OWNER_FUNDING,
+                            f"Owners' top-up for placement in {tier_label(tier)}",
+                            source=_owner_backing(row["team_principal"], row["nationality"]),
+                        )
                 placed += len(team_ids)
             summary = ", ".join(
                 f"{tier_label(t)}: {len(ids)}" for t, ids in placement.items()
