@@ -12,6 +12,7 @@ from RaceLogic.base_race_engine import (
     RaceContext,
     RacingDiscipline,
 )
+from RaceLogic.race_format import SPRINT_RALLYCROSS_FORMAT
 from RaceLogic.realtime_race_engine import RealtimeRaceEngine
 from database.models import Driver, Team
 from services.race_engine_factory import create_realtime_engine
@@ -19,6 +20,8 @@ from services.race_engine_factory import create_realtime_engine
 
 class SprintRallycrossEngine(BaseDisciplineEngine):
     """Sprint/rallycross adapter emphasizing launches and car control."""
+
+    race_format = SPRINT_RALLYCROSS_FORMAT
 
     def __init__(self, seed: Optional[int] = None):
         super().__init__(seed if seed is not None else 0)

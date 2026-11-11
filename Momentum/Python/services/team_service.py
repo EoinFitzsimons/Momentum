@@ -23,6 +23,7 @@ from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
 from services.tier_service import DEFAULT_TIER, TIERS, tier_scale
+from RaceLogic.race_format import DISCIPLINE_FORMATS
 from services.finance_service import (
     FACILITY_UPGRADE,
     OWNER_FUNDING,
@@ -41,14 +42,9 @@ class TeamService:
     # Staff limits by league
     TIER_STAFF_LIMITS = {tier: round(tier_scale(tier, 60, 20)) for tier in TIERS}
 
-    # Driver slots per team
+    # Driver slots per team follow each discipline's race format.
     DRIVER_SLOTS_PER_DISCIPLINE = {
-        "SINGLE_SEATER": 2,
-        "PRODUCTION_TOURING": 2,
-        "URBAN_STREET": 2,
-        "DRAG_ACCELERATION": 2,
-        "SPRINT_RALLYCROSS": 2,
-        "ENDURANCE": 4,  # Endurance allows more drivers for multi-driver cars
+        discipline: fmt.driver_slots for discipline, fmt in DISCIPLINE_FORMATS.items()
     }
 
     def __init__(self, db_manager: DatabaseManager):

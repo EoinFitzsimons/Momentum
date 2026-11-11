@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from database.database_manager import DatabaseManager
 from services.tier_service import BOTTOM_TIER, TierService, tier_label, tier_scale
 from services.finance_service import OWNER_FUNDING, post_with
+from RaceLogic.race_format import DISCIPLINE_FORMATS
 from config import DATABASE_PATH, DISCIPLINES, STAFF_ROLES_CONFIG
 from tools.locale_mapping import get_all_country_codes, get_locale_for_country
 from data.nationality_weights import choose_nationality
@@ -278,13 +279,9 @@ HONORIFIC_PREFIXES = {"dr", "mr", "ms", "mrs", "miss", "prof", "sir", "dame", "l
 
 HONORIFIC_SUFFIXES = {"md", "dds", "phd", "jr", "sr", "ii", "iii", "iv"}
 
+# Driver slots per team come from each discipline's race format.
 DRIVER_SLOTS_PER_DISCIPLINE = {
-    "SINGLE_SEATER": 2,
-    "PRODUCTION_TOURING": 2,
-    "URBAN_STREET": 2,
-    "DRAG_ACCELERATION": 2,
-    "SPRINT_RALLYCROSS": 2,
-    "ENDURANCE": 4,
+    discipline: fmt.driver_slots for discipline, fmt in DISCIPLINE_FORMATS.items()
 }
 
 STAFF_SLOTS_PER_TEAM = 3

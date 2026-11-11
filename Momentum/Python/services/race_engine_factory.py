@@ -95,6 +95,19 @@ def create_discipline_engine(
     return engine_class(seed=seed if seed is not None else 0)
 
 
+def discipline_engine_class(discipline) -> Optional[Type[BaseDisciplineEngine]]:
+    """Import and return the engine class registered for ``discipline``."""
+    try:
+        key = RacingDiscipline(str(getattr(discipline, "value", discipline)).upper())
+    except ValueError:
+        return None
+    entry = CANONICAL_DISCIPLINE_REGISTRY.get(key)
+    if not entry:
+        return None
+    module = importlib.import_module(entry[0])
+    return getattr(module, entry[1], None)
+
+
 def get_canonical_discipline_registry() -> Dict[RacingDiscipline, DiscRegistryEntry]:
     """Expose the canonical registry for validation and diagnostics."""
     return dict(CANONICAL_DISCIPLINE_REGISTRY)

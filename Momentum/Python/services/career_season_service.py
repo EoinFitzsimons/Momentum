@@ -10,6 +10,7 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_result_service import persist_career_race_result
 from services.tier_service import TIERS, normalise_tier
+from RaceLogic.race_format import race_format_for
 from services.upgrade_service import UpgradeService
 
 TIER_ORDER = list(TIERS)
@@ -194,6 +195,7 @@ class CareerSeasonService:
         if not teams:
             return []
 
+        fmt = race_format_for(discipline)
         entries: list[dict[str, int | float]] = []
         for team in teams:
             drivers = self.db.get_drivers_by_team(int(team.id))
@@ -208,7 +210,7 @@ class CareerSeasonService:
                     + float(getattr(d, "consistency", 50.0) or 50.0)
                 ),
                 reverse=True,
-            )[:2]
+            )[: fmt.cars_per_team * fmt.drivers_per_car]
 
             team_rating = (
                 float(getattr(team, "operations_rating", 50.0) or 50.0) * 0.65
@@ -235,7 +237,9 @@ class CareerSeasonService:
                 )
 
         entries.sort(key=lambda item: float(item["score"]), reverse=True)
-        return entries
+        # Heats, brackets and regulation caps: only the format's field size
+        # makes the final classification.
+        return entries[: fmt.grid_size(tier=tier, available=len(entries))]
 
     def _apply_promotion_relegation(
         self, player_id: str, discipline: str, season: int

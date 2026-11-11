@@ -31,6 +31,7 @@ from RaceLogic.base_race_engine import (
     RaceContext,
     RacingDiscipline,
 )
+from RaceLogic.race_format import SINGLE_SEATER_FORMAT
 from database.models import Driver, Team
 from services.race_engine_factory import create_realtime_engine
 
@@ -52,6 +53,8 @@ class SingleSeaterEngine(BaseDisciplineEngine):
 
     Total: 20+ attributes weighted for single seater performance
     """
+
+    race_format = SINGLE_SEATER_FORMAT
 
     def __init__(self, seed: Optional[int] = None):
         """Initialise single seater engine"""
