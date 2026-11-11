@@ -87,6 +87,13 @@ from GUI.accessibility_settings import (
     get_theme_stylesheet,
 )
 from GUI.themed_messagebox import warning, question
+from GUI.circuit_dressing import (
+    PIT_BOX_COUNT,
+    TEAM_FALLBACK_COLOURS,
+    CircuitDressing,
+    build_pit_route,
+    pit_box_positions,
+)
 
 try:
     from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -494,7 +501,11 @@ class CircuitGenerator:
         heading_error = CircuitGenerator._normalize_angle(
             angle_to_start - state["current_theta"]
         )
-        angle_deficit = 2 * math.pi - state["total_angle"]
+        # Use the integrated heading (sampling truncates arcs slightly), and
+        # close clockwise circuits at -360 degrees, anticlockwise at +360.
+        turned = state["current_theta"]
+        loop_angle = -2 * math.pi if turned < 0 else 2 * math.pi
+        angle_deficit = loop_angle - turned
         return distance_to_start, heading_error, angle_deficit
 
     @staticmethod
@@ -885,6 +896,8 @@ class TrackWidget(QWidget):
         self._forest_tile_exists = os.path.exists(self._cached_forest_tile_path)
         self._grass_tile_pixmap: Optional[QPixmap] = None
         self._grass_tile_mtime: Optional[int] = None
+        self._dressing: Optional[CircuitDressing] = None
+        self._dressing_key: Optional[Tuple[int, int, int]] = None
 
     def _init_grass_tile_cache(self) -> None:
         """Load optional grass tile texture and mtime metadata."""
@@ -1108,10 +1121,8 @@ class TrackWidget(QWidget):
 
     def _pit_box_s_for_car(self, car: Car, route_length: float) -> float:
         """Return assigned pit box arc-length for a car."""
-        base = 20.0
-        spacing = 20.0
-        box_s = base + float(int(car.pit_box_index % 10) * spacing)
-        return max(base, min(box_s, max(base, route_length - 20.0)))
+        boxes = pit_box_positions(route_length)
+        return boxes[int(car.pit_box_index) % len(boxes)]
 
     def _resolve_pit_route_s(self, car: Car, route_length: float) -> float:
         """Map pit-stop timing to smooth pit-route progress with a garage hold window."""
@@ -1472,12 +1483,20 @@ class TrackWidget(QWidget):
             self._apply_camera_transform(painter, center_x, center_y)
             self._draw_world_forest_layers(painter)
 
-            self._draw_runoff_areas(painter)  # Layer 2
-            self._draw_grandstands(painter)  # Layer 3
-            self._draw_garages(painter)  # Layer 4
-            # Draw joker/pit if present
+            dressing = self._get_dressing()
+            if dressing is not None:
+                style = self._resolve_surface_visual_profile()
+                dressing.draw_ground(painter, style["runoff_color"])
+                dressing.draw_structures(painter)
+            else:
+                self._draw_runoff_areas(painter)
+                self._draw_grandstands(painter)
+                self._draw_garages(painter)
             self._draw_joker(painter)  # optional joker route
-            self._draw_pit_lane(painter)  # Layer 5
+            if dressing is not None and dressing.pit_paths:
+                dressing.draw_pit(painter)
+            else:
+                self._draw_pit_lane(painter)
             self._draw_track(painter)  # Layers 6-12
             self._draw_cars(painter)  # Layer 13
 
@@ -1486,6 +1505,42 @@ class TrackWidget(QWidget):
         except Exception as e:
             print(f"ERROR in paintEvent: {e}")
             _traceback.print_exc()
+
+    def _get_dressing(self) -> Optional[CircuitDressing]:
+        """Build trackside dressing once per track/pit geometry and cache it."""
+        if not self.track_points or len(self.track_points) < 50:
+            return None
+        pit = getattr(self, "pit_points", None)
+        key = (id(self.track_points), id(pit), len(self.cars))
+        if self._dressing_key != key:
+            self._dressing_key = key
+            try:
+                self._dressing = CircuitDressing(
+                    self.track_points,
+                    pit,
+                    half_width=self.TRACK_HALF_WIDTH,
+                    team_colours=self._pit_team_colours(),
+                    seed=len(self.track_points),
+                )
+            except Exception:
+                LOGGER.debug("Failed to build circuit dressing", exc_info=True)
+                self._dressing = None
+        return self._dressing
+
+    def _pit_team_colours(self) -> Optional[List[QColor]]:
+        """Return one livery colour per pit box, ordered by box index."""
+        colours: Dict[int, QColor] = {}
+        for car in self.cars:
+            idx = int(getattr(car, "pit_box_index", 0)) % PIT_BOX_COUNT
+            if idx not in colours:
+                try:
+                    colours[idx] = self._resolve_car_livery(car).primary_color
+                except Exception:
+                    colours[idx] = car.colour
+        if not colours:
+            return None
+        fallback = [QColor(*c) for c in TEAM_FALLBACK_COLOURS]
+        return [colours.get(i, fallback[i]) for i in range(PIT_BOX_COUNT)]
 
     def _apply_camera_transform(self, painter, center_x: int, center_y: int) -> None:
         """Apply follow/full camera transform before world-space drawing."""
@@ -1540,11 +1595,17 @@ class TrackWidget(QWidget):
         """Return world-space midpoint of the active track geometry."""
         if not self.track_points:
             return 0.0, 0.0
+        key = (id(self.track_points), len(self.track_points))
+        cached = getattr(self, "_track_center_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         min_x = min(pt.x for pt in self.track_points)
         max_x = max(pt.x for pt in self.track_points)
         min_y = min(pt.y for pt in self.track_points)
         max_y = max(pt.y for pt in self.track_points)
-        return (min_x + max_x) * 0.5, (min_y + max_y) * 0.5
+        center = ((min_x + max_x) * 0.5, (min_y + max_y) * 0.5)
+        self._track_center_cache = (key, center)
+        return center
 
     def _compute_full_view_zoom(self) -> float:
         """Compute fit-to-viewport zoom for full-track mode."""
@@ -1581,7 +1642,11 @@ class TrackWidget(QWidget):
     def _draw_world_forest_layers(self, painter) -> None:
         """Draw cached large forest and infield forest overlays in world space."""
         self._draw_world_forest_tile(painter)
-        self._draw_world_inner_forest_band(painter)
+        dressing = self._get_dressing()
+        if dressing is not None:
+            dressing.draw_scenery(painter)
+        else:
+            self._draw_world_inner_forest_band(painter)
 
     def _draw_world_forest_tile(self, painter) -> None:
         try:
@@ -2292,7 +2357,8 @@ class TrackWidget(QWidget):
                 return
 
             track_width = 14
-            self._draw_track_infield(painter, track_width)
+            if self._get_dressing() is None:
+                self._draw_track_infield(painter, track_width)
             self._draw_track_surface_and_racing_line(painter, centerline, track_width)
             self._draw_track_edges(painter, track_width)
             self._draw_corner_kerbs(painter)
@@ -2309,11 +2375,16 @@ class TrackWidget(QWidget):
         """Return closed centerline path for the current track."""
         if not self.track_points or len(self.track_points) < 2:
             return None
+        key = (id(self.track_points), len(self.track_points))
+        cached = getattr(self, "_centerline_cache", None)
+        if cached is not None and cached[0] == key:
+            return cached[1]
         centerline = QPainterPath()
         centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
         for pt in self.track_points[1:]:
             centerline.lineTo(pt.x, pt.y)
         centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+        self._centerline_cache = (key, centerline)
         return centerline
 
     def _build_infield_points(
@@ -2609,85 +2680,78 @@ class TrackWidget(QWidget):
         )
         painter.drawPath(centerline)
 
+    def _static_track_paths(self, track_width: int) -> Dict[str, QPainterPath]:
+        """Cache edge-line and kerb paths; they only change with the track."""
+        key = (id(self.track_points), len(self.track_points), track_width)
+        if getattr(self, "_static_paths_key", None) == key:
+            return self._static_paths
+        left, right = QPainterPath(), QPainterPath()
+        for i, pt in enumerate(self.track_points):
+            nx, ny = -math.sin(pt.theta), math.cos(pt.theta)
+            lp = QPointF(pt.x - nx * track_width, pt.y - ny * track_width)
+            rp = QPointF(pt.x + nx * track_width, pt.y + ny * track_width)
+            if i == 0:
+                left.moveTo(lp)
+                right.moveTo(rp)
+            else:
+                left.lineTo(lp)
+                right.lineTo(rp)
+        red, white = QPainterPath(), QPainterPath()
+        corner: List[TrackPoint] = []
+        for pt in list(self.track_points) + [None]:
+            if pt is not None and abs(pt.curvature) > 0.003:
+                corner.append(pt)
+                continue
+            if len(corner) > 5:
+                self._add_corner_kerb_segments(corner, 12, red, white)
+            corner = []
+        self._static_paths = {"left": left, "right": right, "red": red, "white": white}
+        self._static_paths_key = key
+        return self._static_paths
+
     def _draw_track_edges(self, painter, track_width: int) -> None:
         """Draw left and right white edge lines."""
         style = self._resolve_surface_visual_profile()
+        paths = self._static_track_paths(track_width)
         painter.setPen(QPen(style["edge_color"], 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        for i in range(0, len(self.track_points) - 1):
-            pt = self.track_points[i]
-            next_pt = self.track_points[i + 1]
-            normal_x = -math.sin(pt.theta)
-            normal_y = math.cos(pt.theta)
-            next_normal_x = -math.sin(next_pt.theta)
-            next_normal_y = math.cos(next_pt.theta)
-            painter.drawLine(
-                int(pt.x - normal_x * track_width),
-                int(pt.y - normal_y * track_width),
-                int(next_pt.x - next_normal_x * track_width),
-                int(next_pt.y - next_normal_y * track_width),
-            )
-            painter.drawLine(
-                int(pt.x + normal_x * track_width),
-                int(pt.y + normal_y * track_width),
-                int(next_pt.x + next_normal_x * track_width),
-                int(next_pt.y + next_normal_y * track_width),
-            )
+        painter.drawPath(paths["left"])
+        painter.drawPath(paths["right"])
 
-    def _draw_single_corner_kerb(
-        self, painter, corner_points: List[TrackPoint], kerb_offset: int
+    @staticmethod
+    def _add_corner_kerb_segments(
+        corner_points: List[TrackPoint],
+        kerb_offset: int,
+        red: QPainterPath,
+        white: QPainterPath,
     ) -> None:
-        """Draw striped kerb for one detected corner segment."""
-        first_curv = corner_points[0].curvature
+        """Append alternating 5 m kerb stripes on the inside of one corner."""
+        side = 1 if corner_points[0].curvature > 0 else -1
         segment_length = 0.0
         stripe_toggle = True
-
         for j in range(len(corner_points) - 1):
             pt = corner_points[j]
             next_pt = corner_points[j + 1]
-            normal_x = -math.sin(pt.theta)
-            normal_y = math.cos(pt.theta)
-            next_normal_x = -math.sin(next_pt.theta)
-            next_normal_y = math.cos(next_pt.theta)
-
-            dist = math.sqrt((next_pt.x - pt.x) ** 2 + (next_pt.y - pt.y) ** 2)
-            segment_length += dist
+            segment_length += math.hypot(next_pt.x - pt.x, next_pt.y - pt.y)
             if segment_length > 5:
                 stripe_toggle = not stripe_toggle
                 segment_length = 0.0
-
-            colour = QColor(221, 45, 74) if stripe_toggle else QColor(255, 255, 255)
-            painter.setPen(QPen(colour, 4))
-
-            if first_curv > 0:
-                painter.drawLine(
-                    int(pt.x - normal_x * kerb_offset),
-                    int(pt.y - normal_y * kerb_offset),
-                    int(next_pt.x - next_normal_x * kerb_offset),
-                    int(next_pt.y - next_normal_y * kerb_offset),
-                )
-            else:
-                painter.drawLine(
-                    int(pt.x + normal_x * kerb_offset),
-                    int(pt.y + normal_y * kerb_offset),
-                    int(next_pt.x + next_normal_x * kerb_offset),
-                    int(next_pt.y + next_normal_y * kerb_offset),
-                )
+            target = red if stripe_toggle else white
+            off = kerb_offset * side
+            target.moveTo(pt.x + math.sin(pt.theta) * off, pt.y - math.cos(pt.theta) * off)
+            target.lineTo(
+                next_pt.x + math.sin(next_pt.theta) * off,
+                next_pt.y - math.cos(next_pt.theta) * off,
+            )
 
     def _draw_corner_kerbs(self, painter) -> None:
-        """Detect corner runs and draw inside apex kerbs."""
-        current_corner: List[TrackPoint] = []
-        kerb_offset = 12
-        for pt in self.track_points:
-            if abs(pt.curvature) > 0.003:
-                current_corner.append(pt)
-                continue
-            if len(current_corner) > 5:
-                self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
-            current_corner = []
-
-        if len(current_corner) > 5:
-            self._draw_single_corner_kerb(painter, current_corner, kerb_offset)
+        """Draw inside apex kerbs from cached stripe paths."""
+        paths = self._static_track_paths(14)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(221, 45, 74), 4))
+        painter.drawPath(paths["red"])
+        painter.setPen(QPen(QColor(255, 255, 255), 4))
+        painter.drawPath(paths["white"])
 
     def _draw_track_centerline_overlay(self, painter, centerline: QPainterPath) -> None:
         """Draw subtle dashed centerline overlay."""
@@ -4233,36 +4297,21 @@ class RaceWindow(QMainWindow):
 
     def _generate_best_closed_routes(self, instructions: List[Any]) -> Dict[str, Any]:
         """Generate a closed circuit and keep whichever closure mode yields lower gap."""
+        modes: List[Any] = [
+            instructions,
+            {"solve_closure": False, "instructions": instructions},
+            {"solve_closure": True, "instructions": instructions},
+        ]
         candidates: List[Optional[Dict[str, Any]]] = []
-
-        # Primary mode: pass raw list (uses built-in iterative closure).
-        try:
-            candidates.append(
-                CircuitGenerator.generate_with_routes(instructions, options={})
-            )
-        except Exception:
-            candidates.append(None)
-
-        # Fallback modes: explicit wrapper toggles.
-        try:
-            candidates.append(
-                CircuitGenerator.generate_with_routes(
-                    {"solve_closure": False, "instructions": instructions},
-                    options={},
-                )
-            )
-        except Exception:
-            candidates.append(None)
-
-        try:
-            candidates.append(
-                CircuitGenerator.generate_with_routes(
-                    {"solve_closure": True, "instructions": instructions},
-                    options={},
-                )
-            )
-        except Exception:
-            candidates.append(None)
+        for mode in modes:
+            try:
+                routes = CircuitGenerator.generate_with_routes(mode, options={})
+            except Exception:
+                routes = None
+            # Well-formed layouts already close; skip the slower fallback modes.
+            if routes is not None and self._route_gap(routes) <= 3.0:
+                return routes
+            candidates.append(routes)
 
         best = min(candidates, key=self._route_gap)
         return best or {"main": []}
@@ -4295,33 +4344,7 @@ class RaceWindow(QMainWindow):
         if not main_points:
             return None
 
-        # Align with garage placement zone and keep only the straightest samples.
-        candidates = [
-            pt
-            for pt in main_points
-            if 8.0 <= float(pt.s) <= 290.0 and abs(float(pt.curvature)) <= 0.006
-        ]
-        if len(candidates) < 12:
-            candidates = [pt for pt in main_points if 8.0 <= float(pt.s) <= 290.0]
-        if len(candidates) < 6:
-            return None
-
-        # Keep the pit lane lane clearly separate from the racing surface.
-        centerline_offset = 36.0
-        out: List[TrackPoint] = []
-        for pt in candidates:
-            normal_x = -math.sin(pt.theta)
-            normal_y = math.cos(pt.theta)
-            out.append(
-                TrackPoint(
-                    s=float(pt.s - candidates[0].s),
-                    x=float(pt.x + normal_x * centerline_offset),
-                    y=float(pt.y + normal_y * centerline_offset),
-                    theta=float(pt.theta),
-                    curvature=float(pt.curvature),
-                )
-            )
-        return out
+        return build_pit_route(main_points)
 
     def _ensure_auxiliary_route_visibility(self, main_points: List[TrackPoint]) -> None:
         """Guarantee visible pit/joker geometry for disciplines that rely on route cues."""
