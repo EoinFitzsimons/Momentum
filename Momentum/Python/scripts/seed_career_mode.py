@@ -908,7 +908,7 @@ def assign_staff_contracts(db: DatabaseManager, disciplines: list) -> int:  # NO
 
         mandatory_targets = list(team_ids_needing_minimum)
         pair_count = min(len(staff_rows), len(mandatory_targets))
-        start_season = datetime.now().year
+        start_season = SEED_REFERENCE_DATE.year
 
         for idx in range(pair_count):
             team_id = mandatory_targets[idx]
