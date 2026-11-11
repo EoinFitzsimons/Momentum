@@ -23,6 +23,11 @@ from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
 from services.tier_service import DEFAULT_TIER, TIERS, tier_scale
+from services.finance_service import (
+    FACILITY_UPGRADE,
+    OWNER_FUNDING,
+    FinanceService,
+)
 
 
 class TeamService:
@@ -104,7 +109,7 @@ class TeamService:
             nationality=nationality,
             discipline=discipline,
             tier=tier,
-            budget=initial_budget,
+            budget=0.0,
             founded_year=datetime.now().year,
             team_principal=team_principal,
             history="",
@@ -122,6 +127,16 @@ class TeamService:
 
         if not team_id:
             raise RuntimeError(f"Failed to create team: {name}")
+
+        # Founding capital is the owners' money, posted so the ledger explains
+        # the opening balance rather than the balance appearing from nowhere.
+        FinanceService(self.db).post(
+            team_id,
+            initial_budget,
+            OWNER_FUNDING,
+            f"Founding capital for a {tier.replace('_', ' ').title()} entry",
+            source=f"{team_principal or name} and backers",
+        )
 
         if player_id:
             self.db.assign_team_owner(team_id, str(player_id))
@@ -326,9 +341,12 @@ class TeamService:
                     f"Required: €{facility_cost:,.0f}, Available: €{team.budget:,.0f}"
                 )
 
-            team.budget -= facility_cost
-            self.db.add_budget_transaction(
-                team_id, "facility_upgrade", facility_cost, f"Facility upgrade: {name}"
+            team.budget = FinanceService(self.db).post(
+                team_id,
+                -facility_cost,
+                FACILITY_UPGRADE,
+                f"Facility upgrade: {name}",
+                source=team.name,
             )
             self.db.upsert_facility_upgrade(team_id, name, facility_cost)
             changes[f"facility_upgrade::{name}"] = {
@@ -463,14 +481,10 @@ class TeamService:
                 f"Insufficient budget. Requested: €{amount:,.0f}, Available: €{available_budget:,.0f}"
             )
 
-        # Create budget transaction
-        transaction_id = self.db.add_budget_transaction(
-            team_id, category, amount, description
+        team.budget = FinanceService(self.db).post(
+            team_id, -amount, category, description, source=team.name
         )
-
-        # Update team budget
-        team.budget -= amount
-        self.db.update_team(team_id, team)
+        transaction_id = int(self.db.get_budget_transactions(team_id)[0]["id"])
 
         return {
             "success": True,

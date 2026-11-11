@@ -27,6 +27,7 @@ from config import DATABASE_PATH, DISCIPLINES  # noqa: E402
 from database.database_manager import DatabaseManager  # noqa: E402
 from scripts import import_circuits  # noqa: E402
 from scripts import seed_career_mode as world  # noqa: E402
+from services.finance_service import OWNER_FUNDING, FinanceService  # noqa: E402
 
 # Tables that describe things that happened, rather than the world as shipped.
 PLAY_STATE_TABLES: tuple[str, ...] = (
@@ -38,7 +39,6 @@ PLAY_STATE_TABLES: tuple[str, ...] = (
     "career_championships",
     "career_races",
     "career_race_results",
-    "team_budget_transactions",
     "team_car_upgrades",
     "team_facility_upgrades",
     "team_audit_log",
@@ -118,6 +118,17 @@ def build(
     leftovers = {table: n for table, n in play_state_counts(db).items() if n}
     if leftovers:
         raise RuntimeError(f"seed database contains play state: {leftovers}")
+    # The ledger may only hold each team's opening capital, and must add up.
+    with db.get_connection() as conn:
+        categories = {
+            str(row[0])
+            for row in conn.execute("SELECT DISTINCT category FROM team_budget_transactions")
+        }
+    if categories - {OWNER_FUNDING}:
+        raise RuntimeError(f"seed ledger has non-opening transactions: {categories}")
+    mismatched = FinanceService(db).reconcile()
+    if mismatched:
+        raise RuntimeError(f"seed balances do not match the ledger: {mismatched[:3]}")
 
     _pin_timestamps(db)
     with db.get_connection() as conn:

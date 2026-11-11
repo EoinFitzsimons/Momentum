@@ -201,6 +201,15 @@ class DatabaseManager(RaceResultPersistence):
                 conn,
                 lambda c: self._ensure_table_columns(
                     c,
+                    "team_budget_transactions",
+                    {"source": "TEXT DEFAULT ''"},
+                ),
+            )
+
+            self._run_schema_migration_step(
+                conn,
+                lambda c: self._ensure_table_columns(
+                    c,
                     "drivers",
                     {
                         "contract_start_season": INTEGER_DEFAULT_NULL,
@@ -314,6 +323,7 @@ class DatabaseManager(RaceResultPersistence):
             category TEXT NOT NULL,
             amount REAL NOT NULL,
             description TEXT DEFAULT '',
+            source TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (team_id) REFERENCES teams(id)
         );

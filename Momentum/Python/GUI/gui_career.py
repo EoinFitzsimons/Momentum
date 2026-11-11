@@ -39,7 +39,8 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_season_service import CareerSeasonService
 from services.tier_service import TIERS, normalise_tier, tier_label
-from services.upgrade_service import UpgradeService, UPGRADE_CATEGORY
+from services.upgrade_service import UpgradeService
+from services.finance_service import CAR_UPGRADE_REFUND, FinanceService, InsufficientFunds, post_with
 from GUI.gui_navbar import NavigationBar
 from GUI.gui_championship import ChampionshipSelectionDialog, _player_label
 
@@ -578,19 +579,24 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 "DELETE FROM career_championships WHERE player_id = ?", (player_id,)
             )
             # A new world starts with undeveloped cars for every team, so the
-            # money spent on the old cars goes back into each team's budget.
-            conn.execute(
+            # money spent on the old cars is refunded, on the books, before the
+            # upgrades are removed.
+            refunds = conn.execute(
                 """
-                UPDATE teams
-                SET budget = budget + COALESCE(
-                    (SELECT SUM(u.invested_amount) FROM team_car_upgrades u
-                     WHERE u.team_id = teams.id), 0)
+                SELECT team_id, SUM(invested_amount) AS invested
+                FROM team_car_upgrades GROUP BY team_id
                 """
-            )
-            conn.execute(
-                "DELETE FROM team_budget_transactions WHERE category = ?",
-                (UPGRADE_CATEGORY,),
-            )
+            ).fetchall()
+            for refund in refunds:
+                if float(refund["invested"] or 0.0) > 0:
+                    post_with(
+                        conn,
+                        int(refund["team_id"]),
+                        float(refund["invested"]),
+                        CAR_UPGRADE_REFUND,
+                        "Car development written back at career reset",
+                        source="Career reset",
+                    )
             conn.execute("DELETE FROM team_car_upgrades")
             conn.execute("DELETE FROM ai_offseason_spending")
             conn.execute(
@@ -1617,22 +1623,16 @@ class CareerWindow(QMainWindow):
         if not self.owned_team:
             return False
 
-        current_budget = float(self.owned_team.budget or 0.0)
-        new_budget = current_budget + float(amount)
-        if new_budget < 0:
-            return False
-
-        self.owned_team.budget = new_budget
-        updated = self.db.update_team(self.owned_team.id, self.owned_team)
-        if not updated:
-            return False
-
         try:
-            self.db.add_budget_transaction(
-                self.owned_team.id, category, float(amount), description
+            FinanceService(self.db).post(
+                self.owned_team.id,
+                float(amount),
+                category,
+                description,
+                source=self.owned_team.name,
             )
-        except Exception:
-            pass
+        except InsufficientFunds:
+            return False
 
         refreshed = self.db.get_team(self.owned_team.id)
         if refreshed is not None:

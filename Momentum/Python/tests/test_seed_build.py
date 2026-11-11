@@ -10,6 +10,8 @@ import pytest
 
 from scripts.build_seed_database import PLAY_STATE_TABLES, build
 from scripts.seed_career_mode import is_latin_script
+from database.database_manager import DatabaseManager
+from services.finance_service import OWNER_FUNDING, FinanceService
 from services.tier_service import TIERS
 
 TEAMS_PER_DISCIPLINE = 10
@@ -81,6 +83,19 @@ def test_every_team_has_drivers_staff_and_a_league_budget(seed_db):
     )
     ordered = [budgets[tier] for tier in TIERS]
     assert ordered == sorted(ordered, reverse=True)
+
+
+@pytest.mark.integration
+def test_every_opening_balance_is_on_the_books(seed_db):
+    finance = FinanceService(DatabaseManager(db_path=str(seed_db)))
+    assert finance.reconcile() == []
+    conn = sqlite3.connect(seed_db)
+    categories = {r[0] for r in conn.execute("SELECT DISTINCT category FROM team_budget_transactions")}
+    assert categories == {OWNER_FUNDING}
+    unsourced = conn.execute(
+        "SELECT COUNT(1) FROM team_budget_transactions WHERE source IS NULL OR source = ''"
+    ).fetchone()[0]
+    assert unsourced == 0
 
 
 @pytest.mark.integration

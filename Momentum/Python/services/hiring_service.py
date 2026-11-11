@@ -22,6 +22,7 @@ from datetime import datetime
 # Import database extensions to add hiring methods
 import database.database_extensions  # noqa
 from database.database_manager import DatabaseManager
+from services.finance_service import CONTRACT_BUYOUT, SIGNING_BONUS, FinanceService
 from database.models import Driver, Team
 from config import DATABASE_PATH
 
@@ -407,8 +408,13 @@ class HiringService:
         if not success:
             return (False, "Database error during contract signing", {})
 
-        # Deduct signing bonus from team budget
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
+        new_budget = FinanceService(self.db).post(
+            team_id,
+            -signing_bonus,
+            SIGNING_BONUS,
+            f"Signing bonus for {driver.name}",
+            source=team.name,
+        )
 
         # Return contract details
         contract_details = {
@@ -465,7 +471,13 @@ class HiringService:
 
         # Release driver
         self.db.release_driver(personnel_id)  # type: ignore[attr-defined]
-        new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
+        new_budget = FinanceService(self.db).post(
+            team_id,
+            -buyout_cost,
+            CONTRACT_BUYOUT,
+            f"Contract buyout for {driver.name}",
+            source=team.name,
+        )
 
         return (
             True,
@@ -505,7 +517,13 @@ class HiringService:
 
         # Release staff
         self.db.release_staff(personnel_id)  # type: ignore[attr-defined]
-        new_budget = self.db.update_team_budget(team_id, -buyout_cost)  # type: ignore[attr-defined]
+        new_budget = FinanceService(self.db).post(
+            team_id,
+            -buyout_cost,
+            CONTRACT_BUYOUT,
+            f"Contract buyout for {staff.name}",
+            source=team.name,
+        )
 
         return (
             True,
@@ -678,8 +696,13 @@ class HiringService:
         if not success:
             return (False, "Database error during contract signing", {})
 
-        # Deduct signing bonus
-        new_budget = self.db.update_team_budget(team_id, -signing_bonus)  # type: ignore[attr-defined]
+        new_budget = FinanceService(self.db).post(
+            team_id,
+            -signing_bonus,
+            SIGNING_BONUS,
+            f"Signing bonus for {staff.name}",
+            source=team.name,
+        )
 
         # Return contract details
         contract_details = {

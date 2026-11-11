@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database.database_manager import DatabaseManager
 from services.tier_service import BOTTOM_TIER, TierService, tier_label, tier_scale
+from services.finance_service import OWNER_FUNDING, post_with
 from config import DATABASE_PATH, DISCIPLINES, STAFF_ROLES_CONFIG
 from tools.locale_mapping import get_all_country_codes, get_locale_for_country
 from data.nationality_weights import choose_nationality
@@ -636,6 +637,39 @@ def _generate_operations_rating() -> float:
     return round(max(40.0, min(96.0, random.gauss(64.0, 13.0))), 2)
 
 
+# Where a team's opening money comes from. Picked per team for flavour; the
+# amount itself follows the league the team was placed in.
+OWNER_FORTUNES = [
+    "a family haulage business",
+    "a regional construction group",
+    "a chain of car dealerships",
+    "the sale of a software company",
+    "a commercial property portfolio",
+    "an energy drinks brand",
+    "a shipping and ports company",
+    "a mining concern",
+    "a supermarket chain",
+    "a motorsport parts manufacturer",
+    "a telecoms fortune",
+    "a consortium of local sponsors",
+    "a private equity fund",
+    "a fashion and lifestyle label",
+    "a racing-mad hotelier",
+]
+
+
+def _owner_backing(team_row) -> str:
+    """Flavour text naming who put the opening money in and where it came from."""
+    name = str(team_row["team_principal"] or "").strip() if team_row else ""
+    nationality = str(team_row["nationality"] or "") if team_row else ""
+    fortune = random.choice(OWNER_FORTUNES)
+    if random.random() < 0.6 and name:
+        return f"{name}, owner-principal, funded by {fortune}"
+    fake = _build_fake_for_nationality(nationality) if nationality else fake_for_locale("en_GB")
+    owner = clean_name(person_name(fake)) or "A private owner"
+    return f"{owner}, owner, funded by {fortune}"
+
+
 def _budget_for_tier(discipline: str, tier: str) -> float:
     """Starting budget for a team given the league it was placed in."""
     base_budget = BUDGET_CAPS.get(discipline, 50_000_000)
@@ -689,7 +723,8 @@ def _build_seed_team_data(
         "nationality": nationality,
         "discipline": discipline,
         "tier": tier,
-        "budget": _budget_for_tier(discipline, tier),
+        # Opening money is posted to the ledger once the league is known.
+        "budget": 0.0,
         "founded_year": random.randint(1950, 2024),
         "team_principal": clean_name(person_name(fake_for_principal)),
         "headquarters": headquarters or str(COUNTRIES.get(nationality, nationality)),
@@ -1141,9 +1176,17 @@ def assign_tiers_by_strength(db: DatabaseManager, disciplines: list) -> int:
         for discipline, placement in placements.items():
             for tier, team_ids in placement.items():
                 for team_id in team_ids:
-                    conn.execute(
-                        "UPDATE teams SET budget = ? WHERE id = ?",
-                        (_budget_for_tier(discipline, tier), int(team_id)),
+                    row = conn.execute(
+                        "SELECT name, nationality, team_principal FROM teams WHERE id = ?",
+                        (int(team_id),),
+                    ).fetchone()
+                    post_with(
+                        conn,
+                        int(team_id),
+                        _budget_for_tier(discipline, tier),
+                        OWNER_FUNDING,
+                        f"Opening capital for the {tier_label(tier)} season",
+                        source=_owner_backing(row),
                     )
                 placed += len(team_ids)
             summary = ", ".join(
