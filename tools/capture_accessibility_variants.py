@@ -14,7 +14,7 @@ import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CAPTURE_SCRIPT = os.path.join(ROOT, "tools", "capture_all_screens.py")
-OUT_ROOT = os.path.join(os.path.dirname(ROOT), "saves", "accessibility_screenshots")
+OUT_ROOT = os.path.join(ROOT, "saves", "accessibility_screenshots")
 ALL_SCREENS_DIR = os.path.join(OUT_ROOT, "all_screens")
 
 VARIANTS = [

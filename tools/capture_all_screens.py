@@ -20,7 +20,7 @@ from momentum.database.database_manager import DatabaseManager
 
 
 OUT_DIR = os.path.join(
-    os.path.dirname(ROOT), "saves", "accessibility_screenshots", "all_screens"
+    ROOT, "saves", "accessibility_screenshots", "all_screens"
 )
 os.makedirs(OUT_DIR, exist_ok=True)
 

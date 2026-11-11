@@ -23,7 +23,7 @@ from momentum.gui.accessibility_settings import (
     normalize_accessibility_settings,
 )
 
-OUT_DIR = os.path.join(os.path.dirname(ROOT), "saves", "accessibility_screenshots")
+OUT_DIR = os.path.join(ROOT, "saves", "accessibility_screenshots")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 THEMES = ["standard", "high_contrast", "colorblind_safe"]
