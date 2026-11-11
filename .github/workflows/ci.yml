@@ -23,12 +23,17 @@ jobs:
         run: |
           # The Ubuntu mirrors behind the runners drop out now and then; retry
           # rather than fail the whole run on a DNS blip.
+          installed=0
           for attempt in 1 2 3 4 5; do
-            sudo apt-get update && \
-            sudo apt-get install -y --no-install-recommends --fix-missing \
-              libegl1 libgl1 libxkbcommon0 libdbus-1-3 && break
+            if sudo apt-get update && \
+               sudo apt-get install -y --no-install-recommends --fix-missing \
+                 libegl1 libgl1 libxkbcommon0 libdbus-1-3; then
+              installed=1
+              break
+            fi
             echo "apt attempt $attempt failed; retrying in 20s"; sleep 20
           done
+          test "$installed" = 1
 
       - name: Install dependencies
         run: |
