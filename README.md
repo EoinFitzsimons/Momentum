@@ -46,8 +46,8 @@ python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-The PyInstaller build configuration is in `packaging/Momentum.spec` and the
-Windows build helper is `packaging/build_exe.ps1`.
+The PyInstaller build configuration is in `packaging/Momentum.spec` and
+the Windows build helper is in `packaging/build_exe.ps1`.
 
 ## Repository layout
 
