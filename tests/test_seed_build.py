@@ -130,6 +130,11 @@ def test_tracks_match_source_data_and_no_play_state(seed_db):
         "OR json_array_length(instructions_json) < 2"
     ).fetchone()[0]
     assert empty_layouts == 0
+    # The importer must store the figures the source gives, not its own defaults:
+    # only the DRS disciplines have zones, and a drag strip has no corners.
+    stored = {name: (turns, drs) for name, turns, drs in conn.execute("SELECT name, turns, drs_zones FROM tracks")}
+    assert {n: drs for n, (_, drs) in stored.items()} == {r["name"]: r["drs_zones"] for r in records}
+    assert {n: turns for n, (turns, _) in stored.items()} == {r["name"]: r["turns"] for r in records}
     present = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for table in PLAY_STATE_TABLES:
         if table in present:

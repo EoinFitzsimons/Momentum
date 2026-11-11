@@ -162,7 +162,7 @@ def _sanitize_payload(payload: dict) -> dict:
     payload["name"] = str(payload.get("name") or "").strip()
     payload["country"] = str(payload.get("country") or "").strip()
     payload["length_km"] = max(0.1, _parse_float(payload.get("length_km"), 3.2))
-    payload["turns"] = max(1, _parse_int(payload.get("turns"), 12))
+    payload["turns"] = max(0, _parse_int(payload.get("turns"), 12))
     payload["avg_speed_kmh"] = max(
         1.0, _parse_float(payload.get("avg_speed_kmh"), 160.0)
     )
