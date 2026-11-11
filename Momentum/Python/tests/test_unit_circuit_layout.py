@@ -120,3 +120,12 @@ def test_pit_route_survives_short_main_straight(qt_app):
     ]
     pit = build_pit_route(pts)
     assert pit is not None and len(pit) > 100
+
+    tight = [
+        TrackPoint(s=float(i), x=20 * math.cos(i / 20), y=20 * math.sin(i / 20),
+                   theta=i / 20 + math.pi / 2, curvature=1 / 20)
+        for i in range(int(2 * math.pi * 20) * 3)
+    ]
+    pit = build_pit_route(tight)
+    assert pit is not None
+    assert all(math.hypot(p.x, p.y) >= 9.9 for p in pit)

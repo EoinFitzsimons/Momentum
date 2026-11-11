@@ -80,6 +80,9 @@ def build_pit_route(points: Sequence[Any], offset: float = PIT_OFFSET) -> Option
         pt = points[idx]
         t = min(j / ramp, (n - 1 - j) / ramp)
         d = side * offset * _smoothstep(t)
+        if d * pt.curvature > 0:
+            # Offsetting towards a bend's centre: stay within half its radius.
+            d = math.copysign(min(abs(d), 0.5 / abs(pt.curvature)), d)
         xy.append((pt.x - math.sin(pt.theta) * d, pt.y + math.cos(pt.theta) * d))
     out = []
     s = 0.0
