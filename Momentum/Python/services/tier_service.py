@@ -16,6 +16,8 @@ TIER_3 = "TIER_3"
 TIER_4 = "TIER_4"
 TIER_5 = "TIER_5"
 TIERS: tuple[str, ...] = (TIER_1, TIER_2, TIER_3, TIER_4, TIER_5)
+# Teams in each league of a discipline.
+LEAGUE_SIZE = 20
 TOP_TIER = TIERS[0]
 BOTTOM_TIER = TIERS[-1]
 # Unknown or new teams start in the bottom league.

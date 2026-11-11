@@ -22,7 +22,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from database.database_manager import DatabaseManager
 from database.models import Team
-from services.tier_service import DEFAULT_TIER, TIERS, tier_scale
+from services.tier_service import DEFAULT_TIER, LEAGUE_SIZE, TIERS, normalise_tier, tier_scale
 from RaceLogic.race_format import DISCIPLINE_FORMATS
 from services.finance_service import (
     FACILITY_UPGRADE,
@@ -560,6 +560,87 @@ class TeamService:
         performance_bonus = (team.total_wins * 100_000) + (team.total_podiums * 50_000)
 
         return tier_income + performance_bonus
+
+    def found_player_team(
+        self,
+        name: str,
+        discipline: str,
+        nationality: str,
+        tier: str,
+        team_principal: str = "",
+        headquarters: str = "",
+        player_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Found a player's own team in the league of their choice.
+
+        The new team gets that league's founding capital, staff limit and
+        sponsor level. Leagues hold ``LEAGUE_SIZE`` teams, so when the chosen
+        one is full its weakest team is dissolved to make room: its drivers and
+        staff become free agents.
+        """
+        tier = normalise_tier(tier)
+        discipline = str(discipline or "SINGLE_SEATER").upper()
+        league = [
+            team
+            for team in self.db.get_teams_by_discipline(discipline)
+            if normalise_tier(getattr(team, "tier", None)) == tier
+        ]
+        replaced: Optional[Dict[str, Any]] = None
+        if len(league) >= LEAGUE_SIZE:
+            from services.tier_service import TierService
+
+            strength = TierService(self.db)
+            weakest = min(league, key=strength.team_strength)
+            replaced = self.dissolve_team(int(weakest.id), reason=f"replaced by {name}")
+        result = self.create_team(
+            name=name,
+            discipline=discipline,
+            nationality=nationality,
+            tier=tier,
+            team_principal=team_principal,
+            headquarters=headquarters,
+            player_id=player_id,
+        )
+        result["replaced_team"] = replaced
+        return result
+
+    def dissolve_team(self, team_id: int, reason: str = "") -> Dict[str, Any]:
+        """Wind a team up: release its people and remove it from the league.
+
+        The ledger rows stay behind so the money remains traceable.
+        """
+        team = self.db.get_team(team_id)
+        if team is None:
+            raise ValueError(f"Team {team_id} not found")
+        released_drivers = [int(d.id) for d in self.db.get_drivers_by_team(team_id)]
+        for driver_id in released_drivers:
+            self.db.release_driver(driver_id)  # type: ignore[attr-defined]
+        try:
+            released_staff = [int(s.id) for s in self.db.get_staff_by_team(team_id)]
+        except Exception:
+            released_staff = []
+        for staff_id in released_staff:
+            self.db.release_staff(staff_id)  # type: ignore[attr-defined]
+        # The row stays (results and ledger entries point at it); it simply
+        # leaves the league.
+        with self.db.get_connection() as conn:
+            conn.execute(
+                "UPDATE team_ownership SET is_active = 0 WHERE team_id = ?", (int(team_id),)
+            )
+            conn.execute(
+                "UPDATE teams SET dissolved_at = CURRENT_TIMESTAMP, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (int(team_id),),
+            )
+            conn.commit()
+        return {
+            "id": int(team_id),
+            "name": team.name,
+            "tier": normalise_tier(getattr(team, "tier", None)),
+            "released_drivers": released_drivers,
+            "released_staff": released_staff,
+            "reason": reason,
+        }
 
     def _log_team_change(
         self,
