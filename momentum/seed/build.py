@@ -101,7 +101,7 @@ def build(
     if drivers is None:
         drivers = world.default_driver_count(teams_per_discipline, disciplines)
 
-    db = DatabaseManager(db_path=str(output))
+    db = DatabaseManager(db_path=str(output), seed_from_bundle=False)
     world.seed_drivers(db, drivers, disciplines)
     world.seed_teams(db, teams_per_discipline, disciplines)
     world.seed_staff(db, staff)

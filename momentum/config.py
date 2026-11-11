@@ -54,7 +54,9 @@ def user_data_dir() -> Path:
     """Writable per-user directory for saves, honouring MOMENTUM_DATA_DIR."""
     override = os.getenv("MOMENTUM_DATA_DIR")
     if override:
-        return Path(override)
+        # A relative override is taken from the working directory, never from
+        # the (possibly read-only) package directory.
+        return Path(override).expanduser().absolute()
     if sys.platform.startswith("win"):
         base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~")
         return Path(base) / "Momentum"
@@ -69,6 +71,10 @@ if IS_REPOSITORY_CHECKOUT and not getattr(sys, "frozen", False):
 else:
     _default_database_path = user_data_dir() / DATABASE_FILENAME
 
+# The save the game plays from when nothing overrides it. Only this path is
+# seeded from the bundled world on first launch; an explicit DATABASE_PATH
+# (for example a seed build's output) starts from an empty schema.
+DEFAULT_SAVE_PATH = _default_database_path
 DATABASE_PATH = os.getenv("DATABASE_PATH", str(_default_database_path))
 BUNDLED_DATABASE_PATH = _bundled_database_path
 

@@ -146,3 +146,13 @@ def test_same_seed_builds_the_same_world(tmp_path, seed_db):
     build(again, seed=11, teams_per_discipline=TEAMS_PER_DISCIPLINE, drivers=DRIVERS)
     for table in ("drivers", "teams", "staff_members", "tracks"):
         assert _rows(again, table) == _rows(seed_db, table), table
+
+
+@pytest.mark.integration
+def test_build_into_the_default_save_starts_from_an_empty_schema(tmp_path, monkeypatch):
+    """A rebuild aimed at the game's own save must not start from the shipped world."""
+    monkeypatch.setenv("MOMENTUM_DATA_DIR", str(tmp_path))
+    output = tmp_path / "momentum.db"
+    counts = build(output, seed=11, teams_per_discipline=1, drivers=12)
+    assert counts["teams"] == 6
+    assert counts["drivers"] == 12

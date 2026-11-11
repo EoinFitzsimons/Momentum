@@ -47,7 +47,7 @@ from momentum.database.models import (
     SCHEMA_SQL,
 )
 from momentum.database.race_result_persistence import RaceResultPersistence
-from momentum.config import BUNDLED_DATABASE_PATH, DATABASE_PATH
+from momentum.config import BUNDLED_DATABASE_PATH, DATABASE_PATH, DEFAULT_SAVE_PATH
 
 
 INTEGER_DEFAULT_NULL = "INTEGER DEFAULT NULL"
@@ -109,7 +109,7 @@ class DatabaseManager(RaceResultPersistence):
         manager = DatabaseManager("/custom/path/db.sqlite")  # Custom path
     """
 
-    def __init__(self, db_path: str = DATABASE_PATH):
+    def __init__(self, db_path: str = DATABASE_PATH, seed_from_bundle: bool = True):
         """
         Initialise Database Manager
 
@@ -119,12 +119,16 @@ class DatabaseManager(RaceResultPersistence):
         Args:
             db_path (str): Path to SQLite database file. Defaults to configured path
                           from momentum.config.DATABASE_PATH
+            seed_from_bundle (bool): Copy the shipped seed world into the default
+                          per-user save on first launch. Pass False to guarantee
+                          an empty schema (the seed builder does).
 
         Raises:
             sqlite3.Error: If database initialisation fails
             OSError: If database directory cannot be created
         """
         self.db_path = db_path
+        self.seed_from_bundle = seed_from_bundle
         self.init_database()
 
     def init_database(self):
@@ -152,13 +156,14 @@ class DatabaseManager(RaceResultPersistence):
         db_path.parent.mkdir(parents=True, exist_ok=True)
 
         # First run of a packaged or installed game: copy the bundled seed
-        # world into the writable per-user location the game plays from. Only
-        # the configured default database is seeded this way; any other path
-        # (tests, tools, explicit saves) starts from an empty schema.
+        # world into the per-user save the game plays from by default. Only
+        # that default is seeded; an explicit DATABASE_PATH, a seed build's
+        # output, tests and tools all start from an empty schema.
         if (
-            not db_path.exists()
+            self.seed_from_bundle
+            and not db_path.exists()
             and BUNDLED_DATABASE_PATH.exists()
-            and db_path.resolve() == Path(DATABASE_PATH).resolve()
+            and db_path.resolve() == Path(DEFAULT_SAVE_PATH).resolve()
             and BUNDLED_DATABASE_PATH.resolve() != db_path.resolve()
         ):
             shutil.copy2(BUNDLED_DATABASE_PATH, db_path)
