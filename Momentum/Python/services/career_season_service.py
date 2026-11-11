@@ -10,7 +10,7 @@ from database.database_manager import DatabaseManager
 from services.championship_service import ChampionshipService
 from services.career_result_service import persist_career_race_result
 from services.tier_service import TIERS, normalise_tier
-from RaceLogic.race_format import race_format_for
+from RaceLogic.race_format import GRAND_PRIX, race_format_for
 from services.upgrade_service import UpgradeService
 
 TIER_ORDER = list(TIERS)
@@ -202,7 +202,7 @@ class CareerSeasonService:
             if not drivers:
                 continue
 
-            top_drivers = sorted(
+            ranked = sorted(
                 drivers,
                 key=lambda d: (
                     float(getattr(d, "speed", 50.0) or 50.0)
@@ -210,19 +210,24 @@ class CareerSeasonService:
                     + float(getattr(d, "consistency", 50.0) or 50.0)
                 ),
                 reverse=True,
-            )[: fmt.cars_per_team * fmt.drivers_per_car]
-
+            )
             team_rating = (
                 float(getattr(team, "operations_rating", 50.0) or 50.0) * 0.65
                 + float(getattr(team, "car_rating", 0.0) or 0.0) * 35.0
             )
-
-            for driver in top_drivers:
-                driver_rating = (
-                    float(getattr(driver, "speed", 50.0) or 50.0) * 0.42
-                    + float(getattr(driver, "racecraft", 50.0) or 50.0) * 0.33
-                    + float(getattr(driver, "consistency", 50.0) or 50.0) * 0.25
-                )
+            # One entry per car. Endurance cars share three drivers, so the
+            # car's pace is the crew's average and the lead driver carries it.
+            per_car = max(1, int(fmt.drivers_per_car))
+            for car in range(int(fmt.cars_per_team)):
+                crew = ranked[car * per_car : (car + 1) * per_car]
+                if not crew:
+                    break
+                driver_rating = sum(
+                    float(getattr(d, "speed", 50.0) or 50.0) * 0.42
+                    + float(getattr(d, "racecraft", 50.0) or 50.0) * 0.33
+                    + float(getattr(d, "consistency", 50.0) or 50.0) * 0.25
+                    for d in crew
+                ) / len(crew)
                 total = (
                     (driver_rating * 0.62)
                     + (team_rating * 0.33)
@@ -230,16 +235,18 @@ class CareerSeasonService:
                 )
                 entries.append(
                     {
-                        "driver_id": int(driver.id),
+                        "driver_id": int(crew[0].id),
                         "team_id": int(team.id),
                         "score": float(total),
                     }
                 )
 
-        # Every entrant is classified: in heats-and-final or bracket formats
-        # the cars that miss the final are still placed behind it, so each
-        # team earns its points and income for the round.
         entries.sort(key=lambda item: float(item["score"]), reverse=True)
+        if fmt.race_day == GRAND_PRIX:
+            # A grand prix grid is capped by regulation and track length; the
+            # slowest cars fail to qualify and take nothing from the round.
+            return entries[: fmt.grid_size(tier=tier, available=len(entries))]
+        # Heats, brackets and battles classify everyone who took part.
         return entries
 
     def _apply_promotion_relegation(
