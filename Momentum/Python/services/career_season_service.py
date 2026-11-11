@@ -236,10 +236,11 @@ class CareerSeasonService:
                     }
                 )
 
+        # Every entrant is classified: in heats-and-final or bracket formats
+        # the cars that miss the final are still placed behind it, so each
+        # team earns its points and income for the round.
         entries.sort(key=lambda item: float(item["score"]), reverse=True)
-        # Heats, brackets and regulation caps: only the format's field size
-        # makes the final classification.
-        return entries[: fmt.grid_size(tier=tier, available=len(entries))]
+        return entries
 
     def _apply_promotion_relegation(
         self, player_id: str, discipline: str, season: int
