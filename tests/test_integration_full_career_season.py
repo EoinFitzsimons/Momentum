@@ -8,7 +8,7 @@ import pytest
 def _seed_single_seater_roster(db):
     import importlib
 
-    career_seed = importlib.import_module("scripts.seed_career_mode")
+    career_seed = importlib.import_module("momentum.seed.world")
 
     disciplines = ["SINGLE_SEATER"]
     career_seed.seed_teams(db, 2, disciplines)
@@ -19,7 +19,7 @@ def _seed_single_seater_roster(db):
 @pytest.mark.integration
 def test_full_career_season_runner_completes_seeded_season(seeded_db):
     """Run a small but real season pipeline against a seeded temp database."""
-    season_runner = pytest.importorskip("scripts.run_full_career_season")
+    season_runner = pytest.importorskip("tools.run_full_career_season")
 
     _seed_single_seater_roster(seeded_db["db"])
 
