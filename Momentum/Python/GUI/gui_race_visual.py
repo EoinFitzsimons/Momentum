@@ -5051,11 +5051,11 @@ class RaceWindow(QMainWindow):
 
     def _contracted_fetch_limit(self, limit: int, tier_norm: Optional[str]) -> int:
         """Return candidate query size, widened when tier filtering is active."""
-        fetch_limit = int(limit)
         if tier_norm:
-            # Pull a broader candidate list first, then normalize/filter tiers in Python.
-            fetch_limit = max(fetch_limit * 8, fetch_limit + 20)
-        return fetch_limit
+            # The tier filter is applied in Python, so every contracted driver in
+            # the discipline must be a candidate or a lower league comes up short.
+            return 1_000_000
+        return int(limit)
 
     def _fetch_contracted_driver_rows(
         self, discipline_norm: str, fetch_limit: int
