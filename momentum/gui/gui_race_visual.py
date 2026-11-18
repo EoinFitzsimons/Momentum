@@ -63,6 +63,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QMessageBox,
     QComboBox,
+    QStyle,
 )
 import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
@@ -3754,11 +3755,20 @@ class RaceWindow(QMainWindow):
             gap_width = scaled(95)  # gap like "+888:888"
             position_width = self.standings_table.columnWidth(0)
             # The driver name takes whatever width is left after the fixed
-            # columns; on a narrow desktop it keeps a readable minimum and the
-            # table scrolls horizontally rather than hiding the gap column.
+            # columns, the frame and the vertical scrollbar a full field needs,
+            # so the gap column stays in view; on a very narrow desktop it keeps
+            # a readable minimum and the table scrolls horizontally instead.
             frame = self.standings_table.frameWidth() * 2
+            scrollbar = self.standings_table.style().pixelMetric(
+                QStyle.PixelMetric.PM_ScrollBarExtent
+            )
             name_width = (
-                sidebar_content_width - frame - position_width - lap_width - gap_width
+                sidebar_content_width
+                - frame
+                - scrollbar
+                - position_width
+                - lap_width
+                - gap_width
             )
             self.standings_table.setColumnWidth(1, max(scaled(160), name_width))
             self.standings_table.setColumnWidth(2, lap_width)
@@ -7258,7 +7268,10 @@ class RaceWindow(QMainWindow):
             symbol = "(=)"
         else:
             symbol = "(+)"
-        return QTableWidgetItem(f"{symbol} {entry['name']}")
+        item = QTableWidgetItem(f"{symbol} {entry['name']}")
+        # The full name is always reachable even when the column is narrow.
+        item.setToolTip(str(entry["name"]))
+        return item
 
     def _compute_gap_text(
         self,
