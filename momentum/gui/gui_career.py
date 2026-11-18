@@ -94,40 +94,63 @@ class WrappingPushButton(QPushButton):
     """Push button whose caption wraps onto further lines instead of clipping.
 
     QPushButton elides or clips long captions; the league cards on the career
-    board need the full tier and series name visible at every UI scale, so the
-    caption is drawn by a word-wrapping label laid out inside the button.
+    board need the full tier and series name visible at every UI scale. The
+    caption is re-flowed into explicit line breaks whenever the button's width
+    changes, so the button still draws its own text and keeps every stylesheet
+    state (checked, disabled, hover) intact.
     """
 
     def __init__(self, text: str = "", parent=None):
         super().__init__("", parent)
-        self._caption = QLabel(text, self)
-        self._caption.setWordWrap(True)
-        self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._caption.setStyleSheet("background: transparent; border: none;")
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(scaled(10), scaled(8), scaled(10), scaled(8))
-        layout.addWidget(self._caption)
+        self._caption = text or ""
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._reflow_caption()
 
     def setText(self, text: Optional[str]) -> None:  # type: ignore[override]
-        self._caption.setText(text or "")
-        self.updateGeometry()
+        self._caption = text or ""
+        self._reflow_caption()
 
     def text(self) -> str:  # type: ignore[override]
-        return self._caption.text()
-
-    def caption_label(self) -> QLabel:
         return self._caption
+
+    def displayed_text(self) -> str:
+        """The caption as drawn, with the line breaks chosen for the current width."""
+        return super().text()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._reflow_caption()
 
     def changeEvent(self, event) -> None:  # type: ignore[override]
         super().changeEvent(event)
         if event is not None and event.type() in (
-            QEvent.Type.EnabledChange,
+            QEvent.Type.FontChange,
             QEvent.Type.StyleChange,
-            QEvent.Type.PaletteChange,
         ):
-            self._caption.setEnabled(self.isEnabled())
+            self._reflow_caption()
+
+    def _available_text_width(self) -> int:
+        width = self.contentsRect().width() - scaled(24)
+        return width if width > 0 else 0
+
+    def _reflow_caption(self) -> None:
+        metrics = self.fontMetrics()
+        width = self._available_text_width()
+        lines: list[str] = []
+        for paragraph in self._caption.split("\n"):
+            current = ""
+            for word in paragraph.split():
+                candidate = f"{current} {word}".strip()
+                if current and width and metrics.horizontalAdvance(candidate) > width:
+                    lines.append(current)
+                    current = word
+                else:
+                    current = candidate
+            lines.append(current)
+        wrapped = "\n".join(lines)
+        if wrapped != super().text():
+            super().setText(wrapped)
+            self.updateGeometry()
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
