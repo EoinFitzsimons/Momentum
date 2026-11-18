@@ -273,6 +273,8 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             # every team in a league stays distinguishable at any UI scale.
             table.setWordWrap(True)
             table.setTextElideMode(Qt.TextElideMode.ElideNone)
+            # Pixel scrolling keeps every part of a tall wrapped row reachable.
+            table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
             header = table.horizontalHeader()
             if header is not None:
                 header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
