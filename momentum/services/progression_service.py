@@ -19,8 +19,6 @@ Authors: Eoin Fitzsimons
 import random
 from typing import Dict, Tuple, Optional, Any
 
-# Import database extensions to add progression methods
-import momentum.database.database_extensions  # noqa
 from momentum.database.database_manager import DatabaseManager
 from momentum.database.models import Driver
 from momentum.config import DATABASE_PATH

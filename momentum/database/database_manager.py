@@ -46,6 +46,7 @@ from momentum.database.models import (
     RaceResult,
     SCHEMA_SQL,
 )
+from momentum.database.personnel_persistence import PersonnelPersistence
 from momentum.database.race_result_persistence import RaceResultPersistence
 from momentum.config import BUNDLED_DATABASE_PATH, DATABASE_PATH, DEFAULT_SAVE_PATH
 
@@ -82,7 +83,7 @@ class SimpleTrack:
     drs_zones: int = 1
 
 
-class DatabaseManager(RaceResultPersistence):
+class DatabaseManager(PersonnelPersistence, RaceResultPersistence):
     """
     Database Manager - Core Data Access Layer
 

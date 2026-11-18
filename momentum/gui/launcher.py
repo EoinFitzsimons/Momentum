@@ -125,6 +125,12 @@ class MomentumLauncher:
         tuning_preset = config.get("tuning_preset", "balanced")
         self.race_window.set_tuning_preset(tuning_preset)
 
+        # Pre-Race Setup choices (championship and career dialogs)
+        if hasattr(self.race_window, "set_pre_race_conditions"):
+            self.race_window.set_pre_race_conditions(
+                config.get("weather"), config.get("tyre_strategy")
+            )
+
         # Apply display mode from config
         display_mode = config.get("display_mode", "borderless")
         self.race_window.set_display_mode(display_mode)
@@ -373,6 +379,9 @@ class MomentumLauncher:
             existing = getattr(self.main_menu, "career_window")
 
         if existing is not None:
+            if self.main_menu is not None and hasattr(self.main_menu, "show_career_page"):
+                if self.main_menu.show_career_page():
+                    return
             if hasattr(existing, "load_data"):
                 existing.load_data()
             existing.show()
@@ -396,19 +405,19 @@ class MomentumLauncher:
     def _handle_career_next_race(self, config: dict) -> None:
         """Career progression handler using career_* tables (no championships dependency)."""
         self._close_active_race_window()
+        # The race is over either way; forget it so a failure below falls back
+        # to the main menu instead of re-entering this handler.
+        self.race_config = {}
 
         try:
             from momentum.database.database_manager import DatabaseManager
 
+            from momentum.services.career_result_service import settle_career_race
+
             db = DatabaseManager()
             race_id = int(config.get("career_race_id") or config.get("race_id") or 0)
-            if race_id > 0:
-                with db.get_connection() as conn:
-                    conn.execute(
-                        "UPDATE career_races SET status = 'completed' WHERE id = ?",
-                        (race_id,),
-                    )
-                    conn.commit()
+            outcome = settle_career_race(db, race_id)
+            print(f"[LAUNCHER] Career race {race_id} {outcome}")
 
             career_championship_id = int(config.get("career_championship_id") or 0)
             championship = None
@@ -437,7 +446,7 @@ class MomentumLauncher:
                 championship = getattr(existing, "championship", None)
 
             if championship is None:
-                self.return_to_menu()
+                self._show_main_menu()
                 return
 
             self._show_or_create_career_hq(championship)
@@ -446,10 +455,63 @@ class MomentumLauncher:
             import traceback
 
             traceback.print_exc()
-            self.return_to_menu()
+            self._show_main_menu()
+
+    def _active_race_mode(self) -> str:
+        mode = (self.race_config or {}).get("mode") if hasattr(self, "race_config") else None
+        if mode is None and self.race_window is not None:
+            mode = getattr(self.race_window, "_game_mode", None)
+        return str(mode or "").lower()
+
+    def _active_race_is_career(self) -> bool:
+        return self._active_race_mode() == "career"
 
     def return_to_menu(self):
-        """Return from race to main menu."""
+        """Return from a race to where it was started: Career HQ, the championship window or the main menu."""
+        if self._active_race_is_career():
+            self._handle_career_next_race(dict(self.race_config or {}))
+            return
+        if self._active_race_mode() == "championship" and (self.race_config or {}).get(
+            "championship_id"
+        ):
+            self._handle_championship_return(dict(self.race_config or {}))
+            return
+        self._show_main_menu()
+
+    def _handle_championship_return(self, config: dict) -> None:
+        """Settle the round just left and go back to the championship window."""
+        self._close_active_race_window()
+        self.race_config = {}
+        try:
+            from momentum.services.race_settlement import settle_championship_race
+
+            ctx = self._load_championship_context(config.get("championship_id"))
+            if ctx is None:
+                return
+            db, championship, championship_service = ctx
+            race_id = int(config.get("race_id") or 0)
+            outcome = settle_championship_race(db, championship_service, race_id)
+            if outcome == "completed":
+                self._backfill_race_points_if_needed(
+                    championship_service,
+                    race_id,
+                    db=db,
+                    discipline=championship.discipline,
+                )
+            print(f"[LAUNCHER] Championship race {race_id} {outcome}")
+        except Exception as e:
+            print(f"[LAUNCHER] ERROR settling championship race: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+        if self.main_menu is not None and hasattr(self.main_menu, "show_championship_page"):
+            if self.main_menu.show_championship_page():
+                return
+        self._show_main_menu()
+
+    def _show_main_menu(self):
+        """Close any race window and show the main menu, unconditionally."""
         if self.race_window:
             self.race_window.close()
             self.race_window = None

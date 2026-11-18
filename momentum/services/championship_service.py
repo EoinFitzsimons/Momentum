@@ -385,6 +385,7 @@ class ChampionshipService:
         Valid transitions:
         - scheduled -> in-progress
         - in-progress -> completed
+        - in-progress -> scheduled (race abandoned before any result was saved)
         - scheduled -> cancelled
 
         Args:
@@ -408,7 +409,7 @@ class ChampionshipService:
         # Define valid transitions
         valid_transitions = {
             "scheduled": ["in-progress", "cancelled"],
-            "in-progress": ["completed"],
+            "in-progress": ["completed", "scheduled"],
             "completed": [],  # No transitions from completed
             "cancelled": [],  # No transitions from cancelled
         }

@@ -45,7 +45,11 @@ def test_race_lifecycle_transition_rules(seeded_championship):
     assert success is True
     assert error is None
 
+    # An abandoned race (no result saved) may return to the calendar.
     success, error = service.update_race_lifecycle_status(race_id, "scheduled")
+    assert success is True
+    assert error is None
+    success, error = service.update_race_lifecycle_status(race_id, "completed")
     assert success is False
     assert "Invalid transition" in (error or "")
 

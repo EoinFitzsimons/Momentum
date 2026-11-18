@@ -124,7 +124,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self.setWindowTitle("Select Career")
         self._ensure_career_tables()
         self._replace_create_button_text()
-        self._select_discipline("SINGLE_SEATER")
+        self._select_discipline(self._initial_discipline())
 
     def setup_ui(self):
         """Build the career-world entry screen instead of a generic table."""
@@ -139,8 +139,10 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             QGroupBox::title { color: #7EE6E0; padding: 0 6px; }
             QPushButton { background-color: #29343A; color: #EAF8FA; border: 1px solid #4B626A; border-radius: 6px; padding: 10px; }
             QPushButton:hover { background-color: #34464D; border-color: #7EE6E0; }
-            QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; }
+            QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; font-weight: 700; }
             QTableWidget { background-color: #172023; color: #EAF8FA; gridline-color: #34464D; border: 1px solid #405057; }
+            QTableWidget[selectedLeague="true"] { border: 2px solid #7EE6E0; }
+            QLabel[selectedLeague="true"] { color: #7EE6E0; font-weight: 700; }
             QHeaderView::section { background-color: #29343A; color: #B7D9DB; padding: 7px; border: none; }
             """
         )
@@ -327,12 +329,48 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             else:
                 button.setText(f"{tier_label(tier)} · no series yet")
                 button.setEnabled(False)
-            button.setChecked(
-                bool(self._selected_series and series and
-                     int(self._selected_series["id"]) == int(series["id"]))
-            )
             self._fill_tier_table(widgets["table"], widgets["summary"], teams_by_tier[tier], series)
         self._load_profile_summary()
+        self._select_series(self._resolve_selected_tier(series_by_tier))
+
+    def _owned_team(self):
+        """The team the saved profile currently runs, if any."""
+        try:
+            team_id = self.db.get_player_team_id(PLAYER_ID)
+            return self.db.get_team(int(team_id)) if team_id else None
+        except Exception:
+            return None
+
+    def _initial_discipline(self) -> str:
+        """Open on the discipline of the player's current team, else single-seaters."""
+        team = self._owned_team()
+        discipline = str(getattr(team, "discipline", "") or "")
+        if discipline and any(value == discipline for value, _ in self.discipline_buttons):
+            return discipline
+        return "SINGLE_SEATER"
+
+    def _resolve_selected_tier(self, series_by_tier: dict[str, dict]) -> str | None:
+        """Keep the current choice, else the player's own league, else the lowest tier.
+
+        The league of the team the profile owns is where the career last played,
+        so it is the default; a new save starts at the bottom of the ladder.
+        """
+        selected = self._selected_series
+        if selected:
+            for tier, series in series_by_tier.items():
+                if int(series["id"]) == int(selected["id"]):
+                    return tier
+        team = self._owned_team()
+        if team is not None and str(getattr(team, "discipline", "")) == str(
+            self._selected_discipline
+        ):
+            team_tier = normalise_tier(getattr(team, "tier", None))
+            if team_tier in series_by_tier:
+                return team_tier
+        for tier in reversed(TIERS):
+            if tier in series_by_tier:
+                return tier
+        return None
 
     def _fill_tier_table(self, table: QTableWidget, summary: QLabel, teams: list, series: dict | None) -> None:
         teams = sorted(teams, key=lambda t: str(getattr(t, "name", "")))
@@ -389,12 +427,27 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         ratings = [float(getattr(m, "rating", 50.0) or 50.0) for m in staff]
         return sum(ratings) / len(ratings) if ratings else None
 
-    def _select_series(self, tier: str) -> None:
-        widgets = self.tier_columns.get(tier)
+    def _select_series(self, tier: str | None) -> None:
+        widgets = self.tier_columns.get(tier) if tier else None
         series = widgets["series"] if widgets else None
         self._selected_series = series
         for value, column in self.tier_columns.items():
-            column["button"].setChecked(bool(series) and value == tier)
+            is_selected = bool(series) and value == tier
+            column["button"].setChecked(is_selected)
+            for widget in (column["table"], column["summary"]):
+                widget.setProperty("selectedLeague", "true" if is_selected else "false")
+                style = widget.style()
+                if style is not None:
+                    style.unpolish(widget)
+                    style.polish(widget)
+        if series:
+            self.select_btn.setText(
+                f"Enter Selected World · {tier_label(tier)} · {series['name']}"
+            )
+            self.select_btn.setEnabled(True)
+        else:
+            self.select_btn.setText("Enter Selected World · no league available")
+            self.select_btn.setEnabled(False)
 
     def _replace_create_button_text(self) -> None:
         for button in self.findChildren(QPushButton):
@@ -1709,19 +1762,25 @@ class CareerWindow(QMainWindow):
         race_id = int(self.next_race["race_id"])
         with self.db.get_connection() as conn:
             row = conn.execute(
-                "SELECT track_id, weather_conditions, laps FROM career_races WHERE id = ?",
+                "SELECT id, track_id, weather_conditions, laps, round_number, race_date "
+                "FROM career_races WHERE id = ?",
                 (race_id,),
             ).fetchone()
-            if not row:
-                warning(self, "Race Error", "Could not load next race details.")
-                return
+        if not row:
+            warning(self, "Race Error", "Could not load next race details.")
+            return
+        race_data = dict(row)
+
+        setup = self._show_pre_race_setup(race_data)
+        if setup is None:
+            return
+
+        with self.db.get_connection() as conn:
             conn.execute(
                 "UPDATE career_races SET status = 'in-progress' WHERE id = ?",
                 (race_id,),
             )
             conn.commit()
-
-        race_data = dict(row)
 
         config = {
             "mode": "career",
@@ -1734,12 +1793,46 @@ class CareerWindow(QMainWindow):
             "team": self.owned_team,
             "discipline": self.championship.discipline,
             "tier": str(getattr(self.championship, "tier", "TIER_2") or "TIER_2"),
-            "weather": race_data.get("weather_conditions", "clear"),
-            "tyre_strategy": "Medium",
+            "weather": setup.get("weather") or race_data.get("weather_conditions", "clear"),
+            "tyre_strategy": setup.get("tyre_strategy") or "Medium",
             "laps": int(race_data.get("laps", 3) or 3),
         }
 
         self.start_race_signal.emit(config)
+
+    def _pre_race_dialog(self, race_data: dict):
+        """Build the shared Pre-Race Setup dialog for the next career round.
+
+        The team and driver were chosen in Career HQ, so both are locked; the
+        weather defaults to the calendar forecast and only tyres remain open.
+        """
+        from momentum.gui.gui_championship import PreRaceSetupDialog
+
+        race = SimpleNamespace(
+            id=int(race_data["id"]),
+            track_id=int(race_data["track_id"]),
+            laps=int(race_data.get("laps", 3) or 3),
+            round_number=int(race_data.get("round_number", 0) or 0),
+            race_date=str(race_data.get("race_date", "") or ""),
+            weather_conditions=str(race_data.get("weather_conditions", "") or ""),
+        )
+        track = self.db.get_track(int(race_data["track_id"]))
+        return PreRaceSetupDialog(
+            self.db,
+            self.championship,
+            race,
+            track,
+            locked_team_id=int(self.owned_team.id) if self.owned_team else None,
+            parent=self,
+            locked_driver_id=int(self.selected_driver.id),
+        )
+
+    def _show_pre_race_setup(self, race_data: dict) -> dict | None:
+        """Run the pre-race dialog; None when the player backs out."""
+        dialog = self._pre_race_dialog(race_data)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.get_race_config()
 
     def _on_return_to_menu(self):
         self.return_to_menu.emit()

@@ -626,7 +626,7 @@ class TeamService:
         seats = max(1, int(driver_slots_for(discipline)))
         hiring = HiringService(self.db.db_path)
         try:
-            pool, _total = hiring.db.get_available_drivers(  # type: ignore[attr-defined]
+            pool, _total = hiring.db.get_available_drivers(
                 discipline=discipline, page_size=500
             )
         except Exception:
@@ -666,13 +666,13 @@ class TeamService:
             raise ValueError(f"Team {team_id} not found")
         released_drivers = [int(d.id) for d in self.db.get_drivers_by_team(team_id)]
         for driver_id in released_drivers:
-            self.db.release_driver(driver_id)  # type: ignore[attr-defined]
+            self.db.release_driver(driver_id)
         try:
             released_staff = [int(s.id) for s in self.db.get_staff_by_team(team_id)]
         except Exception:
             released_staff = []
         for staff_id in released_staff:
-            self.db.release_staff(staff_id)  # type: ignore[attr-defined]
+            self.db.release_staff(staff_id)
         # The row stays (results and ledger entries point at it); it simply
         # leaves the league.
         with self.db.get_connection() as conn:

@@ -524,3 +524,41 @@ class BaseDisciplineEngine(ABC):
 
 # Export the base classes and enums
 __all__ = ["BaseDisciplineEngine", "RaceContext", "RacingDiscipline"]
+
+
+# Pre-race forecast labels (as offered by the Pre-Race Setup dialog and stored
+# on career calendars) mapped to the engine's numeric weather inputs.
+# precipitation is mm/h (the engine targets track_wetness = precipitation / 8).
+FORECASTS: Dict[str, Dict[str, float]] = {
+    "clear": {"precipitation": 0.0, "visibility": 100.0, "humidity": 45.0, "track_wetness": 0.0},
+    "cloudy": {"precipitation": 0.0, "visibility": 95.0, "humidity": 65.0, "track_wetness": 0.0},
+    "rainy": {"precipitation": 4.0, "visibility": 80.0, "humidity": 90.0, "track_wetness": 0.5},
+    "wet": {"precipitation": 2.0, "visibility": 85.0, "humidity": 95.0, "track_wetness": 0.8},
+    "storm": {"precipitation": 10.0, "visibility": 55.0, "humidity": 98.0, "track_wetness": 1.0},
+}
+FORECAST_ALIASES = {"rain": "rainy", "overcast": "cloudy", "dry": "clear", "sunny": "clear"}
+
+
+def normalise_forecast(label: Any) -> Optional[str]:
+    """Return the canonical forecast key for a label, or None if unknown."""
+    raw = str(label or "").strip().lower()
+    raw = FORECAST_ALIASES.get(raw, raw)
+    return raw if raw in FORECASTS else None
+
+
+def apply_forecast(context: RaceContext, label: Any) -> Optional[str]:
+    """Write a forecast into ``context`` weather and track conditions.
+
+    Returns the canonical forecast applied, or None when the label is unknown
+    and the context is left at its dry defaults.
+    """
+    key = normalise_forecast(label)
+    if key is None:
+        return None
+    forecast = FORECASTS[key]
+    context.weather_conditions["precipitation"] = forecast["precipitation"]
+    context.weather_conditions["visibility"] = forecast["visibility"]
+    context.weather_conditions["humidity"] = forecast["humidity"]
+    context.track_conditions["track_wetness"] = forecast["track_wetness"]
+    context.track_conditions["forecast"] = key
+    return key
