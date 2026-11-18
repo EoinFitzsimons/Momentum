@@ -122,3 +122,14 @@ def test_a_name_from_another_discipline_is_refused(discipline, wrong_name):
 def test_every_shipped_name_reads_as_its_own_discipline():
     for _, raw in read_sources():
         assert name_discipline(raw["name"]) == raw["primary_discipline"], raw["name"]
+
+
+def test_drag_strips_present_the_race_distance_not_the_strip_length():
+    from types import SimpleNamespace
+
+    from momentum.data.circuit_schema import track_distance_label
+
+    strip = SimpleNamespace(is_point_to_point=True, length_km=1.09)
+    circuit = SimpleNamespace(is_point_to_point=False, length_km=6.35)
+    assert track_distance_label(strip) == "402 m"
+    assert track_distance_label(circuit) == "6.35km"

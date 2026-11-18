@@ -88,7 +88,7 @@ from momentum.gui.accessibility_settings import (
     get_theme_stylesheet,
 )
 from momentum.gui.themed_messagebox import warning, question
-from momentum.data.circuit_schema import QUARTER_MILE_M
+from momentum.data.circuit_schema import QUARTER_MILE_M, track_distance_label
 from momentum.gui.circuit_dressing import (
     PIT_BOX_COUNT,
     TEAM_FALLBACK_COLOURS,
@@ -5009,9 +5009,8 @@ class RaceWindow(QMainWindow):
         """Set final ready message after successful data load."""
         track = self.track
         track_name = getattr(track, "name", "Unknown Track")
-        track_km = float(getattr(track, "length_km", 0.0))
         self.info_label.setText(
-            f"{len(self.drivers)} drivers | {track_name} ({track_km:.2f}km)"
+            f"{len(self.drivers)} drivers | {track_name} ({track_distance_label(track)})"
         )
         print("Data loading complete - ready to race")
 

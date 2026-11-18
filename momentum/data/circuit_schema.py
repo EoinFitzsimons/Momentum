@@ -28,6 +28,15 @@ Grade = Literal["Diamond", "Platinum", "Gold", "Silver", "Bronze", "Approved"]
 QUARTER_MILE_M = 402.34
 
 
+def track_distance_label(track: object) -> str:
+    """The distance a player should see for a track: the 402 m race distance
+    for a drag strip (its stored length also covers the shutdown area), the
+    lap length in kilometres for a circuit."""
+    if getattr(track, "is_point_to_point", False):
+        return f"{QUARTER_MILE_M:.0f} m"
+    return f"{float(getattr(track, 'length_km', 0.0) or 0.0):.2f}km"
+
+
 class CircuitError(ValueError):
     """Raised when the circuit source data breaks its schema or profile."""
 
