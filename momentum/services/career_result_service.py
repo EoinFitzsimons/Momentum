@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from momentum.services.race_settlement import UNCHANGED, settle_race
+
 
 def persist_career_race_result(
     db: Any,
@@ -88,24 +90,29 @@ def settle_career_race(db: Any, career_race_id: int) -> str:
     it is raced again rather than silently skipped, else ``"unchanged"``.
     """
     if db is None or int(career_race_id or 0) <= 0:
-        return "unchanged"
-    if complete_career_race(db, career_race_id):
-        return "completed"
+        return UNCHANGED
     with db.get_connection() as conn:
         row = conn.execute(
             "SELECT status FROM career_races WHERE id = ?", (int(career_race_id),)
         ).fetchone()
-        if row is None or str(row[0]) == "completed":
-            return "unchanged"
+        if row is None:
+            return UNCHANGED
         has_results = conn.execute(
             "SELECT 1 FROM career_race_results WHERE career_race_id = ? LIMIT 1",
             (int(career_race_id),),
         ).fetchone()
-        if has_results or str(row[0]) == "scheduled":
-            return "unchanged"
-        conn.execute(
-            "UPDATE career_races SET status = 'scheduled' WHERE id = ?",
-            (int(career_race_id),),
-        )
-        conn.commit()
-        return "reopened"
+
+    def _reopen() -> None:
+        with db.get_connection() as conn:
+            conn.execute(
+                "UPDATE career_races SET status = 'scheduled' WHERE id = ?",
+                (int(career_race_id),),
+            )
+            conn.commit()
+
+    return settle_race(
+        str(row[0]),
+        bool(has_results),
+        lambda: complete_career_race(db, career_race_id),
+        _reopen,
+    )
