@@ -207,3 +207,34 @@ def test_career_pre_race_dialog_locks_team_and_driver(career_db):
     assert config["team"].id == team_id
     assert config["driver"].id == window.selected_driver.id
     assert config["race_id"] == int(race["id"])
+
+
+@pytest.mark.unit
+def test_failed_career_settlement_falls_back_to_the_main_menu_once(career_db, monkeypatch):
+    from momentum.gui import launcher as launcher_module
+    import momentum.services.career_result_service as crs
+
+    db, championship, team_id, player_id = career_db
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(crs, "settle_career_race", boom)
+
+    calls = []
+
+    class _Menu:
+        def show_career_page(self):
+            calls.append("career_page")
+            return True
+
+        def show(self):
+            calls.append("main_menu")
+
+    launcher = launcher_module.MomentumLauncher.__new__(launcher_module.MomentumLauncher)
+    launcher.main_menu = _Menu()
+    launcher.race_window = None
+    launcher.race_config = {"mode": "career", "career_championship_id": int(championship.id), "race_id": 1}
+    launcher.return_to_menu()
+    assert calls == ["main_menu"]
+    assert launcher.race_config == {}

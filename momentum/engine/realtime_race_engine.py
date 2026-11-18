@@ -3374,9 +3374,9 @@ class RealtimeRaceEngine:
             )
             entry["time_seconds"] = None
             entry["race_stopped"] = True
-            entry["distance_m"] = float(state.lap) * float(
-                race_state.track_length_m
-            ) + float(state.position_m)
+            # position_m is cumulative from the start line, so it already
+            # includes every completed lap.
+            entry["distance_m"] = float(state.position_m)
             results.append(entry)
         for state in dnf_drivers:
             entry = self._build_result_entry(

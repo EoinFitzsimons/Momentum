@@ -399,6 +399,9 @@ class MomentumLauncher:
     def _handle_career_next_race(self, config: dict) -> None:
         """Career progression handler using career_* tables (no championships dependency)."""
         self._close_active_race_window()
+        # The race is over either way; forget it so a failure below falls back
+        # to the main menu instead of re-entering this handler.
+        self.race_config = {}
 
         try:
             from momentum.database.database_manager import DatabaseManager
@@ -437,7 +440,7 @@ class MomentumLauncher:
                 championship = getattr(existing, "championship", None)
 
             if championship is None:
-                self.return_to_menu()
+                self._show_main_menu()
                 return
 
             self._show_or_create_career_hq(championship)
@@ -446,7 +449,7 @@ class MomentumLauncher:
             import traceback
 
             traceback.print_exc()
-            self.return_to_menu()
+            self._show_main_menu()
 
     def _active_race_is_career(self) -> bool:
         mode = (self.race_config or {}).get("mode") if hasattr(self, "race_config") else None
@@ -459,7 +462,10 @@ class MomentumLauncher:
         if self._active_race_is_career():
             self._handle_career_next_race(dict(self.race_config or {}))
             return
+        self._show_main_menu()
 
+    def _show_main_menu(self):
+        """Close any race window and show the main menu, unconditionally."""
         if self.race_window:
             self.race_window.close()
             self.race_window = None
