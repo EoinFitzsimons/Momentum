@@ -844,6 +844,9 @@ class FoundTeamDialog(QDialog):
         home = nationality_code(home_country)
         if home is not None:
             self.country_combo.setCurrentIndex(max(0, self.country_combo.findData(home)))
+        else:
+            self.country_combo.insertItem(0, "Choose a country", None)
+            self.country_combo.setCurrentIndex(0)
         form.addRow("Home country", self.country_combo)
         self.hq_edit = QLineEdit()
         self.hq_edit.setPlaceholderText("Headquarters (town or city)")
@@ -877,11 +880,15 @@ class FoundTeamDialog(QDialog):
         if not name:
             warning(self, "Team Name Required", "Give your team a name first.")
             return
+        country = self.country_combo.currentData()
+        if not country:
+            warning(self, "Home Country Required", "Choose where the team is based.")
+            return
         try:
             result = self._service.found_player_team(
                 name=name,
                 discipline=self.discipline,
-                nationality=str(self.country_combo.currentData() or "INT"),
+                nationality=str(country),
                 tier=str(self.tier_combo.currentData()),
                 team_principal=self.principal_edit.text().strip(),
                 headquarters=self.hq_edit.text().strip(),

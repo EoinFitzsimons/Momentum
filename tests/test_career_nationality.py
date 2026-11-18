@@ -29,3 +29,13 @@ def test_found_team_dialog_defaults_to_the_managers_country(seeded_db):
     other = FoundTeamDialog(seeded_db["db"], "SINGLE_SEATER", home_country="Ireland")
     assert other.country_combo.currentData() == "IRL"
     assert app is not None
+
+
+def test_found_team_dialog_has_no_country_when_the_nationality_is_unknown(seeded_db):
+    from PyQt6.QtWidgets import QApplication
+
+    QApplication.instance() or QApplication([])
+    from momentum.gui.gui_career import FoundTeamDialog
+
+    dialog = FoundTeamDialog(seeded_db["db"], "SINGLE_SEATER", home_country="Atlantis")
+    assert dialog.country_combo.currentData() is None

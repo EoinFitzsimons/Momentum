@@ -427,7 +427,7 @@ class CreateChampionshipDialog(QDialog):
         self.calendar_list = QListWidget()
         self.calendar_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.calendar_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.calendar_list.setMinimumHeight(260)
+        self.calendar_list.setMinimumHeight(160)
         self.calendar_list.model().rowsMoved.connect(lambda *_: self._refresh_calendar_rows())
         tracks_layout.addWidget(self.calendar_list)
 
