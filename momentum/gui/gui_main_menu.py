@@ -52,6 +52,7 @@ from PyQt6.QtWidgets import (
     QListWidgetItem,
     QDialog,
     QGridLayout,
+    QScrollArea,
     QSizePolicy,
 )
 import sys
@@ -407,11 +408,20 @@ class MainMenuWindow(QMainWindow):
         self.view_stack = QStackedWidget()
         root_layout.addWidget(self.view_stack)
 
-        self.menu_page = QWidget()
+        # The menu content sits in a scroll area so that a large UI scale on
+        # a small display never pushes the controls out of reach.
+        self.menu_page = QScrollArea()
+        self.menu_page.setWidgetResizable(True)
+        self.menu_page.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.menu_page.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        menu_content = QWidget()
+        self.menu_page.setWidget(menu_content)
         self.view_stack.addWidget(self.menu_page)
         self.view_stack.setCurrentWidget(self.menu_page)
 
-        main_layout = QVBoxLayout(self.menu_page)
+        main_layout = QVBoxLayout(menu_content)
         margin = scaled(40)
         main_layout.setContentsMargins(margin, scaled(28), margin, scaled(28))
         main_layout.setSpacing(scaled(16))
