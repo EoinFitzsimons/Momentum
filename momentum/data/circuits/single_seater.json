@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 1,
-    "name": "Royal Apex Autodromo",
+    "name": "Al Khor Grand Prix Circuit",
     "country": "Qatar",
     "region": "Al Khor",
     "circuit_type": "permanent",
@@ -42,7 +42,7 @@
   },
   {
     "circuit_id": 2,
-    "name": "West Talaal Raceway",
+    "name": "Brabant Grand Prix Circuit",
     "country": "Belgium",
     "region": "Brabant",
     "circuit_type": "permanent",
@@ -83,7 +83,7 @@
   },
   {
     "circuit_id": 3,
-    "name": "Rosario Racing Centre",
+    "name": "Sentosa International Circuit",
     "country": "Singapore",
     "region": "Sentosa",
     "circuit_type": "street",
@@ -124,7 +124,7 @@
   },
   {
     "circuit_id": 4,
-    "name": "Isvik Loop",
+    "name": "Otago Grand Prix Circuit",
     "country": "New Zealand",
     "region": "Otago",
     "circuit_type": "permanent",
@@ -165,7 +165,7 @@
   },
   {
     "circuit_id": 5,
-    "name": "Jinrai Autobahn",
+    "name": "Victoria Grand Prix Circuit",
     "country": "Australia",
     "region": "Victoria",
     "circuit_type": "permanent",
@@ -206,7 +206,7 @@
   },
   {
     "circuit_id": 6,
-    "name": "North Winterpeak Corso",
+    "name": "Winterpeak International Circuit",
     "country": "Australia",
     "region": "Queensland",
     "circuit_type": "permanent",
@@ -247,7 +247,7 @@
   },
   {
     "circuit_id": 7,
-    "name": "West Caspar Speedway",
+    "name": "Kallang Reach Grand Prix Circuit",
     "country": "Singapore",
     "region": "Sentosa",
     "circuit_type": "permanent",
@@ -288,7 +288,7 @@
   },
   {
     "circuit_id": 8,
-    "name": "Thorsheim Rally Stage",
+    "name": "Sabah International Circuit",
     "country": "Malaysia",
     "region": "Sabah",
     "circuit_type": "permanent",
@@ -329,7 +329,7 @@
   },
   {
     "circuit_id": 9,
-    "name": "Nordvast Ring",
+    "name": "Wallonia Grand Prix Circuit",
     "country": "Belgium",
     "region": "Wallonia",
     "circuit_type": "permanent",
@@ -370,7 +370,7 @@
   },
   {
     "circuit_id": 10,
-    "name": "Rasheed International Circuito",
+    "name": "Pattaya International Circuit",
     "country": "Thailand",
     "region": "Pattaya",
     "circuit_type": "permanent",
@@ -411,7 +411,7 @@
   },
   {
     "circuit_id": 11,
-    "name": "Fjordheim Grand Prix Circuit",
+    "name": "Al Rasheed Grand Prix Circuit",
     "country": "Saudi Arabia",
     "region": "Eastern",
     "circuit_type": "street",
@@ -452,7 +452,7 @@
   },
   {
     "circuit_id": 12,
-    "name": "Eriksund Arena",
+    "name": "Deccan International Circuit",
     "country": "India",
     "region": "Maharashtra",
     "circuit_type": "permanent",
@@ -493,7 +493,7 @@
   },
   {
     "circuit_id": 13,
-    "name": "Dolorosa Circuit",
+    "name": "Autodromo di Dolorosa",
     "country": "Italy",
     "region": "Tuscana",
     "circuit_type": "street",
@@ -534,7 +534,7 @@
   },
   {
     "circuit_id": 14,
-    "name": "Crestmere International Autodrome",
+    "name": "Akatsuki International Circuit",
     "country": "Japan",
     "region": "Kanto",
     "circuit_type": "street",
@@ -575,7 +575,7 @@
   },
   {
     "circuit_id": 15,
-    "name": "Oldgate Endurance Circuit",
+    "name": "Changi Grand Prix Circuit",
     "country": "Singapore",
     "region": "Changi",
     "circuit_type": "permanent",
@@ -616,7 +616,7 @@
   },
   {
     "circuit_id": 16,
-    "name": "Central Fusion Endurance Circuit",
+    "name": "Karnataka Grand Prix Circuit",
     "country": "India",
     "region": "Karnataka",
     "circuit_type": "permanent",
@@ -657,7 +657,7 @@
   },
   {
     "circuit_id": 17,
-    "name": "Genki Piste",
+    "name": "Canterbury International Circuit",
     "country": "New Zealand",
     "region": "Canterbury",
     "circuit_type": "permanent",
@@ -698,7 +698,7 @@
   },
   {
     "circuit_id": 18,
-    "name": "Dynex Rally Stage",
+    "name": "Sonoran Grand Prix Circuit",
     "country": "United States",
     "region": "Arizona",
     "circuit_type": "street",
@@ -739,7 +739,7 @@
   },
   {
     "circuit_id": 19,
-    "name": "Newbridge Ring",
+    "name": "Nieuwbrug Grand Prix Circuit",
     "country": "Netherlands",
     "region": "Utrecht",
     "circuit_type": "permanent",
@@ -780,7 +780,7 @@
   },
   {
     "circuit_id": 20,
-    "name": "National Uzumaki Racing Centre",
+    "name": "Uzumaki International Circuit",
     "country": "Japan",
     "region": "Kansai",
     "circuit_type": "street",
@@ -821,7 +821,7 @@
   },
   {
     "circuit_id": 21,
-    "name": "Uzumaki Autodromo",
+    "name": "Carinthia Grand Prix Circuit",
     "country": "Austria",
     "region": "Carinthia",
     "circuit_type": "street",
@@ -862,7 +862,7 @@
   },
   {
     "circuit_id": 22,
-    "name": "Imperial Havenport Circuito",
+    "name": "Autódromo de Vila Nova",
     "country": "Brazil",
     "region": "São Paulo",
     "circuit_type": "permanent",
@@ -903,7 +903,7 @@
   },
   {
     "circuit_id": 23,
-    "name": "Eagleton Complex",
+    "name": "Autodromo Siciliano",
     "country": "Italy",
     "region": "Sicilia",
     "circuit_type": "permanent",
@@ -944,7 +944,7 @@
   },
   {
     "circuit_id": 24,
-    "name": "Central Uzumaki Complex",
+    "name": "Kyushu Grand Prix Circuit",
     "country": "Japan",
     "region": "Kyushu",
     "circuit_type": "street",
@@ -985,7 +985,7 @@
   },
   {
     "circuit_id": 25,
-    "name": "North Grandeza Loop",
+    "name": "Noboru International Circuit",
     "country": "Japan",
     "region": "Kyushu",
     "circuit_type": "permanent",

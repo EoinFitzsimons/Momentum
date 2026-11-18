@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 151,
-    "name": "Valentia Grand Prix Circuit",
+    "name": "La Plata Rallycross Circuit",
     "country": "Argentina",
     "region": "Buenos Aires",
     "circuit_type": "mixed",
@@ -95,7 +95,7 @@
   },
   {
     "circuit_id": 153,
-    "name": "Carlsen Track",
+    "name": "Atlas Rally Stage",
     "country": "Morocco",
     "region": "Fes",
     "circuit_type": "mixed",
@@ -142,7 +142,7 @@
   },
   {
     "circuit_id": 154,
-    "name": "Highbridge Motor Stadium",
+    "name": "Québec Motor Stadium",
     "country": "Canada",
     "region": "Quebec",
     "circuit_type": "mixed",
@@ -236,7 +236,7 @@
   },
   {
     "circuit_id": 156,
-    "name": "Marakesh Speedway",
+    "name": "Muharraq Arena",
     "country": "Bahrain",
     "region": "Muharraq",
     "circuit_type": "mixed",
@@ -283,7 +283,7 @@
   },
   {
     "circuit_id": 157,
-    "name": "Mjolnir International Piste",
+    "name": "Jeolla Rallycross Circuit",
     "country": "South Korea",
     "region": "Jeolla",
     "circuit_type": "mixed",
@@ -330,7 +330,7 @@
   },
   {
     "circuit_id": 158,
-    "name": "Kingsgate International Racing Arena",
+    "name": "Al Dhafra Arena",
     "country": "United Arab Emirates",
     "region": "Abu Dhabi",
     "circuit_type": "mixed",
@@ -377,7 +377,7 @@
   },
   {
     "circuit_id": 159,
-    "name": "Pinecrest Autodromo",
+    "name": "Madeira Rally Stage",
     "country": "Portugal",
     "region": "Madeira",
     "circuit_type": "mixed",
@@ -424,7 +424,7 @@
   },
   {
     "circuit_id": 160,
-    "name": "Byakko Autodrome",
+    "name": "Araucanía Rally Stage",
     "country": "Chile",
     "region": "Araucanía",
     "circuit_type": "mixed",
@@ -471,7 +471,7 @@
   },
   {
     "circuit_id": 161,
-    "name": "Fujimura Autobahn",
+    "name": "Valais Rally Stage",
     "country": "Switzerland",
     "region": "Valais",
     "circuit_type": "mixed",
@@ -518,7 +518,7 @@
   },
   {
     "circuit_id": 162,
-    "name": "Chikara Endurance Circuit",
+    "name": "Casablanca Arena",
     "country": "Morocco",
     "region": "Casablanca",
     "circuit_type": "mixed",
@@ -565,7 +565,7 @@
   },
   {
     "circuit_id": 163,
-    "name": "Greater Jazirah Loop",
+    "name": "Tyrol Rallycross Circuit",
     "country": "Austria",
     "region": "Tyrol",
     "circuit_type": "mixed",
@@ -612,7 +612,7 @@
   },
   {
     "circuit_id": 164,
-    "name": "Frostpeak Grand Prix Circuit",
+    "name": "Arad Motor Stadium",
     "country": "Bahrain",
     "region": "Muharraq",
     "circuit_type": "mixed",
@@ -659,7 +659,7 @@
   },
   {
     "circuit_id": 165,
-    "name": "North Whitestone Rally Stage",
+    "name": "Toscana Rally Stage",
     "country": "Italy",
     "region": "Tuscana",
     "circuit_type": "mixed",
@@ -706,7 +706,7 @@
   },
   {
     "circuit_id": 166,
-    "name": "South Skulstad Ring",
+    "name": "Patagonia Rally Stage",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "mixed",
@@ -753,7 +753,7 @@
   },
   {
     "circuit_id": 167,
-    "name": "North Luminos Ring",
+    "name": "Sichuan Rallycross Circuit",
     "country": "China",
     "region": "Sichuan",
     "circuit_type": "mixed",
@@ -800,7 +800,7 @@
   },
   {
     "circuit_id": 168,
-    "name": "Oldgate Rally Stage",
+    "name": "Provence Rally Stage",
     "country": "France",
     "region": "Provence",
     "circuit_type": "mixed",
@@ -894,7 +894,7 @@
   },
   {
     "circuit_id": 170,
-    "name": "Bergstrom International Sprint Track",
+    "name": "Chikmagalur Rally Stage",
     "country": "India",
     "region": "Karnataka",
     "circuit_type": "mixed",
@@ -941,7 +941,7 @@
   },
   {
     "circuit_id": 171,
-    "name": "Chikara International Rennstrecke",
+    "name": "Changi Motor Stadium",
     "country": "Singapore",
     "region": "Changi",
     "circuit_type": "mixed",
@@ -988,7 +988,7 @@
   },
   {
     "circuit_id": 172,
-    "name": "Imperial Fortezza Park",
+    "name": "Gyeonggi Motor Stadium",
     "country": "South Korea",
     "region": "Gyeonggi",
     "circuit_type": "mixed",
@@ -1035,7 +1035,7 @@
   },
   {
     "circuit_id": 173,
-    "name": "Crosswell International Circuit",
+    "name": "Saguenay Rally Stage",
     "country": "Canada",
     "region": "Quebec",
     "circuit_type": "mixed",
@@ -1082,7 +1082,7 @@
   },
   {
     "circuit_id": 174,
-    "name": "Uzumaki Racing Centre",
+    "name": "Neuquén Arena",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "mixed",
@@ -1129,7 +1129,7 @@
   },
   {
     "circuit_id": 175,
-    "name": "Greater Zahir Arena",
+    "name": "Lusail Arena",
     "country": "Qatar",
     "region": "Lusail",
     "circuit_type": "mixed",

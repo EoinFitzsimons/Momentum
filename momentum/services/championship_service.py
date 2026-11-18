@@ -19,7 +19,9 @@ Points Systems:
 
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
+
+from momentum.engine.season_calendar import season_dates
 from momentum.database.database_manager import DatabaseManager
 from momentum.database.models import Championship, Race, RaceResult
 from momentum.services.track_surface_service import TrackSurfaceService
@@ -298,8 +300,8 @@ class ChampionshipService:
 
         Args:
             championship: Championship object
-            tracks: List of track IDs for the season
-            start_date: Season start date
+            tracks: List of track IDs for the season, in round order
+            start_date: The season is the first whose March opener falls on or after this
 
         Returns:
             Tuple of (championship_id, list of race_ids)
@@ -310,11 +312,11 @@ class ChampionshipService:
         if not champ_id:
             raise ValueError("Failed to create championship")
 
-        # Create race calendar with surface assignment
+        # Race calendar on the season's Sundays, with surface assignment
         race_ids = []
-        current_date = start_date
+        dates = season_dates(len(tracks), start_date)
 
-        for round_num, track_id in enumerate(tracks, start=1):
+        for round_num, (track_id, race_date) in enumerate(zip(tracks, dates), start=1):
             # Get track and assign surface for this discipline
             track = self.db.get_track(track_id)
             if track:
@@ -330,7 +332,7 @@ class ChampionshipService:
                 track_id=track_id,
                 season=championship.current_season,
                 round_number=round_num,
-                race_date=current_date.strftime("%Y-%m-%d"),
+                race_date=race_date.strftime("%Y-%m-%d"),
                 weather_conditions="clear",
                 laps=self.default_laps_for_discipline(championship.discipline),
                 status="scheduled",
@@ -339,9 +341,6 @@ class ChampionshipService:
             race_id = self.db.create_race(race)
             if race_id:
                 race_ids.append(race_id)
-
-            # Space races 2 weeks apart
-            current_date += timedelta(days=14)
 
         return champ_id, race_ids
 

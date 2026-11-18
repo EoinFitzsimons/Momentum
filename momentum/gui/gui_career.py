@@ -9,7 +9,7 @@ Implements a dedicated career HQ flow:
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -38,6 +38,9 @@ from momentum.gui.themed_messagebox import information, warning
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.championship_service import ChampionshipService
 from momentum.services.career_season_service import CareerSeasonService
+from momentum.data.countries import COUNTRIES
+from momentum.engine.race_format import race_format_for
+from momentum.engine.season_calendar import plan_season, season_dates
 from momentum.services.tier_service import TIERS, normalise_tier, tier_label
 from momentum.services.upgrade_service import UpgradeService
 from momentum.services.finance_service import CAR_UPGRADE_REFUND, FinanceService, InsufficientFunds, post_with
@@ -46,6 +49,41 @@ from momentum.gui.gui_championship import ChampionshipSelectionDialog, _player_l
 
 
 PLAYER_ID = "local_player"
+
+
+def nationality_code(value: str | None) -> str | None:
+    """The ISO alpha-3 code for a saved nationality.
+
+    Profiles store the code; saves made when the field was free text hold a
+    country name, which is matched by name.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.upper() in COUNTRIES:
+        return text.upper()
+    for code, name in COUNTRIES.items():
+        if name.casefold() == text.casefold():
+            return code
+    return None
+
+
+def country_name(value: str | None) -> str:
+    code = nationality_code(value)
+    return COUNTRIES[code] if code else str(value or "")
+
+
+def player_nationality(db: DatabaseManager, player_id: str = PLAYER_ID) -> str | None:
+    """The manager's nationality from the career save, as a country code."""
+    try:
+        with db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT nationality FROM career_player_profiles WHERE player_id = ?",
+                (player_id,),
+            ).fetchone()
+    except Exception:
+        return None
+    return nationality_code(row["nationality"]) if row else None
 WORLD_START_DATE = "2026-01-01"
 BUDGET_WARNING_TITLE = "Insufficient Budget"
 SEASON_COMPLETE_TEXT = "Season Complete"
@@ -75,15 +113,6 @@ def _style_table(table: QTableWidget, min_height: int, max_height: int | None = 
         table.setMaximumHeight(max_height)
 
 LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
-
-CAREER_DISCIPLINE_RACE_COUNTS = {
-    "SINGLE_SEATER": 24,
-    "PRODUCTION_TOURING": 12,
-    "URBAN_STREET": 10,
-    "DRAG_ACCELERATION": 14,
-    "SPRINT_RALLYCROSS": 12,
-    "ENDURANCE": 8,
-}
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
@@ -252,7 +281,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             profile = None
         if profile:
             self.profile_summary.setText(
-                f"<b>{profile['player_name']}</b> · {profile['nationality']} · age {profile['age']}<br>"
+                f"<b>{profile['player_name']}</b> · {country_name(profile['nationality'])} · age {profile['age']}<br>"
                 f"{profile['bio']}"
             )
         else:
@@ -668,7 +697,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             )
 
             for discipline, tier in series_keys:
-                season_length = int(CAREER_DISCIPLINE_RACE_COUNTS.get(discipline, 10))
+                season_length = int(race_format_for(discipline).season_rounds)
                 series_name = (
                     f"{_player_label(discipline)} {_player_label(tier)} Championship"
                 )
@@ -686,8 +715,10 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 track_ids = self._resolve_track_ids_for_championship(
                     discipline, season_length
                 )
-                race_date = start_dt
-                for round_number, track_id in enumerate(track_ids, start=1):
+                dates = season_dates(len(track_ids), start_dt)
+                for round_number, (track_id, race_date) in enumerate(
+                    zip(track_ids, dates), start=1
+                ):
                     conn.execute(
                         """
                         INSERT INTO career_races (
@@ -705,7 +736,6 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                             ChampionshipService.default_laps_for_discipline(discipline),
                         ),
                     )
-                    race_date += timedelta(days=14)
 
             conn.commit()
 
@@ -717,15 +747,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             tracks = self.db.get_all_tracks()
         if not tracks:
             raise ValueError("No tracks available to build a championship calendar.")
-
-        base_ids = [int(track.id) for track in tracks]
-        if len(base_ids) >= season_length:
-            return base_ids[:season_length]
-
-        expanded: list[int] = []
-        while len(expanded) < season_length:
-            expanded.extend(base_ids)
-        return expanded[:season_length]
+        return [int(track.id) for track in plan_season(tracks, season_length)]
 
 
 class CareerProfileDialog(QDialog):
@@ -768,9 +790,11 @@ class CareerProfileDialog(QDialog):
         self.height_input.setSuffix(" cm")
         form.addRow("Height", self.height_input)
 
-        self.nationality_input = QLineEdit()
-        self.nationality_input.setPlaceholderText("Nationality")
-        form.addRow("Nationality", self.nationality_input)
+        self.nationality_combo = QComboBox()
+        self.nationality_combo.addItem("Select a country", None)
+        for code, country in sorted(COUNTRIES.items(), key=lambda item: item[1]):
+            self.nationality_combo.addItem(f"{country} ({code})", code)
+        form.addRow("Nationality", self.nationality_combo)
 
         self.bio_input = QPlainTextEdit()
         self.bio_input.setPlaceholderText(
@@ -796,19 +820,19 @@ class CareerProfileDialog(QDialog):
         if not self.name_input.text().strip():
             warning(self, "Missing Name", "Please enter a player name.")
             return
-        if not self.nationality_input.text().strip():
-            warning(self, "Missing Nationality", "Please enter a nationality.")
+        if not self.nationality_combo.currentData():
+            warning(self, "Missing Nationality", "Please choose a nationality.")
             return
         self.accept()
 
     def profile_payload(self) -> dict:
         name = self.name_input.text().strip()
-        nationality = self.nationality_input.text().strip()
+        nationality = str(self.nationality_combo.currentData() or "")
         age = int(self.age_input.value())
         height_cm = int(self.height_input.value())
         bio = self.bio_input.toPlainText().strip()
         if not bio:
-            bio = f"{age}-year-old {nationality} manager, {height_cm} cm tall."
+            bio = f"{age}-year-old manager from {country_name(nationality)}, {height_cm} cm tall."
         return {
             "player_name": name,
             "age": age,
@@ -832,7 +856,10 @@ class FoundTeamDialog(QDialog):
         discipline: str | None,
         tier: str | None = None,
         parent=None,
+        home_country: str | None = None,
     ):
+        """``home_country`` is the manager's nationality code; the new team is
+        based there unless the player chooses otherwise."""
         super().__init__(parent)
         self.db = db
         self.discipline = str(discipline or "SINGLE_SEATER").upper()
@@ -841,7 +868,6 @@ class FoundTeamDialog(QDialog):
         self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
         self.resize(560, 420)
 
-        from momentum.data.countries import COUNTRIES
         from momentum.services.team_service import TeamService
 
         self._service = TeamService(db)
@@ -868,7 +894,12 @@ class FoundTeamDialog(QDialog):
         self.country_combo = QComboBox()
         for code, country in sorted(COUNTRIES.items(), key=lambda item: item[1]):
             self.country_combo.addItem(f"{country} ({code})", code)
-        self.country_combo.setCurrentIndex(max(0, self.country_combo.findData("GBR")))
+        home = nationality_code(home_country)
+        if home is not None:
+            self.country_combo.setCurrentIndex(max(0, self.country_combo.findData(home)))
+        else:
+            self.country_combo.insertItem(0, "Choose a country", None)
+            self.country_combo.setCurrentIndex(0)
         form.addRow("Home country", self.country_combo)
         self.hq_edit = QLineEdit()
         self.hq_edit.setPlaceholderText("Headquarters (town or city)")
@@ -902,11 +933,15 @@ class FoundTeamDialog(QDialog):
         if not name:
             warning(self, "Team Name Required", "Give your team a name first.")
             return
+        country = self.country_combo.currentData()
+        if not country:
+            warning(self, "Home Country Required", "Choose where the team is based.")
+            return
         try:
             result = self._service.found_player_team(
                 name=name,
                 discipline=self.discipline,
-                nationality=str(self.country_combo.currentData() or "INT"),
+                nationality=str(country),
                 tier=str(self.tier_combo.currentData()),
                 team_principal=self.principal_edit.text().strip(),
                 headquarters=self.hq_edit.text().strip(),
@@ -1009,7 +1044,13 @@ class CareerTeamSelectionDialog(QDialog):
         layout.addLayout(buttons)
 
     def _found_team(self):
-        dialog = FoundTeamDialog(self.db, self.discipline, self.tier, self)
+        dialog = FoundTeamDialog(
+            self.db,
+            self.discipline,
+            self.tier,
+            self,
+            home_country=player_nationality(self.db),
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.created_team_id is None:
             return
         team = self.db.get_team(int(dialog.created_team_id))
