@@ -160,6 +160,10 @@ class RaceState:
     checkered_flag_deployed: bool = False  # Set when leader completes all laps
     leader_lap_count: int = 0  # Highest lap count when chequered flag deployed
 
+    # Set when the simulation is halted before the chequered flag (user stop or
+    # safety time limit); the results are then a classification, not a result.
+    stopped: bool = False
+
 
 class RealtimeRaceEngine:
     """
@@ -813,9 +817,11 @@ class RealtimeRaceEngine:
         max_race_time_s = max(180.0, float(race_state.total_laps) * 240.0)
         while not self._race_finished(race_state):
             if self._should_stop_simulation(stop_event):
+                race_state.stopped = True
                 break
 
             if self._apply_time_limit_if_needed(race_state, max_race_time_s):
+                race_state.stopped = True
                 break
 
             frame = self._process_simulation_frame(
@@ -1354,6 +1360,7 @@ class RealtimeRaceEngine:
                     "type": "race_finished",
                     "total_laps": total_laps,
                     "race_time": race_state.current_time,
+                    "race_stopped": bool(race_state.stopped),
                     "results": results,
                     "collision_log": race_state.collision_log,
                 }
@@ -3302,6 +3309,10 @@ class RealtimeRaceEngine:
         finished_drivers, lapped_drivers, dnf_drivers = self._classify_result_states(
             race_state
         )
+        if race_state.stopped:
+            return self._compile_stopped_classification(
+                race_state, finished_drivers + lapped_drivers, dnf_drivers
+            )
 
         # Sort finishers by actual elapsed race time (lowest wins).
         finished_drivers.sort(key=lambda s: float(s.total_time))
@@ -3339,6 +3350,40 @@ class RealtimeRaceEngine:
                 )
             )
 
+        return results
+
+    def _compile_stopped_classification(
+        self,
+        race_state: RaceState,
+        running: List[DriverState],
+        dnf_drivers: List[DriverState],
+    ) -> List[Dict[str, Any]]:
+        """Classify a race halted before the flag by distance covered.
+
+        Nobody finished, so no finishing time exists: cars still running are
+        ranked by laps completed and then by distance along the lap, their
+        time is left unset and they are marked NOT_CLASSIFIED. Retirements keep
+        their real DNF reason at the back.
+        """
+        running.sort(key=lambda s: (-s.lap, -float(s.position_m)))
+        dnf_drivers.sort(key=lambda s: (-s.lap, float(s.total_time)))
+        results: List[Dict[str, Any]] = []
+        for position, state in enumerate(running, 1):
+            entry = self._build_result_entry(
+                race_state, state, position, "NOT_CLASSIFIED", False
+            )
+            entry["time_seconds"] = None
+            entry["race_stopped"] = True
+            entry["distance_m"] = float(state.lap) * float(
+                race_state.track_length_m
+            ) + float(state.position_m)
+            results.append(entry)
+        for state in dnf_drivers:
+            entry = self._build_result_entry(
+                race_state, state, len(results) + 1, "DNF", False
+            )
+            entry["race_stopped"] = True
+            results.append(entry)
         return results
 
     def _classify_result_states(self, race_state: RaceState):

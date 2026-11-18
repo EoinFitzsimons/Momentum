@@ -5605,6 +5605,7 @@ class RaceWindow(QMainWindow):
     def _handle_thread_race_finished_event(self, event: dict) -> None:
         """Store completion diagnostics and emit race-finished payload."""
         self._race_finished_emitted = True
+        self._race_stopped = bool(event.get("race_stopped", False))
         total_laps = int(event.get("total_laps", 0))
         race_time = float(event.get("race_time", 0.0))
         print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
@@ -5788,6 +5789,10 @@ class RaceWindow(QMainWindow):
             print(f"Race finished event received with {len(results)} results")
             self._log_collision_summary_if_available()
             self._reset_ui_for_race_finished()
+            if self._was_race_stopped():
+                self.info_label.setText(
+                    "Race stopped before the flag: no result recorded"
+                )
             if not results:
                 print("WARNING: No results to display")
                 return
@@ -5802,9 +5807,18 @@ class RaceWindow(QMainWindow):
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
 
+        if self._was_race_stopped():
+            # A halted race has no result: nothing is persisted and the
+            # championship does not move on from it.
+            self._show_position_change_summary_safe(results_sorted)
+            return
         self._save_race_results_if_needed(results_sorted)
         self._show_position_change_summary_safe(results_sorted)
         self._enable_next_race_if_championship_mode()
+
+    def _was_race_stopped(self) -> bool:
+        """True when the last simulation was halted before the chequered flag."""
+        return bool(getattr(self, "_race_stopped", False))
 
     def _log_collision_summary_if_available(self) -> None:
         """Print collision summary block when incidents were recorded."""
@@ -5858,7 +5872,9 @@ class RaceWindow(QMainWindow):
 
     def _render_final_standings(self, results_sorted: list) -> None:
         """Render final leaderboard rows and timing/gap values."""
-        leader_time = results_sorted[0].get("time_seconds", 0) if results_sorted else 0
+        leader_time = results_sorted[0].get("time_seconds") if results_sorted else 0
+        if not isinstance(leader_time, (int, float)):
+            leader_time = 0.0
         for i, result in enumerate(results_sorted):
             self._render_final_standings_row(i, result, leader_time)
 
@@ -5894,11 +5910,14 @@ class RaceWindow(QMainWindow):
         self, row_index: int, result: dict, leader_time: float
     ) -> str:
         """Format leader total time or follower gap display string."""
+        time_seconds = result.get("time_seconds")
+        if not isinstance(time_seconds, (int, float)):
+            # No real time exists (race stopped before the flag).
+            return "-"
         if row_index == 0:
             minutes = int(leader_time // 60)
             seconds = leader_time % 60
             return f"{minutes}:{seconds:06.3f}"
-        time_seconds = result.get("time_seconds", 0)
         gap = time_seconds - leader_time
         return f"+{gap:.2f}s" if gap > 0 else "-"
 
@@ -6181,6 +6200,10 @@ class RaceWindow(QMainWindow):
         dlg.setWindowTitle("Race Summary")
         dlg_layout = QVBoxLayout()
 
+        if self._was_race_stopped():
+            dlg.setWindowTitle("Race Summary - Race Stopped")
+            dlg_layout.addWidget(self._build_race_stopped_notice_label())
+
         position_graph = self._build_position_trend_graph(results_sorted)
         if position_graph is not None:
             dlg_layout.addWidget(self._build_position_graph_title_label())
@@ -6262,6 +6285,27 @@ class RaceWindow(QMainWindow):
         max_position = max(1, len(results_sorted) if results_sorted else len(series))
         return self._build_matplotlib_position_canvas(series, max_position)
 
+    def _build_race_stopped_notice_label(self) -> QLabel:
+        """Explain that a halted race produced a classification, not a result."""
+        label = QLabel(
+            "Race stopped before the chequered flag. No result was recorded: "
+            "the order below ranks cars by laps and distance completed, "
+            "no finishing times or gaps exist, and nothing has been saved."
+        )
+        label.setWordWrap(True)
+        label.setStyleSheet(
+            "color: #ffd27a; font-weight: bold; padding: 6px; "
+            "border: 1px solid #ffd27a; border-radius: 4px;"
+        )
+        return label
+
+    def _position_trend_legend_label(self, item: Dict[str, Any]) -> str:
+        """Legend text for a position-trend series, marking the player's car."""
+        name = str(item.get("name") or f"Driver {item.get('driver_id')}")
+        if item.get("driver_id") == self.player_driver_id:
+            return f"{name} (you)"
+        return name
+
     def _build_matplotlib_position_canvas(
         self, series: List[Dict[str, Any]], max_position: int
     ) -> QWidget:
@@ -6288,10 +6332,36 @@ class RaceWindow(QMainWindow):
             xs = [float(p[0]) for p in points]
             ys = [int(p[1]) for p in points]
             is_focus = bool(item.get("is_focus", False))
+            is_player = item.get("driver_id") == self.player_driver_id
             color = self._qcolor_to_mpl(
                 item.get("color", QColor(150, 170, 210)), 0.95 if is_focus else 0.5
             )
-            ax.plot(xs, ys, color=color, linewidth=2.3 if is_focus else 1.2)
+            ax.plot(
+                xs,
+                ys,
+                color=color,
+                linewidth=3.2 if is_player else (2.3 if is_focus else 1.2),
+                linestyle="-" if (is_player or is_focus) else "--",
+                marker="o" if is_player else None,
+                markersize=3.5,
+                label=self._position_trend_legend_label(item),
+            )
+
+        if ax.get_legend_handles_labels()[1]:
+            legend = ax.legend(
+                loc="center left",
+                bbox_to_anchor=(1.01, 0.5),
+                fontsize=7,
+                ncol=2 if len(series) > 10 else 1,
+                frameon=True,
+                facecolor="#1a1f26",
+                edgecolor="#6a788a",
+            )
+            for text in legend.get_texts():
+                text.set_color("#d8e1ec")
+                if text.get_text().endswith("(you)"):
+                    text.set_fontweight("bold")
+                    text.set_color("#ffd27a")
 
         ax.set_ylim(max_position + 0.4, 0.6)
         ax.set_ylabel("Position", color="#d8e1ec")
@@ -6589,7 +6659,12 @@ class RaceWindow(QMainWindow):
         time_s = res.get("time_seconds")
         reaction = res.get("reaction_time_ms")
         trap = res.get("trap_speed_kmh")
-        status = "DNF" if res.get("dnf_reason") else str(res.get("status", "FINISHED"))
+        if res.get("dnf_reason"):
+            status = "DNF"
+        else:
+            status = str(res.get("status", "FINISHED"))
+            if status == "NOT_CLASSIFIED":
+                status = "Not classified / race stopped"
 
         if isinstance(time_s, (int, float)) and time_s != float("inf"):
             time_text = f"{float(time_s):.3f}s"
@@ -6598,8 +6673,12 @@ class RaceWindow(QMainWindow):
                 if row_idx == 0
                 else f"+{max(0.0, float(time_s) - leader_time):.3f}s"
             )
-        else:
+        elif res.get("dnf_reason"):
             time_text = "DNF"
+            gap_text = "-"
+        else:
+            # No real time exists; never invent one.
+            time_text = "-"
             gap_text = "-"
 
         reaction_text = (
