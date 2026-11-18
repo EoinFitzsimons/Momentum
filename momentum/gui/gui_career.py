@@ -12,7 +12,9 @@ import random
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from typing import Optional
+
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -24,6 +26,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QScrollArea,
     QSpinBox,
     QTableWidget,
@@ -34,6 +37,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 from momentum.gui.themed_messagebox import information, warning
+from momentum.gui.accessibility_settings import scale_px_stylesheet, scaled, size_dialog_to_screen
 
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.championship_service import ChampionshipService
@@ -74,7 +78,7 @@ def _style_table(table: QTableWidget, min_height: int, max_height: int | None = 
     if max_height is not None:
         table.setMaximumHeight(max_height)
 
-LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+LOGO_STYLE = f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
 CAREER_DISCIPLINE_RACE_COUNTS = {
     "SINGLE_SEATER": 24,
@@ -84,6 +88,46 @@ CAREER_DISCIPLINE_RACE_COUNTS = {
     "SPRINT_RALLYCROSS": 12,
     "ENDURANCE": 8,
 }
+
+
+class WrappingPushButton(QPushButton):
+    """Push button whose caption wraps onto further lines instead of clipping.
+
+    QPushButton elides or clips long captions; the league cards on the career
+    board need the full tier and series name visible at every UI scale, so the
+    caption is drawn by a word-wrapping label laid out inside the button.
+    """
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__("", parent)
+        self._caption = QLabel(text, self)
+        self._caption.setWordWrap(True)
+        self._caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._caption.setStyleSheet("background: transparent; border: none;")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(scaled(10), scaled(8), scaled(10), scaled(8))
+        layout.addWidget(self._caption)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+
+    def setText(self, text: Optional[str]) -> None:  # type: ignore[override]
+        self._caption.setText(text or "")
+        self.updateGeometry()
+
+    def text(self) -> str:  # type: ignore[override]
+        return self._caption.text()
+
+    def caption_label(self) -> QLabel:
+        return self._caption
+
+    def changeEvent(self, event) -> None:  # type: ignore[override]
+        super().changeEvent(event)
+        if event is not None and event.type() in (
+            QEvent.Type.EnabledChange,
+            QEvent.Type.StyleChange,
+            QEvent.Type.PaletteChange,
+        ):
+            self._caption.setEnabled(self.isEnabled())
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
@@ -103,7 +147,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(14)
         self.setStyleSheet(
-            """
+            scale_px_stylesheet("""
             QDialog { background-color: #202629; }
             QLabel { color: #EAF8FA; }
             QGroupBox { border: 1px solid #405057; border-radius: 8px; margin-top: 10px; padding: 12px; }
@@ -113,7 +157,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; }
             QTableWidget { background-color: #172023; color: #EAF8FA; gridline-color: #34464D; border: 1px solid #405057; }
             QHeaderView::section { background-color: #29343A; color: #B7D9DB; padding: 7px; border: none; }
-            """
+            """)
         )
 
         logo = QLabel("MOMENTUM  /  CAREER WORLD")
@@ -182,9 +226,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         for tier in TIERS:
             column = QVBoxLayout()
             column.setSpacing(8)
-            series_btn = QPushButton(tier_label(tier))
+            series_btn = WrappingPushButton(tier_label(tier))
             series_btn.setCheckable(True)
-            series_btn.setMinimumHeight(48)
+            series_btn.setMinimumHeight(scaled(48))
             series_btn.setAccessibleName(f"Enter {tier_label(tier)} series")
             series_btn.clicked.connect(
                 lambda checked, value=tier: self._select_series(value)
@@ -192,7 +236,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             column.addWidget(series_btn)
             summary = QLabel("")
             summary.setWordWrap(True)
-            summary.setStyleSheet("color: #A8C1C4; font-size: 12px;")
+            summary.setStyleSheet(f"color: #A8C1C4; font-size: {scaled(12)}px;")
             column.addWidget(summary)
             table = QTableWidget()
             table.setColumnCount(4)
@@ -217,6 +261,11 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             }
         board_layout.addLayout(columns, 1)
         layout.addWidget(board_group, 1)
+
+        # Inline label styles are written at 100%; scale them with the UI.
+        for label in self.findChildren(QLabel):
+            if "font-size" in label.styleSheet():
+                label.setStyleSheet(scale_px_stylesheet(label.styleSheet()))
 
         actions = QHBoxLayout()
         self.select_btn = QPushButton("Enter Selected World")
@@ -681,7 +730,7 @@ class CareerProfileDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Career Save")
-        self.resize(520, 430)
+        size_dialog_to_screen(self, 0.3, 0.4, 520, 430)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -786,7 +835,7 @@ class FoundTeamDialog(QDialog):
         self.created_team_id: int | None = None
         self.setWindowTitle("Found a New Team")
         self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
-        self.resize(560, 420)
+        size_dialog_to_screen(self, 0.32, 0.4, 560, 420)
 
         from momentum.data.countries import COUNTRIES
         from momentum.services.team_service import TeamService
@@ -890,7 +939,7 @@ class CareerTeamSelectionDialog(QDialog):
         self.selected_team = None
 
         self.setWindowTitle("Select Career Team")
-        self.resize(900, 520)
+        size_dialog_to_screen(self, 0.6, 0.55, 900, 520)
         self._setup_ui()
         self._load_teams()
 
@@ -1041,7 +1090,7 @@ class CareerWindow(QMainWindow):
         self.next_race = None
 
         self.setWindowTitle(f"Career HQ: {self.championship.name}")
-        self.resize(1400, 900)
+        size_dialog_to_screen(self, 0.85, 0.85, 1100, 700)
 
         self._setup_ui()
         self._resolve_team_ownership()

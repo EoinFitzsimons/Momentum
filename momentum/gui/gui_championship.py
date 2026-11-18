@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 from momentum.gui.themed_messagebox import information, warning, critical, question
+from momentum.gui.accessibility_settings import scaled, size_dialog_to_screen
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QColor
 from typing import Optional, List, Dict, Any, Tuple
@@ -63,7 +64,7 @@ COLORS = {
 }
 
 FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
-LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+LOGO_STYLE = f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
 
 def _screen_dimensions(
@@ -116,12 +117,8 @@ class ChampionshipSelectionDialog(QDialog):
         self.selected_championship = None
 
         self.setWindowTitle("Select Championship")
-        # Responsive sizing based on screen dimensions
-        screen_width, screen_height = _screen_dimensions()
-        width = min(int(screen_width * 0.6), 900)
-        height = min(int(screen_height * 0.6), 700)
-        self.setMinimumSize(600, 400)  # Usable minimum
-        self.resize(width, height)
+        # 70% of the available screen, never below a scaled usable minimum
+        size_dialog_to_screen(self, 0.7, 0.75, 900, 650)
         self.setup_ui()
         self.load_championships()
 
@@ -327,12 +324,7 @@ class CreateChampionshipDialog(QDialog):
         self.championship_service = ChampionshipService(db)
 
         self.setWindowTitle(self.CREATE_CHAMPIONSHIP_TITLE)
-        # Responsive sizing based on screen dimensions
-        screen_width, screen_height = _screen_dimensions()
-        width = min(int(screen_width * 0.5), 800)
-        height = min(int(screen_height * 0.7), 900)
-        self.setMinimumSize(500, 500)  # Usable minimum
-        self.resize(width, height)
+        size_dialog_to_screen(self, 0.5, 0.7, 500, 500)
         self.setup_ui()
 
     def setup_ui(self):
@@ -586,12 +578,8 @@ class ChampionshipWindow(QMainWindow):
         self.refresh_timer.start(5000)  # Refresh every 5 seconds
 
         self.setWindowTitle(f"Championship: {championship.name}")
-        # Responsive sizing - use most of screen for standings view
-        screen_width, screen_height = _screen_dimensions()
-        width = min(int(screen_width * 0.85), 1600)
-        height = min(int(screen_height * 0.85), 1000)
-        self.setMinimumSize(900, 600)  # Usable minimum
-        self.resize(width, height)
+        # Use most of the screen for the standings view
+        size_dialog_to_screen(self, 0.85, 0.85, 900, 600)
 
         self.setup_ui()
         self.load_data()
@@ -1037,12 +1025,7 @@ class PreRaceSetupDialog(QDialog):
         self._syncing_driver_team = False
 
         self.setWindowTitle(f"Pre-Race Setup - {track.name if track else 'Race'}")
-        # Responsive sizing
-        screen_width, screen_height = _screen_dimensions()
-        width = min(int(screen_width * 0.7), 1000)
-        height = min(int(screen_height * 0.7), 800)
-        self.setMinimumSize(700, 500)  # Usable minimum
-        self.resize(width, height)
+        size_dialog_to_screen(self, 0.7, 0.7, 700, 500)
         self.setup_ui()
 
     def setup_ui(self):
@@ -1397,12 +1380,7 @@ class PostRaceResultsDialog(QDialog):
         self.results = results
 
         self.setWindowTitle("Race Results")
-        # Responsive sizing
-        screen_width, screen_height = _screen_dimensions()
-        width = min(int(screen_width * 0.7), 1100)
-        height = min(int(screen_height * 0.75), 900)
-        self.setMinimumSize(700, 500)  # Usable minimum
-        self.resize(width, height)
+        size_dialog_to_screen(self, 0.7, 0.75, 700, 500)
         self.setup_ui()
 
     @staticmethod
