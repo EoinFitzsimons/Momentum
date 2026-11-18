@@ -64,7 +64,12 @@ COLORS = {
 }
 
 FEINT_BUTTON_BORDER_STYLE = "QPushButton { border: 1px solid rgba(185,242,255,0.24); }"
-LOGO_STYLE = f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
+
+def logo_style() -> str:
+    """Wordmark style at the UI scale in force when the window is built."""
+    return f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
 
 
 def _screen_dimensions(
@@ -129,7 +134,7 @@ class ChampionshipSelectionDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Button text constant
@@ -334,7 +339,7 @@ class CreateChampionshipDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Title
@@ -595,7 +600,7 @@ class ChampionshipWindow(QMainWindow):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Header with more info
@@ -1036,7 +1041,7 @@ class PreRaceSetupDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Header with track info
@@ -1414,7 +1419,7 @@ class PostRaceResultsDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Title

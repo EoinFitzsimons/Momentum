@@ -3753,13 +3753,14 @@ class RaceWindow(QMainWindow):
             lap_width = scaled(48)  # lap number
             gap_width = scaled(95)  # gap like "+888:888"
             position_width = self.standings_table.columnWidth(0)
-            self.standings_table.setColumnWidth(
-                1,
-                max(
-                    scaled(300),
-                    sidebar_content_width - position_width - lap_width - gap_width,
-                ),
-            )  # driver name takes the remaining width budget
+            # The driver name takes whatever width is left after the fixed
+            # columns; on a narrow desktop it keeps a readable minimum and the
+            # table scrolls horizontally rather than hiding the gap column.
+            frame = self.standings_table.frameWidth() * 2
+            name_width = (
+                sidebar_content_width - frame - position_width - lap_width - gap_width
+            )
+            self.standings_table.setColumnWidth(1, max(scaled(160), name_width))
             self.standings_table.setColumnWidth(2, lap_width)
             self.standings_table.setColumnWidth(3, gap_width)
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
@@ -3769,7 +3770,7 @@ class RaceWindow(QMainWindow):
             header.setStretchLastSection(False)
 
         self.standings_table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self.standings_table.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded

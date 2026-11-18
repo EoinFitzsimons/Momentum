@@ -78,7 +78,12 @@ def _style_table(table: QTableWidget, min_height: int, max_height: int | None = 
     if max_height is not None:
         table.setMaximumHeight(max_height)
 
-LOGO_STYLE = f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
+
+def logo_style() -> str:
+    """Wordmark style at the UI scale in force when the window is built."""
+    return f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
 
 CAREER_DISCIPLINE_RACE_COUNTS = {
     "SINGLE_SEATER": 24,
@@ -186,24 +191,24 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         )
 
         logo = QLabel("MOMENTUM  /  CAREER WORLD")
-        logo.setStyleSheet("font-size: 24px; font-weight: 700; color: #7EE6E0; letter-spacing: 2px;")
+        logo.setStyleSheet(f"font-size: {scaled(24)}px; font-weight: 700; color: #7EE6E0; letter-spacing: 2px;")
         layout.addWidget(logo)
 
         self.career_title = QLabel("Build your racing life")
-        self.career_title.setStyleSheet("font-size: 30px; font-weight: 700; color: #F2FBFB;")
+        self.career_title.setStyleSheet(f"font-size: {scaled(30)}px; font-weight: 700; color: #F2FBFB;")
         layout.addWidget(self.career_title)
 
         self.career_subtitle = QLabel(
             "Choose the world you want to inhabit. Your discipline shapes the calendar, the teams, the cars, and the way your career develops."
         )
         self.career_subtitle.setWordWrap(True)
-        self.career_subtitle.setStyleSheet("color: #A8C1C4; font-size: 14px;")
+        self.career_subtitle.setStyleSheet(f"color: #A8C1C4; font-size: {scaled(14)}px;")
         layout.addWidget(self.career_subtitle)
 
         identity_row = QHBoxLayout()
         self.profile_summary = QLabel("No career save yet")
         self.profile_summary.setStyleSheet(
-            "background-color: #29343A; border-left: 4px solid #DD2D4A; padding: 12px; font-size: 14px;"
+            f"background-color: #29343A; border-left: 4px solid #DD2D4A; padding: 12px; font-size: {scaled(14)}px;"
         )
         self.profile_summary.setWordWrap(True)
         identity_row.addWidget(self.profile_summary, 1)
@@ -240,7 +245,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         board_group = QGroupBox("Career Board")
         board_layout = QVBoxLayout(board_group)
         self.board_heading = QLabel("Select a discipline to see its leagues")
-        self.board_heading.setStyleSheet("font-size: 16px; font-weight: 700; color: #7EE6E0;")
+        self.board_heading.setStyleSheet(f"font-size: {scaled(16)}px; font-weight: 700; color: #7EE6E0;")
         board_layout.addWidget(self.board_heading)
 
         # One column per league: the series button on top, its teams below.
@@ -293,11 +298,6 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             }
         board_layout.addLayout(columns, 1)
         layout.addWidget(board_group, 1)
-
-        # Inline label styles are written at 100%; scale them with the UI.
-        for label in self.findChildren(QLabel):
-            if "font-size" in label.styleSheet():
-                label.setStyleSheet(scale_px_stylesheet(label.styleSheet()))
 
         actions = QHBoxLayout()
         self.select_btn = QPushButton("Enter Selected World")
@@ -387,8 +387,15 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self._load_profile_summary()
 
     def _schedule_tier_row_fit(self, *_args) -> None:
-        """Re-fit wrapped team names once the current layout pass has finished."""
-        QTimer.singleShot(0, self._fit_tier_rows)
+        """Re-fit wrapped team names once, after the current layout pass has finished."""
+        if getattr(self, "_tier_fit_pending", False):
+            return
+        self._tier_fit_pending = True
+        QTimer.singleShot(0, self._run_tier_row_fit)
+
+    def _run_tier_row_fit(self) -> None:
+        self._tier_fit_pending = False
+        self._fit_tier_rows()
 
     def _fit_tier_rows(self) -> None:
         """Give every row the height its wrapped team name needs.
@@ -1025,7 +1032,7 @@ class CareerTeamSelectionDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         title = QLabel("Select Your Team")
@@ -1188,7 +1195,7 @@ class CareerWindow(QMainWindow):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         self.navbar = NavigationBar(

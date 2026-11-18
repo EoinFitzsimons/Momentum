@@ -254,3 +254,21 @@ def test_apply_settings_keeps_race_choice_when_scale_changes(app, tmp_path, monk
     finally:
         window.close()
         apply_accessibility_to_app(app, {"theme": "standard", "ui_scale": 100})
+
+
+@pytest.mark.unit
+def test_size_dialog_to_screen_leaves_room_for_window_frame(app):
+    from PyQt6.QtWidgets import QDialog
+
+    dialog = QDialog()
+    try:
+        acc.size_dialog_to_screen(dialog, 1.0, 1.0, 10_000, 10_000)
+        screen = acc.available_screen_geometry(dialog)
+        frame_w, frame_h = acc.window_frame_allowance(dialog)
+        assert frame_w > 0 and frame_h > 0
+        assert dialog.minimumWidth() <= screen.width() - frame_w
+        assert dialog.minimumHeight() <= screen.height() - frame_h
+        assert dialog.width() <= screen.width() - frame_w
+        assert dialog.height() <= screen.height() - frame_h
+    finally:
+        dialog.close()

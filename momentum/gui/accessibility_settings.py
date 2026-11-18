@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any, Dict, Optional, Tuple
 
-from PyQt6.QtCore import QRect
+from PyQt6.QtCore import QRect, Qt
 from PyQt6.QtGui import QFont, QFontDatabase, QGuiApplication
 from PyQt6.QtWidgets import QApplication, QWidget
 
@@ -217,16 +217,47 @@ def size_dialog_to_screen(
     min_width: int = 0,
     min_height: int = 0,
 ) -> Tuple[int, int]:
-    """Resize ``widget`` relative to its screen and apply a scaled, screen-capped minimum."""
+    """Resize ``widget`` relative to its screen and apply a scaled, screen-capped minimum.
+
+    The cap leaves room for the native window frame so a framed dialog's
+    client area never forces the window off the work area.
+    """
     rect = available_screen_geometry(widget)
+    frame_w, frame_h = window_frame_allowance(widget)
+    usable = QRect(rect.x(), rect.y(), rect.width() - frame_w, rect.height() - frame_h)
     width, height = screen_relative_size(
-        width_fraction, height_fraction, min_width, min_height, screen=rect
+        width_fraction, height_fraction, min_width, min_height, screen=usable
     )
-    min_w = min(scaled(min_width), rect.width())
-    min_h = min(scaled(min_height), rect.height())
+    min_w = min(scaled(min_width), usable.width())
+    min_h = min(scaled(min_height), usable.height())
     widget.setMinimumSize(min_w, min_h)
     widget.resize(width, height)
     return width, height
+
+
+# Space reserved for native window decorations (title bar and borders) in
+# device-independent pixels; decorations do not follow the UI scale.
+WINDOW_FRAME_ALLOWANCE = (16, 48)
+
+
+def window_frame_allowance(widget: Optional[QWidget]) -> Tuple[int, int]:
+    """Return the (width, height) a framed top-level window needs for decorations."""
+    if widget is None:
+        return WINDOW_FRAME_ALLOWANCE
+    flags = widget.windowFlags()
+    if flags & Qt.WindowType.FramelessWindowHint:
+        return (0, 0)
+    try:
+        frame = widget.frameGeometry()
+        inner = widget.geometry()
+        if widget.isVisible() and frame.height() > inner.height():
+            return (
+                max(0, frame.width() - inner.width()),
+                max(0, frame.height() - inner.height()),
+            )
+    except Exception:
+        pass
+    return WINDOW_FRAME_ALLOWANCE
 
 
 def centred_window_geometry(

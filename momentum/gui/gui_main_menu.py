@@ -856,11 +856,13 @@ class MainMenuWindow(QMainWindow):
         if "render FPS" in changes or "race speed" in changes:
             self._apply_race_settings()
         self._update_apply_state()
-        information(
-            self,
-            "Settings",
-            "Applied and saved: " + ", ".join(changes) + ".",
-        )
+        saved = [change for change in changes if change != "display mode"]
+        lines = []
+        if saved:
+            lines.append("Saved: " + ", ".join(saved) + ".")
+        if "display mode" in changes:
+            lines.append("Display mode applied for this session.")
+        information(self, "Settings", " ".join(lines))
 
     def _show_quick_race_setup(self):
         """Show quick race setup dialog."""
