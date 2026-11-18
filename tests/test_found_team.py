@@ -65,3 +65,57 @@ def test_full_league_makes_room_by_dissolving_its_weakest_team(db):
     assert FinanceService(db).reconcile() == []
     assert len(result["signed_drivers"]) >= 1
     assert len(db.get_drivers_by_team(int(result["id"]))) >= 1
+
+
+@pytest.mark.unit
+def test_founding_in_a_full_league_needs_no_prior_service_imports(tmp_path):
+    """Regression: the GUI reaches ``TeamService`` before any hiring or
+    progression service has been imported, so the personnel operations must
+    be real ``DatabaseManager`` methods rather than runtime patches."""
+    import subprocess
+    import sys
+    import textwrap
+
+    script = textwrap.dedent(
+        f"""
+        import json
+        from momentum.database.database_manager import DatabaseManager
+        from momentum.services.team_service import TeamService
+        from momentum.services.tier_service import LEAGUE_SIZE
+
+        db = DatabaseManager({str(tmp_path / 'fresh.db')!r})
+        db.init_database()
+        assert "release_driver" in DatabaseManager.__dict__ or any(
+            "release_driver" in base.__dict__ for base in DatabaseManager.__mro__
+        )
+        service = TeamService(db)
+        for index in range(LEAGUE_SIZE):
+            service.create_team(f"Incumbent {{index:02d}}", "SINGLE_SEATER", "GBR", "TIER_1")
+        result = service.found_player_team(
+            "Fresh Import Racing", "SINGLE_SEATER", "IRL", "TIER_1", "Eoin", "Naas"
+        )
+        replaced = result["replaced_team"]["id"]
+        released = [d.id for d in db.get_drivers_by_team(replaced)]
+        free_agents = {{d.id for d in db.get_available_drivers("SINGLE_SEATER")[0]}}
+        rows = db.get_budget_transactions(int(result["id"]))
+        print(json.dumps({{
+            "released_still_on_team": released,
+            "replaced_left_league": replaced not in {{
+                t.id for t in db.get_teams_by_discipline("SINGLE_SEATER")
+            }},
+            "ledger": [(r["category"], r["source"]) for r in rows],
+            "free_agents": len(free_agents),
+        }}))
+        """
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=120
+    )
+    assert completed.returncode == 0, completed.stderr
+    import json
+
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert payload["released_still_on_team"] == []
+    assert payload["replaced_left_league"] is True
+    assert payload["ledger"][0][0] == OWNER_FUNDING
+    assert "Eoin" in payload["ledger"][0][1]

@@ -19,8 +19,6 @@ Authors: Eoin Fitzsimons
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
-# Import database extensions to add hiring methods
-import momentum.database.database_extensions  # noqa
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.finance_service import (
     CONTRACT_BUYOUT,
