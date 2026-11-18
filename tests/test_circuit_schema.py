@@ -3,6 +3,7 @@ import json
 import pytest
 from pathlib import Path
 
+from momentum.data.circuit_profiles import name_discipline
 from momentum.data.circuit_schema import (
     FILES,
     CircuitError,
@@ -83,3 +84,52 @@ def test_every_source_file_ships_in_installed_builds():
     for source in sorted((data_dir / "circuits").glob("*.json")):
         relative = source.relative_to(data_dir).as_posix()
         assert any(fnmatch(relative, pattern) for pattern in patterns), relative
+
+
+@pytest.mark.parametrize(
+    "name, discipline",
+    [
+        ("Oldgate Endurance Circuit", "ENDURANCE"),
+        ("Fjordheim Grand Prix Circuit", "SINGLE_SEATER"),
+        ("Zeelandring", "PRODUCTION_TOURING"),
+        ("Everglades Raceway Park", "DRAG_ACCELERATION"),
+        ("Corso Valentia", "URBAN_STREET"),
+        ("Thorsheim Rally Stage", "SPRINT_RALLYCROSS"),
+        ("Apex Sprint Track", None),
+    ],
+)
+def test_a_name_reads_as_its_most_specific_form(name, discipline):
+    assert name_discipline(name) == discipline
+
+
+@pytest.mark.parametrize(
+    "discipline, wrong_name",
+    [
+        ("SINGLE_SEATER", "Oldgate Endurance Circuit"),
+        ("SINGLE_SEATER", "Dynex Rally Stage"),
+        ("DRAG_ACCELERATION", "Apex Sprint Track"),
+        ("URBAN_STREET", "Pinecrest Rally Stage"),
+        ("ENDURANCE", "North Xenon Loop"),
+    ],
+)
+def test_a_name_from_another_discipline_is_refused(discipline, wrong_name):
+    raw = dict(_shipped(discipline))
+    parse_circuit(raw)
+    with pytest.raises(ValueError, match="does not read as"):
+        parse_circuit({**raw, "name": wrong_name})
+
+
+def test_every_shipped_name_reads_as_its_own_discipline():
+    for _, raw in read_sources():
+        assert name_discipline(raw["name"]) == raw["primary_discipline"], raw["name"]
+
+
+def test_drag_strips_present_the_race_distance_not_the_strip_length():
+    from types import SimpleNamespace
+
+    from momentum.data.circuit_schema import track_distance_label
+
+    strip = SimpleNamespace(is_point_to_point=True, length_km=1.09)
+    circuit = SimpleNamespace(is_point_to_point=False, length_km=6.35)
+    assert track_distance_label(strip) == "402 m"
+    assert track_distance_label(circuit) == "6.35km"

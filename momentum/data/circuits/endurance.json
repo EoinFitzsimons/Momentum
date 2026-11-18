@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 51,
-    "name": "North Xenon Loop",
+    "name": "Laurentides Endurance Circuit",
     "country": "Canada",
     "region": "Quebec",
     "circuit_type": "road_course",
@@ -42,7 +42,7 @@
   },
   {
     "circuit_id": 52,
-    "name": "Hermosa Park",
+    "name": "Western Ghats Endurance Circuit",
     "country": "India",
     "region": "Karnataka",
     "circuit_type": "road_course",
@@ -83,7 +83,7 @@
   },
   {
     "circuit_id": 53,
-    "name": "Apex Road Course",
+    "name": "Hokkaido Road Course",
     "country": "Japan",
     "region": "Hokkaido",
     "circuit_type": "road_course",
@@ -124,7 +124,7 @@
   },
   {
     "circuit_id": 54,
-    "name": "National Isvik Motor Stadium",
+    "name": "Veneto Endurance Circuit",
     "country": "Italy",
     "region": "Veneto",
     "circuit_type": "road_course",
@@ -165,7 +165,7 @@
   },
   {
     "circuit_id": 55,
-    "name": "South Ironspire Ring",
+    "name": "Ironspire Motorsport Park",
     "country": "Australia",
     "region": "Tasmania",
     "circuit_type": "permanent",
@@ -206,7 +206,7 @@
   },
   {
     "circuit_id": 56,
-    "name": "Doragon Raceway",
+    "name": "Sharjah Endurance Circuit",
     "country": "United Arab Emirates",
     "region": "Sharjah",
     "circuit_type": "permanent",
@@ -247,7 +247,7 @@
   },
   {
     "circuit_id": 57,
-    "name": "Talaal Track",
+    "name": "Costa Brava Endurance Circuit",
     "country": "Spain",
     "region": "Catalonia",
     "circuit_type": "road_course",
@@ -288,7 +288,7 @@
   },
   {
     "circuit_id": 58,
-    "name": "Royal Xenon Autobahn",
+    "name": "Southern Alps Road Course",
     "country": "New Zealand",
     "region": "Canterbury",
     "circuit_type": "permanent",
@@ -329,7 +329,7 @@
   },
   {
     "circuit_id": 59,
-    "name": "Polaris Raceway",
+    "name": "Al Shamal Endurance Circuit",
     "country": "Qatar",
     "region": "Al Khor",
     "circuit_type": "permanent",
@@ -370,7 +370,7 @@
   },
   {
     "circuit_id": 60,
-    "name": "Ravenwood Ring",
+    "name": "Ravenwood Road Course",
     "country": "South Africa",
     "region": "KwaZulu-Natal",
     "circuit_type": "permanent",
@@ -411,7 +411,7 @@
   },
   {
     "circuit_id": 61,
-    "name": "Uzumaki Sprint Track",
+    "name": "Albufera Endurance Circuit",
     "country": "Spain",
     "region": "Valencia",
     "circuit_type": "road_course",
@@ -452,7 +452,7 @@
   },
   {
     "circuit_id": 62,
-    "name": "National Portofino Arena",
+    "name": "Marina East Endurance Circuit",
     "country": "Singapore",
     "region": "Central",
     "circuit_type": "permanent",
@@ -493,7 +493,7 @@
   },
   {
     "circuit_id": 63,
-    "name": "Kinetic Course",
+    "name": "Madeira Road Course",
     "country": "Portugal",
     "region": "Madeira",
     "circuit_type": "road_course",
@@ -534,7 +534,7 @@
   },
   {
     "circuit_id": 64,
-    "name": "Bokuden International Mountain Pass",
+    "name": "Rockies Motorsport Park",
     "country": "Canada",
     "region": "Alberta",
     "circuit_type": "permanent",
@@ -575,7 +575,7 @@
   },
   {
     "circuit_id": 65,
-    "name": "Tidehaven Piste",
+    "name": "Maré Alta Endurance Circuit",
     "country": "Brazil",
     "region": "Rio",
     "circuit_type": "road_course",
@@ -616,7 +616,7 @@
   },
   {
     "circuit_id": 66,
-    "name": "Crimson Circuito",
+    "name": "Al Wakrah Endurance Circuit",
     "country": "Qatar",
     "region": "Al Wakrah",
     "circuit_type": "road_course",
@@ -657,7 +657,7 @@
   },
   {
     "circuit_id": 67,
-    "name": "Grand Doragon Street Circuit",
+    "name": "Bengaluru Motorsport Park",
     "country": "India",
     "region": "Karnataka",
     "circuit_type": "permanent",
@@ -698,7 +698,7 @@
   },
   {
     "circuit_id": 68,
-    "name": "Kingsgate Corso",
+    "name": "Chao Phraya Endurance Circuit",
     "country": "Thailand",
     "region": "Bangkok",
     "circuit_type": "road_course",
@@ -739,7 +739,7 @@
   },
   {
     "circuit_id": 69,
-    "name": "North Qatara Piste",
+    "name": "Algoa Bay Road Course",
     "country": "South Africa",
     "region": "Eastern Cape",
     "circuit_type": "permanent",
@@ -780,7 +780,7 @@
   },
   {
     "circuit_id": 70,
-    "name": "Hafnir Course",
+    "name": "Casablanca Endurance Circuit",
     "country": "Morocco",
     "region": "Casablanca",
     "circuit_type": "permanent",
@@ -821,7 +821,7 @@
   },
   {
     "circuit_id": 71,
-    "name": "Eagleton Velocita",
+    "name": "Riffa Endurance Circuit",
     "country": "Bahrain",
     "region": "Riffa",
     "circuit_type": "permanent",
@@ -862,7 +862,7 @@
   },
   {
     "circuit_id": 72,
-    "name": "Central Altavista Ring",
+    "name": "Altavista Endurance Circuit",
     "country": "Argentina",
     "region": "Córdoba",
     "circuit_type": "permanent",
@@ -903,7 +903,7 @@
   },
   {
     "circuit_id": 73,
-    "name": "Royal Qatara Motor Stadium",
+    "name": "Patagonia Motorsport Park",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "road_course",
@@ -944,7 +944,7 @@
   },
   {
     "circuit_id": 74,
-    "name": "Jarvik Velocita",
+    "name": "Coral Coast Road Course",
     "country": "Australia",
     "region": "Queensland",
     "circuit_type": "permanent",
@@ -985,7 +985,7 @@
   },
   {
     "circuit_id": 75,
-    "name": "Greater Yarmouth Circuito",
+    "name": "Boso Endurance Circuit",
     "country": "Japan",
     "region": "Kanto",
     "circuit_type": "road_course",

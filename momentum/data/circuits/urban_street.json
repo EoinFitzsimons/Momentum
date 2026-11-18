@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 101,
-    "name": "International Ultimare Circuit",
+    "name": "Table Bay Harbour Circuit",
     "country": "South Africa",
     "region": "Western Cape",
     "circuit_type": "street",
@@ -41,7 +41,7 @@
   },
   {
     "circuit_id": 102,
-    "name": "Pinecrest Rally Stage",
+    "name": "Abu Dhabi Corniche Street Circuit",
     "country": "United Arab Emirates",
     "region": "Abu Dhabi",
     "circuit_type": "street",
@@ -81,7 +81,7 @@
   },
   {
     "circuit_id": 103,
-    "name": "Grand Omarr Arena",
+    "name": "Dammam Street Circuit",
     "country": "Saudi Arabia",
     "region": "Eastern",
     "circuit_type": "street",
@@ -121,7 +121,7 @@
   },
   {
     "circuit_id": 104,
-    "name": "Greendale Street Circuit",
+    "name": "Santiago Street Circuit",
     "country": "Chile",
     "region": "Santiago",
     "circuit_type": "street",
@@ -161,7 +161,7 @@
   },
   {
     "circuit_id": 105,
-    "name": "Fallcrest Motorsports",
+    "name": "Riffa City Circuit",
     "country": "Bahrain",
     "region": "Riffa",
     "circuit_type": "street",
@@ -201,7 +201,7 @@
   },
   {
     "circuit_id": 106,
-    "name": "Salvatore Grand Prix Circuit",
+    "name": "Riyadh Street Circuit",
     "country": "Saudi Arabia",
     "region": "Riyadh",
     "circuit_type": "street",
@@ -241,7 +241,7 @@
   },
   {
     "circuit_id": 107,
-    "name": "Valentia Street Circuit",
+    "name": "Corso Valentia",
     "country": "Italy",
     "region": "Lombardia",
     "circuit_type": "street",
@@ -281,7 +281,7 @@
   },
   {
     "circuit_id": 108,
-    "name": "Kinetic Circuit",
+    "name": "Tokyo Bay Street Circuit",
     "country": "Japan",
     "region": "Kanto",
     "circuit_type": "street",
@@ -321,7 +321,7 @@
   },
   {
     "circuit_id": 109,
-    "name": "Jarvik Autodrome",
+    "name": "Sakhir City Circuit",
     "country": "Bahrain",
     "region": "Sakhir",
     "circuit_type": "street",
@@ -361,7 +361,7 @@
   },
   {
     "circuit_id": 110,
-    "name": "Ikari Autodromo",
+    "name": "Bariloche Street Circuit",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "street",
@@ -401,7 +401,7 @@
   },
   {
     "circuit_id": 111,
-    "name": "West Fahreed Mountain Pass",
+    "name": "Marine Drive Street Circuit",
     "country": "India",
     "region": "Maharashtra",
     "circuit_type": "street",
@@ -441,7 +441,7 @@
   },
   {
     "circuit_id": 112,
-    "name": "Frostpeak Endurance Circuit",
+    "name": "Puerto Madero Street Circuit",
     "country": "Argentina",
     "region": "Buenos Aires",
     "circuit_type": "street",
@@ -481,7 +481,7 @@
   },
   {
     "circuit_id": 113,
-    "name": "Nazari Rennstrecke",
+    "name": "Corso Nazari",
     "country": "Italy",
     "region": "Lombardia",
     "circuit_type": "street",
@@ -521,7 +521,7 @@
   },
   {
     "circuit_id": 114,
-    "name": "Silverwind Grand Prix Circuit",
+    "name": "Antwerp Harbour Circuit",
     "country": "Belgium",
     "region": "Flanders",
     "circuit_type": "street",
@@ -561,7 +561,7 @@
   },
   {
     "circuit_id": 115,
-    "name": "Grand Bellcrest Speedway",
+    "name": "Algarve Marina Street Circuit",
     "country": "Portugal",
     "region": "Algarve",
     "circuit_type": "street",
@@ -601,7 +601,7 @@
   },
   {
     "circuit_id": 116,
-    "name": "Redstone Complex",
+    "name": "Sharjah Corniche Street Circuit",
     "country": "United Arab Emirates",
     "region": "Sharjah",
     "circuit_type": "street",
@@ -641,7 +641,7 @@
   },
   {
     "circuit_id": 117,
-    "name": "North Ikari Motorsports",
+    "name": "Corso Veneto",
     "country": "Italy",
     "region": "Veneto",
     "circuit_type": "street",
@@ -681,7 +681,7 @@
   },
   {
     "circuit_id": 118,
-    "name": "Noboru Loop",
+    "name": "Port Vell Street Circuit",
     "country": "Spain",
     "region": "Catalonia",
     "circuit_type": "street",
@@ -721,7 +721,7 @@
   },
   {
     "circuit_id": 119,
-    "name": "National Millbrook Autodrome",
+    "name": "Jeddah Corniche Street Circuit",
     "country": "Saudi Arabia",
     "region": "Jeddah",
     "circuit_type": "street",
@@ -761,7 +761,7 @@
   },
   {
     "circuit_id": 120,
-    "name": "Haruka Autodromo",
+    "name": "Sion City Circuit",
     "country": "Switzerland",
     "region": "Valais",
     "circuit_type": "street",
@@ -801,7 +801,7 @@
   },
   {
     "circuit_id": 121,
-    "name": "Novara Park",
+    "name": "Sapporo Street Circuit",
     "country": "Japan",
     "region": "Hokkaido",
     "circuit_type": "street",
@@ -841,7 +841,7 @@
   },
   {
     "circuit_id": 122,
-    "name": "Aether International Racing Centre",
+    "name": "Veracruz Harbour Circuit",
     "country": "Mexico",
     "region": "Veracruz",
     "circuit_type": "street",
@@ -881,7 +881,7 @@
   },
   {
     "circuit_id": 123,
-    "name": "Lindholm Circuit",
+    "name": "Ushuaia Street Circuit",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "street",
@@ -921,7 +921,7 @@
   },
   {
     "circuit_id": 124,
-    "name": "National Takara Course",
+    "name": "Namur City Circuit",
     "country": "Belgium",
     "region": "Ardennes",
     "circuit_type": "street",
@@ -961,7 +961,7 @@
   },
   {
     "circuit_id": 125,
-    "name": "Ustvold Autodromo",
+    "name": "Chur City Circuit",
     "country": "Switzerland",
     "region": "Graubünden",
     "circuit_type": "street",

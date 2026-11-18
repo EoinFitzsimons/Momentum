@@ -88,6 +88,7 @@ from momentum.gui.accessibility_settings import (
     get_theme_stylesheet,
 )
 from momentum.gui.themed_messagebox import warning, question
+from momentum.data.circuit_schema import QUARTER_MILE_M, track_distance_label
 from momentum.gui.circuit_dressing import (
     PIT_BOX_COUNT,
     TEAM_FALLBACK_COLOURS,
@@ -1521,6 +1522,8 @@ class TrackWidget(QWidget):
                     half_width=self.TRACK_HALF_WIDTH,
                     team_colours=self._pit_team_colours(),
                     seed=len(self.track_points),
+                    point_to_point=self.is_drag_track,
+                    race_distance_m=QUARTER_MILE_M if self.is_drag_track else None,
                 )
             except Exception:
                 LOGGER.debug("Failed to build circuit dressing", exc_info=True)
@@ -1634,10 +1637,9 @@ class TrackWidget(QWidget):
             if track_height > 0
             else 1.0
         )
-        zoom = max(0.5, min(min(zoom_x, zoom_y), 2.5))
         if self.is_drag_track:
-            zoom = min(4.0, zoom * 1.85)
-        return zoom
+            return max(0.25, min(zoom_x, zoom_y))
+        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
 
     def _draw_world_forest_layers(self, painter) -> None:
         """Draw cached large forest and infield forest overlays in world space."""
@@ -2372,7 +2374,7 @@ class TrackWidget(QWidget):
         # to ensure correct orientation and clipping. Avoid duplicate drawing here.
 
     def _build_centerline_path(self) -> Optional[QPainterPath]:
-        """Return closed centerline path for the current track."""
+        """Return the centreline path: closed for a lap circuit, open for a drag strip."""
         if not self.track_points or len(self.track_points) < 2:
             return None
         key = (id(self.track_points), len(self.track_points))
@@ -2383,7 +2385,8 @@ class TrackWidget(QWidget):
         centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
         for pt in self.track_points[1:]:
             centerline.lineTo(pt.x, pt.y)
-        centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+        if not self.is_drag_track:
+            centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
         self._centerline_cache = (key, centerline)
         return centerline
 
@@ -2658,12 +2661,17 @@ class TrackWidget(QWidget):
     ) -> None:
         """Draw surface base and darker racing line."""
         style = self._resolve_surface_visual_profile()
+        cap = (
+            Qt.PenCapStyle.FlatCap
+            if self.is_drag_track
+            else Qt.PenCapStyle.RoundCap
+        )
         painter.setPen(
             QPen(
                 style["lane_color"],
                 track_width * 2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -2674,7 +2682,7 @@ class TrackWidget(QWidget):
                 style["line_color"],
                 track_width * 1.2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -2759,15 +2767,25 @@ class TrackWidget(QWidget):
         painter.drawPath(centerline)
 
     def _draw_start_finish_line(self, painter, track_width: int) -> None:
-        """Draw chequered marker: start/finish for loops, finish-only for drag strips."""
+        """Draw the start/finish marker: one chequered line for a lap circuit; for a
+        drag strip a plain start line and a chequered finish at the quarter mile,
+        with the shutdown area running on beyond it."""
         if not self.track_points:
             return
 
         if self.is_drag_track:
-            target_s = max(0.0, float(self.track_length) - 1.0)
+            start = self.track_points[0]
+            painter.save()
+            painter.translate(start.x, start.y)
+            painter.rotate(math.degrees(start.theta) + 90)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(255, 255, 255)))
+            painter.drawRect(int(-track_width), -2, int(2 * track_width), 4)
+            painter.restore()
+            target_s = min(float(self.track_length) - 1.0, QUARTER_MILE_M)
             pt = self._find_track_point_near_s(target_s, tolerance=4)
             if pt is None:
-                pt = self.track_points[-1]
+                pt = min(self.track_points, key=lambda c: abs(c.s - target_s))
         else:
             pt = None
             for candidate in self.track_points:
@@ -4225,6 +4243,20 @@ class RaceWindow(QMainWindow):
         label = getattr(self, "come_in_label", None)
         checkbox = getattr(self, "come_in_checkbox", None)
         status = getattr(self, "come_in_status_label", None)
+        if self._is_drag_discipline():
+            for widget in (
+                label,
+                checkbox,
+                getattr(self, "pit_tyre_label", None),
+                getattr(self, "pit_tyre_combo", None),
+            ):
+                if widget is not None:
+                    widget.hide()
+            if status is not None:
+                status.setText(
+                    "Drag: a single pass with no pit stops; staging and reaction decide the run."
+                )
+            return
         if label is not None:
             label.setText("Come In Request")
         if checkbox is not None:
@@ -4977,9 +5009,8 @@ class RaceWindow(QMainWindow):
         """Set final ready message after successful data load."""
         track = self.track
         track_name = getattr(track, "name", "Unknown Track")
-        track_km = float(getattr(track, "length_km", 0.0))
         self.info_label.setText(
-            f"{len(self.drivers)} drivers | {track_name} ({track_km:.2f}km)"
+            f"{len(self.drivers)} drivers | {track_name} ({track_distance_label(track)})"
         )
         print("Data loading complete - ready to race")
 
@@ -6501,10 +6532,9 @@ class RaceWindow(QMainWindow):
     def _build_detailed_results_table(self, results_sorted: list) -> QTableWidget:
         """Build detailed results table with drag-specific telemetry columns."""
         detail = QTableWidget()
-        detail.setColumnCount(7)
-        detail.setHorizontalHeaderLabels(
-            ["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"]
-        )
+        headers = self._detail_result_columns()
+        detail.setColumnCount(len(headers))
+        detail.setHorizontalHeaderLabels(headers)
         display_results = self._sorted_results_for_detail_display(results_sorted)
         detail.setRowCount(len(display_results))
         leader_time = self._detail_leader_time(display_results)
@@ -6519,30 +6549,40 @@ class RaceWindow(QMainWindow):
                     display_pos,
                 )
             )
-            detail.setItem(row_idx, 0, QTableWidgetItem(str(pos)))
-            detail.setItem(row_idx, 1, QTableWidgetItem(name))
-            detail.setItem(row_idx, 2, QTableWidgetItem(time_text))
-            detail.setItem(row_idx, 3, QTableWidgetItem(gap_text))
-            detail.setItem(row_idx, 4, QTableWidgetItem(reaction_text))
-            detail.setItem(row_idx, 5, QTableWidgetItem(trap_text))
+            cells = {
+                "Pos": str(pos),
+                "Driver": name,
+                "Time": time_text,
+                "Gap": gap_text,
+                "Reaction": reaction_text,
+                "Trap": trap_text,
+            }
+            for col, header in enumerate(headers[:-1]):
+                detail.setItem(row_idx, col, QTableWidgetItem(cells[header]))
             status_item = QTableWidgetItem(status)
             if status == "DNF":
                 status_item.setBackground(QColor(220, 40, 40))
                 status_item.setForeground(QColor(255, 255, 255))
-            detail.setItem(row_idx, 6, status_item)
+            detail.setItem(row_idx, len(headers) - 1, status_item)
 
         detail_hdr = detail.horizontalHeader()
         if isinstance(detail_hdr, QHeaderView):
-            detail_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-            detail_hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+            for col, header in enumerate(headers):
+                detail_hdr.setSectionResizeMode(
+                    col,
+                    QHeaderView.ResizeMode.Stretch
+                    if header == "Driver"
+                    else QHeaderView.ResizeMode.ResizeToContents,
+                )
         detail.setAlternatingRowColors(True)
         detail.setMinimumHeight(340)
         return detail
+
+    def _detail_result_columns(self) -> List[str]:
+        """Reaction time and trap speed are measured on a drag strip only."""
+        if self._is_drag_discipline():
+            return ["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"]
+        return ["Pos", "Driver", "Time", "Gap", "Status"]
 
     def _sorted_results_for_detail_display(self, results: list) -> list:
         """Return race results in visual finish order for summary table rendering."""

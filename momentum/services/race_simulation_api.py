@@ -11,6 +11,7 @@ Date: December 2025
 from typing import List, Callable, Optional, Dict, Any
 import contextlib
 import io
+from momentum.data.circuit_schema import track_distance_label
 from momentum.database.models import Driver, Track, RaceResult, Team
 from momentum.engine.base_race_engine import (
     RaceContext,
@@ -167,7 +168,7 @@ def _print_race_summary(
     print(f"\n{'='*70}")
     print("REAL-TIME RACE SIMULATION - 30 FPS")
     print(f"{'='*70}")
-    print(f"Track: {track.name} ({track.length_km:.2f}km)")
+    print(f"Track: {track.name} ({track_distance_label(track)})")
     print(f"Drivers: {len(drivers)} | Laps: {laps}")
     print(f"Expected updates: ~{2700 * laps * len(drivers):,}")
     print(f"{'='*70}\n")
