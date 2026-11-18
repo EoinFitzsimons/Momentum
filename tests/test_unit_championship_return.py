@@ -99,3 +99,33 @@ def test_return_to_menu_after_a_championship_race_reopens_the_championship_windo
     assert calls == ["championship_page"]
     assert db.get_race(race_id).status == "completed"
     assert launcher.race_config == {}
+
+
+@pytest.mark.integration
+def test_race_window_saves_the_whole_championship_classification(seeded_championship):
+    from PyQt6.QtWidgets import QApplication
+
+    QApplication.instance() or QApplication([])
+    from momentum.gui.gui_race_visual import RaceWindow
+
+    db = seeded_championship["db"]
+    race_id = seeded_championship["race_ids"][0]
+    driver_ids = seeded_championship["seed"]["driver_ids"][:3]
+    drivers = [db.get_driver(d) for d in driver_ids]
+
+    window = RaceWindow.__new__(RaceWindow)
+    window.db = db
+    window.drivers = drivers
+    window._race_id = race_id
+    window._championship_id = seeded_championship["championship_id"]
+    window._game_mode = "championship"
+    window._initial_discipline = "SPRINT_RALLYCROSS"
+    results = [
+        {"driver_id": d.id, "position": i, "fastest_lap": i == 1, "dnf_reason": None}
+        for i, d in enumerate(drivers, start=1)
+    ]
+    window._save_race_results_if_needed(results)
+
+    rows = db.get_race_results(race_id)
+    assert sorted(r.position for r in rows) == [1, 2, 3]
+    assert rows[0].points > 0

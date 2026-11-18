@@ -5955,9 +5955,15 @@ class RaceWindow(QMainWindow):
             return
         try:
             saved_count = 0
+            self._championship_result_batch = []
             for result in results_sorted:
                 if self._save_single_race_result(result):
                     saved_count += 1
+            if self._championship_result_batch:
+                # save_race_results replaces every row for the race, so the
+                # classification must be written as one batch.
+                persist_race_results(self.db, self._championship_result_batch)
+                self._championship_result_batch = []
             print(f"[RACE FINISHED] Saved {saved_count} race results to database")
             if is_career and saved_count:
                 self._complete_career_race()
@@ -6018,7 +6024,11 @@ class RaceWindow(QMainWindow):
                 dnf_reason=dnf_reason,
                 grid_position=result.get("grid_position", result.get("position")),
             )
-            persist_race_results(self.db, [race_result])
+            batch = getattr(self, "_championship_result_batch", None)
+            if batch is None:
+                persist_race_results(self.db, [race_result])
+            else:
+                batch.append(race_result)
         return True
 
     def _is_career_mode(self) -> bool:
