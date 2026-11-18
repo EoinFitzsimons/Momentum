@@ -71,7 +71,11 @@ def test_every_theme_declares_readable_alternate_rows(app, theme):
         foreground = re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", block)
         assert alternate is not None and foreground is not None
         assert _contrast(alternate.group(1), foreground.group(1)) >= 4.5
-    assert "::item:alternate" in css
+    # Per-cell colours set in code (player row, DNF cells) must keep working:
+    # no unselected item rule may force a colour or background.
+    for selector, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        if "::item" in selector and ":selected" not in selector:
+            assert "color" not in body, selector.strip()
 
 
 @pytest.mark.unit
@@ -149,11 +153,15 @@ def test_wrapping_button_keeps_full_caption(app):
     from momentum.gui.gui_career import WrappingPushButton
 
     button = WrappingPushButton("Tier 1 · Single Seater Tier 1 Championship")
+    button.resize(160, 48)
+    button.show()
+    app.processEvents()
     assert button.text() == "Tier 1 · Single Seater Tier 1 Championship"
-    label = button.caption_label()
-    assert label.wordWrap()
-    one_line = label.fontMetrics().lineSpacing()
-    assert label.heightForWidth(160) >= one_line * 2
+    shown = button.displayed_text()
+    assert "\n" in shown
+    assert shown.replace("\n", " ") == button.text()
+    assert button.sizeHint().height() > button.fontMetrics().lineSpacing() * 2
+    button.close()
 
 
 @pytest.mark.unit
@@ -207,3 +215,42 @@ def test_round_header_spans_columns(app):
 )
 def test_default_ui_scale_follows_screen_height(height, expected):
     assert acc.default_ui_scale_for_screen(height) == expected
+
+
+@pytest.mark.unit
+def test_apply_settings_keeps_race_choice_when_scale_changes(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(acc, "_settings_dir", lambda: str(tmp_path))
+    import momentum.gui.gui_main_menu as menu_module
+
+    saved = {}
+    monkeypatch.setattr(menu_module, "information", lambda *args, **kwargs: None)
+
+    def fake_save(values):
+        saved.update(values)
+        return {
+            "render_fps": int(values["render_fps"]),
+            "simulation_speed": float(values["simulation_speed"]),
+        }
+
+    monkeypatch.setattr(menu_module, "save_race_settings", fake_save)
+    window = menu_module.MainMenuWindow()
+    try:
+        window.ui_scale_combo.setCurrentIndex(window.ui_scale_combo.findData(125))
+        window.render_fps_combo.setCurrentIndex(window.render_fps_combo.findData(60))
+        for button in window.display_button_group.buttons():
+            if button.property("mode") == "fullscreen":
+                button.setChecked(True)
+                window._on_display_mode_changed(button)
+        assert set(window.pending_setting_changes()) == {
+            "display mode",
+            "UI scale",
+            "render FPS",
+        }
+        window._apply_settings()
+        assert saved["render_fps"] == 60
+        assert window.race_settings["render_fps"] == 60
+        assert window.display_mode == "fullscreen" == window._applied_display_mode
+        assert window.pending_setting_changes() == []
+    finally:
+        window.close()
+        apply_accessibility_to_app(app, {"theme": "standard", "ui_scale": 100})
