@@ -270,9 +270,11 @@ QLineEdit:focus, QTableWidget:focus, QTreeWidget:focus {
 def get_theme_stylesheet(theme: str, ui_scale: Optional[int] = None) -> str:
     """Return stylesheet overrides for selected accessibility theme.
 
-    Every theme declares ``alternate-background-color`` and item text colours
-    explicitly so alternating rows in tables and trees never fall back to the
-    platform palette (which paints white rows under a white-text theme).
+    Every theme declares ``alternate-background-color`` on tables, trees and
+    lists so alternating rows never fall back to the platform palette (which
+    paints white rows under a white-text theme). Item colours are deliberately
+    not styled so per-cell highlights set in code (player rows, DNF cells)
+    still show.
     """
     theme = str(theme or "standard").strip().lower()
     structure = structure_stylesheet(ui_scale)
@@ -288,11 +290,6 @@ QComboBox, QLineEdit, QListWidget, QTableWidget, QTreeWidget {
     alternate-background-color: #1E1E1E;
     color: #FFFFFF;
     border: 2px solid #FFFFFF;
-}
-QTableWidget::item, QTreeWidget::item, QListWidget::item { color: #FFFFFF; }
-QTableWidget::item:alternate, QTreeWidget::item:alternate, QListWidget::item:alternate {
-    background-color: #1E1E1E;
-    color: #FFFFFF;
 }
 QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected {
     background-color: #FFFFFF;
@@ -314,11 +311,6 @@ QComboBox, QLineEdit, QListWidget, QTableWidget, QTreeWidget {
     alternate-background-color: #343C50;
     color: #E6E6E6;
     border: 1px solid #5DA5DA;
-}
-QTableWidget::item, QTreeWidget::item, QListWidget::item { color: #E6E6E6; }
-QTableWidget::item:alternate, QTreeWidget::item:alternate, QListWidget::item:alternate {
-    background-color: #343C50;
-    color: #E6E6E6;
 }
 QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected {
     background-color: #F0AD4E;
@@ -431,11 +423,6 @@ QTableWidget, QTreeWidget, QListWidget {
     alternate-background-color: #2A3134;
     color: #E3F6F9;
     border: 1px solid #3E474D;
-}
-QTableWidget::item, QTreeWidget::item, QListWidget::item { color: #E3F6F9; }
-QTableWidget::item:alternate, QTreeWidget::item:alternate, QListWidget::item:alternate {
-    background-color: #2A3134;
-    color: #E3F6F9;
 }
 QTableWidget::item:selected, QTreeWidget::item:selected, QListWidget::item:selected {
     background-color: #35504F;
