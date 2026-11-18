@@ -18,7 +18,7 @@ from typing import Annotated, Any, ClassVar, Dict, List, Literal, Optional, Tupl
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
-from momentum.data.circuit_profiles import PROFILES, DisciplineProfile
+from momentum.data.circuit_profiles import PROFILES, DisciplineProfile, name_discipline
 
 CIRCUITS_DIR = Path(__file__).resolve().parent / "circuits"
 
@@ -26,6 +26,15 @@ Climate = Literal["temperate", "mediterranean", "continental", "desert", "tropic
 Grade = Literal["Diamond", "Platinum", "Gold", "Silver", "Bronze", "Approved"]
 
 QUARTER_MILE_M = 402.34
+
+
+def track_distance_label(track: object) -> str:
+    """The distance a player should see for a track: the 402 m race distance
+    for a drag strip (its stored length also covers the shutdown area), the
+    lap length in kilometres for a circuit."""
+    if getattr(track, "is_point_to_point", False):
+        return f"{QUARTER_MILE_M:.0f} m"
+    return f"{float(getattr(track, 'length_km', 0.0) or 0.0):.2f}km"
 
 
 class CircuitError(ValueError):
@@ -88,6 +97,10 @@ class CircuitBase(BaseModel):
 
     def _problems(self) -> List[str]:
         p: List[str] = []
+        reads_as = name_discipline(self.name)
+        if reads_as != self.discipline_key:
+            forms = ", ".join(self.profile.name_forms)
+            p.append(f"name {self.name!r} does not read as a {self.discipline_key} circuit (expected one of: {forms})")
         if not self.track_width_min_m <= self.track_width_avg_m <= self.track_width_max_m:
             p.append("track width must run min <= avg <= max")
         if self.avg_speed_kmh >= self.top_speed_kmh:

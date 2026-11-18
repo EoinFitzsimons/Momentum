@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 from faker import Faker
 
-import momentum.database.database_extensions  # noqa: F401  # patches DatabaseManager
 from momentum.database.database_manager import DatabaseManager
 from momentum.database.models import Driver, Race, RaceResult, Track
 from momentum.engine.realtime_race_engine import RealtimeRaceEngine

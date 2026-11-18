@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 126,
-    "name": "South Vazir Loop",
+    "name": "Kanto Dragway",
     "country": "Japan",
     "region": "Kanto",
     "circuit_type": "permanent",
@@ -37,7 +37,7 @@
   },
   {
     "circuit_id": 127,
-    "name": "International Ashura Motor Stadium",
+    "name": "Auckland Raceway Park",
     "country": "New Zealand",
     "region": "Auckland",
     "circuit_type": "permanent",
@@ -73,7 +73,7 @@
   },
   {
     "circuit_id": 128,
-    "name": "Fjordheim Street Circuit",
+    "name": "Hunter Valley Dragway",
     "country": "Australia",
     "region": "New South Wales",
     "circuit_type": "permanent",
@@ -109,7 +109,7 @@
   },
   {
     "circuit_id": 129,
-    "name": "Kinetic Racing Centre",
+    "name": "Muharraq Drag Strip",
     "country": "Bahrain",
     "region": "Muharraq",
     "circuit_type": "permanent",
@@ -145,7 +145,7 @@
   },
   {
     "circuit_id": 130,
-    "name": "Haruka Rally Stage",
+    "name": "Gyeonggi Dragway",
     "country": "South Korea",
     "region": "Gyeonggi",
     "circuit_type": "permanent",
@@ -181,7 +181,7 @@
   },
   {
     "circuit_id": 131,
-    "name": "Bramford Circuit",
+    "name": "Flanders Drag Strip",
     "country": "Belgium",
     "region": "Flanders",
     "circuit_type": "permanent",
@@ -217,7 +217,7 @@
   },
   {
     "circuit_id": 132,
-    "name": "South Greendale Speedway",
+    "name": "Ardennes Dragway",
     "country": "Belgium",
     "region": "Ardennes",
     "circuit_type": "permanent",
@@ -253,7 +253,7 @@
   },
   {
     "circuit_id": 133,
-    "name": "Royal Akatsuki Road Course",
+    "name": "Brandenburg Dragway",
     "country": "Germany",
     "region": "Brandenburg",
     "circuit_type": "permanent",
@@ -289,7 +289,7 @@
   },
   {
     "circuit_id": 134,
-    "name": "Whitestone Piste",
+    "name": "Jalisco Drag Strip",
     "country": "Mexico",
     "region": "Jalisco",
     "circuit_type": "permanent",
@@ -325,7 +325,7 @@
   },
   {
     "circuit_id": 135,
-    "name": "Palmhurst Complex",
+    "name": "Kansai Dragway",
     "country": "Japan",
     "region": "Kansai",
     "circuit_type": "permanent",
@@ -361,7 +361,7 @@
   },
   {
     "circuit_id": 136,
-    "name": "Imperial Ylvinge Circuito",
+    "name": "Jeju Drag Strip",
     "country": "South Korea",
     "region": "Jeju",
     "circuit_type": "permanent",
@@ -397,7 +397,7 @@
   },
   {
     "circuit_id": 137,
-    "name": "Kinetic Ring",
+    "name": "Mojave Dragway",
     "country": "United States",
     "region": "California",
     "circuit_type": "permanent",
@@ -433,7 +433,7 @@
   },
   {
     "circuit_id": 138,
-    "name": "Greater Ylvinge Racing Arena",
+    "name": "Gelderland Drag Strip",
     "country": "Netherlands",
     "region": "Gelderland",
     "circuit_type": "permanent",
@@ -469,7 +469,7 @@
   },
   {
     "circuit_id": 139,
-    "name": "Kashan Corso",
+    "name": "Douro Dragway",
     "country": "Portugal",
     "region": "Douro",
     "circuit_type": "permanent",
@@ -505,7 +505,7 @@
   },
   {
     "circuit_id": 140,
-    "name": "Polaris Arena",
+    "name": "Mendoza Drag Strip",
     "country": "Argentina",
     "region": "Mendoza",
     "circuit_type": "permanent",
@@ -541,7 +541,7 @@
   },
   {
     "circuit_id": 141,
-    "name": "Ashford Track",
+    "name": "Everglades Raceway Park",
     "country": "United States",
     "region": "Florida",
     "circuit_type": "permanent",
@@ -577,7 +577,7 @@
   },
   {
     "circuit_id": 142,
-    "name": "Unity Piste",
+    "name": "Riyadh Dragway",
     "country": "Saudi Arabia",
     "region": "Riyadh",
     "circuit_type": "permanent",
@@ -613,7 +613,7 @@
   },
   {
     "circuit_id": 143,
-    "name": "Unity Mountain Pass",
+    "name": "Blue Mountains Drag Strip",
     "country": "Australia",
     "region": "New South Wales",
     "circuit_type": "permanent",
@@ -649,7 +649,7 @@
   },
   {
     "circuit_id": 144,
-    "name": "Apex Sprint Track",
+    "name": "Dammam Drag Strip",
     "country": "Saudi Arabia",
     "region": "Eastern",
     "circuit_type": "permanent",
@@ -685,7 +685,7 @@
   },
   {
     "circuit_id": 145,
-    "name": "Maravilla Motorsports",
+    "name": "Sentosa Drag Strip",
     "country": "Singapore",
     "region": "Sentosa",
     "circuit_type": "permanent",
@@ -721,7 +721,7 @@
   },
   {
     "circuit_id": 146,
-    "name": "Imperial Rosario Complex",
+    "name": "Lisboa Raceway Park",
     "country": "Portugal",
     "region": "Lisbon",
     "circuit_type": "permanent",
@@ -757,7 +757,7 @@
   },
   {
     "circuit_id": 147,
-    "name": "Greater Greendale Sprint Track",
+    "name": "Gauteng Dragway",
     "country": "South Africa",
     "region": "Gauteng",
     "circuit_type": "permanent",
@@ -793,7 +793,7 @@
   },
   {
     "circuit_id": 148,
-    "name": "Greater Infinita Rennstrecke",
+    "name": "Lombardia Dragway",
     "country": "Italy",
     "region": "Lombardia",
     "circuit_type": "permanent",
@@ -829,7 +829,7 @@
   },
   {
     "circuit_id": 149,
-    "name": "Deepford Course",
+    "name": "Fes Drag Strip",
     "country": "Morocco",
     "region": "Fes",
     "circuit_type": "permanent",
@@ -865,7 +865,7 @@
   },
   {
     "circuit_id": 150,
-    "name": "Bellaverde Endurance Circuit",
+    "name": "Andalucía Dragway",
     "country": "Spain",
     "region": "Andalusia",
     "circuit_type": "permanent",

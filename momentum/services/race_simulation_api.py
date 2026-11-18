@@ -11,6 +11,7 @@ Date: December 2025
 from typing import List, Callable, Optional, Dict, Any
 import contextlib
 import io
+from momentum.data.circuit_schema import track_distance_label
 from momentum.database.models import Driver, Track, RaceResult, Team
 from momentum.engine.base_race_engine import (
     RaceContext,
@@ -167,7 +168,7 @@ def _print_race_summary(
     print(f"\n{'='*70}")
     print("REAL-TIME RACE SIMULATION - 30 FPS")
     print(f"{'='*70}")
-    print(f"Track: {track.name} ({track.length_km:.2f}km)")
+    print(f"Track: {track.name} ({track_distance_label(track)})")
     print(f"Drivers: {len(drivers)} | Laps: {laps}")
     print(f"Expected updates: ~{2700 * laps * len(drivers):,}")
     print(f"{'='*70}\n")
@@ -360,6 +361,20 @@ def _resolve_realtime_speed(
     return 5.0 if (verbose or event_callback is not None) else 250.0
 
 
+def _context_conditions(context: Optional[RaceContext]) -> Dict[str, Any]:
+    """Weather and track conditions carried by a RaceContext, for the engine."""
+    if context is None:
+        return {}
+    conditions: Dict[str, Any] = {}
+    weather = getattr(context, "weather_conditions", None)
+    if isinstance(weather, dict):
+        conditions["weather_conditions"] = dict(weather)
+    track_conditions = getattr(context, "track_conditions", None)
+    if isinstance(track_conditions, dict):
+        conditions["track_conditions"] = dict(track_conditions)
+    return conditions
+
+
 def _build_engine_run_kwargs(
     drivers: List[Driver],
     teams_dict: Dict[int, Team],
@@ -488,6 +503,7 @@ def simulate_race(
             player_driver_id=player_driver_id,
             player_overrides=player_overrides,
         )
+        run_kwargs.update(_context_conditions(context))
         results_list = _execute_engine_simulation(
             engine, run_kwargs, verbose, event_callback
         )

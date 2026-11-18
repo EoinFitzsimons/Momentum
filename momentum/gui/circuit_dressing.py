@@ -156,11 +156,16 @@ class CircuitDressing:
 
     def __init__(self, track_points: Sequence[Any], pit_points: Optional[Sequence[Any]],
                  half_width: float = 14.0, team_colours: Optional[List[QColor]] = None,
-                 seed: int = 0) -> None:
+                 seed: int = 0, point_to_point: bool = False,
+                 race_distance_m: Optional[float] = None) -> None:
+        """Dress a lap circuit, or with ``point_to_point`` a straight strip whose
+        timed run ends at ``race_distance_m`` and whose remainder is shutdown area."""
         self.points = list(track_points)
         self.pit = list(pit_points) if pit_points else []
         self.hw = half_width
-        self.side = infield_side(self.points)
+        self.point_to_point = point_to_point
+        self.race_distance_m = race_distance_m
+        self.side = 1 if point_to_point else infield_side(self.points)
         self.rng = random.Random(seed)
         self.team_colours = team_colours or [QColor(*c) for c in TEAM_FALLBACK_COLOURS]
         xy = np.array([(p.x, p.y) for p in self.points])
@@ -171,9 +176,14 @@ class CircuitDressing:
         self.stands: List[dict] = []
         self.pit_paths: dict = {}
         self.crowd = _crowd_brush(seed)
-        self._build_corners()
-        self._build_main_grandstand()
-        self._build_pit_complex()
+        self.tower: Optional[Tuple[Any, int, float]] = None
+        self.shutdown: List[QPainterPath] = []
+        if point_to_point:
+            self._build_strip()
+        else:
+            self._build_corners()
+            self._build_main_grandstand()
+            self._build_pit_complex()
         self.scenery = self._record_scenery()
         self._scenery_pixmap: Optional[QPixmap] = None
         self._scenery_key: Optional[Tuple[float, float, float]] = None
@@ -269,6 +279,29 @@ class CircuitDressing:
             idx = window[int(n * a): int(n * b)]
             self._add_stand([self.points[i] for i in idx], self.hw + 14, 24.0, outside, roof=True)
 
+    def _build_strip(self) -> None:
+        """Grandstands flank the timed run on both sides, the timing tower stands
+        by the start line, and the shutdown area beyond the finish is edged with
+        a sand trap rather than a return road."""
+        pts = self.points
+        end_s = float(pts[-1].s)
+        race_end = min(end_s, float(self.race_distance_m or end_s))
+        run = [p for p in pts if 60.0 <= p.s <= race_end - 10.0]
+        if len(run) >= 20:
+            for sign in (1, -1):
+                self._add_stand(run, self.hw + 12, 20.0, sign, roof=False)
+        start = next((p for p in pts if p.s >= 25.0), pts[0])
+        self.tower = (start, -1, self.hw + 10.0)
+        shutdown = [p for p in pts if p.s >= race_end]
+        if len(shutdown) >= 2:
+            self.shutdown.append(_band(shutdown, lambda j, m: -self.hw - 3,
+                                       lambda j, m: -self.hw - 1, 1))
+            self.shutdown.append(_band(shutdown, lambda j, m: self.hw + 1,
+                                       lambda j, m: self.hw + 3, 1))
+            tail = shutdown[-max(2, len(shutdown) // 6):]
+            self.gravel.append(_band(tail, lambda j, m: -self.hw - 10,
+                                     lambda j, m: self.hw + 10, 1))
+
     def _build_pit_complex(self) -> None:
         if len(self.pit) < 20:
             return
@@ -296,7 +329,7 @@ class CircuitDressing:
         spacing = math.hypot(boxes[1][0].x - boxes[0][0].x, boxes[1][0].y - boxes[0][0].y) if len(boxes) > 1 else 20
         self.box_width = max(6.0, spacing * 0.86)
         tower_pt = flat[-1]
-        self.tower = (tower_pt, side)
+        self.tower = (tower_pt, side, PIT_HALF_WIDTH)
         if not self._clear_of_track(self.pit_paths["paddock"], 4.0):
             self.pit_paths.pop("paddock")
 
@@ -340,13 +373,16 @@ class CircuitDressing:
         centre.moveTo(self.points[0].x, self.points[0].y)
         for p in self.points[1:]:
             centre.lineTo(p.x, p.y)
-        centre.closeSubpath()
+        if not self.point_to_point:
+            centre.closeSubpath()
+        cap = Qt.PenCapStyle.FlatCap if self.point_to_point else Qt.PenCapStyle.RoundCap
         verge = QPen(QColor(92, 148, 66), 2 * (self.hw + 30))
         verge.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        verge.setCapStyle(Qt.PenCapStyle.RoundCap)
+        verge.setCapStyle(cap)
         painter.strokePath(centre, verge)
         stripe = QPen(QColor(104, 160, 74), 2 * (self.hw + 14))
         stripe.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        stripe.setCapStyle(cap)
         painter.strokePath(centre, stripe)
         if self.pit:
             lane = QPainterPath()
@@ -435,6 +471,12 @@ class CircuitDressing:
 
     def draw_structures(self, painter) -> None:
         painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QBrush(QColor(236, 236, 236)))
+        for path in self.shutdown:
+            painter.drawPath(path)
+        if self.point_to_point and self.tower is not None:
+            self._draw_tower(painter)
         for stand in self.stands:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QBrush(QColor(0, 0, 0, 60)))
@@ -513,7 +555,9 @@ class CircuitDressing:
             painter.restore()
 
     def _draw_tower(self, painter) -> None:
-        pt, side = self.tower
+        if self.tower is None:
+            return
+        pt, side, offset = self.tower
         painter.save()
         painter.translate(pt.x, pt.y)
         painter.rotate(math.degrees(pt.theta))
@@ -521,9 +565,9 @@ class CircuitDressing:
             painter.scale(1, -1)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QBrush(QColor(0, 0, 0, 70)))
-        painter.drawRect(QRectF(3, PIT_HALF_WIDTH + 6, 16, 16))
+        painter.drawRect(QRectF(3, offset + 6, 16, 16))
         painter.setBrush(QBrush(QColor(236, 238, 242)))
-        painter.drawRect(QRectF(0, PIT_HALF_WIDTH + 3, 16, 16))
+        painter.drawRect(QRectF(0, offset + 3, 16, 16))
         painter.setBrush(QBrush(QColor(70, 140, 200)))
-        painter.drawRect(QRectF(2, PIT_HALF_WIDTH + 5, 12, 4))
+        painter.drawRect(QRectF(2, offset + 5, 12, 4))
         painter.restore()

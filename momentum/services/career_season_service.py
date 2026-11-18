@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+
+from momentum.engine.season_calendar import plan_season, season_dates
 import random
 from typing import Any
 
@@ -432,8 +434,9 @@ class CareerSeasonService:
         start_date = self._season_start_date(
             conn, player_id, championship_id, current_season, next_season
         )
+        dates = season_dates(len(track_ids), start_date)
 
-        for round_number, track_id in enumerate(track_ids, start=1):
+        for round_number, (track_id, race_date) in enumerate(zip(track_ids, dates), start=1):
             conn.execute(
                 """
                 INSERT INTO career_races (
@@ -448,11 +451,10 @@ class CareerSeasonService:
                     int(track_id),
                     next_season,
                     round_number,
-                    start_date.strftime("%Y-%m-%d"),
+                    race_date.strftime("%Y-%m-%d"),
                     ChampionshipService.default_laps_for_discipline(discipline),
                 ),
             )
-            start_date += timedelta(days=14)
 
     def _season_start_date(
         self,
@@ -471,31 +473,18 @@ class CareerSeasonService:
             (player_id, championship_id, current_season),
         ).fetchone()
         if row and row["max_date"]:
-            return datetime.strptime(str(row["max_date"]), "%Y-%m-%d") + timedelta(
-                days=14
-            )
+            return datetime.strptime(str(row["max_date"]), "%Y-%m-%d") + timedelta(days=1)
         return datetime(2026, 1, 1) + timedelta(days=((next_season - 1) * 365))
 
     def _resolve_track_ids_for_championship(
         self, conn, discipline: str, season_length: int
     ) -> list[int]:
-        rows = conn.execute(
-            "SELECT id FROM tracks WHERE UPPER(primary_discipline) = ? ORDER BY id",
-            (str(discipline or "").upper(),),
-        ).fetchall()
-        if not rows:
-            rows = conn.execute("SELECT id FROM tracks ORDER BY id").fetchall()
-        if not rows:
+        tracks = self.db.get_tracks_by_discipline(str(discipline or "").upper())
+        if not tracks:
+            tracks = self.db.get_all_tracks()
+        if not tracks:
             raise ValueError("No tracks available to build next season calendar.")
-
-        base_ids = [int(row["id"]) for row in rows]
-        if len(base_ids) >= season_length:
-            return base_ids[:season_length]
-
-        expanded: list[int] = []
-        while len(expanded) < season_length:
-            expanded.extend(base_ids)
-        return expanded[:season_length]
+        return [int(track.id) for track in plan_season(tracks, season_length)]
 
     def _ensure_career_tables(self) -> None:
         with self.db.get_connection() as conn:

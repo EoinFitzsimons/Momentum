@@ -9,7 +9,7 @@ Implements a dedicated career HQ flow:
 """
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 
 from typing import Optional
@@ -42,6 +42,9 @@ from momentum.gui.accessibility_settings import scale_px_stylesheet, scaled, siz
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.championship_service import ChampionshipService
 from momentum.services.career_season_service import CareerSeasonService
+from momentum.data.countries import COUNTRIES
+from momentum.engine.race_format import race_format_for
+from momentum.engine.season_calendar import plan_season, season_dates
 from momentum.services.tier_service import TIERS, normalise_tier, tier_label
 from momentum.services.upgrade_service import UpgradeService
 from momentum.services.finance_service import CAR_UPGRADE_REFUND, FinanceService, InsufficientFunds, post_with
@@ -50,6 +53,41 @@ from momentum.gui.gui_championship import ChampionshipSelectionDialog, _player_l
 
 
 PLAYER_ID = "local_player"
+
+
+def nationality_code(value: str | None) -> str | None:
+    """The ISO alpha-3 code for a saved nationality.
+
+    Profiles store the code; saves made when the field was free text hold a
+    country name, which is matched by name.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.upper() in COUNTRIES:
+        return text.upper()
+    for code, name in COUNTRIES.items():
+        if name.casefold() == text.casefold():
+            return code
+    return None
+
+
+def country_name(value: str | None) -> str:
+    code = nationality_code(value)
+    return COUNTRIES[code] if code else str(value or "")
+
+
+def player_nationality(db: DatabaseManager, player_id: str = PLAYER_ID) -> str | None:
+    """The manager's nationality from the career save, as a country code."""
+    try:
+        with db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT nationality FROM career_player_profiles WHERE player_id = ?",
+                (player_id,),
+            ).fetchone()
+    except Exception:
+        return None
+    return nationality_code(row["nationality"]) if row else None
 WORLD_START_DATE = "2026-01-01"
 BUDGET_WARNING_TITLE = "Insufficient Budget"
 SEASON_COMPLETE_TEXT = "Season Complete"
@@ -84,15 +122,6 @@ def logo_style() -> str:
     """Wordmark style at the UI scale in force when the window is built."""
     return f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
 
-
-CAREER_DISCIPLINE_RACE_COUNTS = {
-    "SINGLE_SEATER": 24,
-    "PRODUCTION_TOURING": 12,
-    "URBAN_STREET": 10,
-    "DRAG_ACCELERATION": 14,
-    "SPRINT_RALLYCROSS": 12,
-    "ENDURANCE": 8,
-}
 
 
 class WrappingPushButton(QPushButton):
@@ -169,7 +198,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         size_dialog_to_screen(self, 0.85, 0.8, 1100, 650)
         self._ensure_career_tables()
         self._replace_create_button_text()
-        self._select_discipline("SINGLE_SEATER")
+        self._select_discipline(self._initial_discipline())
 
     def setup_ui(self):
         """Build the career-world entry screen instead of a generic table."""
@@ -184,8 +213,10 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             QGroupBox::title { color: #7EE6E0; padding: 0 6px; }
             QPushButton { background-color: #29343A; color: #EAF8FA; border: 1px solid #4B626A; border-radius: 6px; padding: 10px; }
             QPushButton:hover { background-color: #34464D; border-color: #7EE6E0; }
-            QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; }
+            QPushButton:checked { background-color: #7EE6E0; color: #172023; border-color: #7EE6E0; font-weight: 700; }
             QTableWidget { background-color: #172023; color: #EAF8FA; gridline-color: #34464D; border: 1px solid #405057; }
+            QTableWidget[selectedLeague="true"] { border: 2px solid #7EE6E0; }
+            QLabel[selectedLeague="true"] { color: #7EE6E0; font-weight: 700; }
             QHeaderView::section { background-color: #29343A; color: #B7D9DB; padding: 7px; border: none; }
             """)
         )
@@ -331,7 +362,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             profile = None
         if profile:
             self.profile_summary.setText(
-                f"<b>{profile['player_name']}</b> · {profile['nationality']} · age {profile['age']}<br>"
+                f"<b>{profile['player_name']}</b> · {country_name(profile['nationality'])} · age {profile['age']}<br>"
                 f"{profile['bio']}"
             )
         else:
@@ -379,12 +410,48 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             else:
                 button.setText(f"{tier_label(tier)} · no series yet")
                 button.setEnabled(False)
-            button.setChecked(
-                bool(self._selected_series and series and
-                     int(self._selected_series["id"]) == int(series["id"]))
-            )
             self._fill_tier_table(widgets["table"], widgets["summary"], teams_by_tier[tier], series)
         self._load_profile_summary()
+        self._select_series(self._resolve_selected_tier(series_by_tier))
+
+    def _owned_team(self):
+        """The team the saved profile currently runs, if any."""
+        try:
+            team_id = self.db.get_player_team_id(PLAYER_ID)
+            return self.db.get_team(int(team_id)) if team_id else None
+        except Exception:
+            return None
+
+    def _initial_discipline(self) -> str:
+        """Open on the discipline of the player's current team, else single-seaters."""
+        team = self._owned_team()
+        discipline = str(getattr(team, "discipline", "") or "")
+        if discipline and any(value == discipline for value, _ in self.discipline_buttons):
+            return discipline
+        return "SINGLE_SEATER"
+
+    def _resolve_selected_tier(self, series_by_tier: dict[str, dict]) -> str | None:
+        """Keep the current choice, else the player's own league, else the lowest tier.
+
+        The league of the team the profile owns is where the career last played,
+        so it is the default; a new save starts at the bottom of the ladder.
+        """
+        selected = self._selected_series
+        if selected:
+            for tier, series in series_by_tier.items():
+                if int(series["id"]) == int(selected["id"]):
+                    return tier
+        team = self._owned_team()
+        if team is not None and str(getattr(team, "discipline", "")) == str(
+            self._selected_discipline
+        ):
+            team_tier = normalise_tier(getattr(team, "tier", None))
+            if team_tier in series_by_tier:
+                return team_tier
+        for tier in reversed(TIERS):
+            if tier in series_by_tier:
+                return tier
+        return None
 
     def _schedule_tier_row_fit(self, *_args) -> None:
         """Re-fit wrapped team names once, after the current layout pass has finished."""
@@ -492,12 +559,27 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         ratings = [float(getattr(m, "rating", 50.0) or 50.0) for m in staff]
         return sum(ratings) / len(ratings) if ratings else None
 
-    def _select_series(self, tier: str) -> None:
-        widgets = self.tier_columns.get(tier)
+    def _select_series(self, tier: str | None) -> None:
+        widgets = self.tier_columns.get(tier) if tier else None
         series = widgets["series"] if widgets else None
         self._selected_series = series
         for value, column in self.tier_columns.items():
-            column["button"].setChecked(bool(series) and value == tier)
+            is_selected = bool(series) and value == tier
+            column["button"].setChecked(is_selected)
+            for widget in (column["table"], column["summary"]):
+                widget.setProperty("selectedLeague", "true" if is_selected else "false")
+                style = widget.style()
+                if style is not None:
+                    style.unpolish(widget)
+                    style.polish(widget)
+        if series:
+            self.select_btn.setText(
+                f"Enter Selected World · {tier_label(tier)} · {series['name']}"
+            )
+            self.select_btn.setEnabled(True)
+        else:
+            self.select_btn.setText("Enter Selected World · no league available")
+            self.select_btn.setEnabled(False)
 
     def _replace_create_button_text(self) -> None:
         for button in self.findChildren(QPushButton):
@@ -747,7 +829,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             )
 
             for discipline, tier in series_keys:
-                season_length = int(CAREER_DISCIPLINE_RACE_COUNTS.get(discipline, 10))
+                season_length = int(race_format_for(discipline).season_rounds)
                 series_name = (
                     f"{_player_label(discipline)} {_player_label(tier)} Championship"
                 )
@@ -765,8 +847,10 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 track_ids = self._resolve_track_ids_for_championship(
                     discipline, season_length
                 )
-                race_date = start_dt
-                for round_number, track_id in enumerate(track_ids, start=1):
+                dates = season_dates(len(track_ids), start_dt)
+                for round_number, (track_id, race_date) in enumerate(
+                    zip(track_ids, dates), start=1
+                ):
                     conn.execute(
                         """
                         INSERT INTO career_races (
@@ -784,7 +868,6 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                             ChampionshipService.default_laps_for_discipline(discipline),
                         ),
                     )
-                    race_date += timedelta(days=14)
 
             conn.commit()
 
@@ -796,15 +879,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             tracks = self.db.get_all_tracks()
         if not tracks:
             raise ValueError("No tracks available to build a championship calendar.")
-
-        base_ids = [int(track.id) for track in tracks]
-        if len(base_ids) >= season_length:
-            return base_ids[:season_length]
-
-        expanded: list[int] = []
-        while len(expanded) < season_length:
-            expanded.extend(base_ids)
-        return expanded[:season_length]
+        return [int(track.id) for track in plan_season(tracks, season_length)]
 
 
 class CareerProfileDialog(QDialog):
@@ -847,9 +922,11 @@ class CareerProfileDialog(QDialog):
         self.height_input.setSuffix(" cm")
         form.addRow("Height", self.height_input)
 
-        self.nationality_input = QLineEdit()
-        self.nationality_input.setPlaceholderText("Nationality")
-        form.addRow("Nationality", self.nationality_input)
+        self.nationality_combo = QComboBox()
+        self.nationality_combo.addItem("Select a country", None)
+        for code, country in sorted(COUNTRIES.items(), key=lambda item: item[1]):
+            self.nationality_combo.addItem(f"{country} ({code})", code)
+        form.addRow("Nationality", self.nationality_combo)
 
         self.bio_input = QPlainTextEdit()
         self.bio_input.setPlaceholderText(
@@ -875,19 +952,19 @@ class CareerProfileDialog(QDialog):
         if not self.name_input.text().strip():
             warning(self, "Missing Name", "Please enter a player name.")
             return
-        if not self.nationality_input.text().strip():
-            warning(self, "Missing Nationality", "Please enter a nationality.")
+        if not self.nationality_combo.currentData():
+            warning(self, "Missing Nationality", "Please choose a nationality.")
             return
         self.accept()
 
     def profile_payload(self) -> dict:
         name = self.name_input.text().strip()
-        nationality = self.nationality_input.text().strip()
+        nationality = str(self.nationality_combo.currentData() or "")
         age = int(self.age_input.value())
         height_cm = int(self.height_input.value())
         bio = self.bio_input.toPlainText().strip()
         if not bio:
-            bio = f"{age}-year-old {nationality} manager, {height_cm} cm tall."
+            bio = f"{age}-year-old manager from {country_name(nationality)}, {height_cm} cm tall."
         return {
             "player_name": name,
             "age": age,
@@ -911,7 +988,10 @@ class FoundTeamDialog(QDialog):
         discipline: str | None,
         tier: str | None = None,
         parent=None,
+        home_country: str | None = None,
     ):
+        """``home_country`` is the manager's nationality code; the new team is
+        based there unless the player chooses otherwise."""
         super().__init__(parent)
         self.db = db
         self.discipline = str(discipline or "SINGLE_SEATER").upper()
@@ -920,7 +1000,6 @@ class FoundTeamDialog(QDialog):
         self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
         size_dialog_to_screen(self, 0.32, 0.4, 560, 420)
 
-        from momentum.data.countries import COUNTRIES
         from momentum.services.team_service import TeamService
 
         self._service = TeamService(db)
@@ -947,7 +1026,12 @@ class FoundTeamDialog(QDialog):
         self.country_combo = QComboBox()
         for code, country in sorted(COUNTRIES.items(), key=lambda item: item[1]):
             self.country_combo.addItem(f"{country} ({code})", code)
-        self.country_combo.setCurrentIndex(max(0, self.country_combo.findData("GBR")))
+        home = nationality_code(home_country)
+        if home is not None:
+            self.country_combo.setCurrentIndex(max(0, self.country_combo.findData(home)))
+        else:
+            self.country_combo.insertItem(0, "Choose a country", None)
+            self.country_combo.setCurrentIndex(0)
         form.addRow("Home country", self.country_combo)
         self.hq_edit = QLineEdit()
         self.hq_edit.setPlaceholderText("Headquarters (town or city)")
@@ -981,11 +1065,15 @@ class FoundTeamDialog(QDialog):
         if not name:
             warning(self, "Team Name Required", "Give your team a name first.")
             return
+        country = self.country_combo.currentData()
+        if not country:
+            warning(self, "Home Country Required", "Choose where the team is based.")
+            return
         try:
             result = self._service.found_player_team(
                 name=name,
                 discipline=self.discipline,
-                nationality=str(self.country_combo.currentData() or "INT"),
+                nationality=str(country),
                 tier=str(self.tier_combo.currentData()),
                 team_principal=self.principal_edit.text().strip(),
                 headquarters=self.hq_edit.text().strip(),
@@ -1088,7 +1176,13 @@ class CareerTeamSelectionDialog(QDialog):
         layout.addLayout(buttons)
 
     def _found_team(self):
-        dialog = FoundTeamDialog(self.db, self.discipline, self.tier, self)
+        dialog = FoundTeamDialog(
+            self.db,
+            self.discipline,
+            self.tier,
+            self,
+            home_country=player_nationality(self.db),
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.created_team_id is None:
             return
         team = self.db.get_team(int(dialog.created_team_id))
@@ -1800,19 +1894,25 @@ class CareerWindow(QMainWindow):
         race_id = int(self.next_race["race_id"])
         with self.db.get_connection() as conn:
             row = conn.execute(
-                "SELECT track_id, weather_conditions, laps FROM career_races WHERE id = ?",
+                "SELECT id, track_id, weather_conditions, laps, round_number, race_date "
+                "FROM career_races WHERE id = ?",
                 (race_id,),
             ).fetchone()
-            if not row:
-                warning(self, "Race Error", "Could not load next race details.")
-                return
+        if not row:
+            warning(self, "Race Error", "Could not load next race details.")
+            return
+        race_data = dict(row)
+
+        setup = self._show_pre_race_setup(race_data)
+        if setup is None:
+            return
+
+        with self.db.get_connection() as conn:
             conn.execute(
                 "UPDATE career_races SET status = 'in-progress' WHERE id = ?",
                 (race_id,),
             )
             conn.commit()
-
-        race_data = dict(row)
 
         config = {
             "mode": "career",
@@ -1825,12 +1925,46 @@ class CareerWindow(QMainWindow):
             "team": self.owned_team,
             "discipline": self.championship.discipline,
             "tier": str(getattr(self.championship, "tier", "TIER_2") or "TIER_2"),
-            "weather": race_data.get("weather_conditions", "clear"),
-            "tyre_strategy": "Medium",
+            "weather": setup.get("weather") or race_data.get("weather_conditions", "clear"),
+            "tyre_strategy": setup.get("tyre_strategy") or "Medium",
             "laps": int(race_data.get("laps", 3) or 3),
         }
 
         self.start_race_signal.emit(config)
+
+    def _pre_race_dialog(self, race_data: dict):
+        """Build the shared Pre-Race Setup dialog for the next career round.
+
+        The team and driver were chosen in Career HQ, so both are locked; the
+        weather defaults to the calendar forecast and only tyres remain open.
+        """
+        from momentum.gui.gui_championship import PreRaceSetupDialog
+
+        race = SimpleNamespace(
+            id=int(race_data["id"]),
+            track_id=int(race_data["track_id"]),
+            laps=int(race_data.get("laps", 3) or 3),
+            round_number=int(race_data.get("round_number", 0) or 0),
+            race_date=str(race_data.get("race_date", "") or ""),
+            weather_conditions=str(race_data.get("weather_conditions", "") or ""),
+        )
+        track = self.db.get_track(int(race_data["track_id"]))
+        return PreRaceSetupDialog(
+            self.db,
+            self.championship,
+            race,
+            track,
+            locked_team_id=int(self.owned_team.id) if self.owned_team else None,
+            parent=self,
+            locked_driver_id=int(self.selected_driver.id),
+        )
+
+    def _show_pre_race_setup(self, race_data: dict) -> dict | None:
+        """Run the pre-race dialog; None when the player backs out."""
+        dialog = self._pre_race_dialog(race_data)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.get_race_config()
 
     def _on_return_to_menu(self):
         self.return_to_menu.emit()

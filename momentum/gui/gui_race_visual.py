@@ -7,10 +7,17 @@ Integrates:
 - Real-time car position updates based on simulation events
 """
 
-from momentum.services.career_result_service import persist_career_race_result
+from momentum.services.career_result_service import (
+    complete_career_race,
+    persist_career_race_result,
+)
 from momentum.services.tier_service import normalise_tier
 from momentum.services.race_simulation_api import persist_race_results, simulate_race
-from momentum.engine.base_race_engine import RaceContext, RacingDiscipline
+from momentum.engine.base_race_engine import (
+    RaceContext,
+    RacingDiscipline,
+    apply_forecast,
+)
 from momentum.database.database_manager import DatabaseManager
 from momentum.vehicles.appearance_integration import (
     VehicleAppearanceManager,
@@ -93,6 +100,7 @@ from momentum.gui.accessibility_settings import (
     scaled,
 )
 from momentum.gui.themed_messagebox import warning, question
+from momentum.data.circuit_schema import QUARTER_MILE_M, track_distance_label
 from momentum.gui.circuit_dressing import (
     PIT_BOX_COUNT,
     TEAM_FALLBACK_COLOURS,
@@ -1526,6 +1534,8 @@ class TrackWidget(QWidget):
                     half_width=self.TRACK_HALF_WIDTH,
                     team_colours=self._pit_team_colours(),
                     seed=len(self.track_points),
+                    point_to_point=self.is_drag_track,
+                    race_distance_m=QUARTER_MILE_M if self.is_drag_track else None,
                 )
             except Exception:
                 LOGGER.debug("Failed to build circuit dressing", exc_info=True)
@@ -1639,10 +1649,9 @@ class TrackWidget(QWidget):
             if track_height > 0
             else 1.0
         )
-        zoom = max(0.5, min(min(zoom_x, zoom_y), 2.5))
         if self.is_drag_track:
-            zoom = min(4.0, zoom * 1.85)
-        return zoom
+            return max(0.25, min(zoom_x, zoom_y))
+        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
 
     def _draw_world_forest_layers(self, painter) -> None:
         """Draw cached large forest and infield forest overlays in world space."""
@@ -2377,7 +2386,7 @@ class TrackWidget(QWidget):
         # to ensure correct orientation and clipping. Avoid duplicate drawing here.
 
     def _build_centerline_path(self) -> Optional[QPainterPath]:
-        """Return closed centerline path for the current track."""
+        """Return the centreline path: closed for a lap circuit, open for a drag strip."""
         if not self.track_points or len(self.track_points) < 2:
             return None
         key = (id(self.track_points), len(self.track_points))
@@ -2388,7 +2397,8 @@ class TrackWidget(QWidget):
         centerline.moveTo(self.track_points[0].x, self.track_points[0].y)
         for pt in self.track_points[1:]:
             centerline.lineTo(pt.x, pt.y)
-        centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
+        if not self.is_drag_track:
+            centerline.lineTo(self.track_points[0].x, self.track_points[0].y)
         self._centerline_cache = (key, centerline)
         return centerline
 
@@ -2663,12 +2673,17 @@ class TrackWidget(QWidget):
     ) -> None:
         """Draw surface base and darker racing line."""
         style = self._resolve_surface_visual_profile()
+        cap = (
+            Qt.PenCapStyle.FlatCap
+            if self.is_drag_track
+            else Qt.PenCapStyle.RoundCap
+        )
         painter.setPen(
             QPen(
                 style["lane_color"],
                 track_width * 2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -2679,7 +2694,7 @@ class TrackWidget(QWidget):
                 style["line_color"],
                 track_width * 1.2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -2764,15 +2779,25 @@ class TrackWidget(QWidget):
         painter.drawPath(centerline)
 
     def _draw_start_finish_line(self, painter, track_width: int) -> None:
-        """Draw chequered marker: start/finish for loops, finish-only for drag strips."""
+        """Draw the start/finish marker: one chequered line for a lap circuit; for a
+        drag strip a plain start line and a chequered finish at the quarter mile,
+        with the shutdown area running on beyond it."""
         if not self.track_points:
             return
 
         if self.is_drag_track:
-            target_s = max(0.0, float(self.track_length) - 1.0)
+            start = self.track_points[0]
+            painter.save()
+            painter.translate(start.x, start.y)
+            painter.rotate(math.degrees(start.theta) + 90)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(255, 255, 255)))
+            painter.drawRect(int(-track_width), -2, int(2 * track_width), 4)
+            painter.restore()
+            target_s = min(float(self.track_length) - 1.0, QUARTER_MILE_M)
             pt = self._find_track_point_near_s(target_s, tolerance=4)
             if pt is None:
-                pt = self.track_points[-1]
+                pt = min(self.track_points, key=lambda c: abs(c.s - target_s))
         else:
             pt = None
             for candidate in self.track_points:
@@ -4275,6 +4300,20 @@ class RaceWindow(QMainWindow):
         label = getattr(self, "come_in_label", None)
         checkbox = getattr(self, "come_in_checkbox", None)
         status = getattr(self, "come_in_status_label", None)
+        if self._is_drag_discipline():
+            for widget in (
+                label,
+                checkbox,
+                getattr(self, "pit_tyre_label", None),
+                getattr(self, "pit_tyre_combo", None),
+            ):
+                if widget is not None:
+                    widget.hide()
+            if status is not None:
+                status.setText(
+                    "Drag: a single pass with no pit stops; staging and reaction decide the run."
+                )
+            return
         if label is not None:
             label.setText("Come In Request")
         if checkbox is not None:
@@ -5030,9 +5069,8 @@ class RaceWindow(QMainWindow):
         """Set final ready message after successful data load."""
         track = self.track
         track_name = getattr(track, "name", "Unknown Track")
-        track_km = float(getattr(track, "length_km", 0.0))
         self.info_label.setText(
-            f"{len(self.drivers)} drivers | {track_name} ({track_km:.2f}km)"
+            f"{len(self.drivers)} drivers | {track_name} ({track_distance_label(track)})"
         )
         print("Data loading complete - ready to race")
 
@@ -5431,7 +5469,24 @@ class RaceWindow(QMainWindow):
         )
         tc["rallycross_joker_required"] = self._is_rallycross_discipline()
         tc["total_laps"] = race_laps
+        apply_forecast(context, getattr(self, "_forecast", None))
+        starting_compound = getattr(self, "_starting_tyre_compound", None)
+        if starting_compound:
+            tc["starting_tyre_compound"] = starting_compound
         return context
+
+    def set_pre_race_conditions(
+        self, weather: Optional[str], tyre_strategy: Optional[str]
+    ) -> None:
+        """Record the Pre-Race Setup forecast and starting compound for the engine."""
+        self._forecast = str(weather).strip() if weather else None
+        self._starting_tyre_compound = (
+            str(tyre_strategy).strip().lower() if tyre_strategy else None
+        )
+        print(
+            f"[RACE WINDOW] Pre-race conditions: weather={self._forecast}, "
+            f"starting tyres={self._starting_tyre_compound}"
+        )
 
     def _event_callback_from_race_thread(self, event: dict) -> None:
         """Bridge simulation events to GUI-thread-safe signals."""
@@ -5658,6 +5713,7 @@ class RaceWindow(QMainWindow):
     def _handle_thread_race_finished_event(self, event: dict) -> None:
         """Store completion diagnostics and emit race-finished payload."""
         self._race_finished_emitted = True
+        self._race_stopped = bool(event.get("race_stopped", False))
         total_laps = int(event.get("total_laps", 0))
         race_time = float(event.get("race_time", 0.0))
         print(f"\nRace finished! {total_laps} laps in {race_time:.1f}s")
@@ -5841,6 +5897,10 @@ class RaceWindow(QMainWindow):
             print(f"Race finished event received with {len(results)} results")
             self._log_collision_summary_if_available()
             self._reset_ui_for_race_finished()
+            if self._was_race_stopped():
+                self.info_label.setText(
+                    "Race stopped before the flag: no result recorded"
+                )
             if not results:
                 print("WARNING: No results to display")
                 return
@@ -5855,9 +5915,18 @@ class RaceWindow(QMainWindow):
             print(f"ERROR in _on_race_finished: {e}")
             _traceback.print_exc()
 
+        if self._was_race_stopped():
+            # A halted race has no result: nothing is persisted and the
+            # championship does not move on from it.
+            self._show_position_change_summary_safe(results_sorted)
+            return
         self._save_race_results_if_needed(results_sorted)
         self._show_position_change_summary_safe(results_sorted)
         self._enable_next_race_if_championship_mode()
+
+    def _was_race_stopped(self) -> bool:
+        """True when the last simulation was halted before the chequered flag."""
+        return bool(getattr(self, "_race_stopped", False))
 
     def _log_collision_summary_if_available(self) -> None:
         """Print collision summary block when incidents were recorded."""
@@ -5911,7 +5980,9 @@ class RaceWindow(QMainWindow):
 
     def _render_final_standings(self, results_sorted: list) -> None:
         """Render final leaderboard rows and timing/gap values."""
-        leader_time = results_sorted[0].get("time_seconds", 0) if results_sorted else 0
+        leader_time = results_sorted[0].get("time_seconds") if results_sorted else 0
+        if not isinstance(leader_time, (int, float)):
+            leader_time = 0.0
         for i, result in enumerate(results_sorted):
             self._render_final_standings_row(i, result, leader_time)
 
@@ -5947,11 +6018,14 @@ class RaceWindow(QMainWindow):
         self, row_index: int, result: dict, leader_time: float
     ) -> str:
         """Format leader total time or follower gap display string."""
+        time_seconds = result.get("time_seconds")
+        if not isinstance(time_seconds, (int, float)):
+            # No real time exists (race stopped before the flag).
+            return "-"
         if row_index == 0:
             minutes = int(leader_time // 60)
             seconds = leader_time % 60
             return f"{minutes}:{seconds:06.3f}"
-        time_seconds = result.get("time_seconds", 0)
         gap = time_seconds - leader_time
         return f"+{gap:.2f}s" if gap > 0 else "-"
 
@@ -5965,12 +6039,25 @@ class RaceWindow(QMainWindow):
             return
         try:
             saved_count = 0
+            self._championship_result_batch = []
             for result in results_sorted:
                 if self._save_single_race_result(result):
                     saved_count += 1
+            if self._championship_result_batch:
+                # save_race_results replaces every row for the race, so the
+                # classification must be written as one batch.
+                persist_race_results(self.db, self._championship_result_batch)
+                self._championship_result_batch = []
             print(f"[RACE FINISHED] Saved {saved_count} race results to database")
+            if is_career and saved_count:
+                self._complete_career_race()
         except Exception as e:
             print(f"WARNING: Error saving race results: {e}")
+
+    def _complete_career_race(self) -> None:
+        """Close the career round so payout and the calendar move on."""
+        if complete_career_race(self.db, int(self._race_id)):
+            print(f"[RACE FINISHED] Career race {self._race_id} marked completed")
 
     def _save_single_race_result(self, result: dict) -> bool:
         """Save one race result record; return True on success."""
@@ -6021,7 +6108,11 @@ class RaceWindow(QMainWindow):
                 dnf_reason=dnf_reason,
                 grid_position=result.get("grid_position", result.get("position")),
             )
-            persist_race_results(self.db, [race_result])
+            batch = getattr(self, "_championship_result_batch", None)
+            if batch is None:
+                persist_race_results(self.db, [race_result])
+            else:
+                batch.append(race_result)
         return True
 
     def _is_career_mode(self) -> bool:
@@ -6234,6 +6325,10 @@ class RaceWindow(QMainWindow):
         dlg.setWindowTitle("Race Summary")
         dlg_layout = QVBoxLayout()
 
+        if self._was_race_stopped():
+            dlg.setWindowTitle("Race Summary - Race Stopped")
+            dlg_layout.addWidget(self._build_race_stopped_notice_label())
+
         position_graph = self._build_position_trend_graph(results_sorted)
         if position_graph is not None:
             dlg_layout.addWidget(self._build_position_graph_title_label())
@@ -6315,6 +6410,27 @@ class RaceWindow(QMainWindow):
         max_position = max(1, len(results_sorted) if results_sorted else len(series))
         return self._build_matplotlib_position_canvas(series, max_position)
 
+    def _build_race_stopped_notice_label(self) -> QLabel:
+        """Explain that a halted race produced a classification, not a result."""
+        label = QLabel(
+            "Race stopped before the chequered flag. No result was recorded: "
+            "the order below ranks cars by laps and distance completed, "
+            "no finishing times or gaps exist, and nothing has been saved."
+        )
+        label.setWordWrap(True)
+        label.setStyleSheet(
+            "color: #ffd27a; font-weight: bold; padding: 6px; "
+            "border: 1px solid #ffd27a; border-radius: 4px;"
+        )
+        return label
+
+    def _position_trend_legend_label(self, item: Dict[str, Any]) -> str:
+        """Legend text for a position-trend series, marking the player's car."""
+        name = str(item.get("name") or f"Driver {item.get('driver_id')}")
+        if item.get("driver_id") == self.player_driver_id:
+            return f"{name} (you)"
+        return name
+
     def _build_matplotlib_position_canvas(
         self, series: List[Dict[str, Any]], max_position: int
     ) -> QWidget:
@@ -6341,10 +6457,36 @@ class RaceWindow(QMainWindow):
             xs = [float(p[0]) for p in points]
             ys = [int(p[1]) for p in points]
             is_focus = bool(item.get("is_focus", False))
+            is_player = item.get("driver_id") == self.player_driver_id
             color = self._qcolor_to_mpl(
                 item.get("color", QColor(150, 170, 210)), 0.95 if is_focus else 0.5
             )
-            ax.plot(xs, ys, color=color, linewidth=2.3 if is_focus else 1.2)
+            ax.plot(
+                xs,
+                ys,
+                color=color,
+                linewidth=3.2 if is_player else (2.3 if is_focus else 1.2),
+                linestyle="-" if (is_player or is_focus) else "--",
+                marker="o" if is_player else None,
+                markersize=3.5,
+                label=self._position_trend_legend_label(item),
+            )
+
+        if ax.get_legend_handles_labels()[1]:
+            legend = ax.legend(
+                loc="center left",
+                bbox_to_anchor=(1.01, 0.5),
+                fontsize=7,
+                ncol=2 if len(series) > 10 else 1,
+                frameon=True,
+                facecolor="#1a1f26",
+                edgecolor="#6a788a",
+            )
+            for text in legend.get_texts():
+                text.set_color("#d8e1ec")
+                if text.get_text().endswith("(you)"):
+                    text.set_fontweight("bold")
+                    text.set_color("#ffd27a")
 
         ax.set_ylim(max_position + 0.4, 0.6)
         ax.set_ylabel("Position", color="#d8e1ec")
@@ -6554,10 +6696,9 @@ class RaceWindow(QMainWindow):
     def _build_detailed_results_table(self, results_sorted: list) -> QTableWidget:
         """Build detailed results table with drag-specific telemetry columns."""
         detail = QTableWidget()
-        detail.setColumnCount(7)
-        detail.setHorizontalHeaderLabels(
-            ["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"]
-        )
+        headers = self._detail_result_columns()
+        detail.setColumnCount(len(headers))
+        detail.setHorizontalHeaderLabels(headers)
         display_results = self._sorted_results_for_detail_display(results_sorted)
         detail.setRowCount(len(display_results))
         leader_time = self._detail_leader_time(display_results)
@@ -6572,30 +6713,40 @@ class RaceWindow(QMainWindow):
                     display_pos,
                 )
             )
-            detail.setItem(row_idx, 0, QTableWidgetItem(str(pos)))
-            detail.setItem(row_idx, 1, QTableWidgetItem(name))
-            detail.setItem(row_idx, 2, QTableWidgetItem(time_text))
-            detail.setItem(row_idx, 3, QTableWidgetItem(gap_text))
-            detail.setItem(row_idx, 4, QTableWidgetItem(reaction_text))
-            detail.setItem(row_idx, 5, QTableWidgetItem(trap_text))
+            cells = {
+                "Pos": str(pos),
+                "Driver": name,
+                "Time": time_text,
+                "Gap": gap_text,
+                "Reaction": reaction_text,
+                "Trap": trap_text,
+            }
+            for col, header in enumerate(headers[:-1]):
+                detail.setItem(row_idx, col, QTableWidgetItem(cells[header]))
             status_item = QTableWidgetItem(status)
             if status == "DNF":
                 status_item.setBackground(QColor(220, 40, 40))
                 status_item.setForeground(QColor(255, 255, 255))
-            detail.setItem(row_idx, 6, status_item)
+            detail.setItem(row_idx, len(headers) - 1, status_item)
 
         detail_hdr = detail.horizontalHeader()
         if isinstance(detail_hdr, QHeaderView):
-            detail_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-            detail_hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-            detail_hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+            for col, header in enumerate(headers):
+                detail_hdr.setSectionResizeMode(
+                    col,
+                    QHeaderView.ResizeMode.Stretch
+                    if header == "Driver"
+                    else QHeaderView.ResizeMode.ResizeToContents,
+                )
         detail.setAlternatingRowColors(True)
         detail.setMinimumHeight(340)
         return detail
+
+    def _detail_result_columns(self) -> List[str]:
+        """Reaction time and trap speed are measured on a drag strip only."""
+        if self._is_drag_discipline():
+            return ["Pos", "Driver", "Time", "Gap", "Reaction", "Trap", "Status"]
+        return ["Pos", "Driver", "Time", "Gap", "Status"]
 
     def _sorted_results_for_detail_display(self, results: list) -> list:
         """Return race results in visual finish order for summary table rendering."""
@@ -6642,7 +6793,12 @@ class RaceWindow(QMainWindow):
         time_s = res.get("time_seconds")
         reaction = res.get("reaction_time_ms")
         trap = res.get("trap_speed_kmh")
-        status = "DNF" if res.get("dnf_reason") else str(res.get("status", "FINISHED"))
+        if res.get("dnf_reason"):
+            status = "DNF"
+        else:
+            status = str(res.get("status", "FINISHED"))
+            if status == "NOT_CLASSIFIED":
+                status = "Not classified / race stopped"
 
         if isinstance(time_s, (int, float)) and time_s != float("inf"):
             time_text = f"{float(time_s):.3f}s"
@@ -6651,8 +6807,12 @@ class RaceWindow(QMainWindow):
                 if row_idx == 0
                 else f"+{max(0.0, float(time_s) - leader_time):.3f}s"
             )
-        else:
+        elif res.get("dnf_reason"):
             time_text = "DNF"
+            gap_text = "-"
+        else:
+            # No real time exists; never invent one.
+            time_text = "-"
             gap_text = "-"
 
         reaction_text = (

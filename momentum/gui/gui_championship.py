@@ -31,6 +31,9 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QMessageBox,
     QHeaderView,
+    QListWidget,
+    QListWidgetItem,
+    QAbstractItemView,
 )
 from momentum.gui.themed_messagebox import information, warning, critical, question
 from momentum.gui.accessibility_settings import scaled, size_dialog_to_screen
@@ -40,6 +43,8 @@ from typing import Optional, List, Dict, Any, Tuple
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.championship_service import ChampionshipService
 from momentum.services.tier_service import TIER_LABELS, TIERS
+from momentum.engine.race_format import race_format_for
+from momentum.engine.season_calendar import plan_season, season_dates
 from momentum.database.models import Championship, Race
 from datetime import datetime
 
@@ -399,26 +404,59 @@ class CreateChampionshipDialog(QDialog):
         details_layout.addLayout(tier_layout)
 
         # Description
-        details_layout.addWidget(QLabel("Description:"))
+        description_layout = QHBoxLayout()
+        description_layout.addWidget(QLabel("Description:"))
         self.description_input = QTextEdit()
-        self.description_input.setMaximumHeight(100)
-        self.description_input.setPlaceholderText(
-            "Optional championship description..."
-        )
-        details_layout.addWidget(self.description_input)
+        self.description_input.setMaximumHeight(48)
+        self.description_input.setPlaceholderText("Optional")
+        description_layout.addWidget(self.description_input)
+        details_layout.addLayout(description_layout)
 
         layout.addWidget(details_group)
 
-        # Track selection
-        tracks_group = QGroupBox("Track Selection")
+        # Calendar: the designed season for the discipline, open to editing
+        tracks_group = QGroupBox("Calendar")
         tracks_layout = QVBoxLayout(tracks_group)
+        self.calendar_hint = QLabel("")
+        self.calendar_hint.setWordWrap(True)
+        tracks_layout.addWidget(self.calendar_hint)
 
-        tracks_layout.addWidget(
-            QLabel("Tracks will be auto-generated based on discipline")
-        )
-        tracks_layout.addWidget(QLabel("(Manual track selection coming soon)"))
+        self.calendar_list = QListWidget()
+        self.calendar_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.calendar_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.calendar_list.setMinimumHeight(160)
+        self.calendar_list.model().rowsMoved.connect(lambda *_: self._refresh_calendar_rows())
+        tracks_layout.addWidget(self.calendar_list)
+
+        order_layout = QHBoxLayout()
+        move_up_btn = QPushButton("Move Up")
+        move_up_btn.clicked.connect(lambda: self._move_selected_round(-1))
+        order_layout.addWidget(move_up_btn)
+        move_down_btn = QPushButton("Move Down")
+        move_down_btn.clicked.connect(lambda: self._move_selected_round(1))
+        order_layout.addWidget(move_down_btn)
+        remove_btn = QPushButton("Remove Round")
+        remove_btn.clicked.connect(self._remove_selected_round)
+        order_layout.addWidget(remove_btn)
+        reset_btn = QPushButton("Suggested Calendar")
+        reset_btn.clicked.connect(self._reset_calendar)
+        order_layout.addWidget(reset_btn)
+        tracks_layout.addLayout(order_layout)
+
+        add_layout = QHBoxLayout()
+        add_layout.addWidget(QLabel("Add circuit:"))
+        self.available_combo = QComboBox()
+        add_layout.addWidget(self.available_combo, 1)
+        add_btn = QPushButton("Add Round")
+        add_btn.clicked.connect(self._add_selected_track)
+        add_layout.addWidget(add_btn)
+        tracks_layout.addLayout(add_layout)
 
         layout.addWidget(tracks_group)
+
+        self.discipline_combo.currentIndexChanged.connect(lambda _: self._reset_calendar())
+        self.season_spin.valueChanged.connect(self._on_season_length_changed)
+        self._reset_calendar()
 
         # Buttons
         buttons_layout = QHBoxLayout()
@@ -438,6 +476,107 @@ class CreateChampionshipDialog(QDialog):
 
         layout.addLayout(buttons_layout)
 
+    # -- calendar editing -------------------------------------------------
+    def _current_discipline(self) -> str:
+        return str(
+            self.discipline_combo.currentData() or self.discipline_combo.currentText()
+        )
+
+    def _discipline_tracks(self) -> List[Any]:
+        discipline = self._current_discipline()
+        tracks = self.db.get_tracks_by_discipline(discipline)
+        if not tracks:
+            logger.warning("No %s circuits in the database; offering every circuit", discipline)
+            tracks = self.db.get_all_tracks()
+        return list(tracks)
+
+    def _reset_calendar(self) -> None:
+        """Fill the list with the discipline's designed season."""
+        discipline = self._current_discipline()
+        rounds = race_format_for(discipline).season_rounds
+        self.season_spin.blockSignals(True)
+        self.season_spin.setValue(rounds)
+        self.season_spin.blockSignals(False)
+        self._fill_calendar(plan_season(self._discipline_tracks(), rounds))
+
+    def _on_season_length_changed(self, rounds: int) -> None:
+        self._fill_calendar(plan_season(self._discipline_tracks(), int(rounds)))
+
+    def _fill_calendar(self, tracks: List[Any]) -> None:
+        self.calendar_list.clear()
+        for track in tracks:
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, int(track.id))
+            item.setData(Qt.ItemDataRole.UserRole + 1, f"{track.name} ({track.country})")
+            self.calendar_list.addItem(item)
+        self._refresh_calendar_rows()
+
+    def _refresh_calendar_rows(self) -> None:
+        count = self.calendar_list.count()
+        dates = season_dates(count, datetime.now())
+        for row in range(count):
+            item = self.calendar_list.item(row)
+            if item is None:
+                continue
+            item.setText(
+                f"Round {row + 1:>2}   {dates[row].strftime('%d %b %Y')}   "
+                f"{item.data(Qt.ItemDataRole.UserRole + 1)}"
+            )
+        self.season_spin.blockSignals(True)
+        self.season_spin.setValue(max(self.season_spin.minimum(), count))
+        self.season_spin.blockSignals(False)
+        if dates:
+            self.calendar_hint.setText(
+                f"{count} rounds from {dates[0].strftime('%d %B')} to "
+                f"{dates[-1].strftime('%d %B %Y')}, travelling region by region. "
+                "Drag rounds to reorder, or swap circuits below."
+            )
+        else:
+            self.calendar_hint.setText("Add at least one circuit to the calendar.")
+        self._refresh_available_tracks()
+
+    def _refresh_available_tracks(self) -> None:
+        used = set(self._selected_track_ids())
+        self.available_combo.clear()
+        for track in self._discipline_tracks():
+            if int(track.id) not in used:
+                self.available_combo.addItem(f"{track.name} ({track.country})", int(track.id))
+
+    def _selected_track_ids(self) -> List[int]:
+        ids = []
+        for row in range(self.calendar_list.count()):
+            item = self.calendar_list.item(row)
+            if item is not None:
+                ids.append(int(item.data(Qt.ItemDataRole.UserRole)))
+        return ids
+
+    def _move_selected_round(self, step: int) -> None:
+        row = self.calendar_list.currentRow()
+        target = row + step
+        if row < 0 or not 0 <= target < self.calendar_list.count():
+            return
+        item = self.calendar_list.takeItem(row)
+        self.calendar_list.insertItem(target, item)
+        self.calendar_list.setCurrentRow(target)
+        self._refresh_calendar_rows()
+
+    def _remove_selected_round(self) -> None:
+        row = self.calendar_list.currentRow()
+        if row >= 0:
+            self.calendar_list.takeItem(row)
+            self._refresh_calendar_rows()
+
+    def _add_selected_track(self) -> None:
+        track_id = self.available_combo.currentData()
+        if track_id is None:
+            return
+        item = QListWidgetItem()
+        item.setData(Qt.ItemDataRole.UserRole, int(track_id))
+        item.setData(Qt.ItemDataRole.UserRole + 1, self.available_combo.currentText())
+        self.calendar_list.addItem(item)
+        self.calendar_list.setCurrentItem(item)
+        self._refresh_calendar_rows()
+
     def create_championship(self):
         """Create the championship."""
         name = self.name_input.text().strip()
@@ -456,16 +595,25 @@ class CreateChampionshipDialog(QDialog):
                 self.tier_combo.currentData() or self.tier_combo.currentText()
             )
 
+            track_ids = self._selected_track_ids()
             logger.info(f"  Discipline: {_player_label(selected_discipline)}")
-            logger.info(f"  Season Length: {self.season_spin.value()} races")
+            logger.info(f"  Season Length: {len(track_ids)} races")
             logger.info(f"  Tier: {_player_label(selected_tier)}")
+
+            if not track_ids:
+                critical(
+                    self,
+                    "No Rounds",
+                    "Add at least one circuit to the calendar before creating the championship.",
+                )
+                return
 
             # Create championship object
             championship = Championship(
                 id=0,
                 name=name,
                 discipline=selected_discipline,
-                season_length=self.season_spin.value(),
+                season_length=len(track_ids),
                 points_system="standard",
                 current_season=1,
                 tier=selected_tier,
@@ -473,39 +621,6 @@ class CreateChampionshipDialog(QDialog):
                 description=self.description_input.toPlainText(),
             )
             logger.info("Championship object created successfully")
-
-            # Get tracks for discipline (simplified - use first N tracks)
-            logger.info(f"Fetching tracks for discipline: {championship.discipline}")
-            tracks = self.db.get_circuits_by_discipline(championship.discipline)
-            logger.info(f"Found {len(tracks)} tracks for {championship.discipline}")
-
-            if not tracks or len(tracks) < self.season_spin.value():
-                logger.warning(
-                    "Insufficient discipline-specific tracks "
-                    f"({len(tracks)} available, {self.season_spin.value()} needed)"
-                )
-                logger.info("Falling back to all available tracks in database")
-                # If not enough tracks, try to get any tracks
-                all_tracks = self.db.get_all_tracks()
-                logger.info(f"Total tracks available: {len(all_tracks)}")
-                track_ids = [t.id for t in all_tracks[: self.season_spin.value()]]
-            else:
-                logger.info(
-                    f"Using {self.season_spin.value()} discipline-specific tracks"
-                )
-                track_ids = [t.id for t in tracks[: self.season_spin.value()]]
-
-            if not track_ids:
-                logger.error(
-                    "No tracks available in database - cannot create championship"
-                )
-                critical(
-                    self,
-                    "No Tracks",
-                    "No tracks available in database. Please add tracks first.",
-                )
-                return
-
             logger.info(
                 f"Selected {len(track_ids)} tracks for championship calendar: {track_ids}"
             )
@@ -1017,6 +1132,7 @@ class PreRaceSetupDialog(QDialog):
         track,
         locked_team_id: Optional[int] = None,
         parent=None,
+        locked_driver_id: Optional[int] = None,
     ):
         super().__init__(parent)
         self.db = db
@@ -1024,6 +1140,7 @@ class PreRaceSetupDialog(QDialog):
         self.race = race
         self.track = track
         self.locked_team_id = locked_team_id
+        self.locked_driver_id = locked_driver_id
         self.selected_driver = None
         self.selected_team = None
         self.race_config: dict[str, Any] = {}
@@ -1129,6 +1246,7 @@ class PreRaceSetupDialog(QDialog):
         weather_layout.addWidget(QLabel("Weather:"))
         self.weather_combo = QComboBox()
         self.weather_combo.addItems(["Clear", "Cloudy", "Rainy", "Wet", "Storm"])
+        self._preselect_scheduled_weather()
         weather_layout.addWidget(self.weather_combo)
 
         weather_layout.addStretch()
@@ -1205,6 +1323,7 @@ class PreRaceSetupDialog(QDialog):
         self._select_first_team_with_drivers()
         self._refresh_driver_combo_for_selected_team()
         self.on_team_selected()
+        self._apply_driver_lock()
 
     def on_driver_selected(self):
         """Update display when driver is selected."""
@@ -1292,6 +1411,30 @@ class PreRaceSetupDialog(QDialog):
         self.selected_driver = team_drivers[0]
         self.driver_combo.setCurrentIndex(0)
         self.on_driver_selected()
+
+    def _preselect_scheduled_weather(self) -> None:
+        """Default the weather to the forecast on the calendar, when known."""
+        scheduled = str(getattr(self.race, "weather_conditions", "") or "").strip()
+        if not scheduled:
+            return
+        index = self.weather_combo.findText(
+            scheduled, Qt.MatchFlag.MatchFixedString
+        )
+        if index >= 0:
+            self.weather_combo.setCurrentIndex(index)
+
+    def _apply_driver_lock(self) -> None:
+        """Career mode races the driver chosen in Career HQ: fix the driver here."""
+        if self.locked_driver_id is None:
+            return
+        for index in range(self.driver_combo.count()):
+            driver = self.driver_combo.itemData(index)
+            if getattr(driver, "id", None) == self.locked_driver_id:
+                self.driver_combo.setCurrentIndex(index)
+                self.on_driver_selected()
+                break
+        self.driver_combo.setEnabled(False)
+        self.driver_combo.setToolTip("Driver is chosen in Career HQ")
 
     def _update_start_button_state(self):
         """Enable Start only when valid team-driver pairing exists."""
