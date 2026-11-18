@@ -413,9 +413,6 @@ class MainMenuWindow(QMainWindow):
         self.menu_page = QScrollArea()
         self.menu_page.setWidgetResizable(True)
         self.menu_page.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.menu_page.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
         menu_content = QWidget()
         self.menu_page.setWidget(menu_content)
         self.view_stack.addWidget(self.menu_page)
