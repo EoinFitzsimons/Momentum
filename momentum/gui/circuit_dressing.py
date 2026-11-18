@@ -375,12 +375,14 @@ class CircuitDressing:
             centre.lineTo(p.x, p.y)
         if not self.point_to_point:
             centre.closeSubpath()
+        cap = Qt.PenCapStyle.FlatCap if self.point_to_point else Qt.PenCapStyle.RoundCap
         verge = QPen(QColor(92, 148, 66), 2 * (self.hw + 30))
         verge.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        verge.setCapStyle(Qt.PenCapStyle.RoundCap)
+        verge.setCapStyle(cap)
         painter.strokePath(centre, verge)
         stripe = QPen(QColor(104, 160, 74), 2 * (self.hw + 14))
         stripe.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        stripe.setCapStyle(cap)
         painter.strokePath(centre, stripe)
         if self.pit:
             lane = QPainterPath()

@@ -1637,10 +1637,9 @@ class TrackWidget(QWidget):
             if track_height > 0
             else 1.0
         )
-        zoom = max(0.5, min(min(zoom_x, zoom_y), 2.5))
         if self.is_drag_track:
-            zoom = min(4.0, zoom * 1.85)
-        return zoom
+            return max(0.25, min(zoom_x, zoom_y))
+        return max(0.5, min(min(zoom_x, zoom_y), 2.5))
 
     def _draw_world_forest_layers(self, painter) -> None:
         """Draw cached large forest and infield forest overlays in world space."""
@@ -2662,12 +2661,17 @@ class TrackWidget(QWidget):
     ) -> None:
         """Draw surface base and darker racing line."""
         style = self._resolve_surface_visual_profile()
+        cap = (
+            Qt.PenCapStyle.FlatCap
+            if self.is_drag_track
+            else Qt.PenCapStyle.RoundCap
+        )
         painter.setPen(
             QPen(
                 style["lane_color"],
                 track_width * 2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
@@ -2678,7 +2682,7 @@ class TrackWidget(QWidget):
                 style["line_color"],
                 track_width * 1.2,
                 Qt.PenStyle.SolidLine,
-                Qt.PenCapStyle.RoundCap,
+                cap,
                 Qt.PenJoinStyle.RoundJoin,
             )
         )
