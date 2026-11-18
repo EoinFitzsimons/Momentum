@@ -2,6 +2,18 @@
 
 from momentum.gui.gui_career import country_name, nationality_code
 
+_APP = None
+
+
+def _app():
+    """One QApplication for the module; letting it be collected between tests
+    aborts the process when the next one is created."""
+    global _APP
+    from PyQt6.QtWidgets import QApplication
+
+    _APP = QApplication.instance() or QApplication([])
+    return _APP
+
 
 def test_saved_codes_and_legacy_free_text_both_map_to_a_country():
     assert nationality_code("IRL") == "IRL"
@@ -19,9 +31,7 @@ def test_country_name_reads_back_for_display():
 
 
 def test_found_team_dialog_defaults_to_the_managers_country(seeded_db):
-    from PyQt6.QtWidgets import QApplication
-
-    app = QApplication.instance() or QApplication([])
+    app = _app()
     from momentum.gui.gui_career import FoundTeamDialog
 
     dialog = FoundTeamDialog(seeded_db["db"], "SINGLE_SEATER", home_country="IRL")
@@ -32,9 +42,7 @@ def test_found_team_dialog_defaults_to_the_managers_country(seeded_db):
 
 
 def test_found_team_dialog_has_no_country_when_the_nationality_is_unknown(seeded_db):
-    from PyQt6.QtWidgets import QApplication
-
-    QApplication.instance() or QApplication([])
+    _app()
     from momentum.gui.gui_career import FoundTeamDialog
 
     dialog = FoundTeamDialog(seeded_db["db"], "SINGLE_SEATER", home_country="Atlantis")
