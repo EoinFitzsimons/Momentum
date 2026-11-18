@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 from typing import Optional
 
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -160,6 +160,8 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self._selected_discipline = None
         super().__init__(db, parent)
         self.setWindowTitle("Select Career")
+        # Five league columns need more width than the championship picker.
+        size_dialog_to_screen(self, 0.85, 0.8, 1100, 650)
         self._ensure_career_tables()
         self._replace_create_button_text()
         self._select_discipline("SINGLE_SEATER")
@@ -267,11 +269,16 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
             table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
             table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            # Team names wrap onto extra lines rather than being elided, so
+            # every team in a league stays distinguishable at any UI scale.
+            table.setWordWrap(True)
+            table.setTextElideMode(Qt.TextElideMode.ElideNone)
             header = table.horizontalHeader()
             if header is not None:
                 header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
                 for col in range(1, 4):
                     header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+                header.sectionResized.connect(self._schedule_tier_row_fit)
             _style_table(table, 260)
             table.cellClicked.connect(lambda *_, value=tier: self._select_series(value))
             column.addWidget(table, 1)
@@ -377,6 +384,47 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             self._fill_tier_table(widgets["table"], widgets["summary"], teams_by_tier[tier], series)
         self._load_profile_summary()
 
+    def _schedule_tier_row_fit(self, *_args) -> None:
+        """Re-fit wrapped team names once the current layout pass has finished."""
+        QTimer.singleShot(0, self._fit_tier_rows)
+
+    def _fit_tier_rows(self) -> None:
+        """Give every row the height its wrapped team name needs.
+
+        The delegate's own hint ignores the stylesheet's cell padding, so it
+        under-estimates the line count; measure the text against the padded
+        column width instead.
+        """
+        for widgets in self.tier_columns.values():
+            table = widgets.get("table")
+            if not isinstance(table, QTableWidget):
+                continue
+            metrics = table.fontMetrics()
+            # Cell padding plus the delegate's own text margins; erring on
+            # the narrow side only costs a little extra row height.
+            text_width = max(1, table.columnWidth(0) - scaled(2 * 10) - scaled(24))
+            min_height = metrics.lineSpacing() + scaled(2 * 6) + 2
+            for row in range(table.rowCount()):
+                item = table.item(row, 0)
+                text = item.text() if item is not None else ""
+                needed = metrics.boundingRect(
+                    0,
+                    0,
+                    text_width,
+                    0,
+                    int(Qt.TextFlag.TextWordWrap | Qt.TextFlag.TextWrapAnywhere),
+                    text,
+                ).height()
+                table.setRowHeight(row, max(min_height, needed + scaled(2 * 6) + 2))
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._schedule_tier_row_fit()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._schedule_tier_row_fit()
+
     def _fill_tier_table(self, table: QTableWidget, summary: QLabel, teams: list, series: dict | None) -> None:
         teams = sorted(teams, key=lambda t: str(getattr(t, "name", "")))
         table.setRowCount(len(teams))
@@ -389,7 +437,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 driver_avgs.append(driver_avg)
             if staff_avg is not None:
                 staff_avgs.append(staff_avg)
-            table.setItem(row, 0, QTableWidgetItem(str(team.name)))
+            team_item = QTableWidgetItem(str(team.name))
+            team_item.setToolTip(str(team.name))
+            table.setItem(row, 0, team_item)
             table.setItem(row, 1, QTableWidgetItem(
                 "-" if driver_avg is None else f"{driver_avg:.0f}"))
             table.setItem(row, 2, QTableWidgetItem(
@@ -400,6 +450,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 item = table.item(row, col)
                 if item is not None:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._schedule_tier_row_fit()
 
         parts = [f"{len(teams)} teams"]
         if series:
