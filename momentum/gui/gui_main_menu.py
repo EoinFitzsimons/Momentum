@@ -591,7 +591,8 @@ class MainMenuWindow(QMainWindow):
         if not self._ui_ready:
             return
         self._apply_scaled_metrics()
-        self._sync_option_controls()
+        self._sync_accessibility_controls()
+        self._update_apply_state()
         for view in list(self._embedded_views.values()):
             hook = getattr(view, "refresh_accessibility", None)
             if callable(hook):
@@ -762,9 +763,9 @@ class MainMenuWindow(QMainWindow):
 
         return group
 
-    def _sync_option_controls(self) -> None:
-        """Set the option controls to the currently applied values."""
-        for combo in self._option_combos():
+    def _sync_accessibility_controls(self) -> None:
+        """Set the theme and scale combos to the applied accessibility settings."""
+        for combo in (self.theme_combo, self.ui_scale_combo):
             combo.blockSignals(True)
         try:
             theme_idx = self.theme_combo.findData(
@@ -775,6 +776,16 @@ class MainMenuWindow(QMainWindow):
                 int(self.accessibility_settings.get("ui_scale", 100))
             )
             self.ui_scale_combo.setCurrentIndex(scale_idx if scale_idx >= 0 else 0)
+        finally:
+            for combo in (self.theme_combo, self.ui_scale_combo):
+                combo.blockSignals(False)
+
+    def _sync_option_controls(self) -> None:
+        """Set every option control to the currently applied values."""
+        self._sync_accessibility_controls()
+        for combo in (self.render_fps_combo, self.simulation_speed_combo):
+            combo.blockSignals(True)
+        try:
             fps_idx = self.render_fps_combo.findData(
                 int(self.race_settings.get("render_fps", 0))
             )
@@ -784,8 +795,9 @@ class MainMenuWindow(QMainWindow):
             )
             self.simulation_speed_combo.setCurrentIndex(speed_idx if speed_idx >= 0 else 3)
         finally:
-            for combo in self._option_combos():
+            for combo in (self.render_fps_combo, self.simulation_speed_combo):
                 combo.blockSignals(False)
+        self.display_mode = self._applied_display_mode
         for button in self.display_button_group.buttons():
             if button.property("mode") == self._applied_display_mode:
                 button.setChecked(True)
