@@ -12,7 +12,9 @@ import random
 from datetime import datetime
 from types import SimpleNamespace
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from typing import Optional
+
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -24,6 +26,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QScrollArea,
     QSpinBox,
     QTableWidget,
@@ -34,6 +37,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
 )
 from momentum.gui.themed_messagebox import information, warning
+from momentum.gui.accessibility_settings import scale_px_stylesheet, scaled, size_dialog_to_screen
 
 from momentum.database.database_manager import DatabaseManager
 from momentum.services.championship_service import ChampionshipService
@@ -112,7 +116,75 @@ def _style_table(table: QTableWidget, min_height: int, max_height: int | None = 
     if max_height is not None:
         table.setMaximumHeight(max_height)
 
-LOGO_STYLE = "font-size: 26px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
+
+def logo_style() -> str:
+    """Wordmark style at the UI scale in force when the window is built."""
+    return f"font-size: {scaled(26)}px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+
+
+
+class WrappingPushButton(QPushButton):
+    """Push button whose caption wraps onto further lines instead of clipping.
+
+    QPushButton elides or clips long captions; the league cards on the career
+    board need the full tier and series name visible at every UI scale. The
+    caption is re-flowed into explicit line breaks whenever the button's width
+    changes, so the button still draws its own text and keeps every stylesheet
+    state (checked, disabled, hover) intact.
+    """
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__("", parent)
+        self._caption = text or ""
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._reflow_caption()
+
+    def setText(self, text: Optional[str]) -> None:  # type: ignore[override]
+        self._caption = text or ""
+        self._reflow_caption()
+
+    def text(self) -> str:  # type: ignore[override]
+        return self._caption
+
+    def displayed_text(self) -> str:
+        """The caption as drawn, with the line breaks chosen for the current width."""
+        return super().text()
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._reflow_caption()
+
+    def changeEvent(self, event) -> None:  # type: ignore[override]
+        super().changeEvent(event)
+        if event is not None and event.type() in (
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._reflow_caption()
+
+    def _available_text_width(self) -> int:
+        width = self.contentsRect().width() - scaled(24)
+        return width if width > 0 else 0
+
+    def _reflow_caption(self) -> None:
+        metrics = self.fontMetrics()
+        width = self._available_text_width()
+        lines: list[str] = []
+        for paragraph in self._caption.split("\n"):
+            current = ""
+            for word in paragraph.split():
+                candidate = f"{current} {word}".strip()
+                if current and width and metrics.horizontalAdvance(candidate) > width:
+                    lines.append(current)
+                    current = word
+                else:
+                    current = candidate
+            lines.append(current)
+        wrapped = "\n".join(lines)
+        if wrapped != super().text():
+            super().setText(wrapped)
+            self.updateGeometry()
 
 
 class CareerSelectionDialog(ChampionshipSelectionDialog):
@@ -122,6 +194,8 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         self._selected_discipline = None
         super().__init__(db, parent)
         self.setWindowTitle("Select Career")
+        # Five league columns need more width than the championship picker.
+        size_dialog_to_screen(self, 0.85, 0.8, 1100, 650)
         self._ensure_career_tables()
         self._replace_create_button_text()
         self._select_discipline(self._initial_discipline())
@@ -132,7 +206,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         layout.setContentsMargins(24, 22, 24, 22)
         layout.setSpacing(14)
         self.setStyleSheet(
-            """
+            scale_px_stylesheet("""
             QDialog { background-color: #202629; }
             QLabel { color: #EAF8FA; }
             QGroupBox { border: 1px solid #405057; border-radius: 8px; margin-top: 10px; padding: 12px; }
@@ -144,28 +218,28 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             QTableWidget[selectedLeague="true"] { border: 2px solid #7EE6E0; }
             QLabel[selectedLeague="true"] { color: #7EE6E0; font-weight: 700; }
             QHeaderView::section { background-color: #29343A; color: #B7D9DB; padding: 7px; border: none; }
-            """
+            """)
         )
 
         logo = QLabel("MOMENTUM  /  CAREER WORLD")
-        logo.setStyleSheet("font-size: 24px; font-weight: 700; color: #7EE6E0; letter-spacing: 2px;")
+        logo.setStyleSheet(f"font-size: {scaled(24)}px; font-weight: 700; color: #7EE6E0; letter-spacing: 2px;")
         layout.addWidget(logo)
 
         self.career_title = QLabel("Build your racing life")
-        self.career_title.setStyleSheet("font-size: 30px; font-weight: 700; color: #F2FBFB;")
+        self.career_title.setStyleSheet(f"font-size: {scaled(30)}px; font-weight: 700; color: #F2FBFB;")
         layout.addWidget(self.career_title)
 
         self.career_subtitle = QLabel(
             "Choose the world you want to inhabit. Your discipline shapes the calendar, the teams, the cars, and the way your career develops."
         )
         self.career_subtitle.setWordWrap(True)
-        self.career_subtitle.setStyleSheet("color: #A8C1C4; font-size: 14px;")
+        self.career_subtitle.setStyleSheet(f"color: #A8C1C4; font-size: {scaled(14)}px;")
         layout.addWidget(self.career_subtitle)
 
         identity_row = QHBoxLayout()
         self.profile_summary = QLabel("No career save yet")
         self.profile_summary.setStyleSheet(
-            "background-color: #29343A; border-left: 4px solid #DD2D4A; padding: 12px; font-size: 14px;"
+            f"background-color: #29343A; border-left: 4px solid #DD2D4A; padding: 12px; font-size: {scaled(14)}px;"
         )
         self.profile_summary.setWordWrap(True)
         identity_row.addWidget(self.profile_summary, 1)
@@ -202,7 +276,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         board_group = QGroupBox("Career Board")
         board_layout = QVBoxLayout(board_group)
         self.board_heading = QLabel("Select a discipline to see its leagues")
-        self.board_heading.setStyleSheet("font-size: 16px; font-weight: 700; color: #7EE6E0;")
+        self.board_heading.setStyleSheet(f"font-size: {scaled(16)}px; font-weight: 700; color: #7EE6E0;")
         board_layout.addWidget(self.board_heading)
 
         # One column per league: the series button on top, its teams below.
@@ -213,9 +287,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
         for tier in TIERS:
             column = QVBoxLayout()
             column.setSpacing(8)
-            series_btn = QPushButton(tier_label(tier))
+            series_btn = WrappingPushButton(tier_label(tier))
             series_btn.setCheckable(True)
-            series_btn.setMinimumHeight(48)
+            series_btn.setMinimumHeight(scaled(48))
             series_btn.setAccessibleName(f"Enter {tier_label(tier)} series")
             series_btn.clicked.connect(
                 lambda checked, value=tier: self._select_series(value)
@@ -223,7 +297,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             column.addWidget(series_btn)
             summary = QLabel("")
             summary.setWordWrap(True)
-            summary.setStyleSheet("color: #A8C1C4; font-size: 12px;")
+            summary.setStyleSheet(f"color: #A8C1C4; font-size: {scaled(12)}px;")
             column.addWidget(summary)
             table = QTableWidget()
             table.setColumnCount(4)
@@ -231,11 +305,18 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
             table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
             table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
             table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            # Team names wrap onto extra lines rather than being elided, so
+            # every team in a league stays distinguishable at any UI scale.
+            table.setWordWrap(True)
+            table.setTextElideMode(Qt.TextElideMode.ElideNone)
+            # Pixel scrolling keeps every part of a tall wrapped row reachable.
+            table.setVerticalScrollMode(QTableWidget.ScrollMode.ScrollPerPixel)
             header = table.horizontalHeader()
             if header is not None:
                 header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
                 for col in range(1, 4):
                     header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+                header.sectionResized.connect(self._schedule_tier_row_fit)
             _style_table(table, 260)
             table.cellClicked.connect(lambda *_, value=tier: self._select_series(value))
             column.addWidget(table, 1)
@@ -372,6 +453,54 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 return tier
         return None
 
+    def _schedule_tier_row_fit(self, *_args) -> None:
+        """Re-fit wrapped team names once, after the current layout pass has finished."""
+        if getattr(self, "_tier_fit_pending", False):
+            return
+        self._tier_fit_pending = True
+        QTimer.singleShot(0, self._run_tier_row_fit)
+
+    def _run_tier_row_fit(self) -> None:
+        self._tier_fit_pending = False
+        self._fit_tier_rows()
+
+    def _fit_tier_rows(self) -> None:
+        """Give every row the height its wrapped team name needs.
+
+        The delegate's own hint ignores the stylesheet's cell padding, so it
+        under-estimates the line count; measure the text against the padded
+        column width instead.
+        """
+        for widgets in self.tier_columns.values():
+            table = widgets.get("table")
+            if not isinstance(table, QTableWidget):
+                continue
+            metrics = table.fontMetrics()
+            # Cell padding plus the delegate's own text margins; erring on
+            # the narrow side only costs a little extra row height.
+            text_width = max(1, table.columnWidth(0) - scaled(2 * 10) - scaled(24))
+            min_height = metrics.lineSpacing() + scaled(2 * 6) + 2
+            for row in range(table.rowCount()):
+                item = table.item(row, 0)
+                text = item.text() if item is not None else ""
+                needed = metrics.boundingRect(
+                    0,
+                    0,
+                    text_width,
+                    0,
+                    int(Qt.TextFlag.TextWordWrap | Qt.TextFlag.TextWrapAnywhere),
+                    text,
+                ).height()
+                table.setRowHeight(row, max(min_height, needed + scaled(2 * 6) + 2))
+
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        self._schedule_tier_row_fit()
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._schedule_tier_row_fit()
+
     def _fill_tier_table(self, table: QTableWidget, summary: QLabel, teams: list, series: dict | None) -> None:
         teams = sorted(teams, key=lambda t: str(getattr(t, "name", "")))
         table.setRowCount(len(teams))
@@ -384,7 +513,9 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 driver_avgs.append(driver_avg)
             if staff_avg is not None:
                 staff_avgs.append(staff_avg)
-            table.setItem(row, 0, QTableWidgetItem(str(team.name)))
+            team_item = QTableWidgetItem(str(team.name))
+            team_item.setToolTip(str(team.name))
+            table.setItem(row, 0, team_item)
             table.setItem(row, 1, QTableWidgetItem(
                 "-" if driver_avg is None else f"{driver_avg:.0f}"))
             table.setItem(row, 2, QTableWidgetItem(
@@ -395,6 +526,7 @@ class CareerSelectionDialog(ChampionshipSelectionDialog):
                 item = table.item(row, col)
                 if item is not None:
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._schedule_tier_row_fit()
 
         parts = [f"{len(teams)} teams"]
         if series:
@@ -756,7 +888,7 @@ class CareerProfileDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Create Career Save")
-        self.resize(520, 430)
+        size_dialog_to_screen(self, 0.3, 0.4, 520, 430)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -866,7 +998,7 @@ class FoundTeamDialog(QDialog):
         self.created_team_id: int | None = None
         self.setWindowTitle("Found a New Team")
         self.setStyleSheet(FEINT_BUTTON_BORDER_STYLE)
-        self.resize(560, 420)
+        size_dialog_to_screen(self, 0.32, 0.4, 560, 420)
 
         from momentum.services.team_service import TeamService
 
@@ -978,7 +1110,7 @@ class CareerTeamSelectionDialog(QDialog):
         self.selected_team = None
 
         self.setWindowTitle("Select Career Team")
-        self.resize(900, 520)
+        size_dialog_to_screen(self, 0.6, 0.55, 900, 520)
         self._setup_ui()
         self._load_teams()
 
@@ -988,7 +1120,7 @@ class CareerTeamSelectionDialog(QDialog):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         title = QLabel("Select Your Team")
@@ -1135,7 +1267,7 @@ class CareerWindow(QMainWindow):
         self.next_race = None
 
         self.setWindowTitle(f"Career HQ: {self.championship.name}")
-        self.resize(1400, 900)
+        size_dialog_to_screen(self, 0.85, 0.85, 1100, 700)
 
         self._setup_ui()
         self._resolve_team_ownership()
@@ -1157,7 +1289,7 @@ class CareerWindow(QMainWindow):
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         self.navbar = NavigationBar(

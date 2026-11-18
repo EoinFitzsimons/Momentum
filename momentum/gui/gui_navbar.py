@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
 )
+from momentum.gui.accessibility_settings import size_dialog_to_screen
 from momentum.gui.themed_messagebox import information, warning, critical
 from momentum.services.tier_service import TIERS
 
@@ -34,7 +35,7 @@ class SearchResultsDialog(QDialog):
     ):
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(980, 560)
+        size_dialog_to_screen(self, 0.6, 0.6, 980, 560)
         self._build_ui(headers=headers, rows=rows)
 
     def _build_ui(self, headers: list[str], rows: list[list[str]]) -> None:

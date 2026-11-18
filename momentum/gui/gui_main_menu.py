@@ -10,7 +10,7 @@ Provides:
 
 from momentum.database.database_manager import DatabaseManager
 from momentum.config import QUICK_RACE_LIST_SIZE
-from PyQt6.QtGui import QFont, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtCore import Qt, pyqtSignal
 from momentum.services.driver_attributes import (
     # get_driver_skill removed (unused)
@@ -21,11 +21,17 @@ from momentum.services.driver_attributes import (
 )
 from momentum.gui.accessibility_settings import (
     apply_accessibility_to_app,
+    available_screen_geometry,
+    centred_window_geometry,
+    current_ui_scale,
     get_focus_stylesheet,
     get_theme_stylesheet,
     load_accessibility_settings,
     normalize_accessibility_settings,
     save_accessibility_settings,
+    scaled,
+    scaled_font,
+    size_dialog_to_screen,
 )
 from momentum.gui.themed_messagebox import information, warning, about
 from momentum.race_settings import load_race_settings, save_race_settings
@@ -45,20 +51,23 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QDialog,
+    QGridLayout,
+    QScrollArea,
+    QSizePolicy,
 )
 import sys
-from typing import Optional, List, cast
+from typing import Optional, List
 from momentum.services.tier_service import DEFAULT_TIER, TIERS, normalise_tier, tier_label
 
 
-COMBO_BOX_STYLE = """
+COMBO_BOX_STYLE_TEMPLATE = """
     QComboBox {
         background-color: #353839;
         color: #B9F2FF;
         border: 2px solid #B9F2FF;
         border-radius: 8px;
-        padding: 8px;
-        font-size: 14px;
+        padding: __PAD__px;
+        font-size: __FONT__px;
     }
     QComboBox::drop-down {
         border: none;
@@ -78,11 +87,90 @@ COMBO_BOX_STYLE = """
     }
 """
 
+
+def combo_box_style() -> str:
+    """Combo box stylesheet with padding and font size at the current UI scale."""
+    return COMBO_BOX_STYLE_TEMPLATE.replace("__PAD__", str(scaled(8))).replace(
+        "__FONT__", str(scaled(14))
+    )
+
+
+def logo_style() -> str:
+    """Wordmark style at the current UI scale."""
+    return (
+        f"font-size: {scaled(30)}px; font-weight: 700; color: #B9F2FF; "
+        "letter-spacing: 2px;"
+    )
+
+
+def form_label_style() -> str:
+    """Form label style at the current UI scale."""
+    return f"font-size: {scaled(14)}px; font-weight: bold;"
+
+
+COMBO_BOX_STYLE = combo_box_style()
 FEINT_BUTTON_BORDER = "1px solid rgba(185,242,255,0.24)"
-LOGO_STYLE = "font-size: 30px; font-weight: 700; color: #B9F2FF; letter-spacing: 2px;"
+LOGO_STYLE = logo_style()
 UNKNOWN_TEAM = "Unknown Team"
-FORM_LABEL_STYLE = "font-size: 14px; font-weight: bold;"
+FORM_LABEL_STYLE = form_label_style()
 CONTROLS_TUTORIAL_TITLE = "Controls Tutorial"
+
+DISPLAY_MODE_LABELS = {
+    "windowed": "Windowed",
+    "borderless": "Borderless Windowed (Fullscreen)",
+    "fullscreen": "Fullscreen (Exclusive)",
+}
+
+RACE_MODE_CAPTIONS = {
+    "quick": "One-off race: pick a driver, discipline, tier and circuit.",
+    "championship": "A full season calendar with standings across every round.",
+    "career": "Build a racing life: team, staff, finances and progression.",
+}
+
+
+def main_menu_stylesheet(theme: str) -> str:
+    """Main menu stylesheet with every pixel size derived from the UI scale."""
+    px = scaled
+    return (
+        f"""
+            /* Global dark theme */
+            QMainWindow {{ background-color: #353839; }}
+            QWidget {{ background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }}
+
+            /* Group boxes / panels */
+            QGroupBox {{ background-color: transparent; border: 1px solid rgba(185,242,255,0.08); border-radius: 8px; margin-top: {px(14)}px; padding: {px(12)}px; }}
+            QGroupBox::title {{ subcontrol-origin: margin; left: {px(12)}px; padding: 0 {px(6)}px; color: #DD2D4A; font-size: {px(14)}px; font-weight: 600; }}
+
+            /* Labels and typography */
+            QLabel {{ color: #B9F2FF; }}
+            QLabel.h1 {{ font-size: {px(36)}px; font-weight: 700; }}
+            QLabel.h2 {{ font-size: {px(22)}px; font-weight: 600; }}
+
+            /* Buttons */
+            QPushButton {{ border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: {px(10)}px; font-weight: 700; }}
+            QPushButton[primary="true"] {{ background-color: #B9F2FF; color: #353839; }}
+            QPushButton[secondary="true"] {{ background-color: #DD2D4A; color: #FFFFFF; }}
+            QPushButton:disabled {{ background-color: #2E2E2E; color: #777777; }}
+
+            /* ComboBox */
+            QComboBox {{ background-color: #2E2E2E; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.08); padding: {px(6)}px; }}
+
+            /* Radio buttons */
+            QRadioButton {{ color: #B9F2FF; }}
+            QRadioButton::indicator {{ width: {px(16)}px; height: {px(16)}px; }}
+
+            /* List / Driver selector */
+            QListWidget {{ background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }}
+            QListWidget::item {{ border: none; }}
+            /* Remove the default selection background; cards will draw their own */
+            QListWidget::item:selected {{ background-color: transparent; color: #1A1A1A; font-weight: 700; }}
+
+            /* Headers */
+            QHeaderView::section {{ background-color: #2F2F2F; color: #B9F2FF; padding: {px(6)}px; border: none; }}
+        """
+        + get_focus_stylesheet()
+        + get_theme_stylesheet(theme, current_ui_scale())
+    )
 
 
 class DriverCard(QWidget):
@@ -100,7 +188,7 @@ class DriverCard(QWidget):
 
         # Team color bar (left edge indicator)
         team_bar = QWidget()
-        team_bar.setFixedWidth(5)
+        team_bar.setFixedWidth(scaled(5))
         team = self._resolve_team(db, drv)
 
         # Get team color - use team primary color or discipline-based color
@@ -127,10 +215,10 @@ class DriverCard(QWidget):
             else "---"
         )
         initials = QLabel(initials_text)
-        initials.setFixedSize(42, 42)
+        initials.setFixedSize(scaled(42), scaled(42))
         initials.setAlignment(Qt.AlignmentFlag.AlignCenter)
         initials.setStyleSheet(
-            f"background-color: {team_color}; color: #1A1A1A; border-radius:4px; font-weight:700; font-size:13px;"
+            f"background-color: {team_color}; color: #1A1A1A; border-radius:4px; font-weight:700; font-size:{scaled(13)}px;"
         )
         top_row.addWidget(initials)
 
@@ -140,7 +228,7 @@ class DriverCard(QWidget):
 
         # Driver name
         name_label = QLabel(display_name)
-        name_label.setStyleSheet("font-weight:700; color:#B9F2FF; font-size:13px;")
+        name_label.setStyleSheet(f"font-weight:700; color:#B9F2FF; font-size:{scaled(13)}px;")
         name_team_layout.addWidget(name_label)
 
         # Team name
@@ -158,7 +246,7 @@ class DriverCard(QWidget):
         except Exception:
             age = 0
         age_label = QLabel(f"{age}y")
-        age_label.setStyleSheet("color:#999; font-size:11px; font-weight:600;")
+        age_label.setStyleSheet(f"color:#999; font-size:{scaled(11)}px; font-weight:600;")
         age_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -173,13 +261,13 @@ class DriverCard(QWidget):
         # Nationality with flag emoji
         nat = get_display_nationality(drv)
         nat_label = QLabel(nat)
-        nat_label.setStyleSheet("color:#888; font-size:10px;")
+        nat_label.setStyleSheet(f"color:#888; font-size:{scaled(10)}px;")
         bottom_row.addWidget(nat_label)
 
         # Overall rating (scale 0-100)
         rating = get_driver_skill_int(drv)
         rating_label = QLabel(f"Rating: {rating}")
-        rating_label.setStyleSheet("color:#B9F2FF; font-size:11px; font-weight:600;")
+        rating_label.setStyleSheet(f"color:#B9F2FF; font-size:{scaled(11)}px; font-weight:600;")
         bottom_row.addWidget(rating_label)
 
         # Preferred discipline (shortened)
@@ -187,7 +275,7 @@ class DriverCard(QWidget):
         if discipline:
             disc_short = discipline.split("_")[0][:3]  # "SINGLE_SEATER" -> "SIN"
             disc_label = QLabel(disc_short)
-            disc_label.setStyleSheet("color:#666; font-size:10px;")
+            disc_label.setStyleSheet(f"color:#666; font-size:{scaled(10)}px;")
             bottom_row.addWidget(disc_label)
 
         bottom_row.addStretch()
@@ -263,19 +351,15 @@ class MainMenuWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Momentum - Main Menu")
-        # Use screen-relative sizing for responsiveness
-        from PyQt6.QtGui import QGuiApplication
 
-        screen_obj = QGuiApplication.primaryScreen()
-        screen = screen_obj.geometry() if screen_obj is not None else None
-        # Use 70% of screen size, but respect preferred minimums
-        pref_w, pref_h = get_preferred_window_size()
-        screen_w = screen.width() if screen is not None else pref_w
-        screen_h = screen.height() if screen is not None else pref_h
-        window_w = max(pref_w, int(screen_w * 0.7))
-        window_h = max(pref_h, int(screen_h * 0.7))
-        self.resize(window_w, window_h)
-        self.setMinimumSize(800, 600)  # Absolute minimum for usability
+        # Widgets whose heights, fonts or stylesheets follow the UI scale.
+        self._scaled_heights: list = []
+        self._scaled_max_heights: list = []
+        self._scaled_fonts: list = []
+        self._scaled_styles: list = []
+        self._form_labels: list = []
+        self._embedded_views = {}
+        self._ui_ready = False
 
         self.accessibility_settings = load_accessibility_settings()
         self.race_settings = load_race_settings()
@@ -283,52 +367,18 @@ class MainMenuWindow(QMainWindow):
         if isinstance(app, QApplication):
             apply_accessibility_to_app(app, self.accessibility_settings)
 
-        # Apply a dark Momentum palette consistent with existing branding
-        self.setStyleSheet(
-            """
-            /* Global dark theme */
-            QMainWindow { background-color: #353839; }
-            QWidget { background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }
-
-            /* Group boxes / panels */
-            QGroupBox { background-color: transparent; border: 1px solid rgba(185,242,255,0.08); border-radius: 8px; margin-top: 12px; padding: 12px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #DD2D4A; font-size: 14px; font-weight: 600; }
-
-            /* Labels and typography */
-            QLabel { color: #B9F2FF; }
-            QLabel.h1 { font-size: 36px; font-weight: 700; }
-            QLabel.h2 { font-size: 22px; font-weight: 600; }
-
-            /* Buttons */
-            QPushButton { border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: 10px; font-weight: 700; }
-            QPushButton[primary="true"] { background-color: #B9F2FF; color: #353839; }
-            QPushButton[secondary="true"] { background-color: #DD2D4A; color: #FFFFFF; }
-            QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
-
-            /* ComboBox */
-            QComboBox { background-color: #2E2E2E; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.08); padding: 6px; }
-
-            /* Radio buttons */
-            QRadioButton { color: #B9F2FF; }
-            QRadioButton::indicator { width: 16px; height: 16px; }
-
-            /* List / Driver selector */
-            QListWidget { background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }
-            QListWidget::item { border: none; }
-            /* Remove the default selection background; cards will draw their own */
-            QListWidget::item:selected { background-color: transparent; color: #1A1A1A; font-weight: 700; }
-
-            /* Headers */
-            QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
-        """
-            + get_focus_stylesheet()
-            + get_theme_stylesheet(
-                str(self.accessibility_settings.get("theme", "standard"))
-            )
+        # Size from the available screen: 70% of the desktop, never below a
+        # scaled usable minimum and never larger than the screen itself.
+        pref_w, pref_h = get_preferred_window_size()
+        self.setGeometry(
+            centred_window_geometry(0.7, 0.7, min(pref_w, 960), min(pref_h, 640))
         )
+        self._apply_scaled_minimum_size()
+        self._apply_menu_stylesheet()
 
         # Display settings
         self.display_mode = "borderless"  # Default: borderless windowed
+        self._applied_display_mode = "borderless"
 
         # Race settings
         self.selected_driver = None
@@ -358,62 +408,62 @@ class MainMenuWindow(QMainWindow):
         self.view_stack = QStackedWidget()
         root_layout.addWidget(self.view_stack)
 
-        self.menu_page = QWidget()
+        # The menu content sits in a scroll area so that a large UI scale on
+        # a small display never pushes the controls out of reach.
+        self.menu_page = QScrollArea()
+        self.menu_page.setWidgetResizable(True)
+        self.menu_page.setFrameShape(QScrollArea.Shape.NoFrame)
+        menu_content = QWidget()
+        self.menu_page.setWidget(menu_content)
         self.view_stack.addWidget(self.menu_page)
         self.view_stack.setCurrentWidget(self.menu_page)
 
-        main_layout = QVBoxLayout(self.menu_page)
-        main_layout.setContentsMargins(40, 40, 40, 40)
-        main_layout.setSpacing(20)
+        main_layout = QVBoxLayout(menu_content)
+        margin = scaled(40)
+        main_layout.setContentsMargins(margin, scaled(28), margin, scaled(28))
+        main_layout.setSpacing(scaled(16))
 
         # Title
         title = QLabel("MOMENTUM")
-        title_font = QFont()
-        title_font.setPointSize(48)
-        title_font.setBold(True)
-        title.setFont(title_font)
+        self._register_scaled_font(title, 40, True)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("color: #B9F2FF; font-weight: bold;")
         main_layout.addWidget(title)
 
         subtitle = QLabel("Multi-Discipline Motorsport Manager")
-        subtitle_font = QFont()
-        subtitle_font.setPointSize(16)
-        subtitle.setFont(subtitle_font)
+        self._register_scaled_font(subtitle, 15, True)
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: #DD2D4A; font-weight: bold;")
         main_layout.addWidget(subtitle)
 
         self.menu_summary_label = QLabel(
-            "Game Hub: Choose a mode, tune display options, and jump straight into racing. "
-            "Shortcuts: Ctrl+1 Quick Race, Ctrl+2 Championship, Ctrl+3 Career, Ctrl+Enter Apply Display, F1 About."
+            "Game Hub: Choose a mode, tune your options, and jump straight into racing. "
+            "Shortcuts: Ctrl+1 Quick Race, Ctrl+2 Championship, Ctrl+3 Career, "
+            "Ctrl+Enter Apply Settings, F1 About."
         )
         self.menu_summary_label.setWordWrap(True)
+        self.menu_summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(self.menu_summary_label)
 
-        main_layout.addSpacing(30)
-
-        # Main buttons container
+        # Main panels: race modes fill the left column, options the right.
         buttons_container = QHBoxLayout()
-        buttons_container.setSpacing(20)
+        buttons_container.setSpacing(scaled(20))
 
-        # Left side: Race Mode
         race_mode_box = self._create_race_mode_section()
-        buttons_container.addWidget(race_mode_box)
+        buttons_container.addWidget(race_mode_box, 5)
 
-        # Right side: Options
         options_box = self._create_options_section()
-        buttons_container.addWidget(options_box)
+        buttons_container.addWidget(options_box, 6)
 
-        main_layout.addLayout(buttons_container)
+        main_layout.addLayout(buttons_container, 1)
 
         # Exit button at bottom
         exit_btn = QPushButton("Exit")
-        exit_btn.setMinimumHeight(50)
+        self._register_scaled_height(exit_btn, 50)
         exit_btn.setStyleSheet(
             """
             QPushButton {
-                font-size: 16px;
+                font-size: __FONT__px;
                 font-weight: bold;
                 background-color: #353839;
                 color: #B9F2FF;
@@ -432,11 +482,15 @@ class MainMenuWindow(QMainWindow):
             }
         """
         )
+        self._register_scaled_style(exit_btn, exit_btn.styleSheet(), {"__FONT__": 16})
         exit_btn.setShortcut("Ctrl+Q")
         exit_btn.setToolTip("Exit the game launcher (Ctrl+Q)")
         exit_btn.setAccessibleName("Exit Application")
         exit_btn.clicked.connect(self.close)
         main_layout.addWidget(exit_btn)
+
+        self._ui_ready = True
+        self._update_apply_state()
 
     def _set_embedded_window(
         self, key: str, host_window: QMainWindow
@@ -471,195 +525,344 @@ class MainMenuWindow(QMainWindow):
         if self.view_stack is not None and self.menu_page is not None:
             self.view_stack.setCurrentWidget(self.menu_page)
 
+    def _register_scaled_height(self, widget, base_height: int) -> None:
+        """Track a widget whose minimum height is a 100%-scale design value."""
+        self._scaled_heights.append((widget, int(base_height)))
+        widget.setMinimumHeight(scaled(base_height))
+
+    def _register_scaled_max_height(self, widget, base_height: int) -> None:
+        """Track a widget whose maximum height is a 100%-scale design value."""
+        self._scaled_max_heights.append((widget, int(base_height)))
+        widget.setMaximumHeight(scaled(base_height))
+
+    def _register_scaled_font(self, widget, point_size: float, bold: bool = False) -> None:
+        """Track a widget whose font point size follows the UI scale."""
+        self._scaled_fonts.append((widget, float(point_size), bool(bold)))
+        widget.setFont(scaled_font(point_size, bold))
+
+    def _register_scaled_style(self, widget, template: str, sizes: dict) -> None:
+        """Track a widget stylesheet whose ``__NAME__`` placeholders are scaled pixels."""
+        self._scaled_styles.append((widget, template, dict(sizes)))
+        widget.setStyleSheet(self._render_scaled_style(template, sizes))
+
+    @staticmethod
+    def _render_scaled_style(template: str, sizes: dict) -> str:
+        css = template
+        for placeholder, base_px in sizes.items():
+            css = css.replace(placeholder, str(scaled(base_px)))
+        return css
+
+    def _apply_menu_stylesheet(self) -> None:
+        theme = str(self.accessibility_settings.get("theme", "standard"))
+        self.setStyleSheet(main_menu_stylesheet(theme))
+
+    def _apply_scaled_metrics(self) -> None:
+        """Re-apply every registered scale-dependent height, font and stylesheet."""
+        for widget, base_height in self._scaled_heights:
+            widget.setMinimumHeight(scaled(base_height))
+        for widget, base_height in self._scaled_max_heights:
+            widget.setMaximumHeight(scaled(base_height))
+        for widget, point_size, bold in self._scaled_fonts:
+            widget.setFont(scaled_font(point_size, bold))
+        for widget, template, sizes in self._scaled_styles:
+            widget.setStyleSheet(self._render_scaled_style(template, sizes))
+        for combo in self._option_combos():
+            combo.setStyleSheet(combo_box_style())
+        for label in self._form_labels:
+            label.setStyleSheet(form_label_style())
+        self._apply_scaled_minimum_size()
+
+    def _apply_scaled_minimum_size(self) -> None:
+        """Usable minimum at the current UI scale, never larger than the screen."""
+        screen = available_screen_geometry(self)
+        self.setMinimumSize(
+            min(scaled(960), screen.width()), min(scaled(640), screen.height())
+        )
+
+    def _option_combos(self) -> list:
+        return [
+            combo
+            for combo in (
+                getattr(self, "theme_combo", None),
+                getattr(self, "ui_scale_combo", None),
+                getattr(self, "render_fps_combo", None),
+                getattr(self, "simulation_speed_combo", None),
+            )
+            if combo is not None
+        ]
+
+    def refresh_accessibility(self, settings: dict) -> None:
+        """Live hook: re-style this window for a new theme or UI scale."""
+        self.accessibility_settings = normalize_accessibility_settings(settings)
+        self._apply_menu_stylesheet()
+        if not self._ui_ready:
+            return
+        self._apply_scaled_metrics()
+        self._sync_accessibility_controls()
+        self._update_apply_state()
+        for view in list(self._embedded_views.values()):
+            hook = getattr(view, "refresh_accessibility", None)
+            if callable(hook):
+                hook(dict(self.accessibility_settings))
+        if self.centralWidget() is not None:
+            self.centralWidget().updateGeometry()
+
     def _create_race_mode_section(self):
         """Create race mode selection section."""
         group = QGroupBox("Race Mode")
         layout = QVBoxLayout(group)
-        layout.setSpacing(15)
+        layout.setSpacing(scaled(12))
 
-        # Quick Race button
-        quick_race_btn = QPushButton("Quick Race")
-        quick_race_btn.setMinimumHeight(80)
-        quick_race_btn.setProperty("primary", True)
-        quick_race_btn.setShortcut("Ctrl+1")
-        quick_race_btn.setToolTip("Start a one-off quick race (Ctrl+1)")
-        quick_race_btn.setAccessibleName("Quick Race Mode")
-        quick_race_btn.clicked.connect(self._show_quick_race_setup)
-        layout.addWidget(quick_race_btn)
+        modes = (
+            ("Quick Race", "quick", "Ctrl+1", "Quick Race Mode",
+             "Start a one-off quick race (Ctrl+1)", self._show_quick_race_setup),
+            ("Quick Championship", "championship", "Ctrl+2", "Championship Mode",
+             "Start or continue a championship season (Ctrl+2)",
+             self._show_championship_mode),
+            ("Career Mode", "career", "Ctrl+3", "Career Mode",
+             "Start or continue a career season (Ctrl+3)", self._show_career_mode),
+        )
+        for text, key, shortcut, accessible_name, tooltip, handler in modes:
+            button = QPushButton(text)
+            button.setProperty("primary", True)
+            button.setShortcut(shortcut)
+            button.setToolTip(tooltip)
+            button.setAccessibleName(accessible_name)
+            button.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            self._register_scaled_height(button, 96)
+            self._register_scaled_max_height(button, 180)
+            self._register_scaled_font(button, 16, True)
+            button.clicked.connect(handler)
+            layout.addWidget(button, 1)
 
-        # Championship Mode
-        championship_btn = QPushButton("Quick Championship")
-        championship_btn.setMinimumHeight(80)
-        championship_btn.setProperty("primary", True)
-        championship_btn.setShortcut("Ctrl+2")
-        championship_btn.setAccessibleName("Championship Mode")
-        championship_btn.setEnabled(True)  # Now implemented!
-        championship_btn.setToolTip("Start or continue a championship season")
-        championship_btn.clicked.connect(self._show_championship_mode)
-        layout.addWidget(championship_btn)
+            caption = QLabel(RACE_MODE_CAPTIONS[key])
+            caption.setWordWrap(True)
+            caption.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            caption.setStyleSheet("color: #9ED8DB;")
+            layout.addWidget(caption)
+            layout.addSpacing(scaled(8))
 
-        # Career Mode
-        career_btn = QPushButton("Career Mode")
-        career_btn.setMinimumHeight(80)
-        career_btn.setProperty("primary", True)
-        career_btn.setShortcut("Ctrl+3")
-        career_btn.setAccessibleName("Career Mode")
-        career_btn.setEnabled(True)
-        career_btn.setToolTip("Start or continue a career season")
-        career_btn.clicked.connect(self._show_career_mode)
-        layout.addWidget(career_btn)
-
-        layout.addStretch()
-
+        layout.addStretch(1)
         return group
 
+    def _make_form_label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setStyleSheet(form_label_style())
+        self._form_labels.append(label)
+        return label
+
     def _create_options_section(self):
-        """Create options section with display settings."""
+        """Create the options panel: display, appearance and race preferences with one Apply action."""
         group = QGroupBox("Options")
         layout = QVBoxLayout(group)
-        layout.setSpacing(15)
+        layout.setSpacing(scaled(12))
 
-        # Display settings
-        display_label = QLabel("Display Mode:")
-        display_label.setStyleSheet(FORM_LABEL_STYLE)
-        layout.addWidget(display_label)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(scaled(16))
+        grid.setVerticalSpacing(scaled(12))
 
-        # Radio buttons for display mode
+        # Display mode
+        display_box = QGroupBox("Display")
+        display_layout = QVBoxLayout(display_box)
+        display_layout.addWidget(self._make_form_label("Display Mode:"))
         self.display_button_group = QButtonGroup(self)
-
-        windowed_radio = QRadioButton("Windowed (1600x900)")
-        windowed_radio.setProperty("mode", "windowed")
-        self.display_button_group.addButton(windowed_radio, 1)
-        layout.addWidget(windowed_radio)
-
-        borderless_radio = QRadioButton("Borderless Windowed (Fullscreen)")
-        borderless_radio.setProperty("mode", "borderless")
-        borderless_radio.setChecked(True)  # Default
-        self.display_button_group.addButton(borderless_radio, 2)
-        layout.addWidget(borderless_radio)
-
-        fullscreen_radio = QRadioButton("Fullscreen (Exclusive)")
-        fullscreen_radio.setProperty("mode", "fullscreen")
-        self.display_button_group.addButton(fullscreen_radio, 3)
-        layout.addWidget(fullscreen_radio)
-
-        # Connect radio buttons
+        for index, mode in enumerate(("windowed", "borderless", "fullscreen"), start=1):
+            radio = QRadioButton(DISPLAY_MODE_LABELS[mode])
+            radio.setProperty("mode", mode)
+            radio.setChecked(mode == "borderless")
+            self.display_button_group.addButton(radio, index)
+            display_layout.addWidget(radio)
         self.display_button_group.buttonClicked.connect(self._on_display_mode_changed)
+        grid.addWidget(display_box, 0, 0)
 
-        layout.addSpacing(20)
-
-        accessibility_label = QLabel("Accessibility Theme:")
-        accessibility_label.setStyleSheet(FORM_LABEL_STYLE)
-        layout.addWidget(accessibility_label)
-
+        # Appearance / accessibility
+        appearance_box = QGroupBox("Appearance")
+        appearance_layout = QVBoxLayout(appearance_box)
+        appearance_layout.addWidget(self._make_form_label("Accessibility Theme:"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Standard", "standard")
         self.theme_combo.addItem("High Contrast", "high_contrast")
-        self.theme_combo.addItem("Colorblind Safe", "colorblind_safe")
-        self.theme_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.theme_combo.addItem("Colourblind Safe", "colorblind_safe")
+        self.theme_combo.setStyleSheet(combo_box_style())
         self.theme_combo.setAccessibleName("Accessibility Theme")
-        current_theme = str(self.accessibility_settings.get("theme", "standard"))
-        theme_idx = self.theme_combo.findData(current_theme)
-        self.theme_combo.setCurrentIndex(theme_idx if theme_idx >= 0 else 0)
-        layout.addWidget(self.theme_combo)
+        appearance_layout.addWidget(self.theme_combo)
 
-        scale_label = QLabel("UI Scale:")
-        scale_label.setStyleSheet(FORM_LABEL_STYLE)
-        layout.addWidget(scale_label)
-
+        appearance_layout.addWidget(self._make_form_label("UI Scale:"))
         self.ui_scale_combo = QComboBox()
         self.ui_scale_combo.addItem("100%", 100)
         self.ui_scale_combo.addItem("125%", 125)
         self.ui_scale_combo.addItem("150%", 150)
-        self.ui_scale_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.ui_scale_combo.setStyleSheet(combo_box_style())
         self.ui_scale_combo.setAccessibleName("UI Scale")
-        current_scale = int(self.accessibility_settings.get("ui_scale", 100))
-        scale_idx = self.ui_scale_combo.findData(current_scale)
-        self.ui_scale_combo.setCurrentIndex(scale_idx if scale_idx >= 0 else 0)
-        layout.addWidget(self.ui_scale_combo)
+        appearance_layout.addWidget(self.ui_scale_combo)
+        grid.addWidget(appearance_box, 0, 1)
 
-        render_fps_label = QLabel("Render FPS:")
-        render_fps_label.setStyleSheet(FORM_LABEL_STYLE)
-        layout.addWidget(render_fps_label)
-
+        # Race preferences
+        race_box = QGroupBox("Race")
+        race_layout = QVBoxLayout(race_box)
+        race_layout.addWidget(self._make_form_label("Render FPS:"))
         self.render_fps_combo = QComboBox()
         self.render_fps_combo.addItem("Uncapped", 0)
         for fps in (30, 60, 120, 144, 240):
             self.render_fps_combo.addItem(f"{fps} FPS", fps)
-        self.render_fps_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.render_fps_combo.setStyleSheet(combo_box_style())
         self.render_fps_combo.setAccessibleName("Render FPS")
-        render_fps_index = self.render_fps_combo.findData(
-            int(self.race_settings.get("render_fps", 0))
-        )
-        self.render_fps_combo.setCurrentIndex(
-            render_fps_index if render_fps_index >= 0 else 0
-        )
-        layout.addWidget(self.render_fps_combo)
+        race_layout.addWidget(self.render_fps_combo)
 
-        simulation_speed_label = QLabel("Race Speed:")
-        simulation_speed_label.setStyleSheet(FORM_LABEL_STYLE)
-        layout.addWidget(simulation_speed_label)
-
+        race_layout.addWidget(self._make_form_label("Race Speed:"))
         self.simulation_speed_combo = QComboBox()
         for speed in (0.5, 1.0, 2.0, 5.0, 10.0, 20.0):
             self.simulation_speed_combo.addItem(f"{speed:g}x", speed)
-        self.simulation_speed_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.simulation_speed_combo.setStyleSheet(combo_box_style())
         self.simulation_speed_combo.setAccessibleName("Race Speed")
-        speed_index = self.simulation_speed_combo.findData(
-            float(self.race_settings.get("simulation_speed", 5.0))
-        )
-        self.simulation_speed_combo.setCurrentIndex(speed_index if speed_index >= 0 else 3)
-        layout.addWidget(self.simulation_speed_combo)
+        race_layout.addWidget(self.simulation_speed_combo)
+        grid.addWidget(race_box, 1, 0)
 
-        # Apply button
-        apply_btn = QPushButton("Apply Display Settings")
-        apply_btn.setMinimumHeight(50)
-        apply_btn.setProperty("primary", True)
-        apply_btn.setShortcut("Ctrl+Return")
-        apply_btn.setToolTip("Apply selected display mode (Ctrl+Enter)")
-        apply_btn.setAccessibleName("Apply Display Settings")
-        apply_btn.clicked.connect(self._apply_display_mode)
-        layout.addWidget(apply_btn)
-
-        apply_accessibility_btn = QPushButton("Apply Accessibility Settings")
-        apply_accessibility_btn.setMinimumHeight(50)
-        apply_accessibility_btn.setProperty("primary", True)
-        apply_accessibility_btn.setToolTip(
-            "Apply selected accessibility theme and UI scale"
-        )
-        apply_accessibility_btn.setAccessibleName("Apply Accessibility Settings")
-        apply_accessibility_btn.clicked.connect(self._apply_accessibility_settings)
-        layout.addWidget(apply_accessibility_btn)
-
-        apply_race_settings_btn = QPushButton("Apply Race Settings")
-        apply_race_settings_btn.setMinimumHeight(50)
-        apply_race_settings_btn.setProperty("primary", True)
-        apply_race_settings_btn.setToolTip("Apply render FPS and race speed settings")
-        apply_race_settings_btn.setAccessibleName("Apply Race Settings")
-        apply_race_settings_btn.clicked.connect(self._apply_race_settings)
-        layout.addWidget(apply_race_settings_btn)
-
+        # Help
+        help_box = QGroupBox("Help")
+        help_layout = QVBoxLayout(help_box)
         tutorial_btn = QPushButton(CONTROLS_TUTORIAL_TITLE)
-        tutorial_btn.setMinimumHeight(50)
+        self._register_scaled_height(tutorial_btn, 44)
         tutorial_btn.setToolTip(
             "Show quick controls tutorial relevant to current screens"
         )
         tutorial_btn.setAccessibleName(CONTROLS_TUTORIAL_TITLE)
         tutorial_btn.clicked.connect(self._show_controls_tutorial)
-        layout.addWidget(tutorial_btn)
+        help_layout.addWidget(tutorial_btn)
 
-        layout.addStretch()
-
-        # About button
         about_btn = QPushButton("About")
-        about_btn.setMinimumHeight(50)
+        self._register_scaled_height(about_btn, 44)
         about_btn.setShortcut("F1")
         about_btn.setToolTip("About this build (F1)")
         about_btn.setAccessibleName("About Momentum")
         about_btn.clicked.connect(self._show_about)
-        layout.addWidget(about_btn)
+        help_layout.addWidget(about_btn)
+        grid.addWidget(help_box, 1, 1)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
+
+        # One clear action for the whole options page.
+        self.settings_status_label = QLabel("")
+        self.settings_status_label.setWordWrap(True)
+        self.settings_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.settings_status_label.setStyleSheet("color: #9ED8DB;")
+        layout.addWidget(self.settings_status_label)
+
+        self.apply_settings_btn = QPushButton("Apply Settings")
+        self._register_scaled_height(self.apply_settings_btn, 50)
+        self.apply_settings_btn.setProperty("primary", True)
+        self.apply_settings_btn.setShortcut("Ctrl+Return")
+        self.apply_settings_btn.setToolTip(
+            "Apply every changed option on this page (Ctrl+Enter)"
+        )
+        self.apply_settings_btn.setAccessibleName("Apply Settings")
+        self.apply_settings_btn.clicked.connect(self._apply_settings)
+        layout.addWidget(self.apply_settings_btn)
+        layout.addStretch(1)
+
+        self._sync_option_controls()
+        for combo in self._option_combos():
+            combo.currentIndexChanged.connect(self._update_apply_state)
 
         return group
+
+    def _sync_accessibility_controls(self) -> None:
+        """Set the theme and scale combos to the applied accessibility settings."""
+        for combo in (self.theme_combo, self.ui_scale_combo):
+            combo.blockSignals(True)
+        try:
+            theme_idx = self.theme_combo.findData(
+                str(self.accessibility_settings.get("theme", "standard"))
+            )
+            self.theme_combo.setCurrentIndex(theme_idx if theme_idx >= 0 else 0)
+            scale_idx = self.ui_scale_combo.findData(
+                int(self.accessibility_settings.get("ui_scale", 100))
+            )
+            self.ui_scale_combo.setCurrentIndex(scale_idx if scale_idx >= 0 else 0)
+        finally:
+            for combo in (self.theme_combo, self.ui_scale_combo):
+                combo.blockSignals(False)
+
+    def _sync_option_controls(self) -> None:
+        """Set every option control to the currently applied values."""
+        self._sync_accessibility_controls()
+        for combo in (self.render_fps_combo, self.simulation_speed_combo):
+            combo.blockSignals(True)
+        try:
+            fps_idx = self.render_fps_combo.findData(
+                int(self.race_settings.get("render_fps", 0))
+            )
+            self.render_fps_combo.setCurrentIndex(fps_idx if fps_idx >= 0 else 0)
+            speed_idx = self.simulation_speed_combo.findData(
+                float(self.race_settings.get("simulation_speed", 5.0))
+            )
+            self.simulation_speed_combo.setCurrentIndex(speed_idx if speed_idx >= 0 else 3)
+        finally:
+            for combo in (self.render_fps_combo, self.simulation_speed_combo):
+                combo.blockSignals(False)
+        self.display_mode = self._applied_display_mode
+        for button in self.display_button_group.buttons():
+            if button.property("mode") == self._applied_display_mode:
+                button.setChecked(True)
+        self._update_apply_state()
+
+    def pending_setting_changes(self) -> List[str]:
+        """Names of the options that differ from what is currently applied."""
+        changes: List[str] = []
+        if self.display_mode != self._applied_display_mode:
+            changes.append("display mode")
+        if str(self.theme_combo.currentData()) != str(
+            self.accessibility_settings.get("theme", "standard")
+        ):
+            changes.append("theme")
+        if int(self.ui_scale_combo.currentData() or 100) != int(
+            self.accessibility_settings.get("ui_scale", 100)
+        ):
+            changes.append("UI scale")
+        if int(self.render_fps_combo.currentData() or 0) != int(
+            self.race_settings.get("render_fps", 0)
+        ):
+            changes.append("render FPS")
+        if float(self.simulation_speed_combo.currentData() or 5.0) != float(
+            self.race_settings.get("simulation_speed", 5.0)
+        ):
+            changes.append("race speed")
+        return changes
+
+    def _update_apply_state(self, *_args) -> None:
+        """Enable the Apply button only when something would actually change."""
+        if not hasattr(self, "apply_settings_btn"):
+            return
+        changes = self.pending_setting_changes()
+        self.apply_settings_btn.setEnabled(bool(changes))
+        if changes:
+            self.settings_status_label.setText("Unapplied changes: " + ", ".join(changes))
+        else:
+            self.settings_status_label.setText("All settings applied")
+
+    def _apply_settings(self) -> None:
+        """Apply every changed option in one action and report what changed."""
+        changes = self.pending_setting_changes()
+        if not changes:
+            return
+        if "display mode" in changes:
+            self._apply_display_mode()
+        if "theme" in changes or "UI scale" in changes:
+            self._apply_accessibility_settings()
+        if "render FPS" in changes or "race speed" in changes:
+            self._apply_race_settings()
+        self._update_apply_state()
+        saved = [change for change in changes if change != "display mode"]
+        lines = []
+        if saved:
+            lines.append("Saved: " + ", ".join(saved) + ".")
+        if "display mode" in changes:
+            lines.append("Display mode applied for this session.")
+        information(self, "Settings", " ".join(lines))
 
     def _show_quick_race_setup(self):
         """Show quick race setup dialog."""
@@ -776,6 +979,7 @@ class MainMenuWindow(QMainWindow):
         """Handle display mode radio button change."""
         self.display_mode = button.property("mode")
         print(f"[INFO] Display mode selected: {self.display_mode}")
+        self._update_apply_state()
 
     def _apply_display_mode(self):
         """Apply current display mode to main menu window."""
@@ -785,8 +989,11 @@ class MainMenuWindow(QMainWindow):
         if self.display_mode == "windowed":
             self.setWindowFlags(Qt.WindowType.Window)
             self.showNormal()
-            self.setGeometry(100, 100, 1000, 700)
-            print("[INFO] Applied windowed mode (1000x700)")
+            geometry = centred_window_geometry(0.7, 0.7, 960, 640, self)
+            self.setGeometry(geometry)
+            print(
+                f"[INFO] Applied windowed mode ({geometry.width()}x{geometry.height()})"
+            )
 
         elif self.display_mode == "borderless":
             self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -800,7 +1007,9 @@ class MainMenuWindow(QMainWindow):
             self.showFullScreen()
             print("[INFO] Applied exclusive fullscreen")
 
+        self._applied_display_mode = self.display_mode
         self.show()
+        self._update_apply_state()
 
     def _load_drivers(self):
         """Load drivers from database."""
@@ -828,7 +1037,7 @@ class MainMenuWindow(QMainWindow):
         )
 
     def _apply_accessibility_settings(self) -> None:
-        """Apply and persist accessibility settings selected in the options panel."""
+        """Apply and persist the selected theme and UI scale to every open window."""
         selected_theme = str(self.theme_combo.currentData() or "standard")
         selected_scale = int(self.ui_scale_combo.currentData() or 100)
         new_settings = normalize_accessibility_settings(
@@ -839,48 +1048,11 @@ class MainMenuWindow(QMainWindow):
 
         app = QApplication.instance()
         if isinstance(app, QApplication):
+            # Re-styles the application and calls refresh_accessibility on
+            # this window and every other open window.
             apply_accessibility_to_app(app, new_settings)
-
-        self.setStyleSheet(
-            """
-            /* Global dark theme */
-            QMainWindow { background-color: #353839; }
-            QWidget { background-color: #353839; color: #B9F2FF; font-family: 'Inter', 'Segoe UI', sans-serif; }
-
-            /* Group boxes / panels */
-            QGroupBox { background-color: transparent; border: 1px solid rgba(185,242,255,0.08); border-radius: 8px; margin-top: 12px; padding: 12px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #DD2D4A; font-size: 14px; font-weight: 600; }
-
-            /* Labels and typography */
-            QLabel { color: #B9F2FF; }
-            QLabel.h1 { font-size: 36px; font-weight: 700; }
-            QLabel.h2 { font-size: 22px; font-weight: 600; }
-
-            /* Buttons */
-            QPushButton { border: 1px solid rgba(185,242,255,0.24); border-radius: 8px; padding: 10px; font-weight: 700; }
-            QPushButton[primary="true"] { background-color: #B9F2FF; color: #353839; }
-            QPushButton[secondary="true"] { background-color: #DD2D4A; color: #FFFFFF; }
-            QPushButton:disabled { background-color: #2E2E2E; color: #777777; }
-
-            /* ComboBox */
-            QComboBox { background-color: #2E2E2E; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.08); padding: 6px; }
-
-            /* Radio buttons */
-            QRadioButton { color: #B9F2FF; }
-            QRadioButton::indicator { width: 16px; height: 16px; }
-
-            /* List / Driver selector */
-            QListWidget { background-color: #2C2C2C; color: #B9F2FF; border: 1px solid rgba(185,242,255,0.06); }
-            QListWidget::item { border: none; }
-            QListWidget::item:selected { background-color: transparent; color: #1A1A1A; font-weight: 700; }
-
-            /* Headers */
-            QHeaderView::section { background-color: #2F2F2F; color: #B9F2FF; padding: 6px; border: none; }
-        """
-            + get_focus_stylesheet()
-            + get_theme_stylesheet(str(new_settings.get("theme", "standard")))
-        )
-        information(self, "Accessibility", "Accessibility settings applied and saved.")
+        else:
+            self.refresh_accessibility(new_settings)
 
     def _show_controls_tutorial(self) -> None:
         """Show a short in-app tutorial for menu and race controls."""
@@ -910,7 +1082,7 @@ class MainMenuWindow(QMainWindow):
                 "simulation_speed": self.simulation_speed_combo.currentData(),
             }
         )
-        information(self, "Race Settings", "Race settings applied and saved.")
+        self._update_apply_state()
 
     def _on_race_start(self, config: dict):
         """Handle race start from setup dialog."""
@@ -963,17 +1135,8 @@ class QuickRaceSetupWindow(QDialog):
         # positioned independent of the (possibly frameless) main window.
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window)
 
-        # Size dialog responsively based on screen size
-        from PyQt6.QtGui import QGuiApplication
-
-        screen_obj = QGuiApplication.primaryScreen()
-        screen = screen_obj.geometry() if screen_obj is not None else None
-        screen_w = screen.width() if screen is not None else 1400
-        screen_h = screen.height() if screen is not None else 1000
-        w = min(int(screen_w * 0.85), 1400)  # Max 85% of screen or 1400px
-        h = min(int(screen_h * 0.85), 1000)  # Max 85% of screen or 1000px
-        self.setMinimumSize(800, 600)  # Usable minimum
-        self.resize(w, h)
+        # 80% of the available screen, never below a scaled usable minimum.
+        size_dialog_to_screen(self, 0.8, 0.85, 1040, 760)
 
         # Build UI once
         self._setup_ui()
@@ -981,22 +1144,20 @@ class QuickRaceSetupWindow(QDialog):
     def _setup_ui(self):
         """Setup quick race setup UI."""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        layout.setSpacing(20)
+        margin = scaled(30)
+        layout.setContentsMargins(margin, margin, margin, margin)
+        layout.setSpacing(scaled(16))
 
         self.setStyleSheet(f"QPushButton {{ border: {FEINT_BUTTON_BORDER}; }}")
 
         logo = QLabel("MOMENTUM")
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet(LOGO_STYLE)
+        logo.setStyleSheet(logo_style())
         layout.addWidget(logo)
 
         # Title
         title = QLabel("Quick Race Setup")
-        title_font = QFont()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        title.setFont(title_font)
+        title.setFont(scaled_font(22, True))
         layout.addWidget(title)
 
         self.selection_summary = QLabel(
@@ -1005,19 +1166,18 @@ class QuickRaceSetupWindow(QDialog):
         self.selection_summary.setWordWrap(True)
         self.selection_summary.setStyleSheet(
             "background-color: #18212B; border: 1px solid #2E3B4A; border-radius: 8px; "
-            "padding: 10px; color: #CFE8FF;"
+            f"padding: {scaled(10)}px; color: #CFE8FF;"
         )
         layout.addWidget(self.selection_summary)
 
-        # Driver selection + profile area
+        # Driver selection + profile area. This row takes all spare height so
+        # the driver list grows while the profile and preset panels keep the
+        # height they need to draw every line.
         selection_container = QHBoxLayout()
-        selection_container.setSpacing(16)
+        selection_container.setSpacing(scaled(16))
 
         # Left: driver list with compact cards
         driver_group = QGroupBox("Select Your Driver")
-        # Remove fixed minimum width - let it be flexible
-        from PyQt6.QtWidgets import QSizePolicy
-
         driver_group.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -1062,31 +1222,45 @@ class QuickRaceSetupWindow(QDialog):
         self.driver_list.setCurrentRow(0)
         driver_layout.addWidget(self.driver_list)
 
-        selection_container.addWidget(driver_group)
+        selection_container.addWidget(driver_group, 3)
 
-        # Right side: profile + presets
-        right_vbox = QVBoxLayout()
+        # Right side: profile + presets, in a panel with a scaled minimum
+        # width so labels and the combo box always have room.
+        right_panel = QWidget()
+        right_panel.setMinimumWidth(scaled(380))
+        right_panel.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
+        )
+        right_vbox = QVBoxLayout(right_panel)
+        right_vbox.setContentsMargins(0, 0, 0, 0)
+        right_vbox.setSpacing(scaled(12))
         # Driver profile with radar polygon visualisation
         profile_group = QGroupBox("Driver Profile")
+        profile_group.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         profile_layout = QVBoxLayout(profile_group)
+        profile_layout.setSpacing(scaled(6))
 
         self.profile_name = QLabel("Name: -")
+        self.profile_name.setWordWrap(True)
         self.profile_name.setStyleSheet(
-            "font-weight:700; font-size:16px; color:#B9F2FF;"
+            f"font-weight:700; font-size:{scaled(16)}px; color:#B9F2FF;"
         )
         profile_layout.addWidget(self.profile_name)
 
         self.profile_nationality = QLabel("Nationality: -")
+        self.profile_nationality.setWordWrap(True)
         profile_layout.addWidget(self.profile_nationality)
 
         self.profile_skill = QLabel("Skill: -")
         profile_layout.addWidget(self.profile_skill)
 
         self.profile_team = QLabel("Team: -")
+        self.profile_team.setWordWrap(True)
         profile_layout.addWidget(self.profile_team)
 
         # RadarWidget - draws a 6-axis polygon visualisation
-        from PyQt6.QtWidgets import QSizePolicy
         from PyQt6.QtGui import QPainter, QPen, QColor, QBrush
         from PyQt6.QtCore import QPointF
 
@@ -1094,8 +1268,8 @@ class QuickRaceSetupWindow(QDialog):
             def __init__(self, parent=None):
                 super().__init__(parent)
                 self.values = [50.0] * 6
-                self.setMinimumSize(220, 220)
-                self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+                side = scaled(240)
+                self.setFixedSize(side, side)
 
             def set_values(self, vals: list[float]):
                 if not vals or len(vals) < 6:
@@ -1110,7 +1284,8 @@ class QuickRaceSetupWindow(QDialog):
                 h = self.height()
                 cx = w / 2
                 cy = h / 2
-                radius = min(w, h) * 0.40
+                # Leave room outside the outer ring for the axis labels.
+                radius = min(w, h) * 0.33
 
                 # Draw concentric rings
                 pen = QPen(QColor("#555555"))
@@ -1138,14 +1313,16 @@ class QuickRaceSetupWindow(QDialog):
                     painter.setPen(QPen(QColor("#888888")))
                     painter.drawLine(QPointF(cx, cy), QPointF(x, y))
                     # Label
-                    lx = cx + math.cos(angle) * (radius + 18)
-                    ly = cy + math.sin(angle) * (radius + 18)
+                    lx = cx + math.cos(angle) * (radius + scaled(16))
+                    ly = cy + math.sin(angle) * (radius + scaled(16))
                     painter.setPen(QPen(QColor("#B9F2FF")))
+                    label_w = scaled(84)
+                    label_h = scaled(16)
                     painter.drawText(
-                        int(lx - 20),
-                        int(ly - 6),
-                        80,
-                        16,
+                        int(lx - label_w / 2),
+                        int(ly - label_h / 2),
+                        label_w,
+                        label_h,
                         Qt.AlignmentFlag.AlignCenter,
                         labels[i],
                     )
@@ -1166,13 +1343,16 @@ class QuickRaceSetupWindow(QDialog):
 
         self.radar = RadarWidget()
         profile_layout.addWidget(self.radar, 0, Qt.AlignmentFlag.AlignCenter)
-
         right_vbox.addWidget(profile_group)
 
-        # Tuning preset selection
+        # Tuning preset selection: label, combo and description each get
+        # their own row so nothing is drawn over the combo box.
         preset_group = QGroupBox("Race Tuning Preset")
+        preset_group.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum
+        )
         preset_layout = QVBoxLayout(preset_group)
-
+        preset_layout.setSpacing(scaled(6))
         preset_label = QLabel("Choose simulation style:")
         preset_layout.addWidget(preset_label)
 
@@ -1181,7 +1361,8 @@ class QuickRaceSetupWindow(QDialog):
         self.preset_combo.addItem("Aggressive (More Overtakes)", "aggressive")
         self.preset_combo.addItem("Tyre Sensitive (Strategic)", "tyre_sensitive")
         self.preset_combo.setCurrentIndex(0)
-        self.preset_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.preset_combo.setStyleSheet(combo_box_style())
+        self.preset_combo.setMinimumHeight(scaled(36))
         self.preset_combo.setAccessibleName("Race Tuning Preset")
         preset_layout.addWidget(self.preset_combo)
 
@@ -1192,29 +1373,44 @@ class QuickRaceSetupWindow(QDialog):
             "<b>Tyre Sensitive:</b> High degradation, strategic pit stops"
         )
         preset_desc.setWordWrap(True)
-        preset_desc.setStyleSheet("font-size: 11px; color: #999;")
+        preset_desc.setStyleSheet(f"font-size: {scaled(11)}px; color: #999;")
         preset_layout.addWidget(preset_desc)
-
         right_vbox.addWidget(preset_group)
 
-        # Info note about controls
-        info_label = QLabel(
-            "💡 Race pace and overtaking controls are available during the race"
+        # Info note about controls. The leading glyph is a plain "i" badge
+        # drawn with the UI font rather than an emoji the bundled font lacks.
+        info_row = QHBoxLayout()
+        info_row.setSpacing(scaled(8))
+        info_badge = QLabel("i")
+        badge_side = scaled(18)
+        info_badge.setFixedSize(badge_side, badge_side)
+        info_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        info_badge.setStyleSheet(
+            f"font-size: {scaled(11)}px; font-weight: 700; font-style: italic; "
+            "color: #16211F; background-color: #B9F2FF; "
+            f"border-radius: {badge_side // 2}px;"
         )
-        info_label.setStyleSheet("font-size: 12px; color: #888; font-style: italic;")
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        right_vbox.addWidget(info_label)
-
+        info_row.addWidget(info_badge, 0, Qt.AlignmentFlag.AlignTop)
+        info_label = QLabel(
+            "Race pace and overtaking controls are available during the race"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet(
+            f"font-size: {scaled(12)}px; color: #9EB4C2; font-style: italic;"
+        )
+        info_row.addWidget(info_label, 1)
+        right_vbox.addLayout(info_row)
+        right_vbox.addStretch(1)
         # Buttons
         button_layout = QHBoxLayout()
 
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.setMinimumHeight(50)
+        cancel_btn.setMinimumHeight(scaled(50))
         cancel_btn.clicked.connect(self.close)
         button_layout.addWidget(cancel_btn)
 
         start_btn = QPushButton("Start Race")
-        start_btn.setMinimumHeight(50)
+        start_btn.setMinimumHeight(scaled(50))
         start_btn.setStyleSheet(
             "font-weight: bold; background-color: #4CAF50; color: white;"
         )
@@ -1223,9 +1419,15 @@ class QuickRaceSetupWindow(QDialog):
 
         right_vbox.addLayout(button_layout)
 
-        # Attach right_vbox into selection container and add to main layout
-        selection_container.addLayout(right_vbox)
-        layout.addLayout(selection_container)
+        # Attach the right panel into the selection container and give the
+        # whole row the spare height.
+        selection_container.addWidget(right_panel, 2)
+        layout.addLayout(selection_container, 1)
+
+        # Discipline, tier and track sit side by side on one row so the
+        # dialog's fixed-height content stays compact at every UI scale.
+        choices_row = QHBoxLayout()
+        choices_row.setSpacing(scaled(16))
 
         # Discipline selection (comes first, affects track list)
         discipline_group = QGroupBox("Racing Discipline")
@@ -1246,12 +1448,12 @@ class QuickRaceSetupWindow(QDialog):
         for discipline_id, display_name in self.disciplines_map.items():
             self.discipline_combo.addItem(display_name, discipline_id)
 
-        self.discipline_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.discipline_combo.setStyleSheet(combo_box_style())
         self.discipline_combo.setCurrentIndex(0)
         self.discipline_combo.setAccessibleName("Racing Discipline")
         self.discipline_combo.currentIndexChanged.connect(self._on_discipline_changed)
         discipline_layout.addWidget(self.discipline_combo)
-        layout.addWidget(discipline_group)
+        choices_row.addWidget(discipline_group, 1)
 
         # Tier selection (discipline first, then tier, then driver)
         tier_group = QGroupBox("Team Tier")
@@ -1264,7 +1466,7 @@ class QuickRaceSetupWindow(QDialog):
         self.tier_combo.setAccessibleName("Team Tier")
         self.tier_combo.currentIndexChanged.connect(self._on_tier_changed)
         tier_layout.addWidget(self.tier_combo)
-        layout.addWidget(tier_group)
+        choices_row.addWidget(tier_group, 1)
 
         # Track selection (populates based on selected discipline)
         track_group = QGroupBox("Track Selection")
@@ -1273,11 +1475,12 @@ class QuickRaceSetupWindow(QDialog):
         track_layout.addWidget(track_label)
 
         self.track_combo = QComboBox()
-        self.track_combo.setStyleSheet(COMBO_BOX_STYLE)
+        self.track_combo.setStyleSheet(combo_box_style())
         self.track_combo.setAccessibleName("Track Selection")
         self.track_combo.currentIndexChanged.connect(self._update_setup_summary)
         track_layout.addWidget(self.track_combo)
-        layout.addWidget(track_group)
+        choices_row.addWidget(track_group, 2)
+        layout.addLayout(choices_row)
 
         # Populate tracks for initial discipline
         self._update_tiers_for_selected_discipline()

@@ -30,17 +30,19 @@ from momentum.vehicles.vehicle_appearance import (
 )
 
 from PyQt6.QtGui import (
-    QPainter,
-    QPen,
-    QColor,
     QBrush,
-    QPainterPath,
+    QColor,
+    QFont,
+    QFontMetrics,
     QKeyEvent,
-    QPaintEvent,
-    QPixmap,
-    QLinearGradient,
-    QPolygonF,
     QKeySequence,
+    QLinearGradient,
+    QPaintEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QPolygonF,
     QShortcut,
 )
 
@@ -68,6 +70,7 @@ from PyQt6.QtWidgets import (
     QSplitter,
     QMessageBox,
     QComboBox,
+    QStyle,
 )
 import random
 from PyQt6.QtWidgets import QHeaderView, QSizePolicy
@@ -90,9 +93,11 @@ from .infield_presets import select_preset
 from .props_placer import place_props, draw_props
 from momentum.gui.accessibility_settings import (
     apply_accessibility_to_app,
+    centred_window_geometry,
     normalize_accessibility_settings,
     get_focus_stylesheet,
     get_theme_stylesheet,
+    scaled,
 )
 from momentum.gui.themed_messagebox import warning, question
 from momentum.data.circuit_schema import QUARTER_MILE_M, track_distance_label
@@ -3462,14 +3467,27 @@ class RaceWindow(QMainWindow):
 
         right_panel.addLayout(controls)
 
-        # Race info
+        # Race info. Both status labels are given a fixed height (two lines
+        # and one line respectively) so changing the message between the
+        # pre-start and running states never re-lays out the panel below.
         self.info_label = QLabel("Ready to race")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.info_label.setWordWrap(True)
+        info_metrics = self.info_label.fontMetrics()
+        self.info_label.setFixedHeight(info_metrics.lineSpacing() * 2 + scaled(6))
+        self.info_label.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         right_panel.addWidget(self.info_label)
 
         self.control_hint_label = QLabel("")
         self.control_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.control_hint_label.setStyleSheet("font-size: 11px; color: #B9F2FF;")
+        self.control_hint_label.setStyleSheet(
+            f"font-size: {scaled(11)}px; color: #B9F2FF;"
+        )
+        self.control_hint_label.setFixedHeight(
+            self.control_hint_label.fontMetrics().lineSpacing() + scaled(4)
+        )
         right_panel.addWidget(self.control_hint_label)
 
         # Player controls section
@@ -3757,12 +3775,29 @@ class RaceWindow(QMainWindow):
         self.standings_table.setFixedWidth(sidebar_content_width)
         header = self.standings_table.horizontalHeader()
         if header is not None:
-            self.standings_table.setColumnWidth(0, 32)  # color chip
-            self.standings_table.setColumnWidth(
-                1, max(420, sidebar_content_width - 180)
-            )  # driver name width budget
-            self.standings_table.setColumnWidth(2, 48)  # lap number
-            self.standings_table.setColumnWidth(3, 95)  # gap like "+888:888"
+            self.standings_table.setColumnWidth(0, scaled(32))  # colour chip
+            lap_width = scaled(48)  # lap number
+            gap_width = scaled(95)  # gap like "+888:888"
+            position_width = self.standings_table.columnWidth(0)
+            # The driver name takes whatever width is left after the fixed
+            # columns, the frame and the vertical scrollbar a full field needs,
+            # so the gap column stays in view; on a very narrow desktop it keeps
+            # a readable minimum and the table scrolls horizontally instead.
+            frame = self.standings_table.frameWidth() * 2
+            scrollbar = self.standings_table.style().pixelMetric(
+                QStyle.PixelMetric.PM_ScrollBarExtent
+            )
+            name_width = (
+                sidebar_content_width
+                - frame
+                - scrollbar
+                - position_width
+                - lap_width
+                - gap_width
+            )
+            self.standings_table.setColumnWidth(1, max(scaled(160), name_width))
+            self.standings_table.setColumnWidth(2, lap_width)
+            self.standings_table.setColumnWidth(3, gap_width)
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
             header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -3770,7 +3805,7 @@ class RaceWindow(QMainWindow):
             header.setStretchLastSection(False)
 
         self.standings_table.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self.standings_table.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
@@ -3779,7 +3814,7 @@ class RaceWindow(QMainWindow):
             QTableWidget.SizeAdjustPolicy.AdjustToContents
         )
         # Use fixed row height for performance (avoid resizeRowsToContents each frame)
-        self._standings_row_height = 26
+        self._standings_row_height = scaled(26)
         standings_vheader = self.standings_table.verticalHeader()
         if isinstance(standings_vheader, QHeaderView):
             standings_vheader.setDefaultSectionSize(self._standings_row_height)
@@ -3800,13 +3835,21 @@ class RaceWindow(QMainWindow):
         )
         self.knockout_tree.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.knockout_tree.setStyleSheet(
-            "QTreeWidget::item { height: 28px; font-size: 12px; }"
+            f"QTreeWidget::item {{ height: {scaled(28)}px; font-size: {scaled(12)}px; }}"
         )
         tree_header = self.knockout_tree.header()
         if isinstance(tree_header, QHeaderView):
-            self.knockout_tree.setColumnWidth(0, 62)
-            self.knockout_tree.setColumnWidth(2, 150)
-            self.knockout_tree.setColumnWidth(3, 102)
+            # The heat column must hold "Round NN" as well as "H" so the
+            # round headers are never clipped; measure the UI font.
+            tree_metrics = self.knockout_tree.fontMetrics()
+            heat_col_width = (
+                tree_metrics.horizontalAdvance("Round 10")
+                + self.knockout_tree.indentation()
+                + scaled(24)
+            )
+            self.knockout_tree.setColumnWidth(0, max(scaled(62), heat_col_width))
+            self.knockout_tree.setColumnWidth(2, scaled(130))
+            self.knockout_tree.setColumnWidth(3, scaled(90))
             tree_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
             tree_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
             tree_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -3827,19 +3870,26 @@ class RaceWindow(QMainWindow):
             Qt.ScrollBarPolicy.ScrollBarAsNeeded
         )
         self.drag_time_table.setTextElideMode(Qt.TextElideMode.ElideNone)
-        self.drag_time_table.setMinimumHeight(260)
-        self.drag_time_table.setMaximumHeight(420)
+        self.drag_time_table.setMinimumHeight(scaled(260))
+        self.drag_time_table.setMaximumHeight(scaled(420))
         dtt_vheader = self.drag_time_table.verticalHeader()
         if isinstance(dtt_vheader, QHeaderView):
             dtt_vheader.setDefaultSectionSize(26)
         dtt_header = self.drag_time_table.horizontalHeader()
         if isinstance(dtt_header, QHeaderView):
-            self.drag_time_table.setColumnWidth(1, 52)
-            self.drag_time_table.setColumnWidth(2, 76)
-            self.drag_time_table.setColumnWidth(3, 76)
-            self.drag_time_table.setColumnWidth(4, 76)
-            self.drag_time_table.setColumnWidth(5, 76)
-            self.drag_time_table.setColumnWidth(6, 88)
+            # Size each statistic column from its header text so the labels
+            # are never clipped at any UI scale; the driver column stretches.
+            header_font = QFont(self.drag_time_table.font())
+            header_font.setBold(True)
+            header_metrics = QFontMetrics(header_font)
+            header_padding = scaled(2 * 10 + 12)
+            for column in range(1, 7):
+                header_item = self.drag_time_table.horizontalHeaderItem(column)
+                header_text = header_item.text() if header_item is not None else ""
+                self.drag_time_table.setColumnWidth(
+                    column,
+                    header_metrics.horizontalAdvance(header_text) + header_padding,
+                )
             dtt_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             dtt_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
             dtt_header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -3896,10 +3946,10 @@ class RaceWindow(QMainWindow):
             screen = QApplication.primaryScreen()
             if screen is not None:
                 screen_w = int(screen.availableGeometry().width())
-                return max(560, min(760, int(screen_w * 0.34)))
+                return max(scaled(560), min(scaled(760), int(screen_w * 0.34)))
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
-        return 640
+        return scaled(640)
 
     def _load_data(self):
         """Load drivers and track from database."""
@@ -4860,6 +4910,9 @@ class RaceWindow(QMainWindow):
         while current_size >= 2:
             round_node = QTreeWidgetItem([f"Round {round_idx}", "", "", ""])
             tree.addTopLevelItem(round_node)
+            # A round header spans every column so its text is never clipped
+            # to the narrow heat column.
+            round_node.setFirstColumnSpanned(True)
             self._drag_round_nodes[round_idx] = round_node
             heat_count = current_size // 2
             for heat_idx in range(1, heat_count + 1):
@@ -7375,7 +7428,10 @@ class RaceWindow(QMainWindow):
             symbol = "(=)"
         else:
             symbol = "(+)"
-        return QTableWidgetItem(f"{symbol} {entry['name']}")
+        item = QTableWidgetItem(f"{symbol} {entry['name']}")
+        # The full name is always reachable even when the column is narrow.
+        item.setToolTip(str(entry["name"]))
+        return item
 
     def _compute_gap_text(
         self,
@@ -7524,30 +7580,16 @@ class RaceWindow(QMainWindow):
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
 
     def _resize_standings_height(self):
-        """Resize standings table to its contents to avoid scrollbars."""
-        try:
-            rows = self.standings_table.rowCount()
-            header = self.standings_table.horizontalHeader()
-            header_h = header.height() if header else 0
-            row_heights = rows * getattr(self, "_standings_row_height", 26)
-            margins = self.standings_table.contentsMargins()
-            frame = self.standings_table.frameWidth() * 2
-            total = (
-                header_h + row_heights + margins.top() + margins.bottom() + frame + 4
-            )
-            available_height = total
-            right_container = getattr(self, "_right_container", None)
-            if right_container is not None:
-                try:
-                    available_height = max(0, right_container.contentsRect().height())
-                except Exception:
-                    available_height = total
+        """Keep the standings table at a stable size.
 
-            capped_height = (
-                total if available_height <= 0 else min(total, available_height)
-            )
-            self.standings_table.setMinimumHeight(0)
-            self.standings_table.setMaximumHeight(max(0, capped_height))
+        The table owns all spare height in the control panel (layout stretch)
+        and scrolls when the field does not fit. Its height is deliberately
+        not tied to the row count so the panel does not re-lay out when rows
+        arrive at race start.
+        """
+        try:
+            self.standings_table.setMinimumHeight(scaled(160))
+            self.standings_table.setMaximumHeight(16777215)
         except Exception:
             LOGGER.debug(SUPPRESSED_GUI_EXCEPTION_MSG, exc_info=True)
 
@@ -7968,8 +8010,11 @@ class RaceWindow(QMainWindow):
         """Switch to standard resizable windowed mode."""
         self.setWindowFlag(Qt.WindowType.FramelessWindowHint, False)
         self.showNormal()
-        self.setGeometry(100, 100, 1600, 900)
-        print("[INFO] Race window: windowed mode (1600x900)")
+        geometry = centred_window_geometry(0.8, 0.8, 1280, 720, self)
+        self.setGeometry(geometry)
+        print(
+            f"[INFO] Race window: windowed mode ({geometry.width()}x{geometry.height()})"
+        )
 
     def _apply_borderless_mode(self, available) -> None:
         """Switch to borderless-windowed fullscreen mode."""
