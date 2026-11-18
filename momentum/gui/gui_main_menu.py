@@ -722,6 +722,20 @@ class MainMenuWindow(QMainWindow):
                 return
             self.view_stack.setCurrentWidget(career_page)
 
+    def show_career_page(self) -> bool:
+        """Bring the embedded Career HQ back, refreshed; False if none is open."""
+        career_window = getattr(self, "career_window", None)
+        page = self._embedded_views.get("career") if hasattr(self, "_embedded_views") else None
+        if career_window is None or page is None or self.view_stack is None:
+            return False
+        if hasattr(career_window, "load_data"):
+            career_window.load_data()
+        self.view_stack.setCurrentWidget(page)
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        return True
+
     def _return_from_championship(self):
         """Return from championship to main menu."""
         self._show_menu_page()

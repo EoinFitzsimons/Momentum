@@ -1024,6 +1024,7 @@ class PreRaceSetupDialog(QDialog):
         track,
         locked_team_id: Optional[int] = None,
         parent=None,
+        locked_driver_id: Optional[int] = None,
     ):
         super().__init__(parent)
         self.db = db
@@ -1031,6 +1032,7 @@ class PreRaceSetupDialog(QDialog):
         self.race = race
         self.track = track
         self.locked_team_id = locked_team_id
+        self.locked_driver_id = locked_driver_id
         self.selected_driver = None
         self.selected_team = None
         self.race_config: dict[str, Any] = {}
@@ -1141,6 +1143,7 @@ class PreRaceSetupDialog(QDialog):
         weather_layout.addWidget(QLabel("Weather:"))
         self.weather_combo = QComboBox()
         self.weather_combo.addItems(["Clear", "Cloudy", "Rainy", "Wet", "Storm"])
+        self._preselect_scheduled_weather()
         weather_layout.addWidget(self.weather_combo)
 
         weather_layout.addStretch()
@@ -1217,6 +1220,7 @@ class PreRaceSetupDialog(QDialog):
         self._select_first_team_with_drivers()
         self._refresh_driver_combo_for_selected_team()
         self.on_team_selected()
+        self._apply_driver_lock()
 
     def on_driver_selected(self):
         """Update display when driver is selected."""
@@ -1304,6 +1308,30 @@ class PreRaceSetupDialog(QDialog):
         self.selected_driver = team_drivers[0]
         self.driver_combo.setCurrentIndex(0)
         self.on_driver_selected()
+
+    def _preselect_scheduled_weather(self) -> None:
+        """Default the weather to the forecast on the calendar, when known."""
+        scheduled = str(getattr(self.race, "weather_conditions", "") or "").strip()
+        if not scheduled:
+            return
+        index = self.weather_combo.findText(
+            scheduled, Qt.MatchFlag.MatchFixedString
+        )
+        if index >= 0:
+            self.weather_combo.setCurrentIndex(index)
+
+    def _apply_driver_lock(self) -> None:
+        """Career mode races the driver chosen in Career HQ: fix the driver here."""
+        if self.locked_driver_id is None:
+            return
+        for index in range(self.driver_combo.count()):
+            driver = self.driver_combo.itemData(index)
+            if getattr(driver, "id", None) == self.locked_driver_id:
+                self.driver_combo.setCurrentIndex(index)
+                self.on_driver_selected()
+                break
+        self.driver_combo.setEnabled(False)
+        self.driver_combo.setToolTip("Driver is chosen in Career HQ")
 
     def _update_start_button_state(self):
         """Enable Start only when valid team-driver pairing exists."""

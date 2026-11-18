@@ -7,7 +7,10 @@ Integrates:
 - Real-time car position updates based on simulation events
 """
 
-from momentum.services.career_result_service import persist_career_race_result
+from momentum.services.career_result_service import (
+    complete_career_race,
+    persist_career_race_result,
+)
 from momentum.services.tier_service import normalise_tier
 from momentum.services.race_simulation_api import persist_race_results, simulate_race
 from momentum.engine.base_race_engine import RaceContext, RacingDiscipline
@@ -5935,8 +5938,15 @@ class RaceWindow(QMainWindow):
                 if self._save_single_race_result(result):
                     saved_count += 1
             print(f"[RACE FINISHED] Saved {saved_count} race results to database")
+            if is_career and saved_count:
+                self._complete_career_race()
         except Exception as e:
             print(f"WARNING: Error saving race results: {e}")
+
+    def _complete_career_race(self) -> None:
+        """Close the career round so payout and the calendar move on."""
+        if complete_career_race(self.db, int(self._race_id)):
+            print(f"[RACE FINISHED] Career race {self._race_id} marked completed")
 
     def _save_single_race_result(self, result: dict) -> bool:
         """Save one race result record; return True on success."""

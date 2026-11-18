@@ -373,6 +373,9 @@ class MomentumLauncher:
             existing = getattr(self.main_menu, "career_window")
 
         if existing is not None:
+            if self.main_menu is not None and hasattr(self.main_menu, "show_career_page"):
+                if self.main_menu.show_career_page():
+                    return
             if hasattr(existing, "load_data"):
                 existing.load_data()
             existing.show()
@@ -400,15 +403,12 @@ class MomentumLauncher:
         try:
             from momentum.database.database_manager import DatabaseManager
 
+            from momentum.services.career_result_service import settle_career_race
+
             db = DatabaseManager()
             race_id = int(config.get("career_race_id") or config.get("race_id") or 0)
-            if race_id > 0:
-                with db.get_connection() as conn:
-                    conn.execute(
-                        "UPDATE career_races SET status = 'completed' WHERE id = ?",
-                        (race_id,),
-                    )
-                    conn.commit()
+            outcome = settle_career_race(db, race_id)
+            print(f"[LAUNCHER] Career race {race_id} {outcome}")
 
             career_championship_id = int(config.get("career_championship_id") or 0)
             championship = None
@@ -448,8 +448,18 @@ class MomentumLauncher:
             traceback.print_exc()
             self.return_to_menu()
 
+    def _active_race_is_career(self) -> bool:
+        mode = (self.race_config or {}).get("mode") if hasattr(self, "race_config") else None
+        if mode is None and self.race_window is not None:
+            mode = getattr(self.race_window, "_game_mode", None)
+        return str(mode or "").lower() == "career"
+
     def return_to_menu(self):
-        """Return from race to main menu."""
+        """Return from a race: to Career HQ for a career race, else the main menu."""
+        if self._active_race_is_career():
+            self._handle_career_next_race(dict(self.race_config or {}))
+            return
+
         if self.race_window:
             self.race_window.close()
             self.race_window = None

@@ -52,3 +52,60 @@ def persist_career_race_result(
                 grid_position,
             ),
         )
+
+
+def complete_career_race(db: Any, career_race_id: int) -> bool:
+    """Mark a career race ``completed`` once its result rows exist.
+
+    This is the single place the GUI uses to close a race, so the prize and
+    sponsor payout (which only pays races in ``completed`` status) and the
+    season rollover both see the same lifecycle state. Returns True when the
+    status changed.
+    """
+    if db is None:
+        return False
+    with db.get_connection() as conn:
+        has_results = conn.execute(
+            "SELECT 1 FROM career_race_results WHERE career_race_id = ? LIMIT 1",
+            (int(career_race_id),),
+        ).fetchone()
+        if not has_results:
+            return False
+        cursor = conn.execute(
+            "UPDATE career_races SET status = 'completed' "
+            "WHERE id = ? AND status != 'completed'",
+            (int(career_race_id),),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def settle_career_race(db: Any, career_race_id: int) -> str:
+    """Settle a career race the player has left the race window for.
+
+    Returns ``"completed"`` when its results close it, ``"reopened"`` when the
+    race was abandoned mid-run (no results) and goes back to ``scheduled`` so
+    it is raced again rather than silently skipped, else ``"unchanged"``.
+    """
+    if db is None or int(career_race_id or 0) <= 0:
+        return "unchanged"
+    if complete_career_race(db, career_race_id):
+        return "completed"
+    with db.get_connection() as conn:
+        row = conn.execute(
+            "SELECT status FROM career_races WHERE id = ?", (int(career_race_id),)
+        ).fetchone()
+        if row is None or str(row[0]) == "completed":
+            return "unchanged"
+        has_results = conn.execute(
+            "SELECT 1 FROM career_race_results WHERE career_race_id = ? LIMIT 1",
+            (int(career_race_id),),
+        ).fetchone()
+        if has_results or str(row[0]) == "scheduled":
+            return "unchanged"
+        conn.execute(
+            "UPDATE career_races SET status = 'scheduled' WHERE id = ?",
+            (int(career_race_id),),
+        )
+        conn.commit()
+        return "reopened"

@@ -1721,19 +1721,25 @@ class CareerWindow(QMainWindow):
         race_id = int(self.next_race["race_id"])
         with self.db.get_connection() as conn:
             row = conn.execute(
-                "SELECT track_id, weather_conditions, laps FROM career_races WHERE id = ?",
+                "SELECT id, track_id, weather_conditions, laps, round_number, race_date "
+                "FROM career_races WHERE id = ?",
                 (race_id,),
             ).fetchone()
-            if not row:
-                warning(self, "Race Error", "Could not load next race details.")
-                return
+        if not row:
+            warning(self, "Race Error", "Could not load next race details.")
+            return
+        race_data = dict(row)
+
+        setup = self._show_pre_race_setup(race_data)
+        if setup is None:
+            return
+
+        with self.db.get_connection() as conn:
             conn.execute(
                 "UPDATE career_races SET status = 'in-progress' WHERE id = ?",
                 (race_id,),
             )
             conn.commit()
-
-        race_data = dict(row)
 
         config = {
             "mode": "career",
@@ -1746,12 +1752,46 @@ class CareerWindow(QMainWindow):
             "team": self.owned_team,
             "discipline": self.championship.discipline,
             "tier": str(getattr(self.championship, "tier", "TIER_2") or "TIER_2"),
-            "weather": race_data.get("weather_conditions", "clear"),
-            "tyre_strategy": "Medium",
+            "weather": setup.get("weather") or race_data.get("weather_conditions", "clear"),
+            "tyre_strategy": setup.get("tyre_strategy") or "Medium",
             "laps": int(race_data.get("laps", 3) or 3),
         }
 
         self.start_race_signal.emit(config)
+
+    def _pre_race_dialog(self, race_data: dict):
+        """Build the shared Pre-Race Setup dialog for the next career round.
+
+        The team and driver were chosen in Career HQ, so both are locked; the
+        weather defaults to the calendar forecast and only tyres remain open.
+        """
+        from momentum.gui.gui_championship import PreRaceSetupDialog
+
+        race = SimpleNamespace(
+            id=int(race_data["id"]),
+            track_id=int(race_data["track_id"]),
+            laps=int(race_data.get("laps", 3) or 3),
+            round_number=int(race_data.get("round_number", 0) or 0),
+            race_date=str(race_data.get("race_date", "") or ""),
+            weather_conditions=str(race_data.get("weather_conditions", "") or ""),
+        )
+        track = self.db.get_track(int(race_data["track_id"]))
+        return PreRaceSetupDialog(
+            self.db,
+            self.championship,
+            race,
+            track,
+            locked_team_id=int(self.owned_team.id) if self.owned_team else None,
+            parent=self,
+            locked_driver_id=int(self.selected_driver.id),
+        )
+
+    def _show_pre_race_setup(self, race_data: dict) -> dict | None:
+        """Run the pre-race dialog; None when the player backs out."""
+        dialog = self._pre_race_dialog(race_data)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return dialog.get_race_config()
 
     def _on_return_to_menu(self):
         self.return_to_menu.emit()
