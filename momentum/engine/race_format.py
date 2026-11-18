@@ -37,6 +37,9 @@ class RaceFormat:
     # Track-length cap: roughly one car per this many metres of lap.
     metres_per_car: float = 100.0
     min_entries: int = 6
+    # Rounds in a designed season; the calendar builder spreads them from
+    # March to November.
+    season_rounds: int = 12
     # Leagues whose cars carry a drag-reduction system. A circuit records where
     # its DRS zones are; whether the cars may open the wing is a rule of the tier.
     drs_tiers: Tuple[str, ...] = ()
@@ -76,6 +79,7 @@ SINGLE_SEATER_FORMAT = RaceFormat(
     max_entries=40,
     max_entries_by_tier={TOP_TIER: 30},
     metres_per_car=110.0,
+    season_rounds=20,
     drs_tiers=TIERS,
 )
 PRODUCTION_TOURING_FORMAT = RaceFormat(
@@ -83,6 +87,7 @@ PRODUCTION_TOURING_FORMAT = RaceFormat(
     cars_per_team=2,
     max_entries=40,
     metres_per_car=90.0,
+    season_rounds=12,
 )
 ENDURANCE_FORMAT = RaceFormat(
     name="Endurance race",
@@ -91,6 +96,7 @@ ENDURANCE_FORMAT = RaceFormat(
     reserve_drivers=1,
     max_entries=20,
     metres_per_car=250.0,
+    season_rounds=8,
     # Only the purpose-built top-tier prototypes; the GT-style lower tiers are
     # homologated road cars without it.
     drs_tiers=(TOP_TIER,),
@@ -103,6 +109,7 @@ SPRINT_RALLYCROSS_FORMAT = RaceFormat(
     max_entries=10,
     metres_per_car=120.0,
     min_entries=4,
+    season_rounds=12,
 )
 DRAG_ACCELERATION_FORMAT = RaceFormat(
     name="Drag elimination bracket",
@@ -112,6 +119,7 @@ DRAG_ACCELERATION_FORMAT = RaceFormat(
     max_entries=16,
     metres_per_car=1.0,
     min_entries=4,
+    season_rounds=14,
 )
 URBAN_STREET_FORMAT = RaceFormat(
     name="Street battles",
@@ -121,6 +129,7 @@ URBAN_STREET_FORMAT = RaceFormat(
     max_entries=16,
     metres_per_car=80.0,
     min_entries=4,
+    season_rounds=10,
 )
 
 DISCIPLINE_FORMATS: Dict[str, RaceFormat] = {

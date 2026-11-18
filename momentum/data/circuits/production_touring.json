@@ -1,7 +1,7 @@
 [
   {
     "circuit_id": 76,
-    "name": "Grand Noboru International Circuit",
+    "name": "Lusail Raceway",
     "country": "Qatar",
     "region": "Lusail",
     "circuit_type": "permanent",
@@ -41,7 +41,7 @@
   },
   {
     "circuit_id": 77,
-    "name": "Ashura International Endurance Circuit",
+    "name": "Patagonia Raceway",
     "country": "Argentina",
     "region": "Patagonia",
     "circuit_type": "permanent",
@@ -81,7 +81,7 @@
   },
   {
     "circuit_id": 78,
-    "name": "Eikou Mountain Pass",
+    "name": "Fes Raceway",
     "country": "Morocco",
     "region": "Fes",
     "circuit_type": "permanent",
@@ -121,7 +121,7 @@
   },
   {
     "circuit_id": 79,
-    "name": "Nordvast Autodromo",
+    "name": "Baja Raceway",
     "country": "Mexico",
     "region": "Baja",
     "circuit_type": "permanent",
@@ -161,7 +161,7 @@
   },
   {
     "circuit_id": 80,
-    "name": "Azurra Rennstrecke",
+    "name": "Zeelandring",
     "country": "Netherlands",
     "region": "Zeeland",
     "circuit_type": "permanent",
@@ -201,7 +201,7 @@
   },
   {
     "circuit_id": 81,
-    "name": "Nexus Rennstrecke",
+    "name": "Veracruz Raceway",
     "country": "Mexico",
     "region": "Veracruz",
     "circuit_type": "permanent",
@@ -241,7 +241,7 @@
   },
   {
     "circuit_id": 82,
-    "name": "Dawnshire Racing Arena",
+    "name": "Tirolring",
     "country": "Austria",
     "region": "Tyrol",
     "circuit_type": "permanent",
@@ -281,7 +281,7 @@
   },
   {
     "circuit_id": 83,
-    "name": "Elmwood Racing Centre",
+    "name": "Pearl River Raceway",
     "country": "China",
     "region": "Guangdong",
     "circuit_type": "permanent",
@@ -321,7 +321,7 @@
   },
   {
     "circuit_id": 84,
-    "name": "Northvale Speedway",
+    "name": "Muharraq Raceway",
     "country": "Bahrain",
     "region": "Muharraq",
     "circuit_type": "permanent",
@@ -361,7 +361,7 @@
   },
   {
     "circuit_id": 85,
-    "name": "Sector Track",
+    "name": "Pampas Raceway",
     "country": "Argentina",
     "region": "Buenos Aires",
     "circuit_type": "permanent",
@@ -401,7 +401,7 @@
   },
   {
     "circuit_id": 86,
-    "name": "East Matrix Racing Centre",
+    "name": "Alsace Ring",
     "country": "France",
     "region": "Alsace",
     "circuit_type": "permanent",
@@ -441,7 +441,7 @@
   },
   {
     "circuit_id": 87,
-    "name": "Grand Portofino Endurance Circuit",
+    "name": "Yunnan Raceway",
     "country": "China",
     "region": "Yunnan",
     "circuit_type": "permanent",
@@ -481,7 +481,7 @@
   },
   {
     "circuit_id": 88,
-    "name": "National Zenwick Velocita",
+    "name": "Sierras Raceway",
     "country": "Argentina",
     "region": "Córdoba",
     "circuit_type": "permanent",
@@ -521,7 +521,7 @@
   },
   {
     "circuit_id": 89,
-    "name": "Azurra Racing Arena",
+    "name": "Kansai Ring",
     "country": "Japan",
     "region": "Kansai",
     "circuit_type": "permanent",
@@ -561,7 +561,7 @@
   },
   {
     "circuit_id": 90,
-    "name": "National Northvale Racing Arena",
+    "name": "Jeddah Raceway",
     "country": "Saudi Arabia",
     "region": "Jeddah",
     "circuit_type": "permanent",
@@ -601,7 +601,7 @@
   },
   {
     "circuit_id": 91,
-    "name": "Queenshold Velocita",
+    "name": "Harima Raceway",
     "country": "Japan",
     "region": "Kansai",
     "circuit_type": "permanent",
@@ -641,7 +641,7 @@
   },
   {
     "circuit_id": 92,
-    "name": "Royal Elmwood Autodromo",
+    "name": "Saint-Laurent Raceway",
     "country": "Canada",
     "region": "Quebec",
     "circuit_type": "permanent",
@@ -681,7 +681,7 @@
   },
   {
     "circuit_id": 93,
-    "name": "Grindval Arena",
+    "name": "Tejo Raceway",
     "country": "Portugal",
     "region": "Lisbon",
     "circuit_type": "permanent",
@@ -721,7 +721,7 @@
   },
   {
     "circuit_id": 94,
-    "name": "Jadecliff International Autobahn",
+    "name": "Highveld Raceway",
     "country": "South Africa",
     "region": "Gauteng",
     "circuit_type": "permanent",
@@ -761,7 +761,7 @@
   },
   {
     "circuit_id": 95,
-    "name": "Queenshold Corso",
+    "name": "Queenshold Raceway",
     "country": "Australia",
     "region": "Queensland",
     "circuit_type": "permanent",
@@ -801,7 +801,7 @@
   },
   {
     "circuit_id": 96,
-    "name": "Bokuden Speedway",
+    "name": "Thar Raceway",
     "country": "India",
     "region": "Rajasthan",
     "circuit_type": "permanent",
@@ -841,7 +841,7 @@
   },
   {
     "circuit_id": 97,
-    "name": "Grand Heiwa Corso",
+    "name": "Scheldering",
     "country": "Netherlands",
     "region": "Zeeland",
     "circuit_type": "permanent",
@@ -881,7 +881,7 @@
   },
   {
     "circuit_id": 98,
-    "name": "Queenshold Motorsports",
+    "name": "Sentosa Raceway",
     "country": "Singapore",
     "region": "Sentosa",
     "circuit_type": "permanent",
@@ -921,7 +921,7 @@
   },
   {
     "circuit_id": 99,
-    "name": "Central Genki Motorsports",
+    "name": "Canterbury Plains Raceway",
     "country": "New Zealand",
     "region": "Canterbury",
     "circuit_type": "permanent",
@@ -961,7 +961,7 @@
   },
   {
     "circuit_id": 100,
-    "name": "Dynex Rennstrecke",
+    "name": "Karnataka Raceway",
     "country": "India",
     "region": "Karnataka",
     "circuit_type": "permanent",

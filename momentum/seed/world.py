@@ -195,7 +195,9 @@ def person_name(fake: Faker) -> str:
     """A person's name in Latin letters.
 
     Japanese and Chinese providers offer a proper romanisation; transliterating
-    the kanji would give Chinese readings for Japanese names.
+    the kanji would give Chinese readings for Japanese names. Korean names are
+    built from the family and given names separately, since a transliterated
+    "류현주" runs the two together ("ryuhyeonju").
     """
     romanised = getattr(fake, "romanized_name", None)
     if callable(romanised):
@@ -203,7 +205,50 @@ def person_name(fake: Faker) -> str:
             return _title_if_shouting(str(romanised()))
         except Exception:
             pass
+    if _faker_locale(fake).startswith("ko"):
+        return korean_name(str(fake.last_name()), str(fake.first_name()))
     return str(fake.name())
+
+
+def full_name(fake: Faker, attempts: int = 6) -> str:
+    """A cleaned given-plus-family name; a draw that leaves a lone surname
+    (Indonesian "Puti Pratama, S.Sos" is title plus surname) is redrawn."""
+    name = ""
+    for _ in range(attempts):
+        name = clean_name(person_name(fake), fake)
+        if len(name.split()) >= 2:
+            return name
+    return name
+
+
+def _faker_locale(fake: Faker) -> str:
+    locales = getattr(fake, "locales", None) or []
+    return str(locales[0]) if locales else ""
+
+
+# Conventional spellings of common Korean family names; unidecode gives the
+# literal reading ("I", "Bak", "Choe") that nobody uses on an entry list.
+KOREAN_FAMILY_NAMES = {
+    "김": "Kim", "이": "Lee", "박": "Park", "최": "Choi", "정": "Jung", "강": "Kang",
+    "조": "Cho", "윤": "Yoon", "장": "Jang", "임": "Lim", "한": "Han", "오": "Oh",
+    "서": "Seo", "신": "Shin", "권": "Kwon", "황": "Hwang", "안": "Ahn", "송": "Song",
+    "류": "Ryu", "유": "Yoo", "전": "Jeon", "홍": "Hong", "고": "Ko", "문": "Moon",
+    "양": "Yang", "손": "Son", "배": "Bae", "백": "Baek", "조": "Cho", "허": "Heo",
+    "남": "Nam", "심": "Shim", "노": "Noh", "하": "Ha", "곽": "Kwak", "성": "Sung",
+    "차": "Cha", "주": "Joo", "우": "Woo", "구": "Koo", "민": "Min", "나": "Na",
+    "진": "Jin", "지": "Ji", "엄": "Um", "채": "Chae", "원": "Won", "천": "Chun",
+    "방": "Bang", "공": "Kong", "현": "Hyun", "함": "Ham", "변": "Byun", "염": "Yeom",
+    "여": "Yeo", "추": "Choo", "도": "Do", "소": "So", "석": "Seok", "선": "Sun",
+    "설": "Seol", "마": "Ma", "길": "Gil", "연": "Yeon", "위": "Wi", "표": "Pyo",
+    "명": "Myung", "기": "Ki", "반": "Ban", "왕": "Wang", "금": "Keum", "옥": "Ok",
+    "육": "Yook", "인": "In", "맹": "Maeng", "제": "Je", "모": "Mo", "남궁": "Namgoong",
+}
+
+
+def korean_name(family: str, given: str) -> str:
+    """Romanised Korean name, family name first as it is written in English."""
+    family_latin = KOREAN_FAMILY_NAMES.get(family) or to_latin(family).title()
+    return f"{family_latin} {to_latin(given).title()}".strip()
 
 
 def _title_if_shouting(name: str) -> str:
@@ -273,9 +318,95 @@ COMMON_LOCALES = [
     "nl_NL",
 ]
 
-HONORIFIC_PREFIXES = {"dr", "mr", "ms", "mrs", "miss", "prof", "sir", "dame", "lady"}
+HONORIFIC_PREFIXES = {
+    "dr", "mr", "ms", "mrs", "miss", "mx", "prof", "sir", "dame", "lady",
+    "herr", "frau", "hr", "fru", "sig", "dott", "pan", "pani", "pán", "paní",
+}
 
-HONORIFIC_SUFFIXES = {"md", "dds", "phd", "jr", "sr", "ii", "iii", "iv"}
+HONORIFIC_SUFFIXES = {"md", "dds", "dvm", "phd", "jr", "sr", "ii", "iii", "iv", "v"}
+
+# Parts of a surname that Faker lists as "prefixes" in some locales (de, du,
+# van); they are the name, not a title, and stay.
+NAME_PARTICLES = {
+    "de", "del", "de la", "de las", "de los", "du", "le", "la", "da", "do", "dos",
+    "das", "van", "van de", "van der", "van den", "von", "der", "den", "di", "della",
+}
+
+# "B.Eng.", "Dipl.-Ing.", "Sig.ra", "Th.D.", "A.": dotted runs of a few letters
+# are a qualification or an initial, never a name.
+_ABBREVIATION = re.compile(r"^(?=.*\.)(?:[^\W\d_]{1,4}[.\-]+)+[^\W\d_]{0,4}$")
+
+_TITLE_CACHE: dict = {}
+
+
+def provider_titles(fake: Optional[Faker]) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
+    """The titles and qualifications a locale's person provider can attach.
+
+    Faker keeps them as ``prefixes_*`` and ``suffixes_*`` lists on the provider,
+    so every locale is covered without a hand-kept table. Longest first, so
+    "Prof. Dr." is removed before "Dr.".
+    """
+    if fake is None:
+        return (), ()
+    locale = _faker_locale(fake)
+    cached = _TITLE_CACHE.get(locale)
+    if cached is not None:
+        return cached
+    prefixes: set = set()
+    suffixes: set = set()
+    for provider in fake.get_providers():
+        if not provider.__class__.__module__.startswith("faker.providers.person"):
+            continue
+        for attr in dir(provider):
+            if attr.startswith("prefixes"):
+                prefixes.update(str(x) for x in getattr(provider, attr) or ())
+            elif attr.startswith("suffixes"):
+                suffixes.update(str(x) for x in getattr(provider, attr) or ())
+    prefixes = {x for x in prefixes if x.casefold() not in NAME_PARTICLES}
+    titles = (
+        tuple(sorted(prefixes, key=len, reverse=True)),
+        tuple(sorted(suffixes, key=len, reverse=True)),
+    )
+    _TITLE_CACHE[locale] = titles
+    return titles
+
+
+def _strip_phrases(text: str, phrases: Tuple[str, ...], at_end: bool) -> str:
+    """Remove title phrases from one end of ``text``, however many are stacked."""
+    changed = True
+    while changed and text:
+        changed = False
+        folded = text.casefold()
+        for phrase in phrases:
+            needle = phrase.casefold()
+            if at_end and folded.endswith(" " + needle):
+                text = text[: -len(needle)].rstrip()
+            elif not at_end and folded.startswith(needle + " "):
+                text = text[len(needle):].lstrip()
+            else:
+                continue
+            changed = True
+            break
+    return text
+
+
+def _strip_titles(text: str, titles: Tuple[Tuple[str, ...], Tuple[str, ...]]) -> list:
+    prefixes, suffixes = titles
+    text = _strip_phrases(" ".join(text.split()), prefixes, at_end=False)
+    text = _strip_phrases(text, suffixes, at_end=True)
+    tokens = [t for t in text.split() if t]
+    while tokens and tokens[0].casefold().rstrip(".") in HONORIFIC_PREFIXES:
+        tokens.pop(0)
+    while tokens and tokens[-1].casefold().rstrip(".") in HONORIFIC_SUFFIXES:
+        tokens.pop()
+    return [_capitalised(t) for t in tokens if not _ABBREVIATION.match(t)]
+
+
+def _capitalised(token: str) -> str:
+    """Some providers list names in lower case ("žagar"); particles stay as they are."""
+    if token.casefold() in NAME_PARTICLES or not token.islower():
+        return token
+    return token[0].upper() + token[1:]
 
 # Driver slots per team come from each discipline's race format.
 DRIVER_SLOTS_PER_DISCIPLINE = {
@@ -328,6 +459,12 @@ def is_latin_script(s: str) -> bool:
     return True
 
 
+# Unidecode renders the Cyrillic hard and soft signs as apostrophes; in
+# Bulgarian the hard sign is a vowel (Първан is Parvan) and the soft sign is
+# silent, so neither belongs in a Latin spelling.
+_CYRILLIC_SIGNS = str.maketrans({"ъ": "a", "Ъ": "A", "ь": "", "Ь": ""})
+
+
 def to_latin(s: str) -> str:
     """Return ``s`` in Latin script.
 
@@ -340,29 +477,42 @@ def to_latin(s: str) -> str:
     if is_latin_script(normalised):
         return " ".join(normalised.split())
     if _unidecode:
-        out = _unidecode(normalised)
+        out = _unidecode(normalised.translate(_CYRILLIC_SIGNS))
     else:
         out = unicodedata.normalize("NFKD", normalised)
         out = out.encode("ascii", "ignore").decode("ascii")
     return " ".join(out.split())
 
 
-def clean_name(name: str) -> str:
-    """Remove honorifics and clean name"""
+def _plain_token(token: str) -> str:
+    """A name token without initials or stray punctuation: "H.-Dieter" is
+    "Dieter", "Emine." is "Emine"."""
+    parts = [part for part in token.split("-") if part.rstrip(".") and "." not in part]
+    return "-".join(part.strip(".,") for part in parts)
+
+
+def clean_name(name: str, fake: Optional[Faker] = None) -> str:
+    """A person's name with titles, qualifications and initials removed.
+
+    Pass the Faker that produced the name so its locale's own titles are
+    known ("Univ.Prof.", "Drs.", "Yrd. Doç."). Some locales write
+    "Family, Given" (Latvian, Lithuanian) and others append qualifications
+    after the comma ("..., S.E."); a given name after the comma is kept and
+    moved in front, anything else is dropped.
+    """
     if not name:
         return ""
-    # Faker appends qualifications after a comma in some locales ("..., S.E.").
-    name = name.split(",", 1)[0]
-    tokens = [t for t in name.strip().split() if t]
+    titles = provider_titles(fake)
+    head, _, tail = name.partition(",")
+    tokens = _strip_titles(head, titles)
+    given = _strip_titles(tail, titles)
+    if given and all(t.replace("-", "").isalpha() for t in given):
+        tokens = given + tokens
     if not tokens:
         return ""
 
-    while tokens and tokens[0].lower().rstrip(".") in HONORIFIC_PREFIXES:
-        tokens.pop(0)
-    while tokens and tokens[-1].lower().rstrip(".") in HONORIFIC_SUFFIXES:
-        tokens.pop()
-
-    cleaned = to_latin(" ".join(tokens)).strip()
+    cleaned = to_latin(" ".join(_plain_token(t) for t in tokens)).strip()
+    cleaned = " ".join(t for t in cleaned.split() if len(t.strip("'-")) > 1)
     if not any(ch.isalpha() for ch in cleaned):
         return ""
     return cleaned
@@ -429,7 +579,7 @@ def generate_driver(
     fake: Faker, nationality: str, discipline: str, locale: str
 ) -> Optional[dict]:
     """Generate a single driver with all attributes"""
-    name = clean_name(person_name(fake))
+    name = full_name(fake)
     if not name:
         return None
 
@@ -661,7 +811,7 @@ def _owner_backing(team_principal: str, nationality: str) -> str:
     if random.random() < 0.6 and name:
         return f"{name}, owner-principal, funded by {fortune}"
     fake = _build_fake_for_nationality(nationality) if nationality else fake_for_locale("en_GB")
-    owner = clean_name(person_name(fake)) or "A private owner"
+    owner = full_name(fake) or "A private owner"
     return f"{owner}, owner, funded by {fortune}"
 
 
@@ -721,7 +871,7 @@ def _build_seed_team_data(
         # Opening money is posted to the ledger once the league is known.
         "budget": 0.0,
         "founded_year": random.randint(1950, 2024),
-        "team_principal": clean_name(person_name(fake_for_principal)),
+        "team_principal": full_name(fake_for_principal),
         "headquarters": headquarters or str(COUNTRIES.get(nationality, nationality)),
         "operations_rating": operations_rating,
         "strategy_profile": random.choice(["conservative", "standard", "aggressive"]),
@@ -827,7 +977,7 @@ def seed_teams(
 
 def generate_staff_member(fake: Faker, role: str) -> Optional[dict]:
     """Generate a single staff member"""
-    name = clean_name(person_name(fake))
+    name = full_name(fake)
     if not name:
         return None
 
