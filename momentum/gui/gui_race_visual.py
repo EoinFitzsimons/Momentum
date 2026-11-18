@@ -13,7 +13,11 @@ from momentum.services.career_result_service import (
 )
 from momentum.services.tier_service import normalise_tier
 from momentum.services.race_simulation_api import persist_race_results, simulate_race
-from momentum.engine.base_race_engine import RaceContext, RacingDiscipline
+from momentum.engine.base_race_engine import (
+    RaceContext,
+    RacingDiscipline,
+    apply_forecast,
+)
 from momentum.database.database_manager import DatabaseManager
 from momentum.vehicles.appearance_integration import (
     VehicleAppearanceManager,
@@ -5381,7 +5385,24 @@ class RaceWindow(QMainWindow):
         )
         tc["rallycross_joker_required"] = self._is_rallycross_discipline()
         tc["total_laps"] = race_laps
+        apply_forecast(context, getattr(self, "_forecast", None))
+        starting_compound = getattr(self, "_starting_tyre_compound", None)
+        if starting_compound:
+            tc["starting_tyre_compound"] = starting_compound
         return context
+
+    def set_pre_race_conditions(
+        self, weather: Optional[str], tyre_strategy: Optional[str]
+    ) -> None:
+        """Record the Pre-Race Setup forecast and starting compound for the engine."""
+        self._forecast = str(weather).strip() if weather else None
+        self._starting_tyre_compound = (
+            str(tyre_strategy).strip().lower() if tyre_strategy else None
+        )
+        print(
+            f"[RACE WINDOW] Pre-race conditions: weather={self._forecast}, "
+            f"starting tyres={self._starting_tyre_compound}"
+        )
 
     def _event_callback_from_race_thread(self, event: dict) -> None:
         """Bridge simulation events to GUI-thread-safe signals."""

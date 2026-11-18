@@ -639,6 +639,28 @@ class RealtimeRaceEngine:
             return
         self.player_overrides["come_in"] = False
 
+    def _is_player_controlled(self, driver_id: int) -> bool:
+        """True for the player's own car and the rest of the player's team."""
+        if self.player_driver_id is not None and int(driver_id) == int(
+            self.player_driver_id
+        ):
+            return True
+        return int(driver_id) in self.player_team_driver_ids
+
+    def _starting_tyre_compound(self, state: DriverState) -> str:
+        """Compound a car starts on.
+
+        The player's team starts on the compound chosen in Pre-Race Setup
+        (``track_conditions["starting_tyre_compound"]``); AI teams read the
+        track and start on wets when it is already wet, else mediums.
+        """
+        chosen = self.track_conditions.get("starting_tyre_compound")
+        if chosen and self._is_player_controlled(state.driver_id):
+            return self._normalise_tyre_compound(chosen)
+        if self._safe_condition_float("track_wetness", 0.0) >= 0.45:
+            return "wet"
+        return "medium"
+
     def _requested_tyre_compound_for_driver(self, state: DriverState) -> str:
         """Resolve requested pit-stop tyre compound for a driver."""
         if self.player_driver_id is None or int(state.driver_id) != int(
@@ -657,7 +679,8 @@ class RealtimeRaceEngine:
     def _normalise_tyre_compound(self, compound: Any) -> str:
         """Return a supported tyre compound key."""
         raw = str(compound or "medium").strip().lower()
-        if raw == "rain":
+        if raw in ("rain", "intermediate", "inter"):
+            # Only one wet-weather profile is modelled.
             raw = "wet"
         if raw not in self.TYRE_WEAR_PROFILES:
             return "medium"
@@ -1476,6 +1499,9 @@ class RealtimeRaceEngine:
                 frames_since_mistake=999,
                 push_intensity=initial_push,
             )
+
+            state.tyre_compound = self._starting_tyre_compound(state)
+            state.requested_tyre_compound = state.tyre_compound
 
             if self._rallycross_joker_enabled:
                 state.joker_lap_target = self._initial_joker_lap_target(

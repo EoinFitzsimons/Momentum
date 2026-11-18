@@ -125,6 +125,12 @@ class MomentumLauncher:
         tuning_preset = config.get("tuning_preset", "balanced")
         self.race_window.set_tuning_preset(tuning_preset)
 
+        # Pre-Race Setup choices (championship and career dialogs)
+        if hasattr(self.race_window, "set_pre_race_conditions"):
+            self.race_window.set_pre_race_conditions(
+                config.get("weather"), config.get("tyre_strategy")
+            )
+
         # Apply display mode from config
         display_mode = config.get("display_mode", "borderless")
         self.race_window.set_display_mode(display_mode)
